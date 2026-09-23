@@ -66,6 +66,11 @@ ygc-web --no-browser
   - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
   - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
   - ファイル名は `ygc_chronicle_YYYYMMDD_HHMMSS.db`
+- DB初期化
+  - 画面右上の「DB初期化」からObservation / Individual / Crawl履歴をすべて削除
+  - 誤操作防止の確認ダイアログと `RESET` 入力が必要
+  - Crawl実行中は初期化不可
+  - 初期化後は空のSQLite DBを自動再作成
 
 ## 既定のBatch Query
 
