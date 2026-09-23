@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 
 
-EXTRACTION_VERSION = "serial-v2"
+EXTRACTION_VERSION = "serial-v3"
 
 
 @dataclass(frozen=True)
@@ -15,11 +15,19 @@ class SerialCandidate:
     reason: str
 
 
+_SERIAL_VALUE = (
+    r"((?:[A-Z]\s+\d{4,8})|"
+    r"(?:[^\s,;|()\[\]{}]{3,32}))"
+)
+
+
 LABEL_PATTERNS = [
     (
         re.compile(
-            r"\bserial\s*(?:number|no\.?)?\s*[:#-]?\s*"
-            r"([A-Z0-9][A-Z0-9 ./_-]{2,24})",
+            r"\bserial\s*"
+            r"(?:number|no\.?|#)?\s*"
+            r"[:#-]?\s*"
+            + _SERIAL_VALUE,
             re.I,
         ),
         0.95,
@@ -27,8 +35,20 @@ LABEL_PATTERNS = [
     ),
     (
         re.compile(
-            r"\bS\s*/\s*N\s*[:#-]?\s*"
-            r"([A-Z0-9][A-Z0-9 ./_-]{2,24})",
+            r"\bser\.?\s*"
+            r"(?:no\.?|#)?\s*"
+            r"[:#-]?\s*"
+            + _SERIAL_VALUE,
+            re.I,
+        ),
+        0.92,
+        "ser-label",
+    ),
+    (
+        re.compile(
+            r"\bS\s*/\s*N\s*"
+            r"[:#-]?\s*"
+            + _SERIAL_VALUE,
             re.I,
         ),
         0.92,
@@ -37,7 +57,7 @@ LABEL_PATTERNS = [
     (
         re.compile(
             r"\bSN\s*[:#-]\s*"
-            r"([A-Z0-9][A-Z0-9 ./_-]{2,24})",
+            + _SERIAL_VALUE,
             re.I,
         ),
         0.88,
@@ -78,94 +98,189 @@ TRAILING_LABELS = {
     "ORIGINAL",
     "WITH",
     "INCLUDES",
+    "HEADSTOCK",
+    "NOTES",
+    "NOTE",
 }
 
 
-def _strip_htmlish_spacing(value: str) -> str:
-    value = value.replace("\r", " ")
-    value = value.replace("\n", " ")
-    value = re.sub(r"\s+", " ", value)
+PROSE_MARKERS = {
+    "THAT",
+    "DATES",
+    "DATED",
+    "DATESTO",
+    "DATESIT",
+    "DATEBACK",
+    "HEADSTOCK",
+    "YOUR",
+}
+
+
+def _strip_htmlish_spacing(
+    value: str,
+) -> str:
+    value = value.replace(
+        "\r",
+        " ",
+    )
+
+    value = value.replace(
+        "\n",
+        " ",
+    )
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value,
+    )
+
     return value.strip()
 
 
-def _trim_trailing_labels(raw: str) -> str:
+def _trim_trailing_labels(
+    raw: str,
+) -> str:
     """
-    Serialの直後に続く見出し語や文章用の末尾記号を除去する。
+    Serial直後に本文や次の見出しが接続されたケースを切る。
 
     例:
-    524436WEIGHT -> 524436
-    N056062.     -> N056062
-    E556368,     -> E556368
+        524436WEIGHT
+            -> 524436
+
+        L53450.HEADSTOCK
+            -> L53450
+
+        73178142--YOUR
+            -> 73178142
     """
 
-    value = raw.strip().upper()
+    value = (
+        raw.strip()
+        .upper()
+        .strip(
+            "\"'"
+        )
+    )
 
-    # 文章用の末尾記号を除去
-    # Serial内部で使われる可能性のある記号は途中なら保持する
     value = value.rstrip(
         ".,:;!?)]}"
     )
+
+    value = re.split(
+        r"--+|—|–",
+        value,
+        maxsplit=1,
+    )[0]
+
+    dotted_suffix = re.fullmatch(
+        r"(.+?)[._/-]"
+        r"([A-Z]{3,})",
+        value,
+    )
+
+    if dotted_suffix:
+        prefix = dotted_suffix.group(
+            1
+        )
+
+        suffix = dotted_suffix.group(
+            2
+        )
+
+        if (
+            any(
+                ch.isdigit()
+                for ch in prefix
+            )
+            and (
+                suffix
+                in TRAILING_LABELS
+                or suffix
+                in PROSE_MARKERS
+            )
+        ):
+            value = prefix
 
     for label in sorted(
         TRAILING_LABELS,
         key=len,
         reverse=True,
     ):
-        if value.endswith(label):
-            candidate = value[: -len(label)].strip()
+        if not value.endswith(
+            label
+        ):
+            continue
 
-            if len(candidate) >= 3:
-                value = candidate
+        candidate = value[
+            : -len(label)
+        ].rstrip(
+            "._/- "
+        )
 
-                value = value.rstrip(
-                    ".,:;!?)]}"
-                )
+        if (
+            len(candidate) >= 3
+            and any(
+                ch.isdigit()
+                for ch in candidate
+            )
+        ):
+            value = candidate
+            break
 
-                break
+    return value.rstrip(
+        ".,:;!?)]}"
+    )
 
-    return value
 
+def _normalize_candidate(
+    raw: str,
+) -> str:
+    value = _strip_htmlish_spacing(
+        raw
+    )
 
-def _split_candidate(raw: str) -> str:
-    """
-    Serial候補の後ろに本文が吸い込まれないようにする。
-    """
-
-    raw = _strip_htmlish_spacing(raw)
-
-    raw = re.split(
-        r"[,;|()\[\]{}]",
-        raw,
-        maxsplit=1,
-    )[0]
-
-    parts = raw.split()
-
-    if not parts:
+    if not value:
         return ""
 
-    if len(parts) == 1:
-        return _trim_trailing_labels(
-            parts[0]
-        )
-
-    if all(
-        re.fullmatch(
-            r"[A-Z0-9./_-]+",
-            part,
-            re.I,
-        )
-        for part in parts
-    ):
-        joined = "".join(parts)
-
-        if len(joined) <= 18:
-            return _trim_trailing_labels(
-                joined
-            )
+    value = re.sub(
+        r"^([A-Z])\s+"
+        r"(\d{4,8})$",
+        r"\1\2",
+        value,
+        flags=re.I,
+    )
 
     return _trim_trailing_labels(
-        parts[0]
+        value
+    )
+
+
+def _looks_masked(
+    value: str,
+) -> bool:
+    upper = value.upper()
+
+    return bool(
+        re.search(
+            r"X{2,}"
+            r"|\?{2,}"
+            r"|\*{2,}"
+            r"|#{2,}",
+            upper,
+        )
+    )
+
+
+def _looks_like_prose(
+    value: str,
+) -> bool:
+    upper = value.upper()
+
+    return any(
+        marker in upper
+        for marker
+        in PROSE_MARKERS
     )
 
 
@@ -173,7 +288,9 @@ def _looks_like_serial(
     value: str,
 ) -> bool:
     """
-    Phase 0用の簡易妥当性チェック。
+    Phase 0用の保守的なSerial妥当性チェック。
+
+    v3では抽出率よりPrecisionを優先する。
     """
 
     if not value:
@@ -187,13 +304,31 @@ def _looks_like_serial(
     if len(value) > 18:
         return False
 
-    # 英字だけはSerialとして扱わない
+    if _looks_masked(
+        value
+    ):
+        return False
+
+    if _looks_like_prose(
+        value
+    ):
+        return False
+
     if value.isalpha():
         return False
 
-    # 数字だけなら4〜10桁程度
     if value.isdigit():
-        return 4 <= len(value) <= 10
+        if re.fullmatch(
+            r"(19|20)\d{2}",
+            value,
+        ):
+            return False
+
+        return (
+            4
+            <= len(value)
+            <= 10
+        )
 
     has_alpha = any(
         ch.isalpha()
@@ -217,6 +352,12 @@ def _looks_like_serial(
     ):
         return False
 
+    if re.search(
+        r"[._/-][A-Z]{3,}$",
+        value,
+    ):
+        return False
+
     return True
 
 
@@ -225,34 +366,39 @@ def _score_candidate(
     base_confidence: float,
     context: str,
 ) -> float:
-    confidence = base_confidence
+    confidence = (
+        base_confidence
+    )
 
     lower_context = (
         context.lower()
     )
 
-    for negative in NEGATIVE_WORDS:
-        if negative in lower_context:
-            if (
-                "serial" in lower_context
-                or "s/n" in lower_context
-                or "sn:" in lower_context
-            ):
-                confidence -= 0.05
-            else:
-                confidence -= 0.35
-
-    # 年式単体をSerialとして扱わない
-    if re.fullmatch(
-        r"(19|20)\d{2}",
-        value,
+    for negative in (
+        NEGATIVE_WORDS
     ):
-        confidence -= 0.50
+        if (
+            negative
+            not in lower_context
+        ):
+            continue
+
+        if (
+            "serial"
+            in lower_context
+            or "s/n"
+            in lower_context
+            or "sn:"
+            in lower_context
+        ):
+            confidence -= 0.05
+        else:
+            confidence -= 0.35
 
     if not _looks_like_serial(
         value
     ):
-        confidence -= 0.60
+        confidence -= 0.95
 
     return max(
         0.0,
@@ -282,10 +428,14 @@ def extract_serial_candidates(
         for match in pattern.finditer(
             text
         ):
-            raw = match.group(1)
+            raw = match.group(
+                1
+            )
 
-            value = _split_candidate(
-                raw
+            value = (
+                _normalize_candidate(
+                    raw
+                )
             )
 
             if not value:
@@ -302,7 +452,9 @@ def extract_serial_candidates(
             )
 
             context = (
-                text[start:end]
+                text[
+                    start:end
+                ]
                 .replace(
                     "\n",
                     " ",
@@ -323,7 +475,9 @@ def extract_serial_candidates(
             candidates.append(
                 SerialCandidate(
                     value=value,
-                    confidence=confidence,
+                    confidence=(
+                        confidence
+                    ),
                     context=context,
                     reason=reason,
                 )
@@ -334,7 +488,9 @@ def extract_serial_candidates(
         SerialCandidate,
     ] = {}
 
-    for candidate in candidates:
+    for candidate in (
+        candidates
+    ):
         existing = best.get(
             candidate.value
         )
