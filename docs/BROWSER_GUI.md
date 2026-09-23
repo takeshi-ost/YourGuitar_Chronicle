@@ -1,0 +1,179 @@
+# Phase 0 Browser GUI
+
+CLIで行っていた繰り返し作業を、ローカルブラウザから操作するためのGUIです。
+
+## セットアップ
+
+既存の仮想環境を有効にして、依存関係を更新します。
+
+```powershell
+cd phase0_proto
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+Reverb Token は2通りの方法で設定できます。
+
+1. WebUI右上の **Token設定** から入力して保存
+2. 従来どおり環境変数 `REVERB_API_TOKEN` を設定
+
+WebUIで保存したTokenを優先し、未設定の場合は環境変数を使用します。
+
+WebUI保存時のTokenはブラウザの `localStorage` に保存され、SQLite DBやGitHubには保存されません。
+
+環境変数を使う場合:
+
+```powershell
+$env:REVERB_API_TOKEN="YOUR_TOKEN"
+```
+
+macOS / Linux:
+
+```bash
+export REVERB_API_TOKEN="YOUR_TOKEN"
+```
+
+## 起動
+
+```powershell
+ygc-web
+```
+
+通常はブラウザが自動的に開きます。
+
+手動で開く場合:
+
+```text
+http://127.0.0.1:8765
+```
+
+ブラウザを自動起動しない場合:
+
+```powershell
+ygc-web --no-browser
+```
+
+## GUIでできること
+
+- Token設定
+  - Reverb Personal Access TokenをWebUIへ貼り付けて保存
+  - 同じブラウザではWebUI再起動後も保持
+  - SQLite DBやGitHubには保存しない
+  - WebUI保存Tokenを優先し、なければ環境変数を使用
+  - 「削除」でブラウザ保存Tokenを消去
+- Dashboard
+  - Observations
+  - Serial Observations
+  - Serial extraction rate
+  - Individuals
+  - Repeated Individuals
+- Batch Crawl
+  - 複数のReverb検索クエリを1回で順次実行
+  - クエリ入力欄は横幅いっぱいに表示し、その下に Year Min / Year Max / Limit / Workers / Start Crawl を1行で配置
+  - Reverb APIの `year_min` / `year_max` を検索段階で適用
+  - 既定では Year Max = 1980。空欄にするとその側のYear制限を無効化
+  - queryごとのlimit指定
+  - detail APIのworker数指定
+  - 既取得Listingの自動スキップ
+  - 進行状況とquery別結果の表示
+- Individuals
+  - Maker / Model / Finish / Year / Serialでフィルタ
+  - ID / Maker / Model / Finish / Year / Serial / Obs の各列ヘッダーをクリックして昇順・降順ソート
+  - 一覧にModel / Finish / Yearを表示
+  - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
+  - Detail内のSource URLは最新Observationだけハイパーリンク化し、過去ObservationのURLは参照用テキストとして表示
+  - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Yearを補完し、Individualへ同期
+- DBエクスポート
+  - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
+  - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
+  - ファイル名は `ygc_chronicle_YYYYMMDD_HHMMSS.db`
+- DB初期化
+  - 画面右上の「DB初期化」からObservation / Individual / Crawl履歴をすべて削除
+  - 誤操作防止の確認ダイアログと `RESET` 入力が必要
+  - Crawl実行中は初期化不可
+  - 初期化後は空のSQLite DBを自動再作成
+
+## 既定のBatch Query
+
+GUIには現在のPhase 0検証で使っている以下を初期値として入れています。
+
+```text
+Fender Stratocaster
+Fender Telecaster
+Fender Jazzmaster
+Fender Jaguar
+Gibson Les Paul
+Gibson SG
+Gibson ES-335
+```
+
+## データ
+
+GUIはCLIと同じSQLite DBを使用します。
+
+```text
+phase0_proto/data/chronicle.db
+```
+
+CLIで収集したデータはGUIからそのまま見えます。逆にGUIで収集したデータもCLIの `ygc stats`, `ygc individuals`, `ygc serial-audit` から確認できます。
+
+別環境へ渡す場合は、WebUI右上の **DBエクスポート** を押してください。ブラウザからSQLiteスナップショットをダウンロードできます。エクスポートは元DBを変更しません。
+
+## セキュリティ
+
+GUIはローカル利用を前提として、既定では `127.0.0.1` のみにbindします。
+
+WebUIで設定したReverb Tokenはブラウザの `localStorage` に保存され、APIリクエスト時だけローカルYGCサーバーへ送信されます。SQLite DBやGitHubには保存されません。ブラウザのlocalStorageは平文相当の保存領域なので、共有PCでは使用せず、必要に応じてWebUIの「Token設定 → 削除」で消してください。
+
+環境変数 `REVERB_API_TOKEN` も引き続き利用できます。WebUI保存Tokenがある場合はそちらを優先します。
+
+LAN内の別端末から使う必要がある場合のみ、明示的に:
+
+```powershell
+ygc-web --host 0.0.0.0
+```
+
+としてください。Phase 0には認証機能がないため、外部公開はしないでください。
+
+
+## Reverb Year Filter
+
+Reverb Listings API の検索パラメータ `year_min` と `year_max` を利用します。
+
+Phase 0では WebUI の既定値を次のようにしています。
+
+```text
+Year Min: 空欄
+Year Max: 1980
+```
+
+YearフィルターはReverb側で候補を絞るための一次フィルターです。
+取得後もYGCのVintage classifierを通し、復刻モデルや不整合データを二次チェックします。
+
+Year情報が未設定・不正確なListingはReverb側のYear検索から漏れる可能性があるため、
+網羅性を確認したい場合はYear Min / Maxを空欄にして従来方式でも取得できます。
+
+
+## Model / Finish / Year metadata migration
+
+新規CrawlではReverb Listingの構造化フィールドから以下をObservationへ保存します。
+
+```text
+model
+finish
+year
+```
+
+Serialを持つObservationからGuitar Individualを作成する際にも同じ情報をIndividualへ保持します。
+
+既存DBはWebUI起動時にスキーマだけ自動移行され、`finish` / `year` カラムが追加されます。既存行の値を埋めるには、今回のみ **Individuals → 既存DBバックフィル** を実行してください。
+
+バックフィルは保存済みReverb Listing IDを使ってListing詳細を再取得し、構造化されたModel / Finish / YearをObservationへ保存した後、Individualへ同期します。既に値があるIndividualメタデータは上書きせず、不足値だけ補完します。
+
+バックフィル後は通常このボタンを再実行する必要はありません。今後の新規Crawlでは自動的に同じ情報が保存されます。
+
+
+## WebUI simplification
+
+Vintage Audit と Serial Audit はPhase 0の初期検証で役割を果たしたため、WebUIからは削除しました。
+内部のVintage分類とSerial抽出処理はCrawl時に引き続き使用されます。
