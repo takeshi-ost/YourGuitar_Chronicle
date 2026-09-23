@@ -69,16 +69,13 @@ ygc-web --no-browser
   - Repeated Individuals
 - Batch Crawl
   - 複数のReverb検索クエリを1回で順次実行
+  - クエリ入力欄は横幅いっぱいに表示し、その下に Year Min / Year Max / Limit / Workers / Start Crawl を1行で配置
   - Reverb APIの `year_min` / `year_max` を検索段階で適用
   - 既定では Year Max = 1980。空欄にするとその側のYear制限を無効化
   - queryごとのlimit指定
   - detail APIのworker数指定
   - 既取得Listingの自動スキップ
   - 進行状況とquery別結果の表示
-- Vintage Audit
-  - Batch Crawlと同じYear Min / Year Maxで検索範囲を指定
-  - 保存せずにReverb summaryを分類
-  - vintage / modern / unknown / non_target の件数と理由を表示
 - Individuals
   - Maker / Model / Finish / Year / Serialでフィルタ
   - ID / Maker / Model / Finish / Year / Serial / Obs の各列ヘッダーをクリックして昇順・降順ソート
@@ -86,10 +83,6 @@ ygc-web --no-browser
   - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
   - Detail内のSource URLは最新Observationだけハイパーリンク化し、過去ObservationのURLは参照用テキストとして表示
   - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Yearを補完し、Individualへ同期
-- Serial Audit
-  - DB内のSerialを現在のextractorで再評価
-  - MATCH / CHECK / SUSPICIOUS を表示
-  - `XXXX`, `THATDATESTO...`, `DATEBACK...`, `--YOUR` 等の既知の怪しい形式を強調表示
 - DBエクスポート
   - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
   - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
@@ -178,3 +171,9 @@ Serialを持つObservationからGuitar Individualを作成する際にも同じ�
 バックフィルは保存済みReverb Listing IDを使ってListing詳細を再取得し、構造化されたModel / Finish / YearをObservationへ保存した後、Individualへ同期します。既に値があるIndividualメタデータは上書きせず、不足値だけ補完します。
 
 バックフィル後は通常このボタンを再実行する必要はありません。今後の新規Crawlでは自動的に同じ情報が保存されます。
+
+
+## WebUI simplification
+
+Vintage Audit と Serial Audit はPhase 0の初期検証で役割を果たしたため、WebUIからは削除しました。
+内部のVintage分類とSerial抽出処理はCrawl時に引き続き使用されます。
