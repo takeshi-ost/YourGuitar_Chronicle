@@ -62,6 +62,10 @@ ygc-web --no-browser
   - DB内のSerialを現在のextractorで再評価
   - MATCH / CHECK / SUSPICIOUS を表示
   - `XXXX`, `THATDATESTO...`, `DATEBACK...`, `--YOUR` 等の既知の怪しい形式を強調表示
+- DBエクスポート
+  - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
+  - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
+  - ファイル名は `ygc_chronicle_YYYYMMDD_HHMMSS.db`
 
 ## 既定のBatch Query
 
@@ -86,6 +90,8 @@ phase0_proto/data/chronicle.db
 ```
 
 CLIで収集したデータはGUIからそのまま見えます。逆にGUIで収集したデータもCLIの `ygc stats`, `ygc individuals`, `ygc serial-audit` から確認できます。
+
+別環境へ渡す場合は、WebUI右上の **DBエクスポート** を押してください。ブラウザからSQLiteスナップショットをダウンロードできます。エクスポートは元DBを変更しません。
 
 ## セキュリティ
 
