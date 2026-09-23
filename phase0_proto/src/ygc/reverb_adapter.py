@@ -833,6 +833,20 @@ def to_observation(
         or None
     )
 
+    finish = (
+        _text(
+            item.get("finish")
+        )
+        or None
+    )
+
+    year = (
+        _text(
+            item.get("year")
+        )
+        or None
+    )
+
     title = (
         _text(
             item.get("title")
@@ -865,6 +879,14 @@ def to_observation(
 
         "model": (
             model
+        ),
+
+        "finish": (
+            finish
+        ),
+
+        "year": (
+            year
         ),
 
         "serial_number": (
