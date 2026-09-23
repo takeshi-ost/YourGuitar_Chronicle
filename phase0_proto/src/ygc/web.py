@@ -904,36 +904,39 @@ INDEX_HTML = r"""<!doctype html>
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
 header{padding:24px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}
 h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 14px}.sub{color:var(--muted);font-size:12px}
-main{padding:22px;max-width:1500px;margin:auto}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+main{padding:22px;max-width:1500px;margin:auto}.grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(360px,.85fr);gap:18px;align-items:start}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}.crawl-query{margin-bottom:12px}.crawl-controls{display:grid;grid-template-columns:110px 110px 130px 110px auto;gap:10px;align-items:end}.crawl-controls button{white-space:nowrap}
 .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}.num{font-size:24px;font-weight:700}.label{font-size:11px;color:var(--muted)}
 input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}textarea{min-height:145px;resize:vertical}
 button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}button.secondary{background:#2a3036;color:var(--text)}button:disabled{opacity:.45;cursor:not-allowed}
-.row{display:grid;grid-template-columns:1fr 90px 90px 110px 90px auto;gap:10px;align-items:end}.row2{display:grid;grid-template-columns:1fr 90px 90px 110px auto;gap:10px;align-items:end}
+.row{display:grid;grid-template-columns:1fr 90px 90px 110px 90px auto;gap:10px;align-items:end}
 table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--text)}th.sortable .sort-indicator{font-size:10px;margin-left:4px}
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 #detail{white-space:pre-wrap}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.row,.row2{grid-template-columns:1fr}}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="grid">
 <section>
 <div class="panel">
 <h2>Batch Crawl</h2>
-<div class="row">
-<div><div class="sub">1行につき1クエリ</div><textarea id="queries">Fender Stratocaster
+<div class="crawl-query">
+<div class="sub">1行につき1クエリ</div>
+<textarea id="queries">Fender Stratocaster
 Fender Telecaster
 Fender Jazzmaster
 Fender Jaguar
 Gibson Les Paul
 Gibson SG
-Gibson ES-335</textarea></div>
+Gibson ES-335</textarea>
+</div>
+<div class="crawl-controls">
 <div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="なし" min="1800" max="2100"></div>
 <div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
 <div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
@@ -952,18 +955,6 @@ Gibson ES-335</textarea></div>
 </section>
 
 <section>
-<div class="panel">
-<h2>Vintage Audit</h2>
-<div class="row2"><div><input id="auditQuery" value="Fender Stratocaster"></div><div><input id="auditYearMin" type="number" placeholder="Year Min" min="1800" max="2100"></div><div><input id="auditYearMax" type="number" value="1980" min="1800" max="2100"></div><div><input id="auditLimit" type="number" value="100" min="1" max="500"></div><div><button onclick="runVintageAudit()">Audit</button></div></div>
-<div id="auditSummary" style="margin:10px 0"></div>
-<div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Status</th><th>Year</th><th>Reason</th><th>Title</th></tr></thead><tbody id="auditBody"></tbody></table></div>
-</div>
-
-<div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Serial Audit</h2><button class="secondary" onclick="loadSerialAudit()">更新</button></div>
-<div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Serial</th><th>Maker / Model</th><th>Conf.</th><th>Result</th><th>Context</th></tr></thead><tbody id="serialBody"></tbody></table></div>
-</div>
-
 <div class="panel">
 <h2>Individual Detail</h2>
 <div id="detail" class="sub">Individuals の行をクリックすると履歴を表示します。</div>
@@ -1016,14 +1007,12 @@ async function resetDatabase(){
     });
     individuals=[];
     document.getElementById('individualBody').innerHTML='';
-    document.getElementById('serialBody').innerHTML='';
     document.getElementById('detail').textContent='Individuals の行をクリックすると履歴を表示します。';
     document.getElementById('jobResults').innerHTML='';
     document.getElementById('jobMessage').textContent='DBを初期化しました';
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
     await loadIndividuals();
-    await loadSerialAudit();
     alert('DBを初期化しました。');
   }catch(e){
     alert(e.message);
@@ -1035,12 +1024,10 @@ function setIndividualSort(key){if(individualSortKey===key){individualSortDirect
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+'</b>\nModel: '+esc(i.model||'')+'\nFinish: '+esc(i.finish||'')+'\nYear: '+esc(i.year||'')+'\nSerial: '+esc(i.serial_number||'')+'\n\n';const observations=d.observations||[];const latestIndex=observations.length-1;for(let index=0;index<observations.length;index++){const o=observations[index];out+=esc(o.listing_date||o.observed_at)+'\nModel: '+esc(o.model||'')+'\nFinish: '+esc(o.finish||'')+'\nYear: '+esc(o.year||'')+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n';const url=String(o.source_url||'');if(url&&index===latestIndex){out+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+'</a>\n\n'}else{out+=esc(url)+'\n\n'}}document.getElementById('detail').innerHTML=out}
-async function loadSerialAudit(){const rows=await jfetch('/api/serial-audit?limit=100');document.getElementById('serialBody').innerHTML=rows.map(x=>{const cls=x.suspicious?'bad':(x.match?'good':'warn');const result=x.suspicious?'SUSPICIOUS':(x.match?'MATCH':'CHECK');return '<tr><td class="mono '+cls+'">'+esc(x.stored)+'</td><td>'+esc((x.manufacturer||'')+' '+(x.model||''))+'</td><td>'+esc(x.confidence==null?'':Number(x.confidence).toFixed(2))+'</td><td class="'+cls+'">'+result+'</td><td>'+esc(x.context)+'</td></tr>'}).join('')}
-async function runVintageAudit(){const minValue=document.getElementById('auditYearMin').value;const maxValue=document.getElementById('auditYearMax').value;const body={query:document.getElementById('auditQuery').value,limit:Number(document.getElementById('auditLimit').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const d=await jfetch('/api/vintage-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('auditSummary').innerHTML=Object.entries(d.counts).map(([k,v])=>'<span class="pill">'+esc(k)+': '+v+'</span>').join('');document.getElementById('auditBody').innerHTML=d.rows.map(x=>'<tr><td class="'+(x.status==='vintage'?'good':x.status==='modern'?'bad':'warn')+'">'+esc(x.status)+'</td><td>'+esc(x.estimated_year||'')+'</td><td class="mono">'+esc(x.reason)+'</td><td>'+esc(x.title)+'</td></tr>').join('')}
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();await loadSerialAudit();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-(async()=>{await refreshStatus();await loadIndividuals();await loadSerialAudit()})()
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+(async()=>{await refreshStatus();await loadIndividuals()})()
 </script>
 </body></html>"""
 
