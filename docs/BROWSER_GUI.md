@@ -80,8 +80,10 @@ ygc-web --no-browser
   - 保存せずにReverb summaryを分類
   - vintage / modern / unknown / non_target の件数と理由を表示
 - Individuals
-  - Maker / Model / Serialでフィルタ
-  - IndividualをクリックしてObservation履歴を表示
+  - Maker / Model / Finish / Year / Serialでフィルタ
+  - 一覧にModel / Finish / Yearを表示
+  - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
+  - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Yearを補完し、Individualへ同期
 - Serial Audit
   - DB内のSerialを現在のextractorで再評価
   - MATCH / CHECK / SUSPICIOUS を表示
@@ -155,3 +157,22 @@ YearフィルターはReverb側で候補を絞るための一次フィルター�
 
 Year情報が未設定・不正確なListingはReverb側のYear検索から漏れる可能性があるため、
 網羅性を確認したい場合はYear Min / Maxを空欄にして従来方式でも取得できます。
+
+
+## Model / Finish / Year metadata migration
+
+新規CrawlではReverb Listingの構造化フィールドから以下をObservationへ保存します。
+
+```text
+model
+finish
+year
+```
+
+Serialを持つObservationからGuitar Individualを作成する際にも同じ情報をIndividualへ保持します。
+
+既存DBはWebUI起動時にスキーマだけ自動移行され、`finish` / `year` カラムが追加されます。既存行の値を埋めるには、今回のみ **Individuals → 既存DBバックフィル** を実行してください。
+
+バックフィルは保存済みReverb Listing IDを使ってListing詳細を再取得し、構造化されたModel / Finish / YearをObservationへ保存した後、Individualへ同期します。既に値があるIndividualメタデータは上書きせず、不足値だけ補完します。
+
+バックフィル後は通常このボタンを再実行する必要はありません。今後の新規Crawlでは自動的に同じ情報が保存されます。
