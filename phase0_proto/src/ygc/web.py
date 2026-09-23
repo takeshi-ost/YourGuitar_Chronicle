@@ -236,6 +236,8 @@ def _run_batch(
                                 obs["manufacturer"],
                                 obs["model"],
                                 obs["serial_number"],
+                                finish=obs.get("finish"),
+                                year=obs.get("year"),
                             )
                         else:
                             obs["individual_id"] = None
@@ -297,6 +299,216 @@ def _run_batch(
     finally:
         with _jobs_lock:
             if _active_job_id == job_id:
+                _active_job_id = None
+
+
+def _run_metadata_backfill(
+    job_id: str,
+    token: str,
+) -> None:
+    global _active_job_id
+
+    repository = repo()
+    rows = (
+        repository
+        .list_observations_for_backfill()
+    )
+    total = len(rows)
+
+    try:
+        if total == 0:
+            synced = (
+                repository
+                .sync_individual_metadata_from_observations()
+            )
+            _set_job(
+                job_id,
+                status="done",
+                message=(
+                    "バックフィル対象はありません"
+                ),
+                progress=1.0,
+                aggregate={
+                    "target_observations": 0,
+                    "metadata_updated": 0,
+                    "individuals_synced": synced,
+                },
+                finished_at=time.time(),
+            )
+            return
+
+        row_by_listing = {
+            str(
+                row[
+                    "source_listing_id"
+                ]
+            ): row
+            for row in rows
+        }
+
+        metadata_updated = 0
+        processed = 0
+
+        with ReverbAPICollector(
+            token=token,
+            api_base=config.REVERB_API_BASE,
+            timeout=config.REQUEST_TIMEOUT,
+            delay=0.15,
+            max_workers=6,
+        ) as collector:
+            for start in range(
+                0,
+                total,
+                100,
+            ):
+                chunk = rows[
+                    start:
+                    start + 100
+                ]
+
+                items = [
+                    {
+                        "id": str(
+                            row[
+                                "source_listing_id"
+                            ]
+                        ),
+                        "_links": {
+                            "self": {
+                                "href": (
+                                    f"{config.REVERB_API_BASE.rstrip('/')}"
+                                    "/listings/"
+                                    f"{row['source_listing_id']}"
+                                )
+                            }
+                        },
+                    }
+                    for row in chunk
+                ]
+
+                for detail in (
+                    collector
+                    .fetch_listing_details(
+                        items
+                    )
+                ):
+                    listing_id = (
+                        collector
+                        .listing_id(
+                            detail
+                        )
+                    )
+
+                    if not listing_id:
+                        processed += 1
+                        continue
+
+                    row = (
+                        row_by_listing
+                        .get(
+                            str(
+                                listing_id
+                            )
+                        )
+                    )
+
+                    if row is None:
+                        processed += 1
+                        continue
+
+                    model = str(
+                        detail.get(
+                            "model"
+                        )
+                        or ""
+                    ).strip() or None
+
+                    finish = str(
+                        detail.get(
+                            "finish"
+                        )
+                        or ""
+                    ).strip() or None
+
+                    year = str(
+                        detail.get(
+                            "year"
+                        )
+                        or ""
+                    ).strip() or None
+
+                    repository.update_observation_metadata(
+                        int(
+                            row["id"]
+                        ),
+                        model=model,
+                        finish=finish,
+                        year=year,
+                    )
+
+                    if (
+                        model
+                        or finish
+                        or year
+                    ):
+                        metadata_updated += 1
+
+                    processed += 1
+
+                    _set_job(
+                        job_id,
+                        message=(
+                            "既存DBをバックフィル中 "
+                            f"{processed}/{total}"
+                        ),
+                        progress=(
+                            processed
+                            / max(
+                                total,
+                                1,
+                            )
+                        ),
+                    )
+
+        synced = (
+            repository
+            .sync_individual_metadata_from_observations()
+        )
+
+        _set_job(
+            job_id,
+            status="done",
+            message=(
+                "model / finish / year "
+                "バックフィル完了"
+            ),
+            progress=1.0,
+            aggregate={
+                "target_observations": total,
+                "metadata_updated": (
+                    metadata_updated
+                ),
+                "individuals_synced": (
+                    synced
+                ),
+            },
+            finished_at=time.time(),
+        )
+
+    except Exception as exc:
+        _set_job(
+            job_id,
+            status="error",
+            message=str(exc),
+            error=str(exc),
+            finished_at=time.time(),
+        )
+    finally:
+        with _jobs_lock:
+            if (
+                _active_job_id
+                == job_id
+            ):
                 _active_job_id = None
 
 
@@ -599,6 +811,79 @@ def api_crawl(
     return {"job_id": job_id}
 
 
+@app.post("/api/backfill-metadata")
+def api_backfill_metadata(
+    http_request: Request,
+) -> dict[str, str]:
+    global _active_job_id
+
+    token, _token_source = (
+        _request_token(
+            http_request
+        )
+    )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Reverb API Token is not configured"
+            ),
+        )
+
+    with _jobs_lock:
+        if (
+            _active_job_id
+            and _jobs.get(
+                _active_job_id,
+                {},
+            ).get("status")
+            == "running"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Another background job "
+                    "is already running"
+                ),
+            )
+
+        job_id = (
+            uuid.uuid4()
+            .hex[:12]
+        )
+
+        _jobs[job_id] = {
+            "id": job_id,
+            "status": "running",
+            "message": (
+                "既存DBのバックフィルを開始します"
+            ),
+            "progress": 0.0,
+            "query_results": [],
+            "started_at": time.time(),
+        }
+
+        _active_job_id = (
+            job_id
+        )
+
+    threading.Thread(
+        target=(
+            _run_metadata_backfill
+        ),
+        args=(
+            job_id,
+            token,
+        ),
+        daemon=True,
+    ).start()
+
+    return {
+        "job_id": job_id
+    }
+
+
 @app.get("/api/jobs/{job_id}")
 def api_job(job_id: str) -> dict[str, Any]:
     with _jobs_lock:
@@ -661,8 +946,8 @@ Gibson ES-335</textarea></div>
 </div>
 
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Individuals</h2><input id="individualFilter" placeholder="maker / model / serial" oninput="renderIndividuals()"><button class="secondary" onclick="loadIndividuals()">更新</button></div>
-<div class="table-wrap"><table><thead><tr><th>ID</th><th>Maker</th><th>Model</th><th>Serial</th><th>Obs</th></tr></thead><tbody id="individualBody"></tbody></table></div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Individuals</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>Maker</th><th>Model</th><th>Finish</th><th>Year</th><th>Serial</th><th>Obs</th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 </section>
 
@@ -743,10 +1028,11 @@ async function resetDatabase(){
   }
 }
 async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
-function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
-async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+' '+esc(i.model||'')+'</b>\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
+function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
+async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+'</b>\nModel: '+esc(i.model||'')+'\nFinish: '+esc(i.finish||'')+'\nYear: '+esc(i.year||'')+'\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\nModel: '+esc(o.model||'')+'\nFinish: '+esc(o.finish||'')+'\nYear: '+esc(o.year||'')+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
 async function loadSerialAudit(){const rows=await jfetch('/api/serial-audit?limit=100');document.getElementById('serialBody').innerHTML=rows.map(x=>{const cls=x.suspicious?'bad':(x.match?'good':'warn');const result=x.suspicious?'SUSPICIOUS':(x.match?'MATCH':'CHECK');return '<tr><td class="mono '+cls+'">'+esc(x.stored)+'</td><td>'+esc((x.manufacturer||'')+' '+(x.model||''))+'</td><td>'+esc(x.confidence==null?'':Number(x.confidence).toFixed(2))+'</td><td class="'+cls+'">'+result+'</td><td>'+esc(x.context)+'</td></tr>'}).join('')}
 async function runVintageAudit(){const minValue=document.getElementById('auditYearMin').value;const maxValue=document.getElementById('auditYearMax').value;const body={query:document.getElementById('auditQuery').value,limit:Number(document.getElementById('auditLimit').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const d=await jfetch('/api/vintage-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('auditSummary').innerHTML=Object.entries(d.counts).map(([k,v])=>'<span class="pill">'+esc(k)+': '+v+'</span>').join('');document.getElementById('auditBody').innerHTML=d.rows.map(x=>'<tr><td class="'+(x.status==='vintage'?'good':x.status==='modern'?'bad':'warn')+'">'+esc(x.status)+'</td><td>'+esc(x.estimated_year||'')+'</td><td class="mono">'+esc(x.reason)+'</td><td>'+esc(x.title)+'</td></tr>').join('')}
+async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;document.getElementById('jobResults').innerHTML=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();await loadSerialAudit();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 (async()=>{await refreshStatus();await loadIndividuals();await loadSerialAudit()})()
