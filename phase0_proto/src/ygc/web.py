@@ -100,6 +100,10 @@ class VintageAuditRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=500)
 
 
+class ResetDatabaseRequest(BaseModel):
+    confirm: str
+
+
 def _run_batch(job_id: str, request: CrawlRequest) -> None:
     global _active_job_id
 
@@ -299,6 +303,62 @@ def api_export_db() -> FileResponse:
         raise
 
 
+@app.post("/api/reset-db")
+def api_reset_db(request: ResetDatabaseRequest) -> dict[str, Any]:
+    if request.confirm != "RESET":
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation text must be RESET",
+        )
+
+    with _jobs_lock:
+        if (
+            _active_job_id
+            and _jobs.get(
+                _active_job_id,
+                {},
+            ).get("status")
+            == "running"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot reset the database while a crawl is running",
+            )
+
+    db_path = Path(config.DB_PATH)
+
+    for path in (
+        db_path,
+        Path(str(db_path) + "-wal"),
+        Path(str(db_path) + "-shm"),
+    ):
+        try:
+            path.unlink(
+                missing_ok=True
+            )
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Could not remove "
+                    f"{path}: {exc}"
+                ),
+            ) from exc
+
+    repository = Repository(
+        config.DB_PATH
+    )
+    repository.init_db()
+
+    return {
+        "ok": True,
+        "db_path": str(
+            config.DB_PATH
+        ),
+        "stats": repository.stats(),
+    }
+
+
 @app.get("/api/individuals")
 def api_individuals() -> list[dict[str, Any]]:
     return [_row_dict(row) for row in repo().list_individuals()]
@@ -466,7 +526,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="exportDatabase()">DBエクスポート</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="grid">
@@ -525,6 +585,35 @@ async function refreshStatus(){const d=await jfetch('/api/status');const s=d.sta
 statCard('Observations',s.observations),statCard('Serial Observations',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Individuals',s.individuals),statCard('Repeated',s.repeated_individuals)
 ].join('');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK</span>':'<span class="status bad">Reverb Token 未設定</span>'}
 function exportDatabase(){window.location.href='/api/export-db'}
+async function resetDatabase(){
+  const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
+  if(!confirm(message))return;
+  const typed=prompt('確認のため RESET と入力してください。');
+  if(typed!=='RESET'){
+    if(typed!==null)alert('入力が一致しないため中止しました。');
+    return;
+  }
+  try{
+    await jfetch('/api/reset-db',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({confirm:'RESET'})
+    });
+    individuals=[];
+    document.getElementById('individualBody').innerHTML='';
+    document.getElementById('serialBody').innerHTML='';
+    document.getElementById('detail').textContent='Individuals の行をクリックすると履歴を表示します。';
+    document.getElementById('jobResults').innerHTML='';
+    document.getElementById('jobMessage').textContent='DBを初期化しました';
+    document.getElementById('jobBar').style.width='0%';
+    await refreshStatus();
+    await loadIndividuals();
+    await loadSerialAudit();
+    alert('DBを初期化しました。');
+  }catch(e){
+    alert(e.message);
+  }
+}
 async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+' '+esc(i.model||'')+'</b>\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
