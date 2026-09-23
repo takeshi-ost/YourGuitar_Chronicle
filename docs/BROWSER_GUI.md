@@ -69,11 +69,14 @@ ygc-web --no-browser
   - Repeated Individuals
 - Batch Crawl
   - 複数のReverb検索クエリを1回で順次実行
+  - Reverb APIの `year_min` / `year_max` を検索段階で適用
+  - 既定では Year Max = 1980。空欄にするとその側のYear制限を無効化
   - queryごとのlimit指定
   - detail APIのworker数指定
   - 既取得Listingの自動スキップ
   - 進行状況とquery別結果の表示
 - Vintage Audit
+  - Batch Crawlと同じYear Min / Year Maxで検索範囲を指定
   - 保存せずにReverb summaryを分類
   - vintage / modern / unknown / non_target の件数と理由を表示
 - Individuals
@@ -134,3 +137,21 @@ ygc-web --host 0.0.0.0
 ```
 
 としてください。Phase 0には認証機能がないため、外部公開はしないでください。
+
+
+## Reverb Year Filter
+
+Reverb Listings API の検索パラメータ `year_min` と `year_max` を利用します。
+
+Phase 0では WebUI の既定値を次のようにしています。
+
+```text
+Year Min: 空欄
+Year Max: 1980
+```
+
+YearフィルターはReverb側で候補を絞るための一次フィルターです。
+取得後もYGCのVintage classifierを通し、復刻モデルや不整合データを二次チェックします。
+
+Year情報が未設定・不正確なListingはReverb側のYear検索から漏れる可能性があるため、
+網羅性を確認したい場合はYear Min / Maxを空欄にして従来方式でも取得できます。
