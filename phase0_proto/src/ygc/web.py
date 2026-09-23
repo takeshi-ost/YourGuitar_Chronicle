@@ -1,0 +1,511 @@
+from __future__ import annotations
+
+import argparse
+import re
+import threading
+import time
+import uuid
+import webbrowser
+from typing import Any
+
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+
+from ygc import config
+from ygc.collectors.reverb import ReverbAPICollector
+from ygc.db.repository import Repository
+from ygc.extractors.serial import extract_serial_candidates
+from ygc.matching.individual_matcher import match_or_create
+from ygc.reverb_adapter import classify_vintage_listing, to_observation
+
+
+app = FastAPI(title="Your Guitar Chronicle Phase 0")
+
+_jobs: dict[str, dict[str, Any]] = {}
+_jobs_lock = threading.Lock()
+_active_job_id: str | None = None
+
+
+def repo() -> Repository:
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    return repository
+
+
+def _row_dict(row: Any) -> dict[str, Any]:
+    return {key: row[key] for key in row.keys()}
+
+
+def _existing_listing_ids(repository: Repository, listing_ids: list[str]) -> set[str]:
+    ids = [value for value in listing_ids if value]
+    if not ids:
+        return set()
+
+    result: set[str] = set()
+    with repository.connect() as con:
+        for start in range(0, len(ids), 500):
+            chunk = ids[start:start + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = con.execute(
+                "SELECT source_listing_id FROM observations "
+                "WHERE source_site=? AND source_listing_id IN (" + placeholders + ")",
+                ["reverb", *chunk],
+            )
+            result.update(str(row["source_listing_id"]) for row in rows)
+    return result
+
+
+def _remove_temporary_fields(observation: dict[str, Any]) -> tuple[str, str, int | None]:
+    status = str(observation.pop("vintage_status", "unknown"))
+    reason = str(observation.pop("vintage_reason", ""))
+    year = observation.pop("estimated_year", None)
+    observation.pop("is_vintage_listing", None)
+    return status, reason, year
+
+
+def _set_job(job_id: str, **values: Any) -> None:
+    with _jobs_lock:
+        if job_id in _jobs:
+            _jobs[job_id].update(values)
+
+
+def _append_job_result(job_id: str, result: dict[str, Any]) -> None:
+    with _jobs_lock:
+        if job_id in _jobs:
+            _jobs[job_id].setdefault("query_results", []).append(result)
+
+
+class CrawlRequest(BaseModel):
+    queries: list[str] = Field(min_length=1, max_length=30)
+    limit: int = Field(default=500, ge=1, le=5000)
+    workers: int = Field(default=6, ge=1, le=12)
+
+
+class VintageAuditRequest(BaseModel):
+    query: str
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+def _run_batch(job_id: str, request: CrawlRequest) -> None:
+    global _active_job_id
+
+    repository = repo()
+    total_queries = len(request.queries)
+    aggregate = {
+        "summaries_fetched": 0,
+        "detail_candidates": 0,
+        "details_fetched": 0,
+        "skipped_modern": 0,
+        "skipped_non_target": 0,
+        "skipped_unknown": 0,
+        "skipped_existing": 0,
+        "new_observations": 0,
+    }
+
+    try:
+        with ReverbAPICollector(
+            token=config.REVERB_API_TOKEN,
+            api_base=config.REVERB_API_BASE,
+            timeout=config.REQUEST_TIMEOUT,
+            delay=0.15,
+            max_workers=request.workers,
+        ) as collector:
+            for query_index, raw_query in enumerate(request.queries, start=1):
+                query = raw_query.strip()
+                if not query:
+                    continue
+
+                _set_job(
+                    job_id,
+                    message=f"{query_index}/{total_queries}: {query}",
+                    current_query=query,
+                    progress=(query_index - 1) / max(total_queries, 1),
+                )
+
+                run_id = repository.start_run("reverb")
+                fetched = detailed = created = 0
+                skipped_modern = skipped_non_target = skipped_unknown = skipped_existing = 0
+
+                try:
+                    summaries = list(collector.iter_listing_summaries(query=query, limit=request.limit))
+                    fetched = len(summaries)
+
+                    listing_ids = [
+                        collector.listing_id(item)
+                        for item in summaries
+                        if collector.listing_id(item)
+                    ]
+                    existing_ids = _existing_listing_ids(repository, listing_ids)
+
+                    candidates: list[dict[str, Any]] = []
+                    for item in summaries:
+                        listing_id = collector.listing_id(item)
+                        if listing_id and listing_id in existing_ids:
+                            skipped_existing += 1
+                            continue
+
+                        status = classify_vintage_listing(item)["status"]
+                        if status in ("vintage", "unknown"):
+                            candidates.append(item)
+                        elif status == "modern":
+                            skipped_modern += 1
+                        else:
+                            skipped_non_target += 1
+
+                    candidate_count = len(candidates)
+
+                    for item in collector.fetch_listing_details(candidates):
+                        detailed += 1
+                        obs = to_observation(item, config.SERIAL_CONFIDENCE_THRESHOLD)
+                        status, _reason, _year = _remove_temporary_fields(obs)
+
+                        if status == "modern":
+                            skipped_modern += 1
+                            continue
+                        if status == "non_target":
+                            skipped_non_target += 1
+                            continue
+                        if status != "vintage":
+                            skipped_unknown += 1
+                            continue
+
+                        if obs["manufacturer"] and obs["serial_number"]:
+                            obs["individual_id"] = match_or_create(
+                                repository,
+                                obs["manufacturer"],
+                                obs["model"],
+                                obs["serial_number"],
+                            )
+                        else:
+                            obs["individual_id"] = None
+
+                        _, was_created = repository.upsert_observation(obs)
+                        if was_created:
+                            created += 1
+
+                    repository.finish_run(
+                        run_id,
+                        pages_discovered=fetched,
+                        pages_fetched=detailed,
+                        observations_created=created,
+                        status="ok",
+                    )
+                except Exception as exc:
+                    repository.finish_run(
+                        run_id,
+                        pages_discovered=fetched,
+                        pages_fetched=detailed,
+                        observations_created=created,
+                        status="error",
+                        error_message=str(exc),
+                    )
+                    raise
+
+                result = {
+                    "query": query,
+                    "summaries_fetched": fetched,
+                    "detail_candidates": candidate_count,
+                    "details_fetched": detailed,
+                    "skipped_modern": skipped_modern,
+                    "skipped_non_target": skipped_non_target,
+                    "skipped_unknown": skipped_unknown,
+                    "skipped_existing": skipped_existing,
+                    "new_observations": created,
+                }
+                _append_job_result(job_id, result)
+
+                for key in aggregate:
+                    aggregate[key] += int(result[key])
+
+        _set_job(
+            job_id,
+            status="done",
+            message="完了",
+            progress=1.0,
+            aggregate=aggregate,
+            finished_at=time.time(),
+        )
+    except Exception as exc:
+        _set_job(
+            job_id,
+            status="error",
+            message=str(exc),
+            error=str(exc),
+            finished_at=time.time(),
+        )
+    finally:
+        with _jobs_lock:
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> HTMLResponse:
+    return HTMLResponse(INDEX_HTML)
+
+
+@app.get("/api/status")
+def api_status() -> dict[str, Any]:
+    repository = repo()
+    return {
+        "token_configured": bool(config.REVERB_API_TOKEN),
+        "db_path": str(config.DB_PATH),
+        "stats": repository.stats(),
+        "active_job_id": _active_job_id,
+    }
+
+
+@app.get("/api/individuals")
+def api_individuals() -> list[dict[str, Any]]:
+    return [_row_dict(row) for row in repo().list_individuals()]
+
+
+@app.get("/api/individuals/{individual_id}")
+def api_individual(individual_id: int) -> dict[str, Any]:
+    individual, observations = repo().get_individual(individual_id)
+    if not individual:
+        raise HTTPException(status_code=404, detail="Individual not found")
+    return {
+        "individual": _row_dict(individual),
+        "observations": [_row_dict(row) for row in observations],
+    }
+
+
+@app.get("/api/serial-audit")
+def api_serial_audit(limit: int = 100) -> list[dict[str, Any]]:
+    limit = max(1, min(limit, 500))
+    repository = repo()
+
+    with repository.connect() as con:
+        rows = con.execute(
+            """
+            SELECT id, individual_id, manufacturer, model, serial_number,
+                   title, raw_text, serial_confidence, source_url
+            FROM observations
+            WHERE serial_number IS NOT NULL AND TRIM(serial_number) <> ''
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        candidates = extract_serial_candidates(row["raw_text"] or "")
+        best = candidates[0] if candidates else None
+        stored = str(row["serial_number"] or "")
+        extracted = best.value if best else ""
+        context = re.sub(r"\s+", " ", best.context).strip() if best else ""
+        if len(context) > 220:
+            context = context[:217] + "..."
+
+        suspicious = bool(
+            re.search(
+                r"(XXXX|\?\?\?|THAT|DATES?TO|DATEBACK|--|YOUR)",
+                stored,
+                re.I,
+            )
+        )
+
+        result.append(
+            {
+                "id": row["id"],
+                "individual_id": row["individual_id"],
+                "manufacturer": row["manufacturer"],
+                "model": row["model"],
+                "stored": stored,
+                "extracted": extracted,
+                "confidence": best.confidence if best else row["serial_confidence"],
+                "match": bool(best and extracted.upper() == stored.upper()),
+                "suspicious": suspicious,
+                "context": context,
+                "source_url": row["source_url"],
+            }
+        )
+    return result
+
+
+@app.post("/api/vintage-audit")
+def api_vintage_audit(request: VintageAuditRequest) -> dict[str, Any]:
+    if not config.REVERB_API_TOKEN:
+        raise HTTPException(status_code=400, detail="REVERB_API_TOKEN is not configured")
+
+    counts = {"vintage": 0, "modern": 0, "unknown": 0, "non_target": 0}
+    rows: list[dict[str, Any]] = []
+
+    with ReverbAPICollector(
+        token=config.REVERB_API_TOKEN,
+        api_base=config.REVERB_API_BASE,
+        timeout=config.REQUEST_TIMEOUT,
+        delay=0.15,
+        max_workers=6,
+    ) as collector:
+        for item in collector.iter_listing_summaries(request.query, request.limit):
+            classification = classify_vintage_listing(item)
+            status = classification["status"]
+            counts[status] = counts.get(status, 0) + 1
+            rows.append(
+                {
+                    "id": item.get("id"),
+                    "status": status,
+                    "estimated_year": classification["estimated_year"],
+                    "reason": classification["reason"],
+                    "title": item.get("title") or "",
+                }
+            )
+    return {"counts": counts, "rows": rows}
+
+
+@app.post("/api/crawl")
+def api_crawl(request: CrawlRequest) -> dict[str, str]:
+    global _active_job_id
+
+    if not config.REVERB_API_TOKEN:
+        raise HTTPException(status_code=400, detail="REVERB_API_TOKEN is not configured")
+
+    queries = [query.strip() for query in request.queries if query.strip()]
+    if not queries:
+        raise HTTPException(status_code=400, detail="At least one query is required")
+
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {
+            "id": job_id,
+            "status": "running",
+            "message": "開始しています",
+            "progress": 0.0,
+            "queries": queries,
+            "query_results": [],
+            "started_at": time.time(),
+        }
+        _active_job_id = job_id
+
+    actual = CrawlRequest(queries=queries, limit=request.limit, workers=request.workers)
+    threading.Thread(target=_run_batch, args=(job_id, actual), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/jobs/{job_id}")
+def api_job(job_id: str) -> dict[str, Any]:
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return dict(job)
+
+
+INDEX_HTML = r"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — Phase 0</title>
+<style>
+:root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--warn:#e0b65f;--bad:#e07171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:24px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}
+h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 14px}.sub{color:var(--muted);font-size:12px}
+main{padding:22px;max-width:1500px;margin:auto}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}.num{font-size:24px;font-weight:700}.label{font-size:11px;color:var(--muted)}
+input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}textarea{min-height:145px;resize:vertical}
+button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}button.secondary{background:#2a3036;color:var(--text)}button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:grid;grid-template-columns:1fr 110px 110px auto;gap:10px;align-items:end}.row2{display:grid;grid-template-columns:1fr 110px auto;gap:10px;align-items:end}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+.table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+#detail{white-space:pre-wrap}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.row,.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div id="tokenState"></div></header>
+<main>
+<div class="cards" id="cards"></div>
+<div class="grid">
+<section>
+<div class="panel">
+<h2>Batch Crawl</h2>
+<div class="row">
+<div><div class="sub">1行につき1クエリ</div><textarea id="queries">Fender Stratocaster
+Fender Telecaster
+Fender Jazzmaster
+Fender Jaguar
+Gibson Les Paul
+Gibson SG
+Gibson ES-335</textarea></div>
+<div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
+<div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
+<div><button id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
+</div>
+<div class="progress"><div class="bar" id="jobBar"></div></div>
+<div id="jobMessage" class="sub">待機中</div>
+<div id="jobResults" style="margin-top:12px"></div>
+</div>
+
+<div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">Individuals</h2><input id="individualFilter" placeholder="maker / model / serial" oninput="renderIndividuals()"><button class="secondary" onclick="loadIndividuals()">更新</button></div>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>Maker</th><th>Model</th><th>Serial</th><th>Obs</th></tr></thead><tbody id="individualBody"></tbody></table></div>
+</div>
+</section>
+
+<section>
+<div class="panel">
+<h2>Vintage Audit</h2>
+<div class="row2"><div><input id="auditQuery" value="Fender Stratocaster"></div><div><input id="auditLimit" type="number" value="100" min="1" max="500"></div><div><button onclick="runVintageAudit()">Audit</button></div></div>
+<div id="auditSummary" style="margin:10px 0"></div>
+<div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Status</th><th>Year</th><th>Reason</th><th>Title</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+</div>
+
+<div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">Serial Audit</h2><button class="secondary" onclick="loadSerialAudit()">更新</button></div>
+<div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Serial</th><th>Maker / Model</th><th>Conf.</th><th>Result</th><th>Context</th></tr></thead><tbody id="serialBody"></tbody></table></div>
+</div>
+
+<div class="panel">
+<h2>Individual Detail</h2>
+<div id="detail" class="sub">Individuals の行をクリックすると履歴を表示します。</div>
+</div>
+</section>
+</div>
+</main>
+<script>
+let individuals=[];
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+async function jfetch(url,opt={}){const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function statCard(label,value){return '<div class="card"><div class="num">'+esc(value)+'</div><div class="label">'+esc(label)+'</div></div>'}
+async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
+statCard('Observations',s.observations),statCard('Serial Observations',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Individuals',s.individuals),statCard('Repeated',s.repeated_individuals)
+].join('');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK</span>':'<span class="status bad">Reverb Token 未設定</span>'}
+async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
+function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
+async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+' '+esc(i.model||'')+'</b>\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
+async function loadSerialAudit(){const rows=await jfetch('/api/serial-audit?limit=100');document.getElementById('serialBody').innerHTML=rows.map(x=>{const cls=x.suspicious?'bad':(x.match?'good':'warn');const result=x.suspicious?'SUSPICIOUS':(x.match?'MATCH':'CHECK');return '<tr><td class="mono '+cls+'">'+esc(x.stored)+'</td><td>'+esc((x.manufacturer||'')+' '+(x.model||''))+'</td><td>'+esc(x.confidence==null?'':Number(x.confidence).toFixed(2))+'</td><td class="'+cls+'">'+result+'</td><td>'+esc(x.context)+'</td></tr>'}).join('')}
+async function runVintageAudit(){const body={query:document.getElementById('auditQuery').value,limit:Number(document.getElementById('auditLimit').value)};const d=await jfetch('/api/vintage-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('auditSummary').innerHTML=Object.entries(d.counts).map(([k,v])=>'<span class="pill">'+esc(k)+': '+v+'</span>').join('');document.getElementById('auditBody').innerHTML=d.rows.map(x=>'<tr><td class="'+(x.status==='vintage'?'good':x.status==='modern'?'bad':'warn')+'">'+esc(x.status)+'</td><td>'+esc(x.estimated_year||'')+'</td><td class="mono">'+esc(x.reason)+'</td><td>'+esc(x.title)+'</td></tr>').join('')}
+async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value)};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;document.getElementById('jobResults').innerHTML=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();await loadSerialAudit();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+(async()=>{await refreshStatus();await loadIndividuals();await loadSerialAudit()})()
+</script>
+</body></html>"""
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Your Guitar Chronicle Phase 0 browser GUI")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--no-browser", action="store_true")
+    args = parser.parse_args()
+
+    if not args.no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://{args.host}:{args.port}")).start()
+
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()
