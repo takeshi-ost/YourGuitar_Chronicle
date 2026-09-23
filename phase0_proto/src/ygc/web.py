@@ -121,11 +121,15 @@ class CrawlRequest(BaseModel):
     queries: list[str] = Field(min_length=1, max_length=30)
     limit: int = Field(default=500, ge=1, le=5000)
     workers: int = Field(default=6, ge=1, le=12)
+    year_min: int | None = Field(default=None, ge=1800, le=2100)
+    year_max: int | None = Field(default=1980, ge=1800, le=2100)
 
 
 class VintageAuditRequest(BaseModel):
     query: str
     limit: int = Field(default=100, ge=1, le=500)
+    year_min: int | None = Field(default=None, ge=1800, le=2100)
+    year_max: int | None = Field(default=1980, ge=1800, le=2100)
 
 
 class ResetDatabaseRequest(BaseModel):
@@ -177,7 +181,14 @@ def _run_batch(
                 skipped_modern = skipped_non_target = skipped_unknown = skipped_existing = 0
 
                 try:
-                    summaries = list(collector.iter_listing_summaries(query=query, limit=request.limit))
+                    summaries = list(
+                        collector.iter_listing_summaries(
+                            query=query,
+                            limit=request.limit,
+                            year_min=request.year_min,
+                            year_max=request.year_max,
+                        )
+                    )
                     fetched = len(summaries)
 
                     listing_ids = [
@@ -507,7 +518,12 @@ def api_vintage_audit(
         delay=0.15,
         max_workers=6,
     ) as collector:
-        for item in collector.iter_listing_summaries(request.query, request.limit):
+        for item in collector.iter_listing_summaries(
+            request.query,
+            request.limit,
+            year_min=request.year_min,
+            year_max=request.year_max,
+        ):
             classification = classify_vintage_listing(item)
             status = classification["status"]
             counts[status] = counts.get(status, 0) + 1
@@ -564,7 +580,13 @@ def api_crawl(
         }
         _active_job_id = job_id
 
-    actual = CrawlRequest(queries=queries, limit=request.limit, workers=request.workers)
+    actual = CrawlRequest(
+        queries=queries,
+        limit=request.limit,
+        workers=request.workers,
+        year_min=request.year_min,
+        year_max=request.year_max,
+    )
     threading.Thread(
         target=_run_batch,
         args=(
@@ -601,7 +623,7 @@ main{padding:22px;max-width:1500px;margin:auto}.grid{display:grid;grid-template-
 .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}.num{font-size:24px;font-weight:700}.label{font-size:11px;color:var(--muted)}
 input,textarea,select,button{font:inherit}input,textarea,select{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}textarea{min-height:145px;resize:vertical}
 button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}button.secondary{background:#2a3036;color:var(--text)}button:disabled{opacity:.45;cursor:not-allowed}
-.row{display:grid;grid-template-columns:1fr 110px 110px auto;gap:10px;align-items:end}.row2{display:grid;grid-template-columns:1fr 110px auto;gap:10px;align-items:end}
+.row{display:grid;grid-template-columns:1fr 90px 90px 110px 90px auto;gap:10px;align-items:end}.row2{display:grid;grid-template-columns:1fr 90px 90px 110px auto;gap:10px;align-items:end}
 table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
@@ -627,6 +649,8 @@ Fender Jaguar
 Gibson Les Paul
 Gibson SG
 Gibson ES-335</textarea></div>
+<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="なし" min="1800" max="2100"></div>
+<div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
 <div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
 <div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
 <div><button id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
@@ -645,7 +669,7 @@ Gibson ES-335</textarea></div>
 <section>
 <div class="panel">
 <h2>Vintage Audit</h2>
-<div class="row2"><div><input id="auditQuery" value="Fender Stratocaster"></div><div><input id="auditLimit" type="number" value="100" min="1" max="500"></div><div><button onclick="runVintageAudit()">Audit</button></div></div>
+<div class="row2"><div><input id="auditQuery" value="Fender Stratocaster"></div><div><input id="auditYearMin" type="number" placeholder="Year Min" min="1800" max="2100"></div><div><input id="auditYearMax" type="number" value="1980" min="1800" max="2100"></div><div><input id="auditLimit" type="number" value="100" min="1" max="500"></div><div><button onclick="runVintageAudit()">Audit</button></div></div>
 <div id="auditSummary" style="margin:10px 0"></div>
 <div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Status</th><th>Year</th><th>Reason</th><th>Title</th></tr></thead><tbody id="auditBody"></tbody></table></div>
 </div>
@@ -722,8 +746,8 @@ async function loadIndividuals(){individuals=await jfetch('/api/individuals');re
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+' '+esc(i.model||'')+'</b>\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
 async function loadSerialAudit(){const rows=await jfetch('/api/serial-audit?limit=100');document.getElementById('serialBody').innerHTML=rows.map(x=>{const cls=x.suspicious?'bad':(x.match?'good':'warn');const result=x.suspicious?'SUSPICIOUS':(x.match?'MATCH':'CHECK');return '<tr><td class="mono '+cls+'">'+esc(x.stored)+'</td><td>'+esc((x.manufacturer||'')+' '+(x.model||''))+'</td><td>'+esc(x.confidence==null?'':Number(x.confidence).toFixed(2))+'</td><td class="'+cls+'">'+result+'</td><td>'+esc(x.context)+'</td></tr>'}).join('')}
-async function runVintageAudit(){const body={query:document.getElementById('auditQuery').value,limit:Number(document.getElementById('auditLimit').value)};const d=await jfetch('/api/vintage-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('auditSummary').innerHTML=Object.entries(d.counts).map(([k,v])=>'<span class="pill">'+esc(k)+': '+v+'</span>').join('');document.getElementById('auditBody').innerHTML=d.rows.map(x=>'<tr><td class="'+(x.status==='vintage'?'good':x.status==='modern'?'bad':'warn')+'">'+esc(x.status)+'</td><td>'+esc(x.estimated_year||'')+'</td><td class="mono">'+esc(x.reason)+'</td><td>'+esc(x.title)+'</td></tr>').join('')}
-async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value)};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function runVintageAudit(){const minValue=document.getElementById('auditYearMin').value;const maxValue=document.getElementById('auditYearMax').value;const body={query:document.getElementById('auditQuery').value,limit:Number(document.getElementById('auditLimit').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const d=await jfetch('/api/vintage-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});document.getElementById('auditSummary').innerHTML=Object.entries(d.counts).map(([k,v])=>'<span class="pill">'+esc(k)+': '+v+'</span>').join('');document.getElementById('auditBody').innerHTML=d.rows.map(x=>'<tr><td class="'+(x.status==='vintage'?'good':x.status==='modern'?'bad':'warn')+'">'+esc(x.status)+'</td><td>'+esc(x.estimated_year||'')+'</td><td class="mono">'+esc(x.reason)+'</td><td>'+esc(x.title)+'</td></tr>').join('')}
+async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;document.getElementById('jobResults').innerHTML=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();await loadSerialAudit();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 (async()=>{await refreshStatus();await loadIndividuals();await loadSerialAudit()})()
 </script>
