@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import argparse
 import re
+import sqlite3
+import tempfile
 import threading
 import time
 import uuid
 import webbrowser
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from ygc import config
 from ygc.collectors.reverb import ReverbAPICollector
@@ -36,6 +41,13 @@ def repo() -> Repository:
 
 def _row_dict(row: Any) -> dict[str, Any]:
     return {key: row[key] for key in row.keys()}
+
+
+def _safe_unlink(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _existing_listing_ids(repository: Repository, listing_ids: list[str]) -> set[str]:
@@ -257,6 +269,36 @@ def api_status() -> dict[str, Any]:
     }
 
 
+@app.get("/api/export-db")
+def api_export_db() -> FileResponse:
+    repository = repo()
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    download_name = f"ygc_chronicle_{timestamp}.db"
+
+    temp_file = tempfile.NamedTemporaryFile(
+        prefix="ygc_export_",
+        suffix=".db",
+        delete=False,
+    )
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+
+    try:
+        with repository.connect() as source:
+            with sqlite3.connect(temp_path) as destination:
+                source.backup(destination)
+
+        return FileResponse(
+            path=temp_path,
+            filename=download_name,
+            media_type="application/vnd.sqlite3",
+            background=BackgroundTask(_safe_unlink, temp_path),
+        )
+    except Exception:
+        _safe_unlink(temp_path)
+        raise
+
+
 @app.get("/api/individuals")
 def api_individuals() -> list[dict[str, Any]]:
     return [_row_dict(row) for row in repo().list_individuals()]
@@ -424,7 +466,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div id="tokenState"></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="exportDatabase()">DBエクスポート</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="grid">
@@ -482,6 +524,7 @@ function statCard(label,value){return '<div class="card"><div class="num">'+esc(
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
 statCard('Observations',s.observations),statCard('Serial Observations',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Individuals',s.individuals),statCard('Repeated',s.repeated_individuals)
 ].join('');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK</span>':'<span class="status bad">Reverb Token 未設定</span>'}
+function exportDatabase(){window.location.href='/api/export-db'}
 async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.serial_number].join(' ').toLowerCase().includes(q));document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+' '+esc(i.model||'')+'</b>\nSerial: '+esc(i.serial_number||'')+'\n\n';for(const o of d.observations){out+=esc(o.listing_date||o.observed_at)+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n'+esc(o.source_url||'')+'\n\n'}document.getElementById('detail').innerHTML=out}
