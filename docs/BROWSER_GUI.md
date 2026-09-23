@@ -12,10 +12,25 @@ cd phase0_proto
 pip install -e ".[dev]"
 ```
 
-Reverb Token は従来どおり環境変数で設定します。ブラウザへTokenを入力・保存する方式にはしていません。
+Reverb Token は2通りの方法で設定できます。
+
+1. WebUI右上の **Token設定** から入力して保存
+2. 従来どおり環境変数 `REVERB_API_TOKEN` を設定
+
+WebUIで保存したTokenを優先し、未設定の場合は環境変数を使用します。
+
+WebUI保存時のTokenはブラウザの `localStorage` に保存され、SQLite DBやGitHubには保存されません。
+
+環境変数を使う場合:
 
 ```powershell
 $env:REVERB_API_TOKEN="YOUR_TOKEN"
+```
+
+macOS / Linux:
+
+```bash
+export REVERB_API_TOKEN="YOUR_TOKEN"
 ```
 
 ## 起動
@@ -40,6 +55,12 @@ ygc-web --no-browser
 
 ## GUIでできること
 
+- Token設定
+  - Reverb Personal Access TokenをWebUIへ貼り付けて保存
+  - 同じブラウザではWebUI再起動後も保持
+  - SQLite DBやGitHubには保存しない
+  - WebUI保存Tokenを優先し、なければ環境変数を使用
+  - 「削除」でブラウザ保存Tokenを消去
 - Dashboard
   - Observations
   - Serial Observations
@@ -102,7 +123,9 @@ CLIで収集したデータはGUIからそのまま見えます。逆にGUIで�
 
 GUIはローカル利用を前提として、既定では `127.0.0.1` のみにbindします。
 
-Reverb TokenはHTMLやLocalStorageに保存せず、サーバープロセスの `REVERB_API_TOKEN` 環境変数だけを使用します。
+WebUIで設定したReverb Tokenはブラウザの `localStorage` に保存され、APIリクエスト時だけローカルYGCサーバーへ送信されます。SQLite DBやGitHubには保存されません。ブラウザのlocalStorageは平文相当の保存領域なので、共有PCでは使用せず、必要に応じてWebUIの「Token設定 → 削除」で消してください。
+
+環境変数 `REVERB_API_TOKEN` も引き続き利用できます。WebUI保存Tokenがある場合はそちらを優先します。
 
 LAN内の別端末から使う必要がある場合のみ、明示的に:
 
