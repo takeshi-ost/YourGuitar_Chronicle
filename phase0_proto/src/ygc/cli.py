@@ -650,6 +650,16 @@ def crawl(
                             obs[
                                 "serial_number"
                             ],
+                            finish=(
+                                obs.get(
+                                    "finish"
+                                )
+                            ),
+                            year=(
+                                obs.get(
+                                    "year"
+                                )
+                            ),
                         )
                     )
                 else:
