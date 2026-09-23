@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: your-guitar-chronicle
+Version: 0.1.0
+Summary: Phase 0 local Chronicle Engine for Reverb API observations
+Requires-Python: >=3.12
+Requires-Dist: httpx<1,>=0.27
+Requires-Dist: typer<1,>=0.12
+Requires-Dist: rich<14,>=13
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8; extra == "dev"

@@ -1,0 +1,3 @@
+from typing import Protocol,Iterable
+class Collector(Protocol):
+    def iter_listings(self,query:str,limit:int)->Iterable[dict]: ...
