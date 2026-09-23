@@ -275,12 +275,17 @@ class ReverbAPICollector:
         self,
         query: str,
         limit: int,
+        year_min: int | None = None,
+        year_max: int | None = None,
     ) -> Iterable[dict]:
         """
         一覧APIだけを取得する。
 
         ここではListing詳細APIを呼ばない。
         """
+
+        if year_min is not None and year_max is not None and year_min > year_max:
+            raise ValueError("year_min must be <= year_max")
 
         count = 0
 
@@ -291,6 +296,12 @@ class ReverbAPICollector:
         params: dict | None = {
             "query": query,
         }
+
+        if year_min is not None:
+            params["year_min"] = year_min
+
+        if year_max is not None:
+            params["year_max"] = year_max
 
         while (
             url
