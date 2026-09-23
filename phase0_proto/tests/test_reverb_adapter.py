@@ -9,6 +9,8 @@ def test_adapter():
         "id": 123,
         "make": "Fender",
         "model": "Stratocaster",
+        "finish": "Olympic White",
+        "year": "1985",
         "title": (
             "1985 Fender Stratocaster"
         ),
@@ -51,6 +53,20 @@ def test_adapter():
             "model"
         ]
         == "Stratocaster"
+    )
+
+    assert (
+        observation[
+            "finish"
+        ]
+        == "Olympic White"
+    )
+
+    assert (
+        observation[
+            "year"
+        ]
+        == "1985"
     )
 
     assert (
