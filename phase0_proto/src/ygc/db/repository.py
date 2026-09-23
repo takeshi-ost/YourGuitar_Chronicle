@@ -358,33 +358,55 @@ class Repository:
                 source = con.execute(
                     """
                     SELECT
-                        model,
-                        finish,
-                        year
-                    FROM observations
-                    WHERE individual_id = ?
-                    ORDER BY
-                        CASE
-                            WHEN model IS NOT NULL
-                              OR finish IS NOT NULL
-                              OR year IS NOT NULL
-                            THEN 0
-                            ELSE 1
-                        END,
-                        COALESCE(
-                            listing_date,
-                            observed_at
-                        ) DESC,
-                        id DESC
-                    LIMIT 1
+                        (
+                            SELECT model
+                            FROM observations
+                            WHERE individual_id = ?
+                              AND model IS NOT NULL
+                              AND TRIM(model) <> ''
+                            ORDER BY
+                                COALESCE(
+                                    listing_date,
+                                    observed_at
+                                ) DESC,
+                                id DESC
+                            LIMIT 1
+                        ) AS model,
+                        (
+                            SELECT finish
+                            FROM observations
+                            WHERE individual_id = ?
+                              AND finish IS NOT NULL
+                              AND TRIM(finish) <> ''
+                            ORDER BY
+                                COALESCE(
+                                    listing_date,
+                                    observed_at
+                                ) DESC,
+                                id DESC
+                            LIMIT 1
+                        ) AS finish,
+                        (
+                            SELECT year
+                            FROM observations
+                            WHERE individual_id = ?
+                              AND year IS NOT NULL
+                              AND TRIM(year) <> ''
+                            ORDER BY
+                                COALESCE(
+                                    listing_date,
+                                    observed_at
+                                ) DESC,
+                                id DESC
+                            LIMIT 1
+                        ) AS year
                     """,
                     (
                         individual_id,
+                        individual_id,
+                        individual_id,
                     ),
                 ).fetchone()
-
-                if not source:
-                    continue
 
                 con.execute(
                     """
