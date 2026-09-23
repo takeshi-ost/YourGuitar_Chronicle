@@ -922,8 +922,6 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 <header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
-<div class="grid">
-<section>
 <div class="panel">
 <h2>Batch Crawl</h2>
 <div class="crawl-query">
@@ -948,6 +946,8 @@ Gibson ES-335</textarea>
 <div id="jobResults" style="margin-top:12px"></div>
 </div>
 
+<div class="grid">
+<section>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Individuals</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
