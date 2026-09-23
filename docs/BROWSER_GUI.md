@@ -81,8 +81,10 @@ ygc-web --no-browser
   - vintage / modern / unknown / non_target の件数と理由を表示
 - Individuals
   - Maker / Model / Finish / Year / Serialでフィルタ
+  - ID / Maker / Model / Finish / Year / Serial / Obs の各列ヘッダーをクリックして昇順・降順ソート
   - 一覧にModel / Finish / Yearを表示
   - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
+  - Detail内のSource URLは最新Observationだけハイパーリンク化し、過去ObservationのURLは参照用テキストとして表示
   - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Yearを補完し、Individualへ同期
 - Serial Audit
   - DB内のSerialを現在のextractorで再評価
