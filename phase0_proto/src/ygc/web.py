@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
@@ -48,6 +48,34 @@ def _safe_unlink(path: Path) -> None:
         path.unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def _request_token(
+    request: Request,
+) -> tuple[str, str]:
+    browser_token = (
+        request.headers.get(
+            "X-Reverb-Token",
+            "",
+        ).strip()
+    )
+
+    if browser_token:
+        return (
+            browser_token,
+            "browser",
+        )
+
+    if config.REVERB_API_TOKEN:
+        return (
+            config.REVERB_API_TOKEN,
+            "environment",
+        )
+
+    return (
+        "",
+        "none",
+    )
 
 
 def _existing_listing_ids(repository: Repository, listing_ids: list[str]) -> set[str]:
@@ -104,7 +132,11 @@ class ResetDatabaseRequest(BaseModel):
     confirm: str
 
 
-def _run_batch(job_id: str, request: CrawlRequest) -> None:
+def _run_batch(
+    job_id: str,
+    request: CrawlRequest,
+    token: str,
+) -> None:
     global _active_job_id
 
     repository = repo()
@@ -122,7 +154,7 @@ def _run_batch(job_id: str, request: CrawlRequest) -> None:
 
     try:
         with ReverbAPICollector(
-            token=config.REVERB_API_TOKEN,
+            token=token,
             api_base=config.REVERB_API_BASE,
             timeout=config.REQUEST_TIMEOUT,
             delay=0.15,
@@ -263,13 +295,30 @@ def index() -> HTMLResponse:
 
 
 @app.get("/api/status")
-def api_status() -> dict[str, Any]:
+def api_status(
+    request: Request,
+) -> dict[str, Any]:
     repository = repo()
+    token, token_source = (
+        _request_token(
+            request
+        )
+    )
+
     return {
-        "token_configured": bool(config.REVERB_API_TOKEN),
-        "db_path": str(config.DB_PATH),
+        "token_configured": bool(
+            token
+        ),
+        "token_source": (
+            token_source
+        ),
+        "db_path": str(
+            config.DB_PATH
+        ),
         "stats": repository.stats(),
-        "active_job_id": _active_job_id,
+        "active_job_id": (
+            _active_job_id
+        ),
     }
 
 
@@ -430,15 +479,29 @@ def api_serial_audit(limit: int = 100) -> list[dict[str, Any]]:
 
 
 @app.post("/api/vintage-audit")
-def api_vintage_audit(request: VintageAuditRequest) -> dict[str, Any]:
-    if not config.REVERB_API_TOKEN:
-        raise HTTPException(status_code=400, detail="REVERB_API_TOKEN is not configured")
+def api_vintage_audit(
+    request: VintageAuditRequest,
+    http_request: Request,
+) -> dict[str, Any]:
+    token, _token_source = (
+        _request_token(
+            http_request
+        )
+    )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Reverb API Token is not configured"
+            ),
+        )
 
     counts = {"vintage": 0, "modern": 0, "unknown": 0, "non_target": 0}
     rows: list[dict[str, Any]] = []
 
     with ReverbAPICollector(
-        token=config.REVERB_API_TOKEN,
+        token=token,
         api_base=config.REVERB_API_BASE,
         timeout=config.REQUEST_TIMEOUT,
         delay=0.15,
@@ -461,11 +524,25 @@ def api_vintage_audit(request: VintageAuditRequest) -> dict[str, Any]:
 
 
 @app.post("/api/crawl")
-def api_crawl(request: CrawlRequest) -> dict[str, str]:
+def api_crawl(
+    request: CrawlRequest,
+    http_request: Request,
+) -> dict[str, str]:
     global _active_job_id
 
-    if not config.REVERB_API_TOKEN:
-        raise HTTPException(status_code=400, detail="REVERB_API_TOKEN is not configured")
+    token, _token_source = (
+        _request_token(
+            http_request
+        )
+    )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Reverb API Token is not configured"
+            ),
+        )
 
     queries = [query.strip() for query in request.queries if query.strip()]
     if not queries:
@@ -488,7 +565,15 @@ def api_crawl(request: CrawlRequest) -> dict[str, str]:
         _active_job_id = job_id
 
     actual = CrawlRequest(queries=queries, limit=request.limit, workers=request.workers)
-    threading.Thread(target=_run_batch, args=(job_id, actual), daemon=True).start()
+    threading.Thread(
+        target=_run_batch,
+        args=(
+            job_id,
+            actual,
+            token,
+        ),
+        daemon=True,
+    ).start()
     return {"job_id": job_id}
 
 
@@ -522,11 +607,12 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 #detail{white-space:pre-wrap}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.row,.row2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Vintage監査・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="grid">
@@ -576,14 +662,32 @@ Gibson ES-335</textarea></div>
 </section>
 </div>
 </main>
+<div class="modal-backdrop" id="tokenModal" onclick="closeTokenSettings(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Reverb API Token</h2>
+    <div class="sub" style="margin-bottom:10px">TokenはこのブラウザのlocalStorageに保存されます。SQLite DBやGitHubには保存しません。</div>
+    <input id="tokenInput" type="password" autocomplete="off" placeholder="Reverb Personal Access Token">
+    <div class="modal-actions">
+      <button class="secondary bad" onclick="clearToken()">削除</button>
+      <button class="secondary" onclick="closeTokenSettings()">キャンセル</button>
+      <button onclick="saveToken()">保存</button>
+    </div>
+  </div>
+</div>
 <script>
 let individuals=[];
+const TOKEN_KEY='ygc_reverb_api_token';
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-async function jfetch(url,opt={}){const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
+async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function statCard(label,value){return '<div class="card"><div class="num">'+esc(value)+'</div><div class="label">'+esc(label)+'</div></div>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
 statCard('Observations',s.observations),statCard('Serial Observations',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Individuals',s.individuals),statCard('Repeated',s.repeated_individuals)
-].join('');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK</span>':'<span class="status bad">Reverb Token 未設定</span>'}
+].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>'}
+function openTokenSettings(){document.getElementById('tokenInput').value=storedToken();document.getElementById('tokenModal').classList.add('open');setTimeout(()=>document.getElementById('tokenInput').focus(),0)}
+function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='tokenModal')return;document.getElementById('tokenModal').classList.remove('open');document.getElementById('tokenInput').value=''}
+async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
+async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
 function exportDatabase(){window.location.href='/api/export-db'}
 async function resetDatabase(){
   const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
