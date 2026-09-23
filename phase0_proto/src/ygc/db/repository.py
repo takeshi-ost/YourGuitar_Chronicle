@@ -178,9 +178,9 @@ class Repository:
             con.execute(
                 """
                 UPDATE individuals
-                SET model = COALESCE(?, model),
-                    finish = COALESCE(?, finish),
-                    year = COALESCE(?, year),
+                SET model = COALESCE(model, ?),
+                    finish = COALESCE(finish, ?),
+                    year = COALESCE(year, ?),
                     updated_at = ?
                 WHERE id = ?
                 """,
