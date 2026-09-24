@@ -22,6 +22,18 @@ def test_adapter():
         "shop": {
             "name": "Example Vintage"
         },
+        "photos": [
+            {
+                "_links": {
+                    "large_crop": {
+                        "href": (
+                            "https://images.reverb.com/"
+                            "example.jpg"
+                        )
+                    }
+                }
+            }
+        ],
         "_links": {
             "web": {
                 "href": (
@@ -88,6 +100,16 @@ def test_adapter():
             "source_listing_id"
         ]
         == "123"
+    )
+
+    assert (
+        observation[
+            "image_url"
+        ]
+        == (
+            "https://images.reverb.com/"
+            "example.jpg"
+        )
     )
 
     assert (
