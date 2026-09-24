@@ -50,3 +50,26 @@ def test_first_image_url_from_embedded_payload():
             "image/upload/example2.png"
         )
     )
+
+
+def test_first_image_url_from_root_array():
+    payload = [
+        {
+            "id": 87485553,
+            "url": (
+                "https://images.reverb.com/"
+                "image/upload/example3.png"
+            ),
+        }
+    ]
+
+    assert (
+        ReverbAPICollector
+        ._first_image_url(
+            payload
+        )
+        == (
+            "https://images.reverb.com/"
+            "image/upload/example3.png"
+        )
+    )
