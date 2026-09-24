@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS observations (
  serial_number TEXT,
  owner_name TEXT,
  owner_type TEXT,
+ owner_profile_url TEXT,
  seller TEXT,
  source_site TEXT NOT NULL,
  source_url TEXT NOT NULL,
