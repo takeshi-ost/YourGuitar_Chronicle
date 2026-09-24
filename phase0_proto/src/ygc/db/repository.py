@@ -73,6 +73,7 @@ class Repository:
                 "image_url": "TEXT",
                 "owner_name": "TEXT",
                 "owner_type": "TEXT",
+                "owner_profile_url": "TEXT",
             },
         }
 
@@ -254,6 +255,7 @@ class Repository:
                 "serial_number",
                 "owner_name",
                 "owner_type",
+                "owner_profile_url",
                 "seller",
                 "source_site",
                 "source_url",
@@ -310,7 +312,10 @@ class Repository:
                         model,
                         finish,
                         year,
-                        image_url
+                        image_url,
+                        owner_name,
+                        owner_type,
+                        owner_profile_url
                     FROM observations
                     WHERE source_site = 'reverb'
                       AND source_listing_id
@@ -325,6 +330,8 @@ class Repository:
                           OR TRIM(year) = ''
                           OR image_url IS NULL
                           OR TRIM(image_url) = ''
+                          OR owner_profile_url IS NULL
+                          OR TRIM(owner_profile_url) = ''
                       )
                     ORDER BY id
                     """
@@ -338,6 +345,9 @@ class Repository:
         finish: str | None,
         year: str | None,
         image_url: str | None = None,
+        owner_name: str | None = None,
+        owner_type: str | None = None,
+        owner_profile_url: str | None = None,
     ) -> None:
         with self.connect() as con:
             con.execute(
@@ -358,6 +368,18 @@ class Repository:
                     image_url = COALESCE(
                         NULLIF(?, ''),
                         image_url
+                    ),
+                    owner_name = COALESCE(
+                        NULLIF(?, ''),
+                        owner_name
+                    ),
+                    owner_type = COALESCE(
+                        NULLIF(?, ''),
+                        owner_type
+                    ),
+                    owner_profile_url = COALESCE(
+                        NULLIF(?, ''),
+                        owner_profile_url
                     )
                 WHERE id = ?
                 """,
@@ -366,6 +388,9 @@ class Repository:
                     finish,
                     year,
                     image_url,
+                    owner_name,
+                    owner_type,
+                    owner_profile_url,
                     observation_id,
                 ),
             )
