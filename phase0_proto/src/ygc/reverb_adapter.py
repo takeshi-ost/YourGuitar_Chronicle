@@ -784,6 +784,29 @@ def _owner_profile_url(
     return None
 
 
+def _location_value(
+    item: dict,
+    key: str,
+) -> str | None:
+    location = item.get(
+        "location"
+    )
+
+    if not isinstance(
+        location,
+        dict,
+    ):
+        return None
+
+    value = _text(
+        location.get(
+            key
+        )
+    )
+
+    return value or None
+
+
 def _source_url(
     item: dict,
 ) -> str | None:
@@ -1087,6 +1110,35 @@ def to_observation(
             _owner_profile_url(
                 item
             )
+        ),
+
+        "location_country": (
+            _location_value(
+                item,
+                "country_code",
+            )
+        ),
+
+        "location_region": (
+            _location_value(
+                item,
+                "region",
+            )
+        ),
+
+        "location_source": (
+            "reverb_listing"
+            if (
+                _location_value(
+                    item,
+                    "country_code",
+                )
+                or _location_value(
+                    item,
+                    "region",
+                )
+            )
+            else None
         ),
 
         "seller": (
