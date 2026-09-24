@@ -780,6 +780,77 @@ def api_status(
     }
 
 
+@app.get("/api/location-probe")
+def api_location_probe(
+    request: Request,
+) -> dict[str, Any]:
+    token, token_source = _request_token(
+        request
+    )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="Reverb API Token is not configured",
+        )
+
+    try:
+        with ReverbAPICollector(
+            token=token,
+            api_base=config.REVERB_API_BASE,
+            timeout=config.REQUEST_TIMEOUT,
+            delay=0.15,
+            max_workers=1,
+        ) as collector:
+            item = next(
+                collector.iter_listing_summaries(
+                    query="Fender Stratocaster",
+                    limit=1,
+                    year_max=1980,
+                )
+            )
+            detail = collector.fetch_listing_detail(
+                item
+            )
+    except StopIteration as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="No Reverb listing was returned for the probe",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Reverb location probe failed: {exc}",
+        ) from exc
+
+    location = detail.get("location")
+    shop = detail.get("shop")
+
+    return {
+        "token_source": token_source,
+        "listing_id": collector.listing_id(
+            detail
+        ),
+        "title": detail.get("title"),
+        "location": (
+            location
+            if isinstance(
+                location,
+                dict,
+            )
+            else location
+        ),
+        "shop": (
+            shop
+            if isinstance(
+                shop,
+                dict,
+            )
+            else shop
+        ),
+    }
+
+
 @app.get("/api/export-db")
 def api_export_db() -> FileResponse:
     repository = repo()
@@ -1333,7 +1404,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="runLocationProbe()">Location Probe</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -1405,6 +1476,26 @@ function openTokenSettings(){document.getElementById('tokenInput').value=storedT
 function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='tokenModal')return;document.getElementById('tokenModal').classList.remove('open');document.getElementById('tokenInput').value=''}
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
+async function runLocationProbe(){
+  try{
+    const d=await jfetch('/api/location-probe');
+    const location=d.location??null;
+    const shop=d.shop??null;
+    const message=[
+      'Location Probe',
+      '',
+      'Listing: '+(d.title||''),
+      'Listing ID: '+(d.listing_id||''),
+      '',
+      'location = '+JSON.stringify(location,null,2),
+      '',
+      'shop = '+JSON.stringify(shop,null,2)
+    ].join('\n');
+    alert(message);
+  }catch(e){
+    alert('Location Probeに失敗しました。\n'+e.message);
+  }
+}
 function exportDatabase(){window.location.href='/api/export-db'}
 function openDatabaseImport(){const input=document.getElementById('dbImportInput');input.value='';input.click()}
 async function importDatabaseFile(input){
