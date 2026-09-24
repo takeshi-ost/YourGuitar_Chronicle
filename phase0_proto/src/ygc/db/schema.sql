@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS observations (
  seller TEXT,
  source_site TEXT NOT NULL,
  source_url TEXT NOT NULL,
+ image_url TEXT,
  source_listing_id TEXT,
  observed_at TEXT NOT NULL,
  listing_date TEXT,
