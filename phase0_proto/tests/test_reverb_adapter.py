@@ -97,6 +97,20 @@ def test_adapter():
 
     assert (
         observation[
+            "owner_name"
+        ]
+        == "Example Vintage"
+    )
+
+    assert (
+        observation[
+            "owner_type"
+        ]
+        == "shop"
+    )
+
+    assert (
+        observation[
             "source_listing_id"
         ]
         == "123"
