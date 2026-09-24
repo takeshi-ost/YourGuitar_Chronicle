@@ -108,6 +108,14 @@ def test_init_db_migrates_existing_metadata_columns(
         "image_url"
         in observation_columns
     )
+    assert (
+        "owner_name"
+        in observation_columns
+    )
+    assert (
+        "owner_type"
+        in observation_columns
+    )
 
 
 def test_metadata_flows_to_individual_and_observation(
@@ -139,6 +147,8 @@ def test_metadata_flows_to_individual_and_observation(
         "finish": "Sunburst",
         "year": "1963",
         "serial_number": "L13242",
+        "owner_name": "Example Shop",
+        "owner_type": "shop",
         "seller": "Example Shop",
         "source_site": "reverb",
         "source_url": (
@@ -192,4 +202,12 @@ def test_metadata_flows_to_individual_and_observation(
     assert (
         observations[0]["image_url"]
         == "https://images.example.invalid/1.jpg"
+    )
+    assert (
+        observations[0]["owner_name"]
+        == "Example Shop"
+    )
+    assert (
+        observations[0]["owner_type"]
+        == "shop"
     )
