@@ -71,6 +71,8 @@ class Repository:
                 "finish": "TEXT",
                 "year": "TEXT",
                 "image_url": "TEXT",
+                "owner_name": "TEXT",
+                "owner_type": "TEXT",
             },
         }
 
@@ -96,6 +98,27 @@ class Repository:
                     f"ADD COLUMN {column} "
                     f"{data_type}"
                 )
+
+        con.execute(
+            """
+            UPDATE observations
+            SET owner_name = COALESCE(
+                    NULLIF(owner_name, ''),
+                    seller
+                ),
+                owner_type = COALESCE(
+                    NULLIF(owner_type, ''),
+                    CASE
+                        WHEN source_site = 'reverb'
+                         AND seller IS NOT NULL
+                         AND TRIM(seller) <> ''
+                        THEN 'shop'
+                        ELSE NULL
+                    END
+                )
+            WHERE source_site = 'reverb'
+            """
+        )
 
     def find_individual(
         self,
@@ -229,6 +252,8 @@ class Repository:
                 "finish",
                 "year",
                 "serial_number",
+                "owner_name",
+                "owner_type",
                 "seller",
                 "source_site",
                 "source_url",
