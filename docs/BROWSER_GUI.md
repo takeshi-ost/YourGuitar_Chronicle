@@ -87,6 +87,13 @@ ygc-web --no-browser
   - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
   - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
   - ファイル名は `ygc_chronicle_YYYYMMDD_HHMMSS.db`
+- DBインポート
+  - 画面右上の「DBインポート」から、別環境でエクスポートしたYGC SQLite DBを選択
+  - 現在のDBを選択したDBで置き換える
+  - SQLite形式、整合性、YGC必須テーブル・主要カラムを確認してから置換
+  - 100 MBを上限とし、Crawlやバックフィル実行中はインポート不可
+  - インポート後に現在のスキーマ migration を自動適用し、Dashboard / Individuals を再読み込み
+  - インポート前に必要なら現在のDBをエクスポートしてバックアップする
 - DB初期化
   - 画面右上の「DB初期化」からObservation / Individual / Crawl履歴をすべて削除
   - 誤操作防止の確認ダイアログと `RESET` 入力が必要
@@ -177,3 +184,12 @@ Serialを持つObservationからGuitar Individualを作成する際にも同じ�
 
 Vintage Audit と Serial Audit はPhase 0の初期検証で役割を果たしたため、WebUIからは削除しました。
 内部のVintage分類とSerial抽出処理はCrawl時に引き続き使用されます。
+
+
+## 複数環境でのDB移動
+
+PC間で同じChronicle DBを使う場合は、元環境で **DBエクスポート** を実行し、移動先のWebUIで **DBインポート** を実行してください。
+
+DBインポートはマージではなく、移動先の現在DBを選択したエクスポートDBで置き換えます。
+そのため、両方の環境で別々にCrawlしたDBを自動統合する用途ではありません。
+現在のDBを残したい場合は、インポート前に必ずエクスポートしてください。
