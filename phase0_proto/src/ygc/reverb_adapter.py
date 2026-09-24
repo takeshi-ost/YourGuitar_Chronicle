@@ -726,6 +726,64 @@ def _seller_name(
     return None
 
 
+def _owner_profile_url(
+    item: dict,
+) -> str | None:
+    shop = item.get(
+        "shop"
+    )
+
+    if isinstance(
+        shop,
+        dict,
+    ):
+        for key in (
+            "url",
+            "web_url",
+        ):
+            value = shop.get(
+                key
+            )
+
+            if value:
+                return str(
+                    value
+                )
+
+        links = (
+            shop.get(
+                "_links"
+            )
+            or {}
+        )
+
+        for key in (
+            "web",
+            "self",
+        ):
+            link = links.get(
+                key
+            )
+
+            if isinstance(
+                link,
+                dict,
+            ):
+                href = link.get(
+                    "href"
+                )
+
+                if (
+                    href
+                    and key == "web"
+                ):
+                    return str(
+                        href
+                    )
+
+    return None
+
+
 def _source_url(
     item: dict,
 ) -> str | None:
@@ -1023,6 +1081,12 @@ def to_observation(
                 item
             )
             else None
+        ),
+
+        "owner_profile_url": (
+            _owner_profile_url(
+                item
+            )
         ),
 
         "seller": (
