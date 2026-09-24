@@ -382,21 +382,40 @@ class ReverbAPICollector:
 
     @staticmethod
     def _first_image_url(
-        payload: dict,
+        payload,
     ) -> str | None:
-        candidates = (
-            payload.get("images")
-            or payload.get("photos")
-            or payload.get(
-                "_embedded",
-                {},
-            ).get("images")
-            or payload.get(
-                "_embedded",
-                {},
-            ).get("photos")
-            or []
-        )
+        if isinstance(
+            payload,
+            list,
+        ):
+            candidates = payload
+        elif isinstance(
+            payload,
+            dict,
+        ):
+            embedded = (
+                payload.get(
+                    "_embedded"
+                )
+                or {}
+            )
+
+            candidates = (
+                payload.get("images")
+                or payload.get("photos")
+                or embedded.get(
+                    "images"
+                )
+                or embedded.get(
+                    "photos"
+                )
+                or payload.get(
+                    "items"
+                )
+                or []
+            )
+        else:
+            return None
 
         if isinstance(
             candidates,
@@ -471,20 +490,19 @@ class ReverbAPICollector:
             payload = self._get_json(
                 image_url
             )
-        except httpx.HTTPError as exc:
+            return (
+                self._first_image_url(
+                    payload
+                )
+            )
+        except Exception as exc:
             log.warning(
-                "Could not fetch listing "
-                "images %s: %s",
+                "Could not fetch/parse "
+                "listing images %s: %s",
                 listing_id,
                 exc,
             )
             return None
-
-        return (
-            self._first_image_url(
-                payload
-            )
-        )
 
     def fetch_listing_detail(
         self,
@@ -508,11 +526,22 @@ class ReverbAPICollector:
                 detail_url
             )
 
-            image_url = (
-                self._fetch_listing_image_url(
-                    detail
+            try:
+                image_url = (
+                    self._fetch_listing_image_url(
+                        detail
+                    )
                 )
-            )
+            except Exception as exc:
+                log.warning(
+                    "Image lookup failed "
+                    "for listing %s: %s",
+                    self.listing_id(
+                        detail
+                    ),
+                    exc,
+                )
+                image_url = None
 
             if image_url:
                 detail[
