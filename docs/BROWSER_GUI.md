@@ -81,6 +81,9 @@ ygc-web --no-browser
   - ID / Maker / Model / Finish / Year / Serial / Obs の各列ヘッダーをクリックして昇順・降順ソート
   - 一覧にModel / Finish / Yearを表示
   - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
+  - Detailを「最新Observation」と「履歴」に分け、Observationをカード表示
+  - 各カードに日付 / Owner / Shop（Ownerと異なる場合）/ Listing / Info / Sourceを表示
+  - Reverb由来ObservationではShop名をOwnerとして保持し、将来のユーザー由来Observationではユーザー名をOwnerとして扱えるよう `owner_name` / `owner_type` を保持
   - Detail上部に最新ObservationのReverb代表画像を1枚表示
   - 画像本体はYGCへ保存せず、ObservationにはReverb側の画像URLだけを保存
   - Detail内のSource URLは最新Observationだけハイパーリンク化し、過去ObservationのURLは参照用テキストとして表示
@@ -233,3 +236,12 @@ Observationには代表画像のURLだけを `image_url` として保持しま�
 新規CrawlではReverb Listing詳細の先頭画像URLを保存します。既存DBは **既存DBバックフィル** を実行すると、Model / Finish / Yearとあわせてimage URLも補完されます。
 
 画像は参照元のReverb URLからブラウザが直接読み込みます。そのため、参照元Listingや画像URLが将来無効になった場合はYGC上でも表示できなくなる可能性があります。
+
+
+## Observation Owner
+
+Observationは、観測時点でその個体を扱っていた主体を `owner_name` / `owner_type` として保持します。
+
+現時点のReverb Observationでは、Reverb ListingのShop名を `owner_name`、`owner_type=shop` として保存します。既存DBも起動時migrationで、Reverb Observationの既存 `seller` 値からOwnerを補完します。
+
+将来ユーザー投稿Observationを追加する場合は、ユーザー名を `owner_name`、`owner_type=user` として保存できる設計です。`seller` はマーケットプレイス上の販売主体というSource固有メタデータとして残し、Ownerとは別フィールドにしています。
