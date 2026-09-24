@@ -529,6 +529,248 @@ class Repository:
 
         return updated
 
+    def statistics(
+        self,
+    ) -> dict[str, Any]:
+        with self.connect() as con:
+            summary = con.execute(
+                """
+                SELECT
+                    COUNT(*) AS individuals,
+                    COUNT(
+                        DISTINCT NULLIF(
+                            TRIM(manufacturer),
+                            ''
+                        )
+                    ) AS makers,
+                    COUNT(
+                        DISTINCT NULLIF(
+                            TRIM(model),
+                            ''
+                        )
+                    ) AS models,
+                    COUNT(
+                        DISTINCT NULLIF(
+                            TRIM(finish),
+                            ''
+                        )
+                    ) AS finishes
+                FROM individuals
+                """
+            ).fetchone()
+
+            def grouped(
+                expression: str,
+                where_sql: str,
+                limit: int = 10,
+            ) -> list[dict[str, Any]]:
+                rows = con.execute(
+                    f"""
+                    SELECT
+                        {expression} AS label,
+                        COUNT(*) AS count
+                    FROM individuals
+                    WHERE {where_sql}
+                    GROUP BY {expression}
+                    ORDER BY
+                        count DESC,
+                        label COLLATE NOCASE
+                    LIMIT ?
+                    """,
+                    (
+                        limit,
+                    ),
+                )
+
+                return [
+                    {
+                        "label": str(
+                            row["label"]
+                        ),
+                        "count": int(
+                            row["count"]
+                        ),
+                    }
+                    for row in rows
+                ]
+
+            maker_counts = grouped(
+                "TRIM(manufacturer)",
+                (
+                    "manufacturer IS NOT NULL "
+                    "AND TRIM(manufacturer) <> ''"
+                ),
+            )
+
+            model_counts = grouped(
+                "TRIM(model)",
+                (
+                    "model IS NOT NULL "
+                    "AND TRIM(model) <> ''"
+                ),
+            )
+
+            finish_counts = grouped(
+                "TRIM(finish)",
+                (
+                    "finish IS NOT NULL "
+                    "AND TRIM(finish) <> ''"
+                ),
+            )
+
+            latest_locations = list(
+                con.execute(
+                    """
+                    WITH latest_observation AS (
+                        SELECT o.*
+                        FROM observations o
+                        INNER JOIN (
+                            SELECT
+                                individual_id,
+                                MAX(
+                                    COALESCE(
+                                        listing_date,
+                                        observed_at
+                                    )
+                                ) AS latest_date
+                            FROM observations
+                            WHERE individual_id
+                                IS NOT NULL
+                            GROUP BY individual_id
+                        ) latest
+                          ON latest.individual_id
+                             = o.individual_id
+                         AND COALESCE(
+                                o.listing_date,
+                                o.observed_at
+                             )
+                             = latest.latest_date
+                        WHERE o.id = (
+                            SELECT MAX(o2.id)
+                            FROM observations o2
+                            WHERE o2.individual_id
+                                  = o.individual_id
+                              AND COALESCE(
+                                    o2.listing_date,
+                                    o2.observed_at
+                                  )
+                                  = COALESCE(
+                                    o.listing_date,
+                                    o.observed_at
+                                  )
+                        )
+                    )
+                    SELECT
+                        TRIM(location_country)
+                            AS label,
+                        COUNT(*) AS count
+                    FROM latest_observation
+                    WHERE location_country
+                          IS NOT NULL
+                      AND TRIM(
+                          location_country
+                      ) <> ''
+                    GROUP BY
+                        TRIM(
+                            location_country
+                        )
+                    ORDER BY
+                        count DESC,
+                        label COLLATE NOCASE
+                    LIMIT 10
+                    """
+                )
+            )
+
+            located_individuals = int(
+                con.execute(
+                    """
+                    WITH latest_observation AS (
+                        SELECT o.*
+                        FROM observations o
+                        INNER JOIN (
+                            SELECT
+                                individual_id,
+                                MAX(
+                                    COALESCE(
+                                        listing_date,
+                                        observed_at
+                                    )
+                                ) AS latest_date
+                            FROM observations
+                            WHERE individual_id
+                                IS NOT NULL
+                            GROUP BY individual_id
+                        ) latest
+                          ON latest.individual_id
+                             = o.individual_id
+                         AND COALESCE(
+                                o.listing_date,
+                                o.observed_at
+                             )
+                             = latest.latest_date
+                        WHERE o.id = (
+                            SELECT MAX(o2.id)
+                            FROM observations o2
+                            WHERE o2.individual_id
+                                  = o.individual_id
+                              AND COALESCE(
+                                    o2.listing_date,
+                                    o2.observed_at
+                                  )
+                                  = COALESCE(
+                                    o.listing_date,
+                                    o.observed_at
+                                  )
+                        )
+                    )
+                    SELECT COUNT(*)
+                    FROM latest_observation
+                    WHERE location_country
+                          IS NOT NULL
+                      AND TRIM(
+                          location_country
+                      ) <> ''
+                    """
+                ).fetchone()[0]
+            )
+
+            return {
+                "summary": {
+                    "individuals": int(
+                        summary["individuals"]
+                    ),
+                    "makers": int(
+                        summary["makers"]
+                    ),
+                    "models": int(
+                        summary["models"]
+                    ),
+                    "finishes": int(
+                        summary["finishes"]
+                    ),
+                    "located_individuals": (
+                        located_individuals
+                    ),
+                },
+                "makers": maker_counts,
+                "models": model_counts,
+                "finishes": finish_counts,
+                "current_countries": [
+                    {
+                        "label": str(
+                            row["label"]
+                        ),
+                        "count": int(
+                            row["count"]
+                        ),
+                    }
+                    for row
+                    in latest_locations
+                ],
+            }
+
+
     def start_run(
         self,
         source_site: str,
