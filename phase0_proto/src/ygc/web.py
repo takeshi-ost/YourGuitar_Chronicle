@@ -754,6 +754,11 @@ def api_status(
     }
 
 
+@app.get("/api/statistics")
+def api_statistics() -> dict[str, Any]:
+    return repo().statistics()
+
+
 @app.get("/api/export-db")
 def api_export_db() -> FileResponse:
     repository = repo()
@@ -1340,6 +1345,10 @@ Gibson ES-335</textarea>
 <div class="toolbar"><h2 style="margin:0;flex:1">Individuals</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
+<div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
+<div id="statistics" class="sub">集計中...</div>
+</div>
 </section>
 
 <section>
@@ -1435,6 +1444,32 @@ async function resetDatabase(){
   }
 }
 async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
+function countList(title,rows){
+  if(!rows||!rows.length)return '<div><strong>'+esc(title)+'</strong><div class="sub">—</div></div>';
+  return '<div><strong>'+esc(title)+'</strong>'+rows.map(x=>'<div class="sub">'+esc(x.label)+' : '+esc(x.count)+'</div>').join('')+'</div>';
+}
+async function loadStatistics(){
+  try{
+    const d=await jfetch('/api/statistics');
+    const s=d.summary||{};
+    const summary='<div class="detail-meta-grid" style="margin-bottom:12px">'+[
+      ['Individuals',s.individuals],
+      ['Makers',s.makers],
+      ['Models',s.models],
+      ['Finishes',s.finishes],
+      ['Current Location known',s.located_individuals]
+    ].map(x=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(x[0])+'</span><span class="detail-meta-value">'+esc(x[1]??0)+'</span></div>').join('')+'</div>';
+    const lists='<div class="detail-meta-grid">'+[
+      countList('Maker',d.makers),
+      countList('Model',d.models),
+      countList('Finish',d.finishes),
+      countList('Current Country',d.current_countries)
+    ].map(x=>'<div class="detail-meta-item">'+x+'</div>').join('')+'</div>';
+    document.getElementById('statistics').innerHTML=summary+lists;
+  }catch(e){
+    document.getElementById('statistics').textContent='Statistics error: '+e.message;
+  }
+}
 function normalizeSortValue(value,key){if(key==='id'||key==='observation_count')return Number(value||0);return String(value??'').toLowerCase()}
 function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
@@ -1447,7 +1482,7 @@ async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);c
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL / Owner / Location をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-(async()=>{await refreshStatus();await loadIndividuals()})()
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics()})()
 </script>
 </body></html>"""
 
