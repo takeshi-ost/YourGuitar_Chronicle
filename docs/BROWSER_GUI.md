@@ -81,8 +81,10 @@ ygc-web --no-browser
   - ID / Maker / Model / Finish / Year / Serial / Obs の各列ヘッダーをクリックして昇順・降順ソート
   - 一覧にModel / Finish / Yearを表示
   - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
+  - Detail上部に最新ObservationのReverb代表画像を1枚表示
+  - 画像本体はYGCへ保存せず、ObservationにはReverb側の画像URLだけを保存
   - Detail内のSource URLは最新Observationだけハイパーリンク化し、過去ObservationのURLは参照用テキストとして表示
-  - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Yearを補完し、Individualへ同期
+  - 「既存DBバックフィル」は今回のメタデータ移行用。Reverb Listingを再取得して既存ObservationへModel / Finish / Year / image URLを補完し、Individualへ同期
 - DBエクスポート
   - 画面右上の「DBエクスポート」から現在のSQLite DBをダウンロード
   - 直接DBファイルをコピーするのではなく、SQLiteのbackup APIで一貫したスナップショットを作成
@@ -222,3 +224,12 @@ start_webui.bat
 どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`phase0_proto/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
 
 ブランチ切り替えは自動では行いません。検証したいブランチへ一度 `git switch <branch>` した後は、そのままランチャーを繰り返し利用できます。
+
+
+## External listing images
+
+Observationには代表画像のURLだけを `image_url` として保持します。画像データ自体はSQLite DBやGitHubには保存しません。
+
+新規CrawlではReverb Listing詳細の先頭画像URLを保存します。既存DBは **既存DBバックフィル** を実行すると、Model / Finish / Yearとあわせてimage URLも補完されます。
+
+画像は参照元のReverb URLからブラウザが直接読み込みます。そのため、参照元Listingや画像URLが将来無効になった場合はYGC上でも表示できなくなる可能性があります。
