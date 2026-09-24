@@ -193,3 +193,32 @@ PC間で同じChronicle DBを使う場合は、元環境で **DBエクスポー�
 DBインポートはマージではなく、移動先の現在DBを選択したエクスポートDBで置き換えます。
 そのため、両方の環境で別々にCrawlしたDBを自動統合する用途ではありません。
 現在のDBを残したい場合は、インポート前に必ずエクスポートしてください。
+
+
+## One-click launcher
+
+WebUIの確認手順を短縮するため、リポジトリ直下に起動スクリプトを用意しています。
+
+macOS:
+
+```bash
+./start_webui.command
+```
+
+Finderから `start_webui.command` をダブルクリックして起動することもできます。初回のみ実行権限が必要な場合は:
+
+```bash
+chmod +x start_webui.command
+```
+
+Windows:
+
+```text
+start_webui.bat
+```
+
+をダブルクリックします。
+
+どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`phase0_proto/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
+
+ブランチ切り替えは自動では行いません。検証したいブランチへ一度 `git switch <branch>` した後は、そのままランチャーを繰り返し利用できます。
