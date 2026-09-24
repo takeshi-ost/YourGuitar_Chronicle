@@ -347,6 +347,145 @@ class ReverbAPICollector:
                     self.delay
                 )
 
+    @staticmethod
+    def _image_href(
+        item: dict,
+    ) -> str | None:
+        links = (
+            item.get("_links")
+            or {}
+        )
+
+        for key in (
+            "images",
+            "photos",
+            "photo",
+        ):
+            link = links.get(
+                key
+            )
+
+            if (
+                isinstance(
+                    link,
+                    dict,
+                )
+                and link.get(
+                    "href"
+                )
+            ):
+                return str(
+                    link["href"]
+                )
+
+        return None
+
+    @staticmethod
+    def _first_image_url(
+        payload: dict,
+    ) -> str | None:
+        candidates = (
+            payload.get("images")
+            or payload.get("photos")
+            or payload.get(
+                "_embedded",
+                {},
+            ).get("images")
+            or payload.get(
+                "_embedded",
+                {},
+            ).get("photos")
+            or []
+        )
+
+        if isinstance(
+            candidates,
+            dict,
+        ):
+            candidates = [
+                candidates
+            ]
+
+        if not isinstance(
+            candidates,
+            list,
+        ):
+            return None
+
+        for image in candidates:
+            if isinstance(
+                image,
+                str,
+            ):
+                value = image.strip()
+                if value:
+                    return value
+
+            if not isinstance(
+                image,
+                dict,
+            ):
+                continue
+
+            for key in (
+                "url",
+                "href",
+            ):
+                value = image.get(
+                    key
+                )
+                if value:
+                    return str(
+                        value
+                    )
+
+        return None
+
+    def _fetch_listing_image_url(
+        self,
+        item: dict,
+    ) -> str | None:
+        listing_id = (
+            self.listing_id(
+                item
+            )
+        )
+
+        image_url = (
+            self._image_href(
+                item
+            )
+        )
+
+        if not image_url:
+            if not listing_id:
+                return None
+
+            image_url = (
+                f"{self.api_base}/"
+                f"listings/{listing_id}/"
+                "images/"
+            )
+
+        try:
+            payload = self._get_json(
+                image_url
+            )
+        except httpx.HTTPError as exc:
+            log.warning(
+                "Could not fetch listing "
+                "images %s: %s",
+                listing_id,
+                exc,
+            )
+            return None
+
+        return (
+            self._first_image_url(
+                payload
+            )
+        )
+
     def fetch_listing_detail(
         self,
         item: dict,
@@ -365,9 +504,22 @@ class ReverbAPICollector:
             return item
 
         try:
-            return self._get_json(
+            detail = self._get_json(
                 detail_url
             )
+
+            image_url = (
+                self._fetch_listing_image_url(
+                    detail
+                )
+            )
+
+            if image_url:
+                detail[
+                    "_ygc_image_url"
+                ] = image_url
+
+            return detail
 
         except httpx.HTTPError as exc:
             log.warning(
