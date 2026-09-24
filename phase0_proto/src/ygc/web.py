@@ -1477,23 +1477,23 @@ function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='to
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
 async function runLocationProbe(){
+  const output=document.getElementById('jobResults');
+  output.innerHTML='<div class="sub">Location Probe 実行中...</div>';
   try{
     const d=await jfetch('/api/location-probe');
-    const location=d.location??null;
-    const shop=d.shop??null;
-    const message=[
+    const text=[
       'Location Probe',
       '',
       'Listing: '+(d.title||''),
       'Listing ID: '+(d.listing_id||''),
       '',
-      'location = '+JSON.stringify(location,null,2),
+      'location = '+JSON.stringify(d.location??null,null,2),
       '',
-      'shop = '+JSON.stringify(shop,null,2)
+      'shop = '+JSON.stringify(d.shop??null,null,2)
     ].join('\n');
-    alert(message);
+    output.innerHTML='<pre style="white-space:pre-wrap;word-break:break-word;user-select:text;margin:0">'+esc(text)+'</pre>';
   }catch(e){
-    alert('Location Probeに失敗しました。\n'+e.message);
+    output.innerHTML='<pre style="white-space:pre-wrap;word-break:break-word;user-select:text;margin:0">'+esc('Location Probeに失敗しました。\n'+e.message)+'</pre>';
   }
 }
 function exportDatabase(){window.location.href='/api/export-db'}
