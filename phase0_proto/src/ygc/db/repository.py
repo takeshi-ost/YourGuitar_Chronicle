@@ -74,6 +74,9 @@ class Repository:
                 "owner_name": "TEXT",
                 "owner_type": "TEXT",
                 "owner_profile_url": "TEXT",
+                "location_country": "TEXT",
+                "location_region": "TEXT",
+                "location_source": "TEXT",
             },
         }
 
@@ -256,6 +259,9 @@ class Repository:
                 "owner_name",
                 "owner_type",
                 "owner_profile_url",
+                "location_country",
+                "location_region",
+                "location_source",
                 "seller",
                 "source_site",
                 "source_url",
@@ -315,7 +321,10 @@ class Repository:
                         image_url,
                         owner_name,
                         owner_type,
-                        owner_profile_url
+                        owner_profile_url,
+                        location_country,
+                        location_region,
+                        location_source
                     FROM observations
                     WHERE source_site = 'reverb'
                       AND source_listing_id
@@ -332,6 +341,8 @@ class Repository:
                           OR TRIM(image_url) = ''
                           OR owner_profile_url IS NULL
                           OR TRIM(owner_profile_url) = ''
+                          OR location_country IS NULL
+                          OR TRIM(location_country) = ''
                       )
                     ORDER BY id
                     """
@@ -348,6 +359,9 @@ class Repository:
         owner_name: str | None = None,
         owner_type: str | None = None,
         owner_profile_url: str | None = None,
+        location_country: str | None = None,
+        location_region: str | None = None,
+        location_source: str | None = None,
     ) -> None:
         with self.connect() as con:
             con.execute(
@@ -380,6 +394,18 @@ class Repository:
                     owner_profile_url = COALESCE(
                         NULLIF(?, ''),
                         owner_profile_url
+                    ),
+                    location_country = COALESCE(
+                        NULLIF(?, ''),
+                        location_country
+                    ),
+                    location_region = COALESCE(
+                        NULLIF(?, ''),
+                        location_region
+                    ),
+                    location_source = COALESCE(
+                        NULLIF(?, ''),
+                        location_source
                     )
                 WHERE id = ?
                 """,
@@ -391,6 +417,9 @@ class Repository:
                     owner_name,
                     owner_type,
                     owner_profile_url,
+                    location_country,
+                    location_region,
+                    location_source,
                     observation_id,
                 ),
             )
