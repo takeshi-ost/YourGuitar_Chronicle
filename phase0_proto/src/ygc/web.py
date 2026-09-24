@@ -837,6 +837,31 @@ async def api_import_db(
                 detail=str(exc),
             ) from exc
 
+        try:
+            with sqlite3.connect(
+                temp_path
+            ) as source:
+                with sqlite3.connect(
+                    db_path
+                ) as destination:
+                    source.backup(
+                        destination
+                    )
+                    destination.execute(
+                        "PRAGMA wal_checkpoint(TRUNCATE)"
+                    )
+        except (
+            sqlite3.Error,
+            OSError,
+        ) as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Could not install imported "
+                    f"database: {exc}"
+                ),
+            ) from exc
+
         for sidecar in (
             Path(
                 str(db_path)
@@ -850,10 +875,6 @@ async def api_import_db(
             _safe_unlink(
                 sidecar
             )
-
-        temp_path.replace(
-            db_path
-        )
 
         repository = Repository(
             db_path
