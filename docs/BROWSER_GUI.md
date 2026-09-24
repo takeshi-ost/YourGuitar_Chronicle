@@ -82,6 +82,9 @@ ygc-web --no-browser
   - 一覧にModel / Finish / Yearを表示
   - Individualをクリックすると、Individualと各ObservationのModel / Finish / Yearを表示
   - Detailを「最新Observation」と「履歴」に分け、Observationをカード表示
+  - Detail上部ではIDを表示せず、Finish / Year / Serial / Current Ownerを独立項目として表示
+  - Current Ownerは最新ObservationのOwnerを使用。将来user型OwnerにプロフィールURLが付いた場合はプロフィールリンクとして表示できる構造
+  - 最新Observation領域は情報量増加に備えて縦スクロール対応
   - 各カードに日付 / Owner / Shop（Ownerと異なる場合）/ Listing / Info / Sourceを表示
   - Reverb由来ObservationではShop名をOwnerとして保持し、将来のユーザー由来Observationではユーザー名をOwnerとして扱えるよう `owner_name` / `owner_type` を保持
   - Detail上部に最新ObservationのReverb代表画像を1枚表示
