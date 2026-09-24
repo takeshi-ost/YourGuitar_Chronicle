@@ -754,6 +754,113 @@ def _source_url(
     return None
 
 
+def listing_image_url(
+    item: dict,
+) -> str | None:
+    photos = (
+        item.get("photos")
+        or item.get("images")
+        or []
+    )
+
+    if isinstance(
+        photos,
+        dict,
+    ):
+        photos = (
+            photos.get("items")
+            or photos.get("photos")
+            or photos.get("images")
+            or []
+        )
+
+    if isinstance(
+        photos,
+        list,
+    ):
+        for photo in photos:
+            if isinstance(
+                photo,
+                str,
+            ):
+                value = photo.strip()
+                if value:
+                    return value
+
+            if not isinstance(
+                photo,
+                dict,
+            ):
+                continue
+
+            for key in (
+                "url",
+                "href",
+            ):
+                value = photo.get(
+                    key
+                )
+                if value:
+                    return str(
+                        value
+                    )
+
+            links = (
+                photo.get("_links")
+                or {}
+            )
+
+            for key in (
+                "large_crop",
+                "full",
+                "supersize",
+                "large",
+                "small_crop",
+            ):
+                link = links.get(
+                    key
+                )
+
+                if isinstance(
+                    link,
+                    dict,
+                ):
+                    href = link.get(
+                        "href"
+                    )
+                    if href:
+                        return str(
+                            href
+                        )
+
+    links = (
+        item.get("_links")
+        or {}
+    )
+
+    for key in (
+        "photo",
+        "image",
+    ):
+        link = links.get(
+            key
+        )
+
+        if isinstance(
+            link,
+            dict,
+        ):
+            href = link.get(
+                "href"
+            )
+            if href:
+                return str(
+                    href
+                )
+
+    return None
+
+
 def _serial_text(
     item: dict,
 ) -> str:
@@ -907,6 +1014,12 @@ def to_observation(
 
         "source_url": (
             _source_url(
+                item
+            )
+        ),
+
+        "image_url": (
+            listing_image_url(
                 item
             )
         ),
