@@ -598,73 +598,42 @@ def _run_metadata_backfill(
                         )
                     )
 
-                    owner_name = (
+                    parsed_observation = (
                         to_observation(
                             detail,
                             config.SERIAL_CONFIDENCE_THRESHOLD,
-                        ).get(
+                        )
+                    )
+                    owner_name = (
+                        parsed_observation.get(
                             "owner_name"
                         )
                     )
                     owner_type = (
-                        "shop"
-                        if owner_name
-                        else None
+                        parsed_observation.get(
+                            "owner_type"
+                        )
                     )
-                    shop = (
-                        detail.get(
-                            "shop"
+                    owner_profile_url = (
+                        parsed_observation.get(
+                            "owner_profile_url"
                         )
-                        if isinstance(
-                            detail.get(
-                                "shop"
-                            ),
-                            dict,
-                        )
-                        else {}
                     )
-                    owner_profile_url = None
-                    for key in (
-                        "url",
-                        "web_url",
-                    ):
-                        value = (
-                            shop.get(
-                                key
-                            )
-                            if shop
-                            else None
+                    location_country = (
+                        parsed_observation.get(
+                            "location_country"
                         )
-                        if value:
-                            owner_profile_url = str(
-                                value
-                            )
-                            break
-                    if (
-                        not owner_profile_url
-                        and shop
-                    ):
-                        web_link = (
-                            shop.get(
-                                "_links",
-                                {},
-                            ).get(
-                                "web"
-                            )
+                    )
+                    location_region = (
+                        parsed_observation.get(
+                            "location_region"
                         )
-                        if isinstance(
-                            web_link,
-                            dict,
-                        ):
-                            href = (
-                                web_link.get(
-                                    "href"
-                                )
-                            )
-                            if href:
-                                owner_profile_url = str(
-                                    href
-                                )
+                    )
+                    location_source = (
+                        parsed_observation.get(
+                            "location_source"
+                        )
+                    )
 
                     repository.update_observation_metadata(
                         int(
@@ -677,6 +646,9 @@ def _run_metadata_backfill(
                         owner_name=owner_name,
                         owner_type=owner_type,
                         owner_profile_url=owner_profile_url,
+                        location_country=location_country,
+                        location_region=location_region,
+                        location_source=location_source,
                     )
 
                     if (
@@ -685,6 +657,8 @@ def _run_metadata_backfill(
                         or year
                         or image_url
                         or owner_profile_url
+                        or location_country
+                        or location_region
                     ):
                         metadata_updated += 1
 
@@ -714,7 +688,7 @@ def _run_metadata_backfill(
             job_id,
             status="done",
             message=(
-                "model / finish / year / image "
+                "model / finish / year / image / location "
                 "バックフィル完了"
             ),
             progress=1.0,
@@ -776,77 +750,6 @@ def api_status(
         "stats": repository.stats(),
         "active_job_id": (
             _active_job_id
-        ),
-    }
-
-
-@app.get("/api/location-probe")
-def api_location_probe(
-    request: Request,
-) -> dict[str, Any]:
-    token, token_source = _request_token(
-        request
-    )
-
-    if not token:
-        raise HTTPException(
-            status_code=400,
-            detail="Reverb API Token is not configured",
-        )
-
-    try:
-        with ReverbAPICollector(
-            token=token,
-            api_base=config.REVERB_API_BASE,
-            timeout=config.REQUEST_TIMEOUT,
-            delay=0.15,
-            max_workers=1,
-        ) as collector:
-            item = next(
-                collector.iter_listing_summaries(
-                    query="Fender Stratocaster",
-                    limit=1,
-                    year_max=1980,
-                )
-            )
-            detail = collector.fetch_listing_detail(
-                item
-            )
-    except StopIteration as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="No Reverb listing was returned for the probe",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Reverb location probe failed: {exc}",
-        ) from exc
-
-    location = detail.get("location")
-    shop = detail.get("shop")
-
-    return {
-        "token_source": token_source,
-        "listing_id": collector.listing_id(
-            detail
-        ),
-        "title": detail.get("title"),
-        "location": (
-            location
-            if isinstance(
-                location,
-                dict,
-            )
-            else location
-        ),
-        "shop": (
-            shop
-            if isinstance(
-                shop,
-                dict,
-            )
-            else shop
         ),
     }
 
@@ -1404,7 +1307,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="runLocationProbe()">Location Probe</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -1476,26 +1379,6 @@ function openTokenSettings(){document.getElementById('tokenInput').value=storedT
 function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='tokenModal')return;document.getElementById('tokenModal').classList.remove('open');document.getElementById('tokenInput').value=''}
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
-async function runLocationProbe(){
-  const output=document.getElementById('jobResults');
-  output.innerHTML='<div class="sub">Location Probe 実行中...</div>';
-  try{
-    const d=await jfetch('/api/location-probe');
-    const text=[
-      'Location Probe',
-      '',
-      'Listing: '+(d.title||''),
-      'Listing ID: '+(d.listing_id||''),
-      '',
-      'location = '+JSON.stringify(d.location??null,null,2),
-      '',
-      'shop = '+JSON.stringify(d.shop??null,null,2)
-    ].join('\n');
-    output.innerHTML='<pre style="white-space:pre-wrap;word-break:break-word;user-select:text;margin:0">'+esc(text)+'</pre>';
-  }catch(e){
-    output.innerHTML='<pre style="white-space:pre-wrap;word-break:break-word;user-select:text;margin:0">'+esc('Location Probeに失敗しました。\n'+e.message)+'</pre>';
-  }
-}
 function exportDatabase(){window.location.href='/api/export-db'}
 function openDatabaseImport(){const input=document.getElementById('dbImportInput');input.value='';input.click()}
 async function importDatabaseFile(input){
@@ -1559,9 +1442,9 @@ function renderIndividuals(){const q=document.getElementById('individualFilter')
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
 function ownerLabel(o){const name=String(o.owner_name||o.seller||'').trim();if(!name)return '';const type=String(o.owner_type||'').trim();return type==='shop'?name+' (Shop)':(type==='user'?name+' (User)':name)}
 function currentOwnerHtml(o){if(!o)return '—';const name=String(o.owner_name||o.seller||'').trim();if(!name)return '—';const type=String(o.owner_type||'').trim();const profileUrl=String(o.owner_profile_url||'').trim();const listingUrl=String(o.source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl){return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>'}if(type==='user'&&profileUrl){return '<a href="'+esc(profileUrl)+'">'+esc(label)+'</a>'}return esc(label)}
-function observationCard(o,isLatest){const url=String(o.source_url||'');const source=sourceName(o);const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);const owner=ownerLabel(o);const seller=String(o.seller||'').trim();let rows='';if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';if(seller&&seller!==String(o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>'}
+function observationCard(o,isLatest){const url=String(o.source_url||'');const source=sourceName(o);const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);const owner=ownerLabel(o);const seller=String(o.seller||'').trim();let rows='';if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';if(seller&&seller!==String(o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>'}
 async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(latest&&latest.image_url){const latestUrl=String(latest.source_url||'');const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(latestUrl){out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer" title="Reverb Listingを開く">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>'}else{out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>'}}out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid"><div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div></div></div>';if(latest){out+='<div class="detail-section">最新Observation</div><div class="latest-observation-scroll">'+observationCard(latest,true)+'</div>'}const history=observations.slice(0,Math.max(0,latestIndex)).reverse();if(history.length){out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('')}document.getElementById('detail').innerHTML=out}
-async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL / Owner link をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL / Owner / Location をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 (async()=>{await refreshStatus();await loadIndividuals()})()
