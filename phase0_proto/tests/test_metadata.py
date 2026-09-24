@@ -116,6 +116,18 @@ def test_init_db_migrates_existing_metadata_columns(
         "owner_type"
         in observation_columns
     )
+    assert (
+        "location_country"
+        in observation_columns
+    )
+    assert (
+        "location_region"
+        in observation_columns
+    )
+    assert (
+        "location_source"
+        in observation_columns
+    )
 
 
 def test_metadata_flows_to_individual_and_observation(
@@ -149,6 +161,9 @@ def test_metadata_flows_to_individual_and_observation(
         "serial_number": "L13242",
         "owner_name": "Example Shop",
         "owner_type": "shop",
+        "location_country": "NL",
+        "location_region": "NH",
+        "location_source": "reverb_listing",
         "seller": "Example Shop",
         "source_site": "reverb",
         "source_url": (
@@ -210,4 +225,16 @@ def test_metadata_flows_to_individual_and_observation(
     assert (
         observations[0]["owner_type"]
         == "shop"
+    )
+    assert (
+        observations[0]["location_country"]
+        == "NL"
+    )
+    assert (
+        observations[0]["location_region"]
+        == "NH"
+    )
+    assert (
+        observations[0]["location_source"]
+        == "reverb_listing"
     )
