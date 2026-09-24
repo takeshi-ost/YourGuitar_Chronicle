@@ -104,6 +104,10 @@ def test_init_db_migrates_existing_metadata_columns(
         "year"
         in observation_columns
     )
+    assert (
+        "image_url"
+        in observation_columns
+    )
 
 
 def test_metadata_flows_to_individual_and_observation(
@@ -139,6 +143,9 @@ def test_metadata_flows_to_individual_and_observation(
         "source_site": "reverb",
         "source_url": (
             "https://example.invalid/1"
+        ),
+        "image_url": (
+            "https://images.example.invalid/1.jpg"
         ),
         "source_listing_id": "1",
         "observed_at": (
@@ -181,4 +188,8 @@ def test_metadata_flows_to_individual_and_observation(
     assert (
         observations[0]["year"]
         == "1963"
+    )
+    assert (
+        observations[0]["image_url"]
+        == "https://images.example.invalid/1.jpg"
     )
