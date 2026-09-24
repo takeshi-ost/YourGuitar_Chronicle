@@ -23,7 +23,11 @@ from ygc.collectors.reverb import ReverbAPICollector
 from ygc.db.repository import Repository
 from ygc.extractors.serial import extract_serial_candidates
 from ygc.matching.individual_matcher import match_or_create
-from ygc.reverb_adapter import classify_vintage_listing, to_observation
+from ygc.reverb_adapter import (
+    classify_vintage_listing,
+    listing_image_url,
+    to_observation,
+)
 
 
 app = FastAPI(title="Your Guitar Chronicle Phase 0")
@@ -588,6 +592,12 @@ def _run_metadata_backfill(
                         or ""
                     ).strip() or None
 
+                    image_url = (
+                        listing_image_url(
+                            detail
+                        )
+                    )
+
                     repository.update_observation_metadata(
                         int(
                             row["id"]
@@ -595,12 +605,14 @@ def _run_metadata_backfill(
                         model=model,
                         finish=finish,
                         year=year,
+                        image_url=image_url,
                     )
 
                     if (
                         model
                         or finish
                         or year
+                        or image_url
                     ):
                         metadata_updated += 1
 
@@ -630,7 +642,7 @@ def _run_metadata_backfill(
             job_id,
             status="done",
             message=(
-                "model / finish / year "
+                "model / finish / year / image "
                 "バックフィル完了"
             ),
             progress=1.0,
@@ -1243,7 +1255,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-#detail{white-space:pre-wrap}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+#detail{white-space:pre-wrap}.detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px;margin:0 0 14px}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}
 </style>
@@ -1381,8 +1393,8 @@ function normalizeSortValue(value,key){if(key==='id'||key==='observation_count')
 function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
-async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;let out='<b>#'+i.id+' '+esc(i.manufacturer)+'</b>\nModel: '+esc(i.model||'')+'\nFinish: '+esc(i.finish||'')+'\nYear: '+esc(i.year||'')+'\nSerial: '+esc(i.serial_number||'')+'\n\n';const observations=d.observations||[];const latestIndex=observations.length-1;for(let index=0;index<observations.length;index++){const o=observations[index];out+=esc(o.listing_date||o.observed_at)+'\nModel: '+esc(o.model||'')+'\nFinish: '+esc(o.finish||'')+'\nYear: '+esc(o.year||'')+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n';const url=String(o.source_url||'');if(url&&index===latestIndex){out+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+'</a>\n\n'}else{out+=esc(url)+'\n\n'}}document.getElementById('detail').innerHTML=out}
-async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(latest&&latest.image_url){out+='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">'}out+='<b>#'+i.id+' '+esc(i.manufacturer)+'</b>\nModel: '+esc(i.model||'')+'\nFinish: '+esc(i.finish||'')+'\nYear: '+esc(i.year||'')+'\nSerial: '+esc(i.serial_number||'')+'\n\n';for(let index=0;index<observations.length;index++){const o=observations[index];out+=esc(o.listing_date||o.observed_at)+'\nModel: '+esc(o.model||'')+'\nFinish: '+esc(o.finish||'')+'\nYear: '+esc(o.year||'')+'\n'+esc(o.seller||'')+'\n'+esc(o.title||'')+'\n';const url=String(o.source_url||'');if(url&&index===latestIndex){out+='<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+'</a>\n\n'}else{out+=esc(url)+'\n\n'}}document.getElementById('detail').innerHTML=out}
+async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 (async()=>{await refreshStatus();await loadIndividuals()})()
