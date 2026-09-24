@@ -238,3 +238,98 @@ def test_metadata_flows_to_individual_and_observation(
         observations[0]["location_source"]
         == "reverb_listing"
     )
+
+
+def test_statistics_use_latest_observation_location(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path
+        / "chronicle.db"
+    )
+    repository.init_db()
+
+    individual_id = (
+        match_or_create(
+            repository,
+            "Fender",
+            "Stratocaster",
+            "S12345",
+            finish="Sunburst",
+            year="1965",
+        )
+    )
+
+    base = {
+        "individual_id": individual_id,
+        "manufacturer": "Fender",
+        "model": "Stratocaster",
+        "finish": "Sunburst",
+        "year": "1965",
+        "serial_number": "S12345",
+        "owner_name": "Example Shop",
+        "owner_type": "shop",
+        "location_source": "reverb_listing",
+        "seller": "Example Shop",
+        "source_site": "reverb",
+        "source_url": (
+            "https://example.invalid/"
+        ),
+        "image_url": None,
+        "raw_text": "",
+        "serial_confidence": 0.95,
+        "extraction_version": "serial-v3",
+        "created_at": (
+            "2026-09-23T00:00:00+00:00"
+        ),
+    }
+
+    first = {
+        **base,
+        "source_listing_id": "1",
+        "observed_at": (
+            "2020-01-01T00:00:00+00:00"
+        ),
+        "listing_date": (
+            "2020-01-01T00:00:00+00:00"
+        ),
+        "title": "First listing",
+        "location_country": "US",
+        "location_region": "CA",
+    }
+
+    latest = {
+        **base,
+        "source_listing_id": "2",
+        "observed_at": (
+            "2026-01-01T00:00:00+00:00"
+        ),
+        "listing_date": (
+            "2026-01-01T00:00:00+00:00"
+        ),
+        "title": "Latest listing",
+        "location_country": "JP",
+        "location_region": "13",
+    }
+
+    repository.upsert_observation(first)
+    repository.upsert_observation(latest)
+
+    stats = repository.statistics()
+
+    assert stats["summary"]["individuals"] == 1
+    assert stats["summary"]["makers"] == 1
+    assert stats["summary"]["models"] == 1
+    assert stats["summary"]["finishes"] == 1
+    assert (
+        stats["summary"][
+            "located_individuals"
+        ]
+        == 1
+    )
+    assert stats["current_countries"] == [
+        {
+            "label": "JP",
+            "count": 1,
+        }
+    ]
