@@ -1011,6 +1011,20 @@ def to_observation(
             else None
         ),
 
+        "owner_name": (
+            _seller_name(
+                item
+            )
+        ),
+
+        "owner_type": (
+            "shop"
+            if _seller_name(
+                item
+            )
+            else None
+        ),
+
         "seller": (
             _seller_name(
                 item
