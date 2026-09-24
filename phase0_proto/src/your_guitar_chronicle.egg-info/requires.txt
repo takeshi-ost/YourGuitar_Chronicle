@@ -1,6 +1,8 @@
 httpx<1,>=0.27
 typer<1,>=0.12
 rich<14,>=13
+fastapi<1,>=0.115
+uvicorn<1,>=0.30
 
 [dev]
 pytest<9,>=8

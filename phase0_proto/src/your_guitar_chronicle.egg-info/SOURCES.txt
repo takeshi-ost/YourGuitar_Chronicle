@@ -4,6 +4,7 @@ src/ygc/__init__.py
 src/ygc/cli.py
 src/ygc/config.py
 src/ygc/reverb_adapter.py
+src/ygc/web.py
 src/ygc/collectors/__init__.py
 src/ygc/collectors/base.py
 src/ygc/collectors/reverb.py
@@ -20,6 +21,8 @@ src/your_guitar_chronicle.egg-info/dependency_links.txt
 src/your_guitar_chronicle.egg-info/entry_points.txt
 src/your_guitar_chronicle.egg-info/requires.txt
 src/your_guitar_chronicle.egg-info/top_level.txt
+tests/test_db_import.py
 tests/test_matching.py
+tests/test_metadata.py
 tests/test_reverb_adapter.py
 tests/test_serial_extractor.py
