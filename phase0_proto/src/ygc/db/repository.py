@@ -70,6 +70,7 @@ class Repository:
             "observations": {
                 "finish": "TEXT",
                 "year": "TEXT",
+                "image_url": "TEXT",
             },
         }
 
@@ -231,6 +232,7 @@ class Repository:
                 "seller",
                 "source_site",
                 "source_url",
+                "image_url",
                 "source_listing_id",
                 "observed_at",
                 "listing_date",
@@ -282,7 +284,8 @@ class Repository:
                         source_listing_id,
                         model,
                         finish,
-                        year
+                        year,
+                        image_url
                     FROM observations
                     WHERE source_site = 'reverb'
                       AND source_listing_id
@@ -295,6 +298,8 @@ class Repository:
                           OR TRIM(finish) = ''
                           OR year IS NULL
                           OR TRIM(year) = ''
+                          OR image_url IS NULL
+                          OR TRIM(image_url) = ''
                       )
                     ORDER BY id
                     """
@@ -307,6 +312,7 @@ class Repository:
         model: str | None,
         finish: str | None,
         year: str | None,
+        image_url: str | None = None,
     ) -> None:
         with self.connect() as con:
             con.execute(
@@ -323,6 +329,10 @@ class Repository:
                     year = COALESCE(
                         NULLIF(?, ''),
                         year
+                    ),
+                    image_url = COALESCE(
+                        NULLIF(?, ''),
+                        image_url
                     )
                 WHERE id = ?
                 """,
@@ -330,6 +340,7 @@ class Repository:
                     model,
                     finish,
                     year,
+                    image_url,
                     observation_id,
                 ),
             )
