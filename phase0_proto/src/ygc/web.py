@@ -50,6 +50,157 @@ def _safe_unlink(path: Path) -> None:
         pass
 
 
+def _validate_import_database(
+    path: Path,
+) -> dict[str, int]:
+    try:
+        with path.open("rb") as file:
+            header = file.read(16)
+    except OSError as exc:
+        raise ValueError(
+            f"Could not read uploaded DB: {exc}"
+        ) from exc
+
+    if header != b"SQLite format 3\x00":
+        raise ValueError(
+            "Selected file is not a SQLite 3 database"
+        )
+
+    required_tables = {
+        "individuals",
+        "observations",
+        "crawl_runs",
+    }
+
+    required_columns = {
+        "individuals": {
+            "id",
+            "manufacturer",
+            "normalized_manufacturer",
+            "normalized_serial",
+        },
+        "observations": {
+            "id",
+            "source_site",
+            "source_url",
+            "source_listing_id",
+            "observed_at",
+        },
+        "crawl_runs": {
+            "id",
+            "source_site",
+            "status",
+        },
+    }
+
+    try:
+        with sqlite3.connect(path) as con:
+            quick_check = con.execute(
+                "PRAGMA quick_check"
+            ).fetchone()
+
+            if (
+                not quick_check
+                or str(
+                    quick_check[0]
+                ).lower()
+                != "ok"
+            ):
+                raise ValueError(
+                    "SQLite integrity check failed"
+                )
+
+            tables = {
+                str(row[0])
+                for row
+                in con.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type='table'
+                    """
+                )
+            }
+
+            missing_tables = (
+                required_tables
+                - tables
+            )
+
+            if missing_tables:
+                raise ValueError(
+                    "Not a YGC database. "
+                    "Missing tables: "
+                    + ", ".join(
+                        sorted(
+                            missing_tables
+                        )
+                    )
+                )
+
+            for (
+                table,
+                expected,
+            ) in required_columns.items():
+                columns = {
+                    str(row[1])
+                    for row
+                    in con.execute(
+                        f"PRAGMA table_info({table})"
+                    )
+                }
+
+                missing_columns = (
+                    expected
+                    - columns
+                )
+
+                if missing_columns:
+                    raise ValueError(
+                        "Not a compatible YGC database. "
+                        f"{table} is missing: "
+                        + ", ".join(
+                            sorted(
+                                missing_columns
+                            )
+                        )
+                    )
+
+            counts = {
+                "observations": int(
+                    con.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM observations
+                        """
+                    ).fetchone()[0]
+                ),
+                "individuals": int(
+                    con.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM individuals
+                        """
+                    ).fetchone()[0]
+                ),
+                "crawl_runs": int(
+                    con.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM crawl_runs
+                        """
+                    ).fetchone()[0]
+                ),
+            }
+
+    except sqlite3.Error as exc:
+        raise ValueError(
+            f"Could not open SQLite database: {exc}"
+        ) from exc
+
+    return counts
+
+
 def _request_token(
     request: Request,
 ) -> tuple[str, str]:
@@ -575,6 +726,164 @@ def api_export_db() -> FileResponse:
         raise
 
 
+@app.post("/api/import-db")
+async def api_import_db(
+    request: Request,
+) -> dict[str, Any]:
+    with _jobs_lock:
+        if (
+            _active_job_id
+            and _jobs.get(
+                _active_job_id,
+                {},
+            ).get("status")
+            == "running"
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Cannot import a database "
+                    "while a background job is running"
+                ),
+            )
+
+    content_length = (
+        request.headers.get(
+            "content-length"
+        )
+    )
+
+    max_size = (
+        100
+        * 1024
+        * 1024
+    )
+
+    if content_length:
+        try:
+            if (
+                int(
+                    content_length
+                )
+                > max_size
+            ):
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "Database file is too large "
+                        "(maximum 100 MB)"
+                    ),
+                )
+        except ValueError:
+            pass
+
+    payload = await request.body()
+
+    if not payload:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No database file was uploaded"
+            ),
+        )
+
+    if len(payload) > max_size:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Database file is too large "
+                "(maximum 100 MB)"
+            ),
+        )
+
+    db_path = Path(
+        config.DB_PATH
+    )
+    db_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    temp_file = (
+        tempfile
+        .NamedTemporaryFile(
+            prefix="ygc_import_",
+            suffix=".db",
+            dir=db_path.parent,
+            delete=False,
+        )
+    )
+
+    temp_path = Path(
+        temp_file.name
+    )
+
+    try:
+        temp_file.write(
+            payload
+        )
+        temp_file.flush()
+        temp_file.close()
+
+        try:
+            imported_counts = (
+                _validate_import_database(
+                    temp_path
+                )
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc),
+            ) from exc
+
+        for sidecar in (
+            Path(
+                str(db_path)
+                + "-wal"
+            ),
+            Path(
+                str(db_path)
+                + "-shm"
+            ),
+        ):
+            _safe_unlink(
+                sidecar
+            )
+
+        temp_path.replace(
+            db_path
+        )
+
+        repository = Repository(
+            db_path
+        )
+        repository.init_db()
+
+        return {
+            "ok": True,
+            "db_path": str(
+                db_path
+            ),
+            "imported_counts": (
+                imported_counts
+            ),
+            "stats": (
+                repository.stats()
+            ),
+        }
+
+    finally:
+        try:
+            temp_file.close()
+        except OSError:
+            pass
+
+        _safe_unlink(
+            temp_path
+        )
+
+
 @app.post("/api/reset-db")
 def api_reset_db(request: ResetDatabaseRequest) -> dict[str, Any]:
     if request.confirm != "RESET":
@@ -919,7 +1228,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -962,6 +1271,7 @@ Gibson ES-335</textarea>
 </section>
 </div>
 </main>
+<input id="dbImportInput" type="file" accept=".db,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <div class="modal-backdrop" id="tokenModal" onclick="closeTokenSettings(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Reverb API Token</h2>
@@ -991,6 +1301,33 @@ function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='to
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
 function exportDatabase(){window.location.href='/api/export-db'}
+function openDatabaseImport(){const input=document.getElementById('dbImportInput');input.value='';input.click()}
+async function importDatabaseFile(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  const message='現在のDBを選択したエクスポートDBで置き換えます。\n\n'+file.name+'\n\n実行前に必要であれば現在のDBをエクスポートしてください。続行しますか？';
+  if(!confirm(message)){input.value='';return}
+  try{
+    const d=await jfetch('/api/import-db',{
+      method:'POST',
+      headers:{'Content-Type':'application/octet-stream'},
+      body:file
+    });
+    individuals=[];
+    document.getElementById('detail').textContent='Individuals の行をクリックすると履歴を表示します。';
+    document.getElementById('jobResults').innerHTML='';
+    document.getElementById('jobMessage').textContent='DBをインポートしました';
+    document.getElementById('jobBar').style.width='0%';
+    await refreshStatus();
+    await loadIndividuals();
+    const imported=d.imported_counts||{};
+    alert('DBをインポートしました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??''));
+  }catch(e){
+    alert('DBインポートに失敗しました。\n'+e.message);
+  }finally{
+    input.value='';
+  }
+}
 async function resetDatabase(){
   const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
   if(!confirm(message))return;
