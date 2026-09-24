@@ -22,6 +22,14 @@ def test_adapter():
         "shop": {
             "name": "Example Vintage"
         },
+        "location": {
+            "region": "NH",
+            "locality": "Amsterdam",
+            "country_code": "NL",
+            "display_location": (
+                "Amsterdam, Netherlands"
+            ),
+        },
         "photos": [
             {
                 "_links": {
@@ -114,6 +122,27 @@ def test_adapter():
             "source_listing_id"
         ]
         == "123"
+    )
+
+    assert (
+        observation[
+            "location_country"
+        ]
+        == "NL"
+    )
+
+    assert (
+        observation[
+            "location_region"
+        ]
+        == "NH"
+    )
+
+    assert (
+        observation[
+            "location_source"
+        ]
+        == "reverb_listing"
     )
 
     assert (
