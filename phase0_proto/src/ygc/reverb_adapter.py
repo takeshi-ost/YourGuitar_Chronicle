@@ -757,6 +757,15 @@ def _source_url(
 def listing_image_url(
     item: dict,
 ) -> str | None:
+    explicit = _text(
+        item.get(
+            "_ygc_image_url"
+        )
+    )
+
+    if explicit:
+        return explicit
+
     photos = (
         item.get("photos")
         or item.get("images")
