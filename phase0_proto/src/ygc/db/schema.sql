@@ -187,4 +187,3 @@ CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_i
 
 CREATE INDEX IF NOT EXISTS idx_claim_spec_items_claim_id ON claim_spec_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_identity_items_claim_id ON claim_identity_items(claim_id);
-CREATE INDEX IF NOT EXISTS idx_claims_target_claim_id ON claims(target_claim_id);
