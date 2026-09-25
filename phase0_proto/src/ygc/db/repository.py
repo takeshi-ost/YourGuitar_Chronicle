@@ -77,6 +77,11 @@ class Repository:
                 "year": "TEXT",
                 "representative_media_asset_id": "INTEGER",
             },
+            "users": {
+                "avatar_storage_path": "TEXT",
+                "avatar_original_filename": "TEXT",
+                "avatar_mime_type": "TEXT",
+            },
             "user_guitars": {
                 "display_order": "INTEGER",
             },
@@ -1116,6 +1121,50 @@ class Repository:
                 cur.rowcount
                 > 0
             )
+
+    def update_user_avatar(
+        self,
+        user_id: int,
+        *,
+        storage_path: str,
+        original_filename: str | None,
+        mime_type: str | None,
+    ) -> bool:
+        path = storage_path.strip()
+        if not path:
+            raise ValueError(
+                "storage_path is required"
+            )
+
+        with self.connect() as con:
+            cur = con.execute(
+                """
+                UPDATE users
+                SET avatar_storage_path = ?,
+                    avatar_original_filename = ?,
+                    avatar_mime_type = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    path,
+                    (
+                        original_filename.strip()
+                        if original_filename
+                        else None
+                    ),
+                    (
+                        mime_type.strip()
+                        if mime_type
+                        else None
+                    ),
+                    utcnow(),
+                    user_id,
+                ),
+            )
+
+            return cur.rowcount > 0
+
 
     def link_user_guitar(
         self,
