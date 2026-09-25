@@ -2139,7 +2139,9 @@ class Repository:
                             ) AS row_number
                         FROM candidates
                     )
-                    SELECT *
+                    SELECT
+                        claim_id AS id,
+                        *
                     FROM ranked
                     WHERE row_number = 1
                     ORDER BY
