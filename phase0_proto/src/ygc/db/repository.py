@@ -75,6 +75,10 @@ class Repository:
                 "year": "TEXT",
                 "location_country": "TEXT",
                 "location_region": "TEXT",
+                "current_owner_name": "TEXT",
+                "current_owner_type": "TEXT",
+                "current_owner_user_id": "INTEGER",
+                "current_owner_source_url": "TEXT",
                 "representative_media_asset_id": "INTEGER",
             },
             "users": {
@@ -623,6 +627,10 @@ class Repository:
             "serial_number": None,
             "location_country": None,
             "location_region": None,
+            "current_owner_name": None,
+            "current_owner_type": None,
+            "current_owner_user_id": None,
+            "current_owner_source_url": None,
         }
 
         listing_rows = list(
@@ -658,9 +666,15 @@ class Repository:
             "year",
             "serial_number",
         }
-        listing_snapshot_fields = set(
-            state.keys()
-        )
+        listing_snapshot_fields = {
+            "manufacturer",
+            "model",
+            "finish",
+            "year",
+            "serial_number",
+            "location_country",
+            "location_region",
+        }
 
         for row in listing_rows:
             claim_id = int(
@@ -782,6 +796,124 @@ class Repository:
             if field == "finish" and value:
                 state["finish"] = value
 
+        owner_claims = list(
+            con.execute(
+                """
+                SELECT
+                    c.id,
+                    c.claim_type,
+                    c.value_text,
+                    c.occurred_at,
+                    c.created_at
+                FROM claims c
+                WHERE c.individual_id = ?
+                  AND c.status = 'active'
+                  AND c.claim_type IN (
+                        'listing',
+                        'owner_change',
+                        'release'
+                  )
+                ORDER BY
+                    COALESCE(
+                        c.occurred_at,
+                        c.created_at
+                    ),
+                    c.created_at,
+                    c.id
+                """,
+                (individual_id,),
+            )
+        )
+
+        for claim in owner_claims:
+            claim_type = str(
+                claim["claim_type"]
+            )
+            if claim_type == "listing":
+                items = {
+                    str(row["field_name"]): (
+                        str(row["value_text"]).strip()
+                        if row["value_text"] is not None
+                        else None
+                    )
+                    for row
+                    in con.execute(
+                        """
+                        SELECT field_name, value_text
+                        FROM claim_listing_items
+                        WHERE claim_id = ?
+                        """,
+                        (claim["id"],),
+                    )
+                }
+                owner_name = items.get(
+                    "owner_name"
+                )
+                owner_type = items.get(
+                    "owner_type"
+                )
+                owner_user_id = items.get(
+                    "owner_user_id"
+                )
+                state["current_owner_name"] = (
+                    owner_name
+                    if owner_name
+                    else None
+                )
+                state["current_owner_type"] = (
+                    owner_type
+                    if owner_type
+                    else None
+                )
+                state["current_owner_user_id"] = (
+                    owner_user_id
+                    if owner_user_id
+                    else None
+                )
+                state["current_owner_source_url"] = (
+                    items.get("source_url")
+                    or None
+                )
+            elif claim_type == "owner_change":
+                owner_user_id = (
+                    str(claim["value_text"]).strip()
+                    if claim["value_text"] is not None
+                    else ""
+                )
+                user = (
+                    con.execute(
+                        """
+                        SELECT display_name
+                        FROM users
+                        WHERE id = ?
+                        """,
+                        (owner_user_id,),
+                    ).fetchone()
+                    if owner_user_id
+                    else None
+                )
+                state["current_owner_name"] = (
+                    str(user["display_name"])
+                    if user
+                    else None
+                )
+                state["current_owner_type"] = (
+                    "user"
+                    if user
+                    else None
+                )
+                state["current_owner_user_id"] = (
+                    owner_user_id
+                    if user
+                    else None
+                )
+                state["current_owner_source_url"] = None
+            elif claim_type == "release":
+                state["current_owner_name"] = "Unknown"
+                state["current_owner_type"] = "unknown"
+                state["current_owner_user_id"] = None
+                state["current_owner_source_url"] = None
+
         normalized_maker = normalize_manufacturer(
             state["manufacturer"]
             or ""
@@ -813,6 +945,10 @@ class Repository:
                 serial_number = ?,
                 location_country = ?,
                 location_region = ?,
+                current_owner_name = ?,
+                current_owner_type = ?,
+                current_owner_user_id = ?,
+                current_owner_source_url = ?,
                 normalized_manufacturer = ?,
                 normalized_model = ?,
                 normalized_serial = ?,
@@ -827,6 +963,10 @@ class Repository:
                 state["serial_number"],
                 state["location_country"],
                 state["location_region"],
+                state["current_owner_name"],
+                state["current_owner_type"],
+                state["current_owner_user_id"],
+                state["current_owner_source_url"],
                 normalized_maker,
                 normalized_model,
                 normalized_serial,
@@ -1727,54 +1867,15 @@ class Repository:
             latest_locations = list(
                 con.execute(
                     """
-                    WITH latest_observation AS (
-                        SELECT o.*
-                        FROM observations o
-                        INNER JOIN (
-                            SELECT
-                                individual_id,
-                                MAX(
-                                    COALESCE(
-                                        listing_date,
-                                        observed_at
-                                    )
-                                ) AS latest_date
-                            FROM observations
-                            WHERE individual_id
-                                IS NOT NULL
-                            GROUP BY individual_id
-                        ) latest
-                          ON latest.individual_id
-                             = o.individual_id
-                         AND COALESCE(
-                                o.listing_date,
-                                o.observed_at
-                             )
-                             = latest.latest_date
-                        WHERE o.id = (
-                            SELECT MAX(o2.id)
-                            FROM observations o2
-                            WHERE o2.individual_id
-                                  = o.individual_id
-                              AND COALESCE(
-                                    o2.listing_date,
-                                    o2.observed_at
-                                  )
-                                  = COALESCE(
-                                    o.listing_date,
-                                    o.observed_at
-                                  )
-                        )
-                    )
                     SELECT
                         TRIM(location_country)
                             AS label,
                         COUNT(*) AS count
-                    FROM latest_observation
+                    FROM individuals
                     WHERE location_country
                           IS NOT NULL
                       AND TRIM(
-                          location_country
+                            location_country
                       ) <> ''
                     GROUP BY
                         TRIM(
@@ -1791,51 +1892,12 @@ class Repository:
             located_individuals = int(
                 con.execute(
                     """
-                    WITH latest_observation AS (
-                        SELECT o.*
-                        FROM observations o
-                        INNER JOIN (
-                            SELECT
-                                individual_id,
-                                MAX(
-                                    COALESCE(
-                                        listing_date,
-                                        observed_at
-                                    )
-                                ) AS latest_date
-                            FROM observations
-                            WHERE individual_id
-                                IS NOT NULL
-                            GROUP BY individual_id
-                        ) latest
-                          ON latest.individual_id
-                             = o.individual_id
-                         AND COALESCE(
-                                o.listing_date,
-                                o.observed_at
-                             )
-                             = latest.latest_date
-                        WHERE o.id = (
-                            SELECT MAX(o2.id)
-                            FROM observations o2
-                            WHERE o2.individual_id
-                                  = o.individual_id
-                              AND COALESCE(
-                                    o2.listing_date,
-                                    o2.observed_at
-                                  )
-                                  = COALESCE(
-                                    o.listing_date,
-                                    o.observed_at
-                                  )
-                        )
-                    )
                     SELECT COUNT(*)
-                    FROM latest_observation
+                    FROM individuals
                     WHERE location_country
                           IS NOT NULL
                       AND TRIM(
-                          location_country
+                            location_country
                       ) <> ''
                     """
                 ).fetchone()[0]
