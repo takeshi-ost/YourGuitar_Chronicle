@@ -2377,12 +2377,13 @@ async function showIndividual(id){
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
+  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
-  if(latest&&latest.image_url){
-    const latestUrl=String(latest.source_url||'');
-    const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
-    if(latestUrl)out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>';
-    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>';
+  if(imageObservation){
+    const imageUrl=String(imageObservation.source_url||'');
+    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
+    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
+    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
   }
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid">'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div>'+
@@ -2919,12 +2920,13 @@ async function showIndividual(id){
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
+  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
-  if(latest&&latest.image_url){
-    const latestUrl=String(latest.source_url||'');
-    const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
-    if(latestUrl)out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>';
-    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>';
+  if(imageObservation){
+    const imageUrl=String(imageObservation.source_url||'');
+    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
+    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
+    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
   }
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid">'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div>'+
