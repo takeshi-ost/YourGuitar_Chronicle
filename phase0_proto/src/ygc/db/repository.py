@@ -1007,19 +1007,39 @@ class Repository:
                 owner_user_id = items.get(
                     "owner_user_id"
                 )
-                state["current_owner_name"] = (
-                    owner_name
-                    if owner_name
+                owner_user = (
+                    con.execute(
+                        """
+                        SELECT display_name, account_type
+                        FROM users
+                        WHERE id = ?
+                        """,
+                        (owner_user_id,),
+                    ).fetchone()
+                    if owner_user_id
                     else None
                 )
+                state["current_owner_name"] = (
+                    str(owner_user["display_name"])
+                    if owner_user
+                    else (
+                        owner_name
+                        if owner_name
+                        else None
+                    )
+                )
                 state["current_owner_type"] = (
-                    owner_type
-                    if owner_type
-                    else None
+                    str(owner_user["account_type"])
+                    if owner_user
+                    else (
+                        owner_type
+                        if owner_type
+                        else None
+                    )
                 )
                 state["current_owner_user_id"] = (
                     owner_user_id
-                    if owner_user_id
+                    if owner_user
                     else None
                 )
                 state["current_owner_source_url"] = (
