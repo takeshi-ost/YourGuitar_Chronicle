@@ -3486,20 +3486,6 @@ function currentLocationObservation(observations,ownerObservation){
   }
   return null;
 }
-function currentLocationObservation(observations,ownerObservation){
-  if(!ownerObservation)return null;
-  const hasLocation=o=>!!(String(o&&o.location_country||'').trim()||String(o&&o.location_region||'').trim());
-  if(hasLocation(ownerObservation))return ownerObservation;
-  const owner=String(ownerObservation.owner_user_name||ownerObservation.owner_name||ownerObservation.seller||'').trim().toLowerCase();
-  if(!owner||String(ownerObservation.owner_type||'').trim()==='unknown')return null;
-  for(let i=observations.length-1;i>=0;i--){
-    const o=observations[i];
-    if(!hasLocation(o))continue;
-    const candidate=String(o.owner_user_name||o.owner_name||o.seller||'').trim().toLowerCase();
-    if(candidate&&candidate===owner)return o;
-  }
-  return null;
-}
 function observationCard(o,isLatest){
   const url=String(o.source_url||'');
   const source=sourceName(o);
@@ -4444,6 +4430,20 @@ function currentLocationHtml(o){
   const region=String(o.location_region||'').trim();
   const value=[country,region].filter(Boolean).join(' / ');
   return value?esc(value):'—';
+}
+function currentLocationObservation(observations,ownerObservation){
+  if(!ownerObservation)return null;
+  const hasLocation=o=>!!(String(o&&o.location_country||'').trim()||String(o&&o.location_region||'').trim());
+  if(hasLocation(ownerObservation))return ownerObservation;
+  const owner=String(ownerObservation.owner_user_name||ownerObservation.owner_name||ownerObservation.seller||'').trim().toLowerCase();
+  if(!owner||String(ownerObservation.owner_type||'').trim()==='unknown')return null;
+  for(let i=observations.length-1;i>=0;i--){
+    const o=observations[i];
+    if(!hasLocation(o))continue;
+    const candidate=String(o.owner_user_name||o.owner_name||o.seller||'').trim().toLowerCase();
+    if(candidate&&candidate===owner)return o;
+  }
+  return null;
 }
 function observationCard(o,isLatest){
   const url=String(o.source_url||'');
