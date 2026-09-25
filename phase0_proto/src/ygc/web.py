@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
@@ -35,6 +35,16 @@ app = FastAPI(title="Your Guitar Chronicle Phase 0")
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
 _active_job_id: str | None = None
+
+
+MEDIA_DIR = config.DATA_DIR / "media"
+MAX_IMAGE_BYTES = 12 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
 
 
 def repo() -> Repository:
@@ -1142,8 +1152,24 @@ def api_individual(individual_id: int) -> dict[str, Any]:
     individual, observations = repo().get_individual(individual_id)
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
+    individual_data = _row_dict(
+        individual
+    )
+    representative_media_id = (
+        individual_data.get(
+            "representative_media_asset_id"
+        )
+    )
+    individual_data[
+        "representative_image_url"
+    ] = (
+        f"/api/media/{representative_media_id}"
+        if representative_media_id
+        else None
+    )
+
     return {
-        "individual": _row_dict(individual),
+        "individual": individual_data,
         "observations": [_row_dict(row) for row in observations],
     }
 
@@ -1164,28 +1190,104 @@ def api_individual_claims(
 
 
 @app.post("/api/users/{user_id}/new-guitar")
-def api_create_new_guitar(
+async def api_create_new_guitar(
     user_id: int,
-    request: InitialListingClaimRequest,
+    manufacturer: str = Form(...),
+    serial_number: str = Form(...),
+    representative_image: UploadFile = File(...),
+    model: str | None = Form(None),
+    finish: str | None = Form(None),
+    year: str | None = Form(None),
+    occurred_at: str | None = Form(None),
+    body: str | None = Form(None),
 ) -> dict[str, Any]:
     repository = repo()
+
+    content_type = (
+        representative_image.content_type
+        or ""
+    ).lower()
+    extension = ALLOWED_IMAGE_TYPES.get(
+        content_type
+    )
+    if not extension:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Representative image must be "
+                "JPEG, PNG, WebP, or GIF"
+            ),
+        )
+
+    image_bytes = await representative_image.read(
+        MAX_IMAGE_BYTES + 1
+    )
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="Representative image is empty",
+        )
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Representative image must be "
+                "12 MB or smaller"
+            ),
+        )
+
+    MEDIA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    stored_name = (
+        uuid.uuid4().hex
+        + extension
+    )
+    stored_path = MEDIA_DIR / stored_name
+    relative_storage_path = (
+        Path("media")
+        / stored_name
+    ).as_posix()
+
+    try:
+        stored_path.write_bytes(
+            image_bytes
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Could not save representative image"
+            ),
+        ) from exc
 
     try:
         (
             individual_id,
             observation_id,
             claim_id,
+            media_asset_id,
         ) = repository.create_initial_listing_claim(
             user_id,
-            manufacturer=request.manufacturer,
-            model=request.model,
-            finish=request.finish,
-            year=request.year,
-            serial_number=request.serial_number,
-            occurred_at=request.occurred_at,
-            body=request.body,
+            manufacturer=manufacturer,
+            model=model,
+            finish=finish,
+            year=year,
+            serial_number=serial_number,
+            occurred_at=occurred_at,
+            body=body,
+            media_storage_path=(
+                relative_storage_path
+            ),
+            media_original_filename=(
+                representative_image.filename
+            ),
+            media_mime_type=content_type,
+            media_captured_at=occurred_at,
         )
     except ValueError as exc:
+        _safe_unlink(stored_path)
         message = str(exc)
         status_code = (
             409
@@ -1196,6 +1298,9 @@ def api_create_new_guitar(
             status_code=status_code,
             detail=message,
         ) from exc
+    except Exception:
+        _safe_unlink(stored_path)
+        raise
 
     user, guitars = repository.get_user(
         user_id
@@ -1205,12 +1310,58 @@ def api_create_new_guitar(
         "individual_id": individual_id,
         "observation_id": observation_id,
         "claim_id": claim_id,
+        "media_asset_id": media_asset_id,
         "user": _row_dict(user),
         "guitars": [
             _row_dict(row)
             for row in guitars
         ],
     }
+
+
+@app.get("/api/media/{media_asset_id}")
+def api_media(
+    media_asset_id: int,
+) -> FileResponse:
+    media = repo().get_media_asset(
+        media_asset_id
+    )
+    if not media:
+        raise HTTPException(
+            status_code=404,
+            detail="Media asset not found",
+        )
+
+    data_root = config.DATA_DIR.resolve()
+    path = (
+        config.DATA_DIR
+        / str(media["storage_path"])
+    ).resolve()
+
+    if not path.is_relative_to(
+        data_root
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid media path",
+        )
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Media file not found",
+        )
+
+    return FileResponse(
+        path,
+        media_type=(
+            media["mime_type"]
+            or "application/octet-stream"
+        ),
+        filename=(
+            media["original_filename"]
+            or path.name
+        ),
+    )
 
 
 @app.post("/api/individuals/{individual_id}/owner-change-claim")
@@ -2174,7 +2325,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
-.claim-memo{margin-top:8px;white-space:pre-wrap}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
@@ -2433,6 +2584,24 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+  }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const votes='<div class="claim-votes">'+
@@ -2498,7 +2667,9 @@ async function showIndividual(id){
   const latest=observations.length?observations[observations.length-1]:null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
-  if(imageObservation){
+  if(i.representative_image_url){
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy"><span class="detail-source">Representative Image</span>';
+  }else if(imageObservation){
     const imageUrl=String(imageObservation.source_url||'');
     const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
@@ -2707,6 +2878,11 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <input id="newGuitarDate" type="date">
       </div>
       <div class="form-row full">
+        <label class="form-label" for="newGuitarImage">Representative Image *</label>
+        <input id="newGuitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <div class="sub" style="margin-top:5px">JPEG / PNG / WebP / GIF、12MB以下。Listing ClaimのEvidenceとしても保存します。</div>
+      </div>
+      <div class="form-row full">
         <label class="form-label" for="newGuitarMemo">Claim memo（任意）</label>
         <textarea id="newGuitarMemo" maxlength="2000" placeholder="初期状態についてのメモ"></textarea>
       </div>
@@ -2899,6 +3075,7 @@ function registerNewGuitar(){
   document.getElementById('newGuitarFinish').value='';
   document.getElementById('newGuitarSerial').value='';
   document.getElementById('newGuitarDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('newGuitarImage').value='';
   document.getElementById('newGuitarMemo').value='';
   document.getElementById('newGuitarModal').classList.add('open');
   document.getElementById('newGuitarMaker').focus();
@@ -2911,26 +3088,31 @@ async function submitNewGuitar(){
   if(!activeUser||!activeUser.user)return;
   const manufacturer=document.getElementById('newGuitarMaker').value.trim();
   const serial=document.getElementById('newGuitarSerial').value.trim();
+  const imageInput=document.getElementById('newGuitarImage');
+  const image=imageInput.files&&imageInput.files[0];
   if(!manufacturer||!serial){
     alert('Maker と Serial は必須です。');
+    return;
+  }
+  if(!image){
+    alert('Representative Image は必須です。');
     return;
   }
   const button=document.getElementById('newGuitarSubmit');
   button.disabled=true;
   try{
-    const payload={
-      manufacturer,
-      model:document.getElementById('newGuitarModel').value.trim()||null,
-      year:document.getElementById('newGuitarYear').value.trim()||null,
-      finish:document.getElementById('newGuitarFinish').value.trim()||null,
-      serial_number:serial,
-      occurred_at:document.getElementById('newGuitarDate').value||null,
-      body:document.getElementById('newGuitarMemo').value.trim()||null
-    };
+    const form=new FormData();
+    form.append('manufacturer',manufacturer);
+    form.append('serial_number',serial);
+    form.append('model',document.getElementById('newGuitarModel').value.trim());
+    form.append('year',document.getElementById('newGuitarYear').value.trim());
+    form.append('finish',document.getElementById('newGuitarFinish').value.trim());
+    form.append('occurred_at',document.getElementById('newGuitarDate').value||'');
+    form.append('body',document.getElementById('newGuitarMemo').value.trim());
+    form.append('representative_image',image);
     const d=await jfetch('/api/users/'+activeUser.user.id+'/new-guitar',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)
+      body:form
     });
     activeUser={user:d.user,guitars:d.guitars};
     closeNewGuitar();
@@ -2938,7 +3120,7 @@ async function submitNewGuitar(){
     selectedIndividualId=Number(d.individual_id);
     await showIndividual(d.individual_id);
   }catch(e){
-    alert('新規ギター登録に失敗しました。\n'+e.message);
+    alert('新規ギター登録に失敗しました.\n'+e.message);
   }finally{
     button.disabled=false;
   }
@@ -3201,7 +3383,9 @@ async function showIndividual(id){
   const latest=observations.length?observations[observations.length-1]:null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
-  if(imageObservation){
+  if(i.representative_image_url){
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy"><span class="detail-source">Representative Image</span>';
+  }else if(imageObservation){
     const imageUrl=String(imageObservation.source_url||'');
     const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
