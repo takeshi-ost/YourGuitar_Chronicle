@@ -1267,7 +1267,11 @@ class Repository:
                     observation_id,
                     user_id,
                     str(user_id),
-                    raw_text,
+                    (
+                        body.strip()
+                        if body
+                        else None
+                    ),
                     acquired_at,
                     now,
                     now,
