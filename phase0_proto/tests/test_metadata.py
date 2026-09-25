@@ -530,8 +530,17 @@ def test_owner_change_claim_response_and_vote(
         owner_id
     )
 
+    _other_observation_id, other_claim_id = (
+        repository.create_owner_change_claim(
+            other_id,
+            individual_id,
+            acquired_at="2026-09-26",
+            body="Other ownership Claim.",
+        )
+    )
+
     assert repository.set_claim_response(
-        claim_id,
+        other_claim_id,
         owner_id,
         "endorse",
     )
@@ -542,10 +551,24 @@ def test_owner_change_claim_response_and_vote(
     )
 
     claims = repository.list_claims(
-        individual_id
+        individual_id,
+        viewer_user_id=owner_id,
     )
-    assert claims[0]["good_count"] == 1
-    assert claims[0]["bad_count"] == 0
+    owner_claim = next(
+        row
+        for row in claims
+        if row["id"] == claim_id
+    )
+    other_claim = next(
+        row
+        for row in claims
+        if row["id"] == other_claim_id
+    )
+    assert owner_claim["good_count"] == 1
+    assert owner_claim["bad_count"] == 0
+    assert other_claim["viewer_stance"] == (
+        "endorse"
+    )
 
 
 def test_listing_observation_is_backfilled_as_claim(
