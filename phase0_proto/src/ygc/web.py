@@ -3386,14 +3386,6 @@ async function jfetch(url,opt={}){
   if(!r.ok)throw new Error(d.detail||r.statusText);
   return d;
 }
-function currentLocationHtml(o){
-  if(!o)return '—';
-  const country=String(o.location_country||'').trim();
-  const region=String(o.location_region||'').trim();
-  const value=[country,region].filter(Boolean).join(' / ');
-  return value?esc(value):'—';
-}
-
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
@@ -4416,6 +4408,13 @@ function currentOwnerHtml(o){
   const label=type==='shop'?name+' (Shop)':name;
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
+}
+function currentLocationHtml(o){
+  if(!o)return '—';
+  const country=String(o.location_country||'').trim();
+  const region=String(o.location_region||'').trim();
+  const value=[country,region].filter(Boolean).join(' / ');
+  return value?esc(value):'—';
 }
 function observationCard(o,isLatest){
   const url=String(o.source_url||'');
