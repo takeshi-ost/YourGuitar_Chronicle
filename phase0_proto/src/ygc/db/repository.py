@@ -267,7 +267,7 @@ class Repository:
                 or row["observed_at"]
             )
 
-            con.execute(
+            cur = con.execute(
                 """
                 INSERT INTO claims (
                     individual_id,
@@ -308,6 +308,41 @@ class Repository:
                     row["created_at"],
                 ),
             )
+            claim_id = int(cur.lastrowid)
+
+            listing_values = {
+                "manufacturer": row["manufacturer"],
+                "model": row["model"],
+                "finish": row["finish"],
+                "year": row["year"],
+                "serial_number": row["serial_number"],
+                "owner_name": row["owner_name"],
+                "location_country": row["location_country"],
+                "location_region": row["location_region"],
+            }
+            for field_name, value in listing_values.items():
+                if value is None:
+                    continue
+                value_text = str(value).strip()
+                if not value_text:
+                    continue
+                con.execute(
+                    """
+                    INSERT INTO claim_listing_items (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        row["created_at"],
+                    ),
+                )
 
     def _backfill_listing_claim_items(
         self,
@@ -1772,6 +1807,40 @@ class Repository:
                 cur.lastrowid
             )
 
+            listing_values = {
+                "manufacturer": maker,
+                "model": model_value,
+                "finish": finish_value,
+                "year": year_value,
+                "serial_number": serial,
+                "owner_name": user["display_name"],
+                "location_country": user["location_country"],
+                "location_region": user["location_region"],
+            }
+            for field_name, value in listing_values.items():
+                if value is None:
+                    continue
+                value_text = str(value).strip()
+                if not value_text:
+                    continue
+                con.execute(
+                    """
+                    INSERT INTO claim_listing_items (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        now,
+                    ),
+                )
+
             next_order = int(
                 con.execute(
                     """
@@ -3135,10 +3204,20 @@ class Repository:
                             o.owner_name
                         )
                             AS observed_owner_name,
-                        o.location_country
-                            AS location_country,
-                        o.location_region
-                            AS location_region,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'location_country'
+                            LIMIT 1
+                        ) AS location_country,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'location_region'
+                            LIMIT 1
+                        ) AS location_region,
                         o.manufacturer
                             AS observed_manufacturer,
                         o.model
