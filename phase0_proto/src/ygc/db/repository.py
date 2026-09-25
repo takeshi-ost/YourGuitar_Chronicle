@@ -75,6 +75,7 @@ class Repository:
             "individuals": {
                 "finish": "TEXT",
                 "year": "TEXT",
+                "representative_media_asset_id": "INTEGER",
             },
             "user_guitars": {
                 "display_order": "INTEGER",
@@ -1313,14 +1314,19 @@ class Repository:
         *,
         manufacturer: str,
         serial_number: str,
+        media_storage_path: str,
+        media_original_filename: str | None = None,
+        media_mime_type: str | None = None,
+        media_captured_at: str | None = None,
         model: str | None = None,
         finish: str | None = None,
         year: str | None = None,
         occurred_at: str | None = None,
         body: str | None = None,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         maker = manufacturer.strip()
         serial = serial_number.strip()
+        storage_path = media_storage_path.strip()
         model_value = (
             model.strip()
             if model and model.strip()
@@ -1358,6 +1364,11 @@ class Repository:
         ):
             raise ValueError(
                 "manufacturer and serial_number are required"
+            )
+
+        if not storage_path:
+            raise ValueError(
+                "representative image is required"
             )
 
         now = utcnow()
@@ -1579,10 +1590,85 @@ class Repository:
                 ),
             )
 
+            cur = con.execute(
+                """
+                INSERT INTO media_assets (
+                    individual_id,
+                    uploader_user_id,
+                    media_type,
+                    storage_path,
+                    original_filename,
+                    mime_type,
+                    captured_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, 'image', ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    user_id,
+                    storage_path,
+                    (
+                        media_original_filename.strip()
+                        if media_original_filename
+                        else None
+                    ),
+                    (
+                        media_mime_type.strip()
+                        if media_mime_type
+                        else None
+                    ),
+                    (
+                        media_captured_at.strip()
+                        if media_captured_at
+                        else event_date
+                    ),
+                    now,
+                    now,
+                ),
+            )
+            media_asset_id = int(
+                cur.lastrowid
+            )
+
+            con.execute(
+                """
+                INSERT INTO claim_evidence (
+                    claim_id,
+                    media_asset_id,
+                    created_at
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    claim_id,
+                    media_asset_id,
+                    now,
+                ),
+            )
+
+            con.execute(
+                """
+                UPDATE individuals
+                SET representative_media_asset_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    media_asset_id,
+                    now,
+                    individual_id,
+                ),
+            )
+
             return (
                 individual_id,
                 observation_id,
                 claim_id,
+                media_asset_id,
             )
 
 
@@ -1806,6 +1892,16 @@ class Repository:
                             AS observed_year,
                         o.serial_number
                             AS observed_serial_number,
+                        (
+                            SELECT ce.media_asset_id
+                            FROM claim_evidence ce
+                            INNER JOIN media_assets ma
+                              ON ma.id = ce.media_asset_id
+                            WHERE ce.claim_id = c.id
+                              AND ma.media_type = 'image'
+                            ORDER BY ce.id
+                            LIMIT 1
+                        ) AS evidence_media_id,
                         COALESCE(v.good_count, 0)
                             AS good_count,
                         COALESCE(v.bad_count, 0)
@@ -1865,6 +1961,21 @@ class Repository:
                     ),
                 )
             )
+
+    def get_media_asset(
+        self,
+        media_asset_id: int,
+    ) -> sqlite3.Row | None:
+        with self.connect() as con:
+            return con.execute(
+                """
+                SELECT *
+                FROM media_assets
+                WHERE id = ?
+                """,
+                (media_asset_id,),
+            ).fetchone()
+
 
     def set_claim_response(
         self,
