@@ -260,7 +260,7 @@ def test_metadata_flows_to_individual_and_observation(
     )
 
 
-def test_statistics_use_latest_observation_location(
+def test_statistics_use_individual_snapshot_location(
     tmp_path,
 ):
     repository = Repository(
@@ -269,71 +269,42 @@ def test_statistics_use_latest_observation_location(
     )
     repository.init_db()
 
-    individual_id = (
-        match_or_create(
-            repository,
-            "Fender",
-            "Stratocaster",
-            "S12345",
-            finish="Sunburst",
-            year="1965",
-        )
+    user_id = repository.create_user(
+        "Collector"
+    )
+    assert repository.update_user(
+        user_id,
+        display_name="Collector",
+        account_type="user",
+        location_country="JP",
+        location_region="Kyoto",
     )
 
-    base = {
-        "individual_id": individual_id,
-        "manufacturer": "Fender",
-        "model": "Stratocaster",
-        "finish": "Sunburst",
-        "year": "1965",
-        "serial_number": "S12345",
-        "owner_name": "Example Shop",
-        "owner_type": "shop",
-        "location_source": "reverb_listing",
-        "seller": "Example Shop",
-        "source_site": "reverb",
-        "source_url": (
-            "https://example.invalid/"
-        ),
-        "image_url": None,
-        "raw_text": "",
-        "serial_confidence": 0.95,
-        "extraction_version": "serial-v3",
-        "created_at": (
-            "2026-09-23T00:00:00+00:00"
-        ),
-    }
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Stratocaster",
+        finish="Sunburst",
+        year="1965",
+        serial_number="S12345",
+        media_storage_path="media/stats.jpg",
+    )
 
-    first = {
-        **base,
-        "source_listing_id": "1",
-        "observed_at": (
-            "2020-01-01T00:00:00+00:00"
-        ),
-        "listing_date": (
-            "2020-01-01T00:00:00+00:00"
-        ),
-        "title": "First listing",
-        "location_country": "US",
-        "location_region": "CA",
-    }
-
-    latest = {
-        **base,
-        "source_listing_id": "2",
-        "observed_at": (
-            "2026-01-01T00:00:00+00:00"
-        ),
-        "listing_date": (
-            "2026-01-01T00:00:00+00:00"
-        ),
-        "title": "Latest listing",
-        "location_country": "JP",
-        "location_region": "13",
-    }
-
-    repository.upsert_observation(first)
-    repository.upsert_observation(latest)
+    with repository.connect() as con:
+        con.execute(
+            """
+            UPDATE observations
+            SET location_country = 'US',
+                location_region = 'CA'
+            WHERE individual_id = ?
+            """,
+            (individual_id,),
+        )
 
     stats = repository.statistics()
 
@@ -502,17 +473,26 @@ def test_owner_change_claim_response_and_vote(
     )
     repository.init_db()
 
+    initial_owner_id = repository.create_user(
+        "Initial Owner"
+    )
     owner_id = repository.create_user(
         "Owner"
     )
     other_id = repository.create_user(
         "Other User"
     )
-    individual_id = match_or_create(
-        repository,
-        "Fender",
-        "Telecaster",
-        "S20001",
+    (
+        individual_id,
+        _listing_observation_id,
+        _listing_claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        initial_owner_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="S20001",
+        media_storage_path="media/s20001.jpg",
     )
 
     observation_id, claim_id = (
@@ -542,13 +522,33 @@ def test_owner_change_claim_response_and_vote(
     claims = repository.list_claims(
         individual_id
     )
-    assert len(claims) == 1
-    assert claims[0]["claim_type"] == (
+    owner_claim = next(
+        row
+        for row in claims
+        if row["id"] == claim_id
+    )
+    assert owner_claim["claim_type"] == (
         "owner_change"
     )
-    assert claims[0]["author_user_id"] == (
+    assert owner_claim["author_user_id"] == (
         owner_id
     )
+
+    individual, _observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    assert individual is not None
+    assert individual["current_owner_name"] == (
+        "Owner"
+    )
+    assert individual["current_owner_type"] == (
+        "user"
+    )
+    assert int(
+        individual["current_owner_user_id"]
+    ) == owner_id
 
     _other_observation_id, other_claim_id = (
         repository.create_owner_change_claim(
@@ -557,6 +557,16 @@ def test_owner_change_claim_response_and_vote(
             acquired_at="2026-09-26",
             body="Other ownership Claim.",
         )
+    )
+
+    individual, _observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    assert individual is not None
+    assert individual["current_owner_name"] == (
+        "Other User"
     )
 
     assert repository.set_claim_response(
@@ -936,6 +946,16 @@ def test_user_owner_name_tracks_account_display_name(
         "New Name"
     )
     assert claims[0]["observed_owner_name"] == (
+        "New Name"
+    )
+
+    individual, _observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    assert individual is not None
+    assert individual["current_owner_name"] == (
         "New Name"
     )
 
