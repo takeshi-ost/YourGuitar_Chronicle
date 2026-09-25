@@ -641,7 +641,7 @@ def test_listing_observation_is_backfilled_as_claim(
     assert created
     assert observation_id > 0
 
-    repository.init_db()
+    repository.migrate_legacy_observations_to_claims()
 
     claims = repository.list_claims(
         individual_id
@@ -727,12 +727,14 @@ def test_new_guitar_registration_creates_initial_listing_claim(
     assert observations[0]["event_type"] == (
         "listing"
     )
-    assert observations[0]["owner_name"] == (
-        "Collector"
-    )
-    assert observations[0]["owner_type"] == (
+    assert observations[0]["source_site"] == (
         "user"
     )
+    assert observations[0]["manufacturer"] is None
+    assert observations[0]["model"] is None
+    assert observations[0]["serial_number"] is None
+    assert observations[0]["owner_name"] is None
+    assert observations[0]["location_country"] is None
 
     claims = repository.list_claims(
         individual_id,
@@ -748,6 +750,21 @@ def test_new_guitar_registration_creates_initial_listing_claim(
     )
     assert claims[0]["observed_owner_name"] == (
         "Collector"
+    )
+    assert claims[0]["observed_manufacturer"] == (
+        "Fender"
+    )
+    assert claims[0]["observed_model"] == (
+        "Telecaster Thinline"
+    )
+    assert claims[0]["observed_finish"] == (
+        "Natural"
+    )
+    assert claims[0]["observed_year"] == (
+        "1976"
+    )
+    assert claims[0]["observed_serial_number"] == (
+        "524436"
     )
     assert claims[0]["body"] == (
         "Initial user registration."
