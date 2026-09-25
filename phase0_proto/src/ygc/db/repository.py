@@ -44,6 +44,9 @@ class Repository:
             self._migrate_metadata_columns(
                 con
             )
+            self._backfill_listing_claims(
+                con
+            )
 
     @staticmethod
     def _table_columns(
@@ -129,6 +132,150 @@ class Repository:
             WHERE source_site = 'reverb'
             """
         )
+
+    def _source_user_id(
+        self,
+        con: sqlite3.Connection,
+        source_name: str,
+    ) -> int:
+        row = con.execute(
+            """
+            SELECT id
+            FROM users
+            WHERE account_type = 'source'
+              AND display_name = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (
+                source_name,
+            ),
+        ).fetchone()
+
+        if row:
+            return int(
+                row["id"]
+            )
+
+        now = utcnow()
+        cur = con.execute(
+            """
+            INSERT INTO users (
+                display_name,
+                account_type,
+                created_at,
+                updated_at
+            )
+            VALUES (?, 'source', ?, ?)
+            """,
+            (
+                source_name,
+                now,
+                now,
+            ),
+        )
+
+        return int(
+            cur.lastrowid
+        )
+
+    def _backfill_listing_claims(
+        self,
+        con: sqlite3.Connection,
+    ) -> None:
+        source_ids: dict[str, int] = {}
+
+        rows = list(
+            con.execute(
+                """
+                SELECT o.*
+                FROM observations o
+                WHERE o.individual_id
+                      IS NOT NULL
+                  AND COALESCE(
+                        o.event_type,
+                        'listing'
+                      ) = 'listing'
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM claims c
+                        WHERE c.observation_id
+                              = o.id
+                          AND c.claim_type
+                              = 'listing'
+                  )
+                ORDER BY o.id
+                """
+            )
+        )
+
+        for row in rows:
+            source_site = str(
+                row["source_site"]
+                or "source"
+            ).strip()
+            source_name = (
+                "Reverb"
+                if source_site.lower()
+                   == "reverb"
+                else source_site
+            )
+
+            if source_name not in source_ids:
+                source_ids[
+                    source_name
+                ] = self._source_user_id(
+                    con,
+                    source_name,
+                )
+
+            occurred_at = (
+                row["listing_date"]
+                or row["occurred_at"]
+                or row["observed_at"]
+            )
+
+            con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, 'listing',
+                    'listing', ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    row["individual_id"],
+                    row["id"],
+                    source_ids[
+                        source_name
+                    ],
+                    (
+                        row[
+                            "source_listing_id"
+                        ]
+                        or row[
+                            "source_url"
+                        ]
+                    ),
+                    row["title"],
+                    occurred_at,
+                    row["created_at"],
+                    row["created_at"],
+                ),
+            )
 
     def find_individual(
         self,
@@ -834,6 +981,7 @@ class Repository:
                     FROM users u
                     LEFT JOIN user_guitars ug
                       ON ug.user_id = u.id
+                    WHERE u.account_type <> 'source'
                     GROUP BY u.id
                     ORDER BY u.id
                     """
@@ -1346,6 +1494,32 @@ class Repository:
                         c.*,
                         u.display_name
                             AS author_name,
+                        o.source_site
+                            AS source_site,
+                        o.source_url
+                            AS source_url,
+                        o.image_url
+                            AS image_url,
+                        o.title
+                            AS listing_title,
+                        o.seller
+                            AS seller,
+                        o.owner_name
+                            AS observed_owner_name,
+                        o.location_country
+                            AS location_country,
+                        o.location_region
+                            AS location_region,
+                        o.manufacturer
+                            AS observed_manufacturer,
+                        o.model
+                            AS observed_model,
+                        o.finish
+                            AS observed_finish,
+                        o.year
+                            AS observed_year,
+                        o.serial_number
+                            AS observed_serial_number,
                         COALESCE(v.good_count, 0)
                             AS good_count,
                         COALESCE(v.bad_count, 0)
@@ -1353,6 +1527,8 @@ class Repository:
                     FROM claims c
                     INNER JOIN users u
                       ON u.id = c.author_user_id
+                    LEFT JOIN observations o
+                      ON o.id = c.observation_id
                     LEFT JOIN (
                         SELECT
                             claim_id,
