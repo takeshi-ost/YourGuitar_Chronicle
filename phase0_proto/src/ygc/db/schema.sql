@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS individuals (
  finish TEXT,
  year TEXT,
  serial_number TEXT,
+ location_country TEXT,
+ location_region TEXT,
  normalized_manufacturer TEXT NOT NULL,
  normalized_model TEXT,
  normalized_serial TEXT,
