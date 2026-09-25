@@ -520,71 +520,6 @@ class Repository:
                 "snapshots_rebuilt": snapshots_rebuilt,
             }
 
-    def _sync_individual_locations_from_listing_claims(
-        self,
-        con: sqlite3.Connection,
-    ) -> None:
-        """
-        Individual Location is initialized from the earliest active
-        Listing Claim that explicitly defines Location. Observation is
-        not consulted here.
-        """
-        rows = list(
-            con.execute(
-                """
-                SELECT
-                    i.id AS individual_id,
-                    (
-                        SELECT li.value_text
-                        FROM claims c
-                        INNER JOIN claim_listing_items li
-                          ON li.claim_id = c.id
-                        WHERE c.individual_id = i.id
-                          AND c.claim_type = 'listing'
-                          AND c.status = 'active'
-                          AND li.field_name = 'location_country'
-                          AND TRIM(li.value_text) <> ''
-                        ORDER BY
-                            COALESCE(c.occurred_at, c.created_at) ASC,
-                            c.id ASC
-                        LIMIT 1
-                    ) AS location_country,
-                    (
-                        SELECT li.value_text
-                        FROM claims c
-                        INNER JOIN claim_listing_items li
-                          ON li.claim_id = c.id
-                        WHERE c.individual_id = i.id
-                          AND c.claim_type = 'listing'
-                          AND c.status = 'active'
-                          AND li.field_name = 'location_region'
-                          AND TRIM(li.value_text) <> ''
-                        ORDER BY
-                            COALESCE(c.occurred_at, c.created_at) ASC,
-                            c.id ASC
-                        LIMIT 1
-                    ) AS location_region
-                FROM individuals i
-                ORDER BY i.id
-                """
-            )
-        )
-
-        for row in rows:
-            con.execute(
-                """
-                UPDATE individuals
-                SET location_country = ?,
-                    location_region = ?
-                WHERE id = ?
-                """,
-                (
-                    row["location_country"],
-                    row["location_region"],
-                    row["individual_id"],
-                ),
-            )
-
     def rebuild_individual_snapshot(
         self,
         individual_id: int,
@@ -1550,230 +1485,230 @@ class Repository:
                 True,
             )
 
-    def list_observations_for_backfill(
+    def list_listing_claims_for_backfill(
         self,
     ) -> list[sqlite3.Row]:
+        """
+        Return active Reverb Listing Claims whose structured Claim data
+        is incomplete and can be supplemented by refetching the source.
+        """
         with self.connect() as con:
             return list(
                 con.execute(
                     """
                     SELECT
-                        id,
-                        individual_id,
-                        source_listing_id,
-                        model,
-                        finish,
-                        year,
-                        image_url,
-                        owner_name,
-                        owner_type,
-                        owner_profile_url,
-                        location_country,
-                        location_region,
-                        location_source
-                    FROM observations
-                    WHERE source_site = 'reverb'
-                      AND source_listing_id
-                          IS NOT NULL
-                      AND TRIM(
-                          source_listing_id
-                      ) <> ''
-                      AND (
-                          finish IS NULL
-                          OR TRIM(finish) = ''
-                          OR year IS NULL
-                          OR TRIM(year) = ''
-                          OR image_url IS NULL
-                          OR TRIM(image_url) = ''
-                          OR owner_profile_url IS NULL
-                          OR TRIM(owner_profile_url) = ''
-                          OR location_country IS NULL
-                          OR TRIM(location_country) = ''
-                      )
-                    ORDER BY id
-                    """
-                )
-            )
-
-    def update_observation_metadata(
-        self,
-        observation_id: int,
-        model: str | None,
-        finish: str | None,
-        year: str | None,
-        image_url: str | None = None,
-        owner_name: str | None = None,
-        owner_type: str | None = None,
-        owner_profile_url: str | None = None,
-        location_country: str | None = None,
-        location_region: str | None = None,
-        location_source: str | None = None,
-    ) -> None:
-        with self.connect() as con:
-            con.execute(
-                """
-                UPDATE observations
-                SET model = COALESCE(
-                        NULLIF(?, ''),
-                        model
-                    ),
-                    finish = COALESCE(
-                        NULLIF(?, ''),
-                        finish
-                    ),
-                    year = COALESCE(
-                        NULLIF(?, ''),
-                        year
-                    ),
-                    image_url = COALESCE(
-                        NULLIF(?, ''),
-                        image_url
-                    ),
-                    owner_name = COALESCE(
-                        NULLIF(?, ''),
-                        owner_name
-                    ),
-                    owner_type = COALESCE(
-                        NULLIF(?, ''),
-                        owner_type
-                    ),
-                    owner_profile_url = COALESCE(
-                        NULLIF(?, ''),
-                        owner_profile_url
-                    ),
-                    location_country = COALESCE(
-                        NULLIF(?, ''),
-                        location_country
-                    ),
-                    location_region = COALESCE(
-                        NULLIF(?, ''),
-                        location_region
-                    ),
-                    location_source = COALESCE(
-                        NULLIF(?, ''),
-                        location_source
-                    )
-                WHERE id = ?
-                """,
-                (
-                    model,
-                    finish,
-                    year,
-                    image_url,
-                    owner_name,
-                    owner_type,
-                    owner_profile_url,
-                    location_country,
-                    location_region,
-                    location_source,
-                    observation_id,
-                ),
-            )
-
-    def sync_individual_metadata_from_observations(
-        self,
-    ) -> int:
-        updated = 0
-
-        with self.connect() as con:
-            rows = list(
-                con.execute(
-                    """
-                    SELECT id
-                    FROM individuals
-                    ORDER BY id
-                    """
-                )
-            )
-
-            for row in rows:
-                individual_id = int(
-                    row["id"]
-                )
-
-                source = con.execute(
-                    """
-                    SELECT
+                        c.id AS claim_id,
+                        c.individual_id,
                         (
-                            SELECT model
-                            FROM observations
-                            WHERE individual_id = ?
-                              AND model IS NOT NULL
-                              AND TRIM(model) <> ''
-                            ORDER BY
-                                COALESCE(
-                                    listing_date,
-                                    observed_at
-                                ) DESC,
-                                id DESC
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'source_listing_id'
+                            LIMIT 1
+                        ) AS source_listing_id,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'model'
                             LIMIT 1
                         ) AS model,
                         (
-                            SELECT finish
-                            FROM observations
-                            WHERE individual_id = ?
-                              AND finish IS NOT NULL
-                              AND TRIM(finish) <> ''
-                            ORDER BY
-                                COALESCE(
-                                    listing_date,
-                                    observed_at
-                                ) DESC,
-                                id DESC
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'finish'
                             LIMIT 1
                         ) AS finish,
                         (
-                            SELECT year
-                            FROM observations
-                            WHERE individual_id = ?
-                              AND year IS NOT NULL
-                              AND TRIM(year) <> ''
-                            ORDER BY
-                                COALESCE(
-                                    listing_date,
-                                    observed_at
-                                ) DESC,
-                                id DESC
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'year'
                             LIMIT 1
-                        ) AS year
+                        ) AS year,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'image_url'
+                            LIMIT 1
+                        ) AS image_url,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'owner_name'
+                            LIMIT 1
+                        ) AS owner_name,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'location_country'
+                            LIMIT 1
+                        ) AS location_country,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'location_region'
+                            LIMIT 1
+                        ) AS location_region
+                    FROM claims c
+                    WHERE c.claim_type = 'listing'
+                      AND c.status = 'active'
+                      AND EXISTS (
+                            SELECT 1
+                            FROM claim_listing_items src
+                            WHERE src.claim_id = c.id
+                              AND src.field_name = 'source_site'
+                              AND LOWER(TRIM(src.value_text)) = 'reverb'
+                      )
+                      AND (
+                            NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'model'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'finish'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'year'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'image_url'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'owner_name'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM claim_listing_items x
+                                WHERE x.claim_id = c.id
+                                  AND x.field_name = 'location_country'
+                                  AND TRIM(x.value_text) <> ''
+                            )
+                      )
+                    ORDER BY c.id
+                    """
+                )
+            )
+
+    def supplement_listing_claim(
+        self,
+        claim_id: int,
+        values: dict[str, Any],
+    ) -> bool:
+        """
+        Fill missing structured fields on an existing Listing Claim.
+
+        Existing non-empty Claim values are preserved. Observation is not
+        modified. The Individual snapshot is rebuilt when data is added.
+        """
+        allowed_fields = {
+            "model",
+            "finish",
+            "year",
+            "image_url",
+            "owner_name",
+            "owner_type",
+            "seller",
+            "location_country",
+            "location_region",
+            "listing_title",
+            "listing_date",
+            "source_url",
+        }
+
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT id, individual_id
+                FROM claims
+                WHERE id = ?
+                  AND claim_type = 'listing'
+                  AND status = 'active'
+                """,
+                (claim_id,),
+            ).fetchone()
+            if not claim:
+                return False
+
+            inserted = False
+            now = utcnow()
+
+            for field_name, value in values.items():
+                if field_name not in allowed_fields:
+                    continue
+                if value is None:
+                    continue
+
+                value_text = str(value).strip()
+                if not value_text:
+                    continue
+
+                existing = con.execute(
+                    """
+                    SELECT value_text
+                    FROM claim_listing_items
+                    WHERE claim_id = ?
+                      AND field_name = ?
+                    LIMIT 1
                     """,
                     (
-                        individual_id,
-                        individual_id,
-                        individual_id,
+                        claim_id,
+                        field_name,
                     ),
                 ).fetchone()
+                if (
+                    existing
+                    and existing["value_text"] is not None
+                    and str(existing["value_text"]).strip()
+                ):
+                    continue
 
                 con.execute(
                     """
-                    UPDATE individuals
-                    SET model = COALESCE(
-                            NULLIF(?, ''),
-                            model
-                        ),
-                        finish = COALESCE(
-                            NULLIF(?, ''),
-                            finish
-                        ),
-                        year = COALESCE(
-                            NULLIF(?, ''),
-                            year
-                        ),
-                        updated_at = ?
-                    WHERE id = ?
+                    INSERT INTO claim_listing_items (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(claim_id, field_name)
+                    DO UPDATE SET value_text = excluded.value_text
                     """,
                     (
-                        source["model"],
-                        source["finish"],
-                        source["year"],
-                        utcnow(),
-                        individual_id,
+                        claim_id,
+                        field_name,
+                        value_text,
+                        now,
                     ),
                 )
+                inserted = True
 
-                updated += 1
+            if inserted:
+                self._rebuild_individual_snapshot_in_connection(
+                    con,
+                    int(claim["individual_id"]),
+                )
 
-        return updated
+            return inserted
 
     def statistics(
         self,
