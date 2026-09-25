@@ -463,6 +463,132 @@ class Repository:
 
         return inserted
 
+    def claim_architecture_status(
+        self,
+    ) -> dict[str, Any]:
+        """
+        Diagnose whether the database is ready for Claim-centered writes.
+        This method does not modify data.
+        """
+        with self.connect() as con:
+            unmigrated_listing_observations = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM observations o
+                    WHERE o.individual_id IS NOT NULL
+                      AND COALESCE(
+                            o.event_type,
+                            'listing'
+                          ) = 'listing'
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM claims c
+                            WHERE c.observation_id = o.id
+                              AND c.claim_type = 'listing'
+                      )
+                    """
+                ).fetchone()[0]
+            )
+
+            claimless_individuals = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM individuals i
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM claims c
+                        WHERE c.individual_id = i.id
+                          AND c.claim_type = 'listing'
+                          AND c.status = 'active'
+                    )
+                    """
+                ).fetchone()[0]
+            )
+
+            active_listing_claims = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM claims
+                    WHERE claim_type = 'listing'
+                      AND status = 'active'
+                    """
+                ).fetchone()[0]
+            )
+
+            incomplete_identity_claims = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM claims c
+                    WHERE c.claim_type = 'listing'
+                      AND c.status = 'active'
+                      AND (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM claim_listing_items li
+                                WHERE li.claim_id = c.id
+                                  AND li.field_name = 'manufacturer'
+                                  AND TRIM(li.value_text) <> ''
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM claim_listing_items li
+                                WHERE li.claim_id = c.id
+                                  AND li.field_name = 'serial_number'
+                                  AND TRIM(li.value_text) <> ''
+                            )
+                      )
+                    """
+                ).fetchone()[0]
+            )
+
+            pending_shells = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM individuals
+                    WHERE manufacturer = '__pending__'
+                       OR normalized_manufacturer
+                          LIKE '__pending__:%'
+                       OR normalized_serial
+                          LIKE '__pending__:%'
+                    """
+                ).fetchone()[0]
+            )
+
+            ready = (
+                unmigrated_listing_observations == 0
+                and claimless_individuals == 0
+                and incomplete_identity_claims == 0
+                and pending_shells == 0
+            )
+
+            return {
+                "ready": ready,
+                "migration_required": (
+                    unmigrated_listing_observations > 0
+                    or claimless_individuals > 0
+                ),
+                "unmigrated_listing_observations": (
+                    unmigrated_listing_observations
+                ),
+                "claimless_individuals": (
+                    claimless_individuals
+                ),
+                "active_listing_claims": (
+                    active_listing_claims
+                ),
+                "incomplete_identity_claims": (
+                    incomplete_identity_claims
+                ),
+                "pending_shells": (
+                    pending_shells
+                ),
+            }
+
     def migrate_legacy_observations_to_claims(
         self,
     ) -> dict[str, int]:
