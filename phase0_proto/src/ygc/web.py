@@ -25,11 +25,12 @@ from ygc import config
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.db.repository import Repository
 from ygc.extractors.serial import extract_serial_candidates
-from ygc.matching.individual_matcher import match_or_create
 from ygc.reverb_adapter import (
     classify_vintage_listing,
     listing_image_url,
+    to_listing_claim_data,
     to_observation,
+    to_provenance_observation,
 )
 
 
@@ -547,8 +548,16 @@ def _run_batch(
 
                     for item in collector.fetch_listing_details(candidates):
                         detailed += 1
-                        obs = to_observation(item, config.SERIAL_CONFIDENCE_THRESHOLD)
-                        status, _reason, _year = _remove_temporary_fields(obs)
+                        claim_data = to_listing_claim_data(
+                            item,
+                            config.SERIAL_CONFIDENCE_THRESHOLD,
+                        )
+                        status = str(
+                            claim_data.get(
+                                "vintage_status",
+                                "unknown",
+                            )
+                        )
 
                         if status == "modern":
                             skipped_modern += 1
@@ -560,20 +569,17 @@ def _run_batch(
                             skipped_unknown += 1
                             continue
 
-                        if obs["manufacturer"] and obs["serial_number"]:
-                            obs["individual_id"] = match_or_create(
-                                repository,
-                                obs["manufacturer"],
-                                obs["model"],
-                                obs["serial_number"],
-                                finish=obs.get("finish"),
-                                year=obs.get("year"),
+                        provenance = to_provenance_observation(
+                            item,
+                            config.SERIAL_CONFIDENCE_THRESHOLD,
+                        )
+                        result = (
+                            repository.persist_reverb_listing_claim(
+                                claim_data,
+                                provenance,
                             )
-                        else:
-                            obs["individual_id"] = None
-
-                        _, was_created = repository.upsert_observation(obs)
-                        if was_created:
+                        )
+                        if result["created"]:
                             created += 1
 
                     repository.finish_run(
