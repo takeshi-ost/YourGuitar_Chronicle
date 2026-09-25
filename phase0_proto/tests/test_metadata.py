@@ -333,3 +333,76 @@ def test_statistics_use_latest_observation_location(
             "count": 1,
         }
     ]
+
+
+def test_user_account_and_guitar_ownership_link(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path
+        / "chronicle.db"
+    )
+    repository.init_db()
+
+    individual_id = (
+        match_or_create(
+            repository,
+            "Fender",
+            "Telecaster",
+            "123456",
+            finish="Blonde",
+            year="1968",
+        )
+    )
+
+    user_id = repository.create_user()
+
+    updated = repository.update_user(
+        user_id,
+        display_name="Takeshi",
+        account_type="user",
+        location_country="JP",
+        location_region="Kyoto",
+    )
+
+    assert updated is True
+
+    linked = repository.link_user_guitar(
+        user_id,
+        individual_id,
+        ownership_status="current_owner",
+    )
+
+    assert linked is True
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    assert user is not None
+    assert user["display_name"] == "Takeshi"
+    assert user["account_type"] == "user"
+    assert user["location_country"] == "JP"
+    assert user["location_region"] == "Kyoto"
+
+    assert len(guitars) == 1
+    assert (
+        guitars[0]["individual_id"]
+        == individual_id
+    )
+    assert (
+        guitars[0]["ownership_status"]
+        == "current_owner"
+    )
+    assert (
+        guitars[0]["manufacturer"]
+        == "Fender"
+    )
+
+    users = repository.list_users()
+
+    assert len(users) == 1
+    assert (
+        users[0]["current_guitar_count"]
+        == 1
+    )
