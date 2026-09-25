@@ -67,6 +67,9 @@ class Repository:
                 "finish": "TEXT",
                 "year": "TEXT",
             },
+            "user_guitars": {
+                "display_order": "INTEGER",
+            },
             "observations": {
                 "finish": "TEXT",
                 "year": "TEXT",
@@ -874,9 +877,14 @@ class Repository:
                             THEN 0
                             ELSE 1
                         END,
-                        i.manufacturer,
-                        i.model,
-                        i.id
+                        CASE
+                            WHEN ug.display_order
+                                 IS NULL
+                            THEN 1
+                            ELSE 0
+                        END,
+                        ug.display_order,
+                        ug.id
                     """,
                     (
                         user_id,
@@ -992,18 +1000,35 @@ class Repository:
             ).fetchone():
                 return False
 
+            next_order = int(
+                con.execute(
+                    """
+                    SELECT COALESCE(
+                        MAX(display_order),
+                        -1
+                    ) + 1
+                    FROM user_guitars
+                    WHERE user_id = ?
+                    """,
+                    (
+                        user_id,
+                    ),
+                ).fetchone()[0]
+            )
+
             con.execute(
                 """
                 INSERT INTO user_guitars (
                     user_id,
                     individual_id,
                     ownership_status,
+                    display_order,
                     acquired_at,
                     released_at,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(
                     user_id,
                     individual_id
@@ -1025,6 +1050,7 @@ class Repository:
                     user_id,
                     individual_id,
                     status,
+                    next_order,
                     acquired_at,
                     released_at,
                     now,
@@ -1033,6 +1059,72 @@ class Repository:
             )
 
             return True
+
+    def reorder_user_guitars(
+        self,
+        user_id: int,
+        individual_ids: list[int],
+    ) -> bool:
+        with self.connect() as con:
+            rows = list(
+                con.execute(
+                    """
+                    SELECT individual_id
+                    FROM user_guitars
+                    WHERE user_id = ?
+                      AND ownership_status
+                          = 'current_owner'
+                    """,
+                    (
+                        user_id,
+                    ),
+                )
+            )
+
+            existing = {
+                int(
+                    row[
+                        "individual_id"
+                    ]
+                )
+                for row in rows
+            }
+
+            requested = [
+                int(value)
+                for value
+                in individual_ids
+            ]
+
+            if (
+                len(requested)
+                != len(set(requested))
+                or set(requested)
+                != existing
+            ):
+                return False
+
+            for index, individual_id in enumerate(
+                requested
+            ):
+                con.execute(
+                    """
+                    UPDATE user_guitars
+                    SET display_order = ?,
+                        updated_at = ?
+                    WHERE user_id = ?
+                      AND individual_id = ?
+                    """,
+                    (
+                        index,
+                        utcnow(),
+                        user_id,
+                        individual_id,
+                    ),
+                )
+
+            return True
+
 
     def unlink_user_guitar(
         self,
