@@ -580,6 +580,31 @@ class Repository:
                 ).fetchone()[0]
             )
 
+            listing_claims_missing_location = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM claims c
+                    WHERE c.claim_type = 'listing'
+                      AND c.status = 'active'
+                      AND EXISTS (
+                            SELECT 1
+                            FROM claim_listing_items src
+                            WHERE src.claim_id = c.id
+                              AND src.field_name = 'source_site'
+                              AND LOWER(TRIM(src.value_text)) = 'reverb'
+                      )
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'location_country'
+                              AND TRIM(li.value_text) <> ''
+                      )
+                    """
+                ).fetchone()[0]
+            )
+
             ready = (
                 unmigrated_listing_observations == 0
                 and claimless_individuals == 0
@@ -611,6 +636,12 @@ class Repository:
                 ),
                 "stale_owner_snapshots": (
                     stale_owner_snapshots
+                ),
+                "listing_claims_missing_location": (
+                    listing_claims_missing_location
+                ),
+                "backfill_recommended": (
+                    listing_claims_missing_location > 0
                 ),
             }
 
