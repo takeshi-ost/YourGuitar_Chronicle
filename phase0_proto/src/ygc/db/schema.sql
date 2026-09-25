@@ -143,6 +143,16 @@ CREATE TABLE IF NOT EXISTS claim_spec_items (
  FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS claim_listing_items (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ field_name TEXT NOT NULL,
+ value_text TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE,
+ UNIQUE(claim_id, field_name)
+);
+
 CREATE TABLE IF NOT EXISTS claim_identity_items (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  claim_id INTEGER NOT NULL,
@@ -188,4 +198,5 @@ CREATE INDEX IF NOT EXISTS idx_media_assets_individual_id ON media_assets(indivi
 CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_id);
 
 CREATE INDEX IF NOT EXISTS idx_claim_spec_items_claim_id ON claim_spec_items(claim_id);
+CREATE INDEX IF NOT EXISTS idx_claim_listing_items_claim_id ON claim_listing_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_identity_items_claim_id ON claim_identity_items(claim_id);
