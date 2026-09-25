@@ -2476,11 +2476,7 @@ class Repository:
                         UPDATE observations
                         SET raw_text = ?,
                             occurred_at = ?,
-                            listing_date = ?,
-                            updated_at = COALESCE(
-                                updated_at,
-                                created_at
-                            )
+                            listing_date = ?
                         WHERE id = ?
                         """,
                         (
