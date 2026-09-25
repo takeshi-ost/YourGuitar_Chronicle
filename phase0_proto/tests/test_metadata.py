@@ -1221,3 +1221,122 @@ def test_grouped_specification_claim_rejects_duplicate_items(
         raise AssertionError(
             "duplicate items should be rejected"
         )
+
+
+
+def test_specification_claim_author_can_edit_group(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    author_id = repository.create_user(
+        "Author"
+    )
+    other_id = repository.create_user(
+        "Other"
+    )
+    (
+        individual_id,
+        _observation_id,
+        _listing_claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        author_id,
+        manufacturer="Fender",
+        model="Telecaster Thinline",
+        serial_number="EDIT001",
+        media_storage_path="media/edit001.jpg",
+    )
+
+    claim_id = repository.create_specification_claim_group(
+        author_id,
+        individual_id,
+        specification_kind="specification",
+        items=[
+            {
+                "field_name": "nut",
+                "value_text": "Original",
+            },
+            {
+                "field_name": "frets",
+                "value_text": "Original",
+            },
+        ],
+        occurred_at="1976-01-01",
+        body="Original specification.",
+    )
+
+    assert repository.update_specification_claim_group(
+        claim_id,
+        author_id,
+        specification_kind="repair",
+        items=[
+            {
+                "field_name": "nut",
+                "value_text": "Bone",
+            },
+            {
+                "field_name": "frets",
+                "value_text": "Leveled",
+            },
+            {
+                "field_name": "pickguard",
+                "value_text": "New 3-ply white",
+            },
+        ],
+        occurred_at="2025-05-01",
+        body="Repair completed.",
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    claim = next(
+        row
+        for row in claims
+        if row["id"] == claim_id
+    )
+    assert claim["specification_kind"] == "repair"
+    assert claim["occurred_at"] == "2025-05-01"
+    assert claim["body"] == "Repair completed."
+
+    items = [
+        row
+        for row in repository.list_specification_items(
+            individual_id
+        )
+        if row["claim_id"] == claim_id
+    ]
+    assert [
+        (
+            row["field_name"],
+            row["value_text"],
+        )
+        for row in items
+    ] == [
+        ("nut", "Bone"),
+        ("frets", "Leveled"),
+        ("pickguard", "New 3-ply white"),
+    ]
+
+    try:
+        repository.update_specification_claim_group(
+            claim_id,
+            other_id,
+            specification_kind="specification",
+            items=[
+                {
+                    "field_name": "nut",
+                    "value_text": "Plastic",
+                }
+            ],
+        )
+    except ValueError as exc:
+        assert "author" in str(exc).lower()
+    else:
+        raise AssertionError(
+            "non-author should not edit a Claim"
+        )
