@@ -3386,6 +3386,13 @@ async function jfetch(url,opt={}){
   if(!r.ok)throw new Error(d.detail||r.statusText);
   return d;
 }
+function currentLocationHtml(o){
+  if(!o)return '—';
+  const country=String(o.location_country||'').trim();
+  const region=String(o.location_region||'').trim();
+  const value=[country,region].filter(Boolean).join(' / ');
+  return value?esc(value):'—';
+}
 
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
@@ -3465,6 +3472,13 @@ function currentOwnerHtml(o){
   const label=type==='shop'?name+' (Shop)':name;
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
+}
+function currentLocationHtml(o){
+  if(!o)return '—';
+  const country=String(o.location_country||'').trim();
+  const region=String(o.location_region||'').trim();
+  const value=[country,region].filter(Boolean).join(' / ');
+  return value?esc(value):'—';
 }
 function observationCard(o,isLatest){
   const url=String(o.source_url||'');
@@ -3721,6 +3735,7 @@ async function showIndividual(id){
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(latest)+'</div>'+
     ownershipControlsHtml(i.id)+'</div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
@@ -4689,7 +4704,8 @@ async function showIndividual(id){
       return ak.localeCompare(bk);
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div></div>';
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(latest)+'</div></div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
