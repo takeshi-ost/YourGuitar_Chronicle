@@ -866,3 +866,60 @@ def test_new_guitar_registration_requires_representative_image(
         raise AssertionError(
             "representative image should be required"
         )
+
+
+
+def test_user_owner_name_tracks_account_display_name(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Old Name"
+    )
+
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="NAME001",
+        media_storage_path="media/name001.jpg",
+    )
+
+    assert repository.update_user(
+        user_id,
+        display_name="New Name",
+        account_type="user",
+        location_country=None,
+        location_region=None,
+    )
+
+    _individual, observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    assert observations[0]["owner_name"] == (
+        "Old Name"
+    )
+    assert observations[0]["owner_user_name"] == (
+        "New Name"
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    assert claims[0]["author_name"] == (
+        "New Name"
+    )
+    assert claims[0]["observed_owner_name"] == (
+        "New Name"
+    )
