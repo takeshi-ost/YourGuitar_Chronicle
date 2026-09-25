@@ -1307,12 +1307,6 @@ async def api_import_db(
                     upload_path,
                     extract_root,
                 )
-                imported_media_count = (
-                    _validate_backup_media_references(
-                        imported_db,
-                        imported_media_root,
-                    )
-                )
             except ValueError as exc:
                 raise HTTPException(
                     status_code=400,
@@ -1340,6 +1334,23 @@ async def api_import_db(
                 status_code=400,
                 detail=str(exc),
             ) from exc
+
+        if not legacy_database:
+            try:
+                imported_media_count = (
+                    _validate_backup_media_references(
+                        imported_db,
+                        imported_media_root,
+                    )
+                )
+            except (
+                ValueError,
+                sqlite3.Error,
+            ) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(exc),
+                ) from exc
 
         rollback_db = (
             work_root
@@ -1535,6 +1546,25 @@ def api_reset_db(request: ResetDatabaseRequest) -> dict[str, Any]:
                     f"{path}: {exc}"
                 ),
             ) from exc
+
+    if MEDIA_DIR.exists():
+        try:
+            shutil.rmtree(
+                MEDIA_DIR
+            )
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Could not remove Media files: "
+                    f"{exc}"
+                ),
+            ) from exc
+
+    MEDIA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     repository = Repository(
         config.DB_PATH
