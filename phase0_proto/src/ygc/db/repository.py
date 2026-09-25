@@ -1856,6 +1856,162 @@ class Repository:
                 claim_id,
             )
 
+    def create_release_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        reason: str | None = None,
+    ) -> tuple[int, int]:
+        now = utcnow()
+        event_date = now[:10]
+        note = (
+            reason.strip()
+            if reason and reason.strip()
+            else None
+        )
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                """
+                SELECT *
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+            ownership = con.execute(
+                """
+                SELECT *
+                FROM user_guitars
+                WHERE user_id = ?
+                  AND individual_id = ?
+                  AND ownership_status = 'current_owner'
+                """,
+                (
+                    user_id,
+                    individual_id,
+                ),
+            ).fetchone()
+
+            if not user or not individual:
+                raise ValueError(
+                    "User or Individual not found"
+                )
+            if not ownership:
+                raise ValueError(
+                    "User is not the current owner of this Individual"
+                )
+
+            cur = con.execute(
+                """
+                INSERT INTO observations (
+                    individual_id,
+                    manufacturer,
+                    model,
+                    finish,
+                    year,
+                    serial_number,
+                    owner_name,
+                    owner_type,
+                    event_type,
+                    actor_user_id,
+                    occurred_at,
+                    source_site,
+                    source_url,
+                    observed_at,
+                    title,
+                    raw_text,
+                    created_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?,
+                    'Unknown', 'unknown',
+                    'release', ?, ?,
+                    'user', ?, ?, 'Release',
+                    ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    individual["manufacturer"],
+                    individual["model"],
+                    individual["finish"],
+                    individual["year"],
+                    individual["serial_number"],
+                    user_id,
+                    event_date,
+                    f"user://{user_id}",
+                    now,
+                    note,
+                    now,
+                ),
+            )
+            observation_id = int(
+                cur.lastrowid
+            )
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, 'release',
+                    'owner_user_id', 'unknown',
+                    ?, ?, 'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    observation_id,
+                    user_id,
+                    note,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(
+                cur.lastrowid
+            )
+
+            con.execute(
+                """
+                DELETE FROM user_guitars
+                WHERE user_id = ?
+                  AND individual_id = ?
+                """,
+                (
+                    user_id,
+                    individual_id,
+                ),
+            )
+
+            return (
+                observation_id,
+                claim_id,
+            )
+
     def create_specification_claim(
         self,
         user_id: int,
