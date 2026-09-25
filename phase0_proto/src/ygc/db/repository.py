@@ -5,6 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ygc.extractors.normalization import (
+    normalize_manufacturer,
+    normalize_model,
+    normalize_serial,
+)
+
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -1298,6 +1304,285 @@ class Repository:
             return (
                 cur.rowcount
                 > 0
+            )
+
+
+    def create_initial_listing_claim(
+        self,
+        user_id: int,
+        *,
+        manufacturer: str,
+        serial_number: str,
+        model: str | None = None,
+        finish: str | None = None,
+        year: str | None = None,
+        occurred_at: str | None = None,
+        body: str | None = None,
+    ) -> tuple[int, int, int]:
+        maker = manufacturer.strip()
+        serial = serial_number.strip()
+        model_value = (
+            model.strip()
+            if model and model.strip()
+            else None
+        )
+        finish_value = (
+            finish.strip()
+            if finish and finish.strip()
+            else None
+        )
+        year_value = (
+            year.strip()
+            if year and year.strip()
+            else None
+        )
+        note = (
+            body.strip()
+            if body and body.strip()
+            else None
+        )
+
+        normalized_maker = normalize_manufacturer(
+            maker
+        )
+        normalized_model = normalize_model(
+            model_value
+        )
+        normalized_serial = normalize_serial(
+            serial
+        )
+
+        if (
+            not normalized_maker
+            or not normalized_serial
+        ):
+            raise ValueError(
+                "manufacturer and serial_number are required"
+            )
+
+        now = utcnow()
+        event_date = (
+            occurred_at.strip()
+            if occurred_at
+            and occurred_at.strip()
+            else now[:10]
+        )
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            if not user:
+                raise ValueError(
+                    "User not found"
+                )
+
+            existing = con.execute(
+                """
+                SELECT id
+                FROM individuals
+                WHERE normalized_manufacturer = ?
+                  AND COALESCE(
+                        normalized_model,
+                        ''
+                      ) = COALESCE(?, '')
+                  AND normalized_serial = ?
+                LIMIT 1
+                """,
+                (
+                    normalized_maker,
+                    normalized_model,
+                    normalized_serial,
+                ),
+            ).fetchone()
+            if existing:
+                raise ValueError(
+                    "An Individual with the same maker, model, and serial already exists"
+                )
+
+            cur = con.execute(
+                """
+                INSERT INTO individuals (
+                    manufacturer,
+                    model,
+                    finish,
+                    year,
+                    serial_number,
+                    normalized_manufacturer,
+                    normalized_model,
+                    normalized_serial,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    maker,
+                    model_value,
+                    finish_value,
+                    year_value,
+                    serial,
+                    normalized_maker,
+                    normalized_model,
+                    normalized_serial,
+                    now,
+                    now,
+                ),
+            )
+            individual_id = int(
+                cur.lastrowid
+            )
+
+            title = " ".join(
+                value
+                for value in (
+                    maker,
+                    model_value,
+                )
+                if value
+            )
+
+            source_listing_id = (
+                f"user-initial-{individual_id}"
+            )
+
+            cur = con.execute(
+                """
+                INSERT INTO observations (
+                    individual_id,
+                    manufacturer,
+                    model,
+                    finish,
+                    year,
+                    serial_number,
+                    owner_name,
+                    owner_type,
+                    event_type,
+                    actor_user_id,
+                    occurred_at,
+                    source_site,
+                    source_url,
+                    source_listing_id,
+                    observed_at,
+                    listing_date,
+                    title,
+                    raw_text,
+                    created_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, 'user',
+                    'listing', ?, ?, 'user', '',
+                    ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    maker,
+                    model_value,
+                    finish_value,
+                    year_value,
+                    serial,
+                    user["display_name"],
+                    user_id,
+                    event_date,
+                    source_listing_id,
+                    now,
+                    event_date,
+                    title,
+                    note,
+                    now,
+                ),
+            )
+            observation_id = int(
+                cur.lastrowid
+            )
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, 'listing',
+                    'listing', ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    observation_id,
+                    user_id,
+                    source_listing_id,
+                    note,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(
+                cur.lastrowid
+            )
+
+            next_order = int(
+                con.execute(
+                    """
+                    SELECT COALESCE(
+                        MAX(display_order),
+                        -1
+                    ) + 1
+                    FROM user_guitars
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchone()[0]
+            )
+
+            con.execute(
+                """
+                INSERT INTO user_guitars (
+                    user_id,
+                    individual_id,
+                    ownership_status,
+                    display_order,
+                    acquired_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, 'current_owner',
+                    ?, ?, ?, ?
+                )
+                """,
+                (
+                    user_id,
+                    individual_id,
+                    next_order,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+
+            return (
+                individual_id,
+                observation_id,
+                claim_id,
             )
 
 
