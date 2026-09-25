@@ -1485,6 +1485,7 @@ class Repository:
     def list_claims(
         self,
         individual_id: int,
+        viewer_user_id: int | None = None,
     ) -> list[sqlite3.Row]:
         with self.connect() as con:
             return list(
@@ -1523,7 +1524,21 @@ class Repository:
                         COALESCE(v.good_count, 0)
                             AS good_count,
                         COALESCE(v.bad_count, 0)
-                            AS bad_count
+                            AS bad_count,
+                        (
+                            SELECT cv.vote
+                            FROM claim_votes cv
+                            WHERE cv.claim_id = c.id
+                              AND cv.user_id = ?
+                            LIMIT 1
+                        ) AS viewer_vote,
+                        (
+                            SELECT cr.stance
+                            FROM claim_responses cr
+                            WHERE cr.claim_id = c.id
+                              AND cr.responder_user_id = ?
+                            LIMIT 1
+                        ) AS viewer_stance
                     FROM claims c
                     INNER JOIN users u
                       ON u.id = c.author_user_id
@@ -1558,7 +1573,11 @@ class Repository:
                         ),
                         c.id
                     """,
-                    (individual_id,),
+                    (
+                        viewer_user_id,
+                        viewer_user_id,
+                        individual_id,
+                    ),
                 )
             )
 
@@ -1580,16 +1599,41 @@ class Repository:
 
         now = utcnow()
         with self.connect() as con:
-            if not con.execute(
-                "SELECT 1 FROM claims WHERE id = ?",
+            claim = con.execute(
+                """
+                SELECT individual_id, author_user_id
+                FROM claims
+                WHERE id = ?
+                """,
                 (claim_id,),
-            ).fetchone():
+            ).fetchone()
+            if not claim:
                 return False
-            if not con.execute(
-                "SELECT 1 FROM users WHERE id = ?",
-                (responder_user_id,),
-            ).fetchone():
-                return False
+
+            if int(claim["author_user_id"]) == int(
+                responder_user_id
+            ):
+                raise ValueError(
+                    "Owner response is only for another user's Claim"
+                )
+
+            owner = con.execute(
+                """
+                SELECT 1
+                FROM user_guitars
+                WHERE user_id = ?
+                  AND individual_id = ?
+                  AND ownership_status = 'current_owner'
+                """,
+                (
+                    responder_user_id,
+                    claim["individual_id"],
+                ),
+            ).fetchone()
+            if not owner:
+                raise ValueError(
+                    "Only the current owner can respond to another user's Claim"
+                )
 
             con.execute(
                 """
