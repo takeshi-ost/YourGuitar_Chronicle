@@ -1876,7 +1876,10 @@ class Repository:
                             AS listing_title,
                         o.seller
                             AS seller,
-                        o.owner_name
+                        COALESCE(
+                            owner_user.display_name,
+                            o.owner_name
+                        )
                             AS observed_owner_name,
                         o.location_country
                             AS location_country,
@@ -1925,6 +1928,9 @@ class Repository:
                       ON u.id = c.author_user_id
                     LEFT JOIN observations o
                       ON o.id = c.observation_id
+                    LEFT JOIN users owner_user
+                      ON owner_user.id = o.actor_user_id
+                     AND o.owner_type = 'user'
                     LEFT JOIN (
                         SELECT
                             claim_id,
@@ -2228,15 +2234,21 @@ class Repository:
             observations = list(
                 con.execute(
                     """
-                    SELECT *
-                    FROM observations
-                    WHERE individual_id=?
+                    SELECT
+                        o.*,
+                        owner_user.display_name
+                            AS owner_user_name
+                    FROM observations o
+                    LEFT JOIN users owner_user
+                      ON owner_user.id = o.actor_user_id
+                     AND o.owner_type = 'user'
+                    WHERE o.individual_id=?
                     ORDER BY
                         COALESCE(
-                            listing_date,
-                            observed_at
+                            o.listing_date,
+                            o.observed_at
                         ),
-                        id
+                        o.id
                     """,
                     (
                         individual_id,
