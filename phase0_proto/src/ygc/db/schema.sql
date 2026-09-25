@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS user_guitars (
  user_id INTEGER NOT NULL,
  individual_id INTEGER NOT NULL,
  ownership_status TEXT NOT NULL DEFAULT 'current_owner',
+ display_order INTEGER,
  acquired_at TEXT,
  released_at TEXT,
  created_at TEXT NOT NULL,
