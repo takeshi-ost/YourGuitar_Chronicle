@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS individuals (
  normalized_manufacturer TEXT NOT NULL,
  normalized_model TEXT,
  normalized_serial TEXT,
+ representative_media_asset_id INTEGER,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
  UNIQUE(normalized_manufacturer, normalized_model, normalized_serial)
@@ -69,6 +70,22 @@ CREATE TABLE IF NOT EXISTS user_guitars (
  UNIQUE(user_id, individual_id)
 );
 
+CREATE TABLE IF NOT EXISTS media_assets (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ individual_id INTEGER NOT NULL,
+ uploader_user_id INTEGER NOT NULL,
+ media_type TEXT NOT NULL DEFAULT 'image',
+ storage_path TEXT NOT NULL,
+ original_filename TEXT,
+ mime_type TEXT,
+ captured_at TEXT,
+ caption TEXT,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
+ FOREIGN KEY(uploader_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS claims (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  individual_id INTEGER NOT NULL,
@@ -108,6 +125,16 @@ CREATE TABLE IF NOT EXISTS claim_votes (
  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
  UNIQUE(claim_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS claim_evidence (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ media_asset_id INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE,
+ FOREIGN KEY(media_asset_id) REFERENCES media_assets(id) ON DELETE CASCADE,
+ UNIQUE(claim_id, media_asset_id)
+);
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,
@@ -129,3 +156,6 @@ CREATE INDEX IF NOT EXISTS idx_claims_individual_id ON claims(individual_id);
 CREATE INDEX IF NOT EXISTS idx_claims_observation_id ON claims(observation_id);
 CREATE INDEX IF NOT EXISTS idx_claim_responses_claim_id ON claim_responses(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_votes_claim_id ON claim_votes(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_individual_id ON media_assets(individual_id);
+CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_id);
