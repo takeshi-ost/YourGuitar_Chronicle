@@ -2421,6 +2421,7 @@ function ownedDrop(event){
 async function ownedDragEnd(event){
   event.currentTarget.classList.remove('dragging');
   ownedDraggedId=null;
+  setTimeout(()=>{ownedDidDrag=false},0);
   const list=document.getElementById('ownedGuitarList');
   if(!list||!activeUser||!activeUser.user)return;
   const ids=[...list.querySelectorAll('.owned-row[data-individual-id]')].map(row=>Number(row.dataset.individualId));
