@@ -4686,15 +4686,15 @@ async function showIndividual(id){
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
-  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
   let out='';
   if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
-  }else if(imageObservation){
-    const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
-    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
+  }else if(imageListing){
+    const imageUrl=String(imageListing.source_url||'');
+    const image='<img class="detail-image" src="'+esc(imageListing.image_url)+'" alt="'+esc(imageListing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(imageListing.source_site||'Source'))+'</a></span>';
+    else out+=image+'<span class="detail-source">Listing Claim</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
@@ -4726,7 +4726,7 @@ async function showIndividual(id){
       return ak.localeCompare(bk);
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div></div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
