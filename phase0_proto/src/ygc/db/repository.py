@@ -317,8 +317,16 @@ class Repository:
                 "year": row["year"],
                 "serial_number": row["serial_number"],
                 "owner_name": row["owner_name"],
+                "owner_type": row["owner_type"],
+                "seller": row["seller"],
                 "location_country": row["location_country"],
                 "location_region": row["location_region"],
+                "listing_title": row["title"],
+                "listing_date": occurred_at,
+                "source_site": row["source_site"],
+                "source_url": row["source_url"],
+                "source_listing_id": row["source_listing_id"],
+                "image_url": row["image_url"],
             }
             for field_name, value in listing_values.items():
                 if value is None:
@@ -372,7 +380,19 @@ class Repository:
                         o.owner_name
                     ) AS owner_name,
                     o.location_country,
-                    o.location_region
+                    o.location_region,
+                    o.owner_type,
+                    o.seller,
+                    o.title AS listing_title,
+                    COALESCE(
+                        o.listing_date,
+                        o.occurred_at,
+                        o.observed_at
+                    ) AS listing_date,
+                    o.source_site,
+                    o.source_url,
+                    o.source_listing_id,
+                    o.image_url
                 FROM claims c
                 INNER JOIN observations o
                   ON o.id = c.observation_id
@@ -392,8 +412,16 @@ class Repository:
             "year",
             "serial_number",
             "owner_name",
+            "owner_type",
+            "seller",
             "location_country",
             "location_region",
+            "listing_title",
+            "listing_date",
+            "source_site",
+            "source_url",
+            "source_listing_id",
+            "image_url",
         )
 
         for row in rows:
@@ -2082,8 +2110,13 @@ class Repository:
                 "year": year_value,
                 "serial_number": serial,
                 "owner_name": user["display_name"],
+                "owner_type": "user",
                 "location_country": user["location_country"],
                 "location_region": user["location_region"],
+                "listing_title": title,
+                "listing_date": event_date,
+                "source_site": "user",
+                "source_listing_id": source_listing_id,
             }
             for field_name, value in listing_values.items():
                 if value is None:
@@ -3457,21 +3490,55 @@ class Repository:
                         c.*,
                         u.display_name
                             AS author_name,
-                        o.source_site
-                            AS source_site,
-                        o.source_url
-                            AS source_url,
-                        o.image_url
-                            AS image_url,
-                        o.title
-                            AS listing_title,
-                        o.seller
-                            AS seller,
-                        COALESCE(
-                            owner_user.display_name,
-                            o.owner_name
-                        )
-                            AS observed_owner_name,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'source_site'
+                            LIMIT 1
+                        ) AS source_site,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'source_url'
+                            LIMIT 1
+                        ) AS source_url,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'image_url'
+                            LIMIT 1
+                        ) AS image_url,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'listing_title'
+                            LIMIT 1
+                        ) AS listing_title,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'seller'
+                            LIMIT 1
+                        ) AS seller,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'owner_name'
+                            LIMIT 1
+                        ) AS observed_owner_name,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'owner_type'
+                            LIMIT 1
+                        ) AS observed_owner_type,
                         (
                             SELECT li.value_text
                             FROM claim_listing_items li
@@ -3486,16 +3553,55 @@ class Repository:
                               AND li.field_name = 'location_region'
                             LIMIT 1
                         ) AS location_region,
-                        o.manufacturer
-                            AS observed_manufacturer,
-                        o.model
-                            AS observed_model,
-                        o.finish
-                            AS observed_finish,
-                        o.year
-                            AS observed_year,
-                        o.serial_number
-                            AS observed_serial_number,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'manufacturer'
+                            LIMIT 1
+                        ) AS observed_manufacturer,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'model'
+                            LIMIT 1
+                        ) AS observed_model,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'finish'
+                            LIMIT 1
+                        ) AS observed_finish,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'year'
+                            LIMIT 1
+                        ) AS observed_year,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'serial_number'
+                            LIMIT 1
+                        ) AS observed_serial_number,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'listing_date'
+                            LIMIT 1
+                        ) AS listing_date,
+                        (
+                            SELECT li.value_text
+                            FROM claim_listing_items li
+                            WHERE li.claim_id = c.id
+                              AND li.field_name = 'source_listing_id'
+                            LIMIT 1
+                        ) AS source_listing_id,
                         (
                             SELECT ce.media_asset_id
                             FROM claim_evidence ce
@@ -3527,11 +3633,6 @@ class Repository:
                     FROM claims c
                     INNER JOIN users u
                       ON u.id = c.author_user_id
-                    LEFT JOIN observations o
-                      ON o.id = c.observation_id
-                    LEFT JOIN users owner_user
-                      ON owner_user.id = o.actor_user_id
-                     AND o.owner_type = 'user'
                     LEFT JOIN (
                         SELECT
                             claim_id,
