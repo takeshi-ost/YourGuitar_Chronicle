@@ -3472,6 +3472,34 @@ function currentLocationHtml(o){
   const value=[country,region].filter(Boolean).join(' / ');
   return value?esc(value):'—';
 }
+function currentLocationObservation(observations,ownerObservation){
+  if(!ownerObservation)return null;
+  const hasLocation=o=>!!(String(o&&o.location_country||'').trim()||String(o&&o.location_region||'').trim());
+  if(hasLocation(ownerObservation))return ownerObservation;
+  const owner=String(ownerObservation.owner_user_name||ownerObservation.owner_name||ownerObservation.seller||'').trim().toLowerCase();
+  if(!owner||String(ownerObservation.owner_type||'').trim()==='unknown')return null;
+  for(let i=observations.length-1;i>=0;i--){
+    const o=observations[i];
+    if(!hasLocation(o))continue;
+    const candidate=String(o.owner_user_name||o.owner_name||o.seller||'').trim().toLowerCase();
+    if(candidate&&candidate===owner)return o;
+  }
+  return null;
+}
+function currentLocationObservation(observations,ownerObservation){
+  if(!ownerObservation)return null;
+  const hasLocation=o=>!!(String(o&&o.location_country||'').trim()||String(o&&o.location_region||'').trim());
+  if(hasLocation(ownerObservation))return ownerObservation;
+  const owner=String(ownerObservation.owner_user_name||ownerObservation.owner_name||ownerObservation.seller||'').trim().toLowerCase();
+  if(!owner||String(ownerObservation.owner_type||'').trim()==='unknown')return null;
+  for(let i=observations.length-1;i>=0;i--){
+    const o=observations[i];
+    if(!hasLocation(o))continue;
+    const candidate=String(o.owner_user_name||o.owner_name||o.seller||'').trim().toLowerCase();
+    if(candidate&&candidate===owner)return o;
+  }
+  return null;
+}
 function observationCard(o,isLatest){
   const url=String(o.source_url||'');
   const source=sourceName(o);
@@ -3686,6 +3714,7 @@ async function showIndividual(id){
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
+  const locationObservation=currentLocationObservation(observations,latest);
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
@@ -3727,7 +3756,7 @@ async function showIndividual(id){
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(latest)+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(locationObservation)+'</div>'+
     ownershipControlsHtml(i.id)+'</div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
@@ -4663,6 +4692,7 @@ async function showIndividual(id){
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
+  const locationObservation=currentLocationObservation(observations,latest);
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
@@ -4704,7 +4734,7 @@ async function showIndividual(id){
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(latest)+'</div></div>';
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(locationObservation)+'</div></div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
