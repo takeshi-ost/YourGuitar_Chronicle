@@ -772,6 +772,11 @@ def user_view() -> HTMLResponse:
     return HTMLResponse(USER_VIEW_HTML)
 
 
+@app.get("/user-view/edit", response_class=HTMLResponse)
+def user_edit() -> HTMLResponse:
+    return HTMLResponse(USER_EDIT_HTML)
+
+
 @app.get("/api/status")
 def api_status(
     request: Request,
@@ -1895,12 +1900,277 @@ async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.ge
 </body></html>"""
 
 
+
 USER_VIEW_HTML = r"""<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Your Guitar Chronicle — User View</title>
+<style>
+:root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--bad:#e07171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:22px 26px;border-bottom:1px solid var(--line)}
+h1{font-size:21px;margin:0}.sub{color:var(--muted);font-size:12px}
+main{max-width:1500px;margin:auto;padding:22px}
+.grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(380px,.85fr);gap:18px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+h2{font-size:17px;margin:0 0 14px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.toolbar h2{margin:0;flex:1}
+input,button{font:inherit}
+input{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}
+button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}
+button.secondary{background:#2a3036;color:var(--text)}
+.edit-chronicle{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;padding:14px 16px;margin-bottom:18px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
+.edit-chronicle:hover{background:#20252a}
+.edit-chronicle-title{font-weight:700}.edit-chronicle-sub{font-size:12px;color:var(--muted);font-weight:400}
+.table-wrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}
+th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margin-left:4px}
+.clickable{cursor:pointer}.clickable:hover{background:#20252a}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}
+.detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
+.detail-image-link{display:block;margin:0 0 6px}
+.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}
+.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:10px}
+.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
+.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}
+.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}
+.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:6px}
+.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}
+.observation-card.latest{border-color:#5c513d;background:#181713}
+.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
+.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}
+.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
+.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
+#detail{white-space:normal}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+@media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Your Guitar Chronicle <span class="sub">User View</span></h1>
+</header>
+<main>
+<button class="edit-chronicle" onclick="window.location.href='/user-view/edit'">
+  <span>
+    <span class="edit-chronicle-title">Edit Your Chronicle</span><br>
+    <span class="edit-chronicle-sub" id="editChronicleSub">プロフィールや所有ギターを編集</span>
+  </span>
+  <span>›</span>
+</button>
+
+<div class="grid">
+<section>
+  <div class="panel">
+    <div class="toolbar">
+      <h2>Individuals</h2>
+      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
+      <button class="secondary" onclick="loadIndividuals()">更新</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th>
+          <th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th>
+          <th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th>
+          <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
+          <th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th>
+          <th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th>
+          <th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th>
+        </tr></thead>
+        <tbody id="individualBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="panel">
+    <h2>Individual Detail</h2>
+    <div id="detail" class="sub">Individuals の行をクリックすると履歴を表示します。</div>
+  </div>
+</section>
+</div>
+</main>
+
+<script>
+let individuals=[];
+let activeUser=null;
+let selectedIndividualId=null;
+let individualSortKey='id';
+let individualSortDirection=1;
+const ACTIVE_USER_KEY='ygc_active_user_id';
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+async function jfetch(url,opt={}){
+  const r=await fetch(url,opt);
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.detail||r.statusText);
+  return d;
+}
+
+async function loadActiveUser(){
+  const id=localStorage.getItem(ACTIVE_USER_KEY);
+  if(!id){
+    activeUser=null;
+    document.getElementById('editChronicleSub').textContent='プロフィールや所有ギターを編集';
+    return;
+  }
+  try{
+    activeUser=await jfetch('/api/users/'+id);
+    const u=activeUser.user;
+    document.getElementById('editChronicleSub').textContent=(u&&u.display_name?u.display_name+' — ':'')+'プロフィールや所有ギターを編集';
+  }catch(e){
+    activeUser=null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
+  }
+}
+
+async function loadIndividuals(){
+  individuals=await jfetch('/api/individuals');
+  renderIndividuals();
+}
+function normalizeSortValue(value,key){
+  if(key==='id'||key==='observation_count')return Number(value||0);
+  return String(value??'').toLowerCase();
+}
+function setIndividualSort(key){
+  if(individualSortKey===key)individualSortDirection*=-1;
+  else{individualSortKey=key;individualSortDirection=1}
+  renderIndividuals();
+}
+function updateSortIndicators(){
+  for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){
+    const el=document.getElementById('sort-'+key);
+    if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
+  }
+}
+function renderIndividuals(){
+  const q=document.getElementById('individualFilter').value.toLowerCase();
+  const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{
+    const av=normalizeSortValue(a[individualSortKey],individualSortKey);
+    const bv=normalizeSortValue(b[individualSortKey],individualSortKey);
+    if(av<bv)return-1*individualSortDirection;
+    if(av>bv)return 1*individualSortDirection;
+    return Number(a.id)-Number(b.id);
+  });
+  updateSortIndicators();
+  document.getElementById('individualBody').innerHTML=rows.map(x=>
+    '<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>'
+  ).join('');
+}
+
+function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
+function ownerLabel(o){
+  const name=String(o.owner_name||o.seller||'').trim();
+  if(!name)return '';
+  const type=String(o.owner_type||'').trim();
+  return type==='shop'?name+' (Shop)':(type==='user'?name+' (User)':name);
+}
+function currentOwnerHtml(o){
+  if(!o)return '—';
+  const name=String(o.owner_name||o.seller||'').trim();
+  if(!name)return '—';
+  const type=String(o.owner_type||'').trim();
+  const listingUrl=String(o.source_url||'').trim();
+  const label=type==='shop'?name+' (Shop)':name;
+  if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
+  return esc(label);
+}
+function observationCard(o,isLatest){
+  const url=String(o.source_url||'');
+  const source=sourceName(o);
+  const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);
+  const owner=ownerLabel(o);
+  const seller=String(o.seller||'').trim();
+  let rows='';
+  if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';
+  if(seller&&seller!==String(o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';
+  const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');
+  if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';
+  if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';
+  const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');
+  if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';
+  if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';
+  return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>';
+}
+function activeUserOwns(individualId){
+  return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
+}
+function ownershipControlsHtml(individualId){
+  if(!activeUser||!activeUser.user)return '';
+  if(activeUserOwns(individualId)){
+    return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
+  }
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">Add to Your Chronicle</button></div>';
+}
+
+async function showIndividual(id){
+  selectedIndividualId=Number(id);
+  const d=await jfetch('/api/individuals/'+id);
+  const i=d.individual;
+  const observations=d.observations||[];
+  const latestIndex=observations.length-1;
+  const latest=latestIndex>=0?observations[latestIndex]:null;
+  let out='';
+  if(latest&&latest.image_url){
+    const latestUrl=String(latest.source_url||'');
+    const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
+    if(latestUrl)out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>';
+    else out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>';
+  }
+  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid">'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
+    '</div>'+ownershipControlsHtml(i.id)+'</div>';
+  if(latest)out+='<div class="detail-section">最新Observation</div>'+observationCard(latest,true);
+  const history=observations.slice(0,Math.max(0,latestIndex)).reverse();
+  if(history.length)out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('');
+  document.getElementById('detail').innerHTML=out;
+}
+
+async function linkOwnedGuitar(individualId){
+  if(!activeUser||!activeUser.user){
+    window.location.href='/user-view/edit';
+    return;
+  }
+  try{
+    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ownership_status:'current_owner'})
+    });
+    await showIndividual(individualId);
+  }catch(e){
+    alert('所有ギターの紐づけに失敗しました。\\n'+e.message);
+  }
+}
+
+(async()=>{
+  await loadActiveUser();
+  await loadIndividuals();
+})()
+</script>
+</body>
+</html>"""
+
+
+USER_EDIT_HTML = r"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — Edit Your Chronicle</title>
 <style>
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--bad:#e07171}
 *{box-sizing:border-box}
@@ -1955,8 +2225,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <body>
 <header>
   <div>
-    <h1>Your Guitar Chronicle <span class="sub">User View</span></h1>
-    <div class="sub">User Account / Individuals / Individual Detail</div>
+    <h1>Your Guitar Chronicle <span class="sub">Edit Your Chronicle</span></h1>
+    <div class="sub">User Account / Individual Detail</div>
   </div>
   <div class="toolbar" style="margin:0">
     <select id="activeUserSelect" style="width:auto;min-width:170px" onchange="setActiveUser(this.value)">
@@ -1976,27 +2246,6 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div id="accountPanel" class="sub">アカウントを選択してください。</div>
   </div>
 
-  <div class="panel">
-    <div class="toolbar">
-      <h2>Individuals</h2>
-      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
-      <button class="secondary" onclick="loadIndividuals()">更新</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th>
-          <th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th>
-          <th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th>
-          <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
-          <th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th>
-          <th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th>
-          <th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th>
-        </tr></thead>
-        <tbody id="individualBody"></tbody>
-      </table>
-    </div>
-  </div>
 </section>
 
 <section>
@@ -2005,6 +2254,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div id="detail" class="sub">Individuals の行をクリックすると履歴を表示します。</div>
   </div>
 </section>
+</div>
+<div style="display:flex;justify-content:center;margin:8px 0 24px">
+  <button class="secondary" onclick="window.location.href='/user-view'">Close</button>
 </div>
 </main>
 
@@ -2326,7 +2578,6 @@ async function unlinkOwnedGuitar(individualId){
 }
 
 (async()=>{
-  await loadIndividuals();
   await loadUsers();
 })()
 </script>
