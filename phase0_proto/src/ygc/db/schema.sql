@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS claims (
  claim_type TEXT NOT NULL,
  field_name TEXT,
  value_text TEXT,
+ specification_kind TEXT,
  body TEXT,
  occurred_at TEXT,
  status TEXT NOT NULL DEFAULT 'active',
@@ -124,6 +125,15 @@ CREATE TABLE IF NOT EXISTS claim_votes (
  FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE,
  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
  UNIQUE(claim_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS claim_spec_items (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ field_name TEXT NOT NULL,
+ value_text TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS claim_evidence (
@@ -159,3 +169,5 @@ CREATE INDEX IF NOT EXISTS idx_claim_votes_claim_id ON claim_votes(claim_id);
 
 CREATE INDEX IF NOT EXISTS idx_media_assets_individual_id ON media_assets(individual_id);
 CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_spec_items_claim_id ON claim_spec_items(claim_id);
