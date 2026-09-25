@@ -291,6 +291,40 @@ class ResetDatabaseRequest(BaseModel):
     confirm: str
 
 
+class UserUpdateRequest(BaseModel):
+    display_name: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+    account_type: str = Field(
+        default="user",
+        max_length=20,
+    )
+    location_country: str | None = Field(
+        default=None,
+        max_length=80,
+    )
+    location_region: str | None = Field(
+        default=None,
+        max_length=120,
+    )
+
+
+class UserGuitarLinkRequest(BaseModel):
+    ownership_status: str = Field(
+        default="current_owner",
+        max_length=30,
+    )
+    acquired_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    released_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+
+
 def _run_batch(
     job_id: str,
     request: CrawlRequest,
@@ -1040,6 +1074,191 @@ def api_individual(individual_id: int) -> dict[str, Any]:
     }
 
 
+@app.get("/api/users")
+def api_users() -> list[dict[str, Any]]:
+    return [
+        _row_dict(row)
+        for row
+        in repo().list_users()
+    ]
+
+
+@app.post("/api/users")
+def api_create_user() -> dict[str, Any]:
+    repository = repo()
+    user_id = repository.create_user()
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
+@app.get("/api/users/{user_id}")
+def api_user(
+    user_id: int,
+) -> dict[str, Any]:
+    user, guitars = repo().get_user(
+        user_id
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
+@app.patch("/api/users/{user_id}")
+def api_update_user(
+    user_id: int,
+    request: UserUpdateRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        updated = repository.update_user(
+            user_id,
+            display_name=(
+                request.display_name
+            ),
+            account_type=(
+                request.account_type
+            ),
+            location_country=(
+                request.location_country
+            ),
+            location_region=(
+                request.location_region
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
+@app.post(
+    "/api/users/{user_id}/guitars/{individual_id}"
+)
+def api_link_user_guitar(
+    user_id: int,
+    individual_id: int,
+    request: UserGuitarLinkRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        linked = repository.link_user_guitar(
+            user_id,
+            individual_id,
+            ownership_status=(
+                request.ownership_status
+            ),
+            acquired_at=(
+                request.acquired_at
+            ),
+            released_at=(
+                request.released_at
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    if not linked:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "User or Individual not found"
+            ),
+        )
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
+@app.delete(
+    "/api/users/{user_id}/guitars/{individual_id}"
+)
+def api_unlink_user_guitar(
+    user_id: int,
+    individual_id: int,
+) -> dict[str, Any]:
+    repository = repo()
+    removed = repository.unlink_user_guitar(
+        user_id,
+        individual_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=404,
+            detail="Ownership link not found",
+        )
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
 @app.get("/api/serial-audit")
 def api_serial_audit(limit: int = 100) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 500))
@@ -1312,7 +1531,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -1349,6 +1568,10 @@ Gibson ES-335</textarea>
 <div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
 <div id="statistics" class="sub">集計中...</div>
 </div>
+<div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">User Account</h2><button class="secondary" onclick="loadActiveUser()">更新</button></div>
+<div id="accountPanel" class="sub">上部の「新規アカウント」からアカウントを作成してください。</div>
+</div>
 </section>
 
 <section>
@@ -1376,7 +1599,11 @@ Gibson ES-335</textarea>
 let individuals=[];
 let individualSortKey='id';
 let individualSortDirection=1;
+let users=[];
+let activeUser=null;
+let selectedIndividualId=null;
 const TOKEN_KEY='ygc_reverb_api_token';
+const ACTIVE_USER_KEY='ygc_active_user_id';
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
@@ -1408,6 +1635,7 @@ async function importDatabaseFile(input){
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
     await loadIndividuals();
+    await loadUsers();
     const imported=d.imported_counts||{};
     alert('DBをインポートしました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??''));
   }catch(e){
@@ -1436,8 +1664,11 @@ async function resetDatabase(){
     document.getElementById('jobResults').innerHTML='';
     document.getElementById('jobMessage').textContent='DBを初期化しました';
     document.getElementById('jobBar').style.width='0%';
+    localStorage.removeItem(ACTIVE_USER_KEY);
+    activeUser=null;
     await refreshStatus();
     await loadIndividuals();
+    await loadUsers();
     alert('DBを初期化しました。');
   }catch(e){
     alert(e.message);
@@ -1470,6 +1701,130 @@ async function loadStatistics(){
     document.getElementById('statistics').textContent='Statistics error: '+e.message;
   }
 }
+async function loadUsers(){
+  users=await jfetch('/api/users');
+  const select=document.getElementById('activeUserSelect');
+  const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
+  select.innerHTML='<option value="">User未選択</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
+  const target=users.some(u=>String(u.id)===String(saved))?saved:(users[0]?String(users[0].id):'');
+  select.value=target;
+  if(target){
+    localStorage.setItem(ACTIVE_USER_KEY,target);
+    await loadActiveUser();
+  }else{
+    activeUser=null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
+    renderAccount();
+  }
+}
+async function createUser(){
+  try{
+    const d=await jfetch('/api/users',{method:'POST'});
+    const id=String(d.user.id);
+    localStorage.setItem(ACTIVE_USER_KEY,id);
+    await loadUsers();
+    document.getElementById('activeUserSelect').value=id;
+    await loadActiveUser();
+  }catch(e){
+    alert('アカウント作成に失敗しました。\n'+e.message);
+  }
+}
+async function setActiveUser(value){
+  if(!value){
+    activeUser=null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
+    renderAccount();
+    if(selectedIndividualId)await showIndividual(selectedIndividualId);
+    return;
+  }
+  localStorage.setItem(ACTIVE_USER_KEY,String(value));
+  await loadActiveUser();
+  if(selectedIndividualId)await showIndividual(selectedIndividualId);
+}
+async function loadActiveUser(){
+  const id=localStorage.getItem(ACTIVE_USER_KEY);
+  if(!id){
+    activeUser=null;
+    renderAccount();
+    return;
+  }
+  try{
+    activeUser=await jfetch('/api/users/'+id);
+    renderAccount();
+  }catch(e){
+    activeUser=null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
+    await loadUsers();
+  }
+}
+function renderAccount(){
+  const el=document.getElementById('accountPanel');
+  if(!activeUser||!activeUser.user){
+    el.className='sub';
+    el.textContent='上部の「新規アカウント」からアカウントを作成してください。';
+    return;
+  }
+  const u=activeUser.user;
+  const guitars=activeUser.guitars||[];
+  el.className='';
+  el.innerHTML='<div class="detail-meta-grid">'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Display Name</span><input id="accountName" value="'+esc(u.display_name||'')+'"></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Account Type</span><select id="accountType"><option value="user"'+(u.account_type==='user'?' selected':'')+'>User</option><option value="shop"'+(u.account_type==='shop'?' selected':'')+'>Shop</option></select></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Country</span><input id="accountCountry" placeholder="JP / US / NL ..." value="'+esc(u.location_country||'')+'"></div>'+
+    '<div class="detail-meta-item"><span class="detail-meta-label">Region</span><input id="accountRegion" placeholder="Kyoto / CA / NH ..." value="'+esc(u.location_region||'')+'"></div>'+
+    '</div>'+
+    '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">認証なしのPhase 0アカウント / ID '+esc(u.id)+'</span></div>'+
+    '<div class="detail-section">Owned Guitars</div>'+
+    (guitars.length?guitars.map(g=>'<div class="observation-card"><div class="observation-card-head"><div class="observation-date">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div><div class="observation-source">'+esc(g.ownership_status||'')+'</div></div><div class="sub">'+esc(g.year||'')+(g.finish?' / '+esc(g.finish):'')+(g.serial_number?' / '+esc(g.serial_number):'')+'</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button><button class="secondary bad" onclick="unlinkOwnedGuitar('+g.individual_id+')">紐づけ解除</button></div></div>').join(''):'<div class="sub">まだ所有ギターは登録されていません。</div>');
+}
+async function saveUser(){
+  if(!activeUser||!activeUser.user)return;
+  const id=activeUser.user.id;
+  const body={
+    display_name:document.getElementById('accountName').value.trim(),
+    account_type:document.getElementById('accountType').value,
+    location_country:document.getElementById('accountCountry').value.trim()||null,
+    location_region:document.getElementById('accountRegion').value.trim()||null
+  };
+  try{
+    activeUser=await jfetch('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    await loadUsers();
+    document.getElementById('activeUserSelect').value=String(id);
+    await loadActiveUser();
+  }catch(e){
+    alert('アカウント保存に失敗しました。\n'+e.message);
+  }
+}
+function activeUserOwns(individualId){
+  return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
+}
+function ownershipControlsHtml(individualId){
+  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">所有ギターに紐づけるにはUserを選択してください。</div>';
+  if(activeUserOwns(individualId)){
+    return '<div class="toolbar" style="margin-top:10px"><span class="status good">現在のUserが所有中</span><button class="secondary bad" onclick="unlinkOwnedGuitar('+individualId+')">紐づけ解除</button></div>';
+  }
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
+}
+async function linkOwnedGuitar(individualId){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ownership_status:'current_owner'})});
+    renderAccount();
+    await showIndividual(individualId);
+  }catch(e){
+    alert('所有ギターの紐づけに失敗しました。\n'+e.message);
+  }
+}
+async function unlinkOwnedGuitar(individualId){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'DELETE'});
+    renderAccount();
+    if(selectedIndividualId===Number(individualId))await showIndividual(individualId);
+  }catch(e){
+    alert('所有ギターの紐づけ解除に失敗しました。\n'+e.message);
+  }
+}
 function normalizeSortValue(value,key){if(key==='id'||key==='observation_count')return Number(value||0);return String(value??'').toLowerCase()}
 function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
@@ -1478,11 +1833,11 @@ function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'
 function ownerLabel(o){const name=String(o.owner_name||o.seller||'').trim();if(!name)return '';const type=String(o.owner_type||'').trim();return type==='shop'?name+' (Shop)':(type==='user'?name+' (User)':name)}
 function currentOwnerHtml(o){if(!o)return '—';const name=String(o.owner_name||o.seller||'').trim();if(!name)return '—';const type=String(o.owner_type||'').trim();const profileUrl=String(o.owner_profile_url||'').trim();const listingUrl=String(o.source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl){return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>'}if(type==='user'&&profileUrl){return '<a href="'+esc(profileUrl)+'">'+esc(label)+'</a>'}return esc(label)}
 function observationCard(o,isLatest){const url=String(o.source_url||'');const source=sourceName(o);const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);const owner=ownerLabel(o);const seller=String(o.seller||'').trim();let rows='';if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';if(seller&&seller!==String(o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>'}
-async function showIndividual(id){const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(latest&&latest.image_url){const latestUrl=String(latest.source_url||'');const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(latestUrl){out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer" title="Reverb Listingを開く">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>'}else{out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>'}}out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid"><div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div></div></div>';if(latest){out+='<div class="detail-section">最新Observation</div><div class="latest-observation-scroll">'+observationCard(latest,true)+'</div>'}const history=observations.slice(0,Math.max(0,latestIndex)).reverse();if(history.length){out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('')}document.getElementById('detail').innerHTML=out}
+async function showIndividual(id){selectedIndividualId=Number(id);const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(latest&&latest.image_url){const latestUrl=String(latest.source_url||'');const image='<img class="detail-image" src="'+esc(latest.image_url)+'" alt="'+esc(latest.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(latestUrl){out+='<a class="detail-image-link" href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer" title="Reverb Listingを開く">'+image+'</a><span class="detail-source">Source: <a href="'+esc(latestUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(latest))+'</a></span>'}else{out+=image+'<span class="detail-source">Source: '+esc(sourceName(latest))+'</span>'}}out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid"><div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div></div>'+ownershipControlsHtml(i.id)+'</div>';if(latest){out+='<div class="detail-section">最新Observation</div><div class="latest-observation-scroll">'+observationCard(latest,true)+'</div>'}const history=observations.slice(0,Math.max(0,latestIndex)).reverse();if(history.length){out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('')}document.getElementById('detail').innerHTML=out}
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL / Owner / Location をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics()})()
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
 </script>
 </body></html>"""
 
