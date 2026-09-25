@@ -241,6 +241,44 @@ def init_db():
 
 
 @app.command(
+    "claim-status"
+)
+def claim_status():
+    repository = repo()
+    repository.init_db()
+    status = repository.claim_architecture_status()
+    console.print_json(
+        json.dumps(
+            status,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command(
+    "migrate-claims"
+)
+def migrate_claims():
+    repository = repo()
+    repository.init_db()
+    before = repository.claim_architecture_status()
+    result = repository.migrate_legacy_observations_to_claims()
+    after = repository.claim_architecture_status()
+    console.print_json(
+        json.dumps(
+            {
+                "before": before,
+                "migration": result,
+                "after": after,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command(
     "reverb-probe"
 )
 def reverb_probe(
