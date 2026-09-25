@@ -972,6 +972,253 @@ def _serial_text(
     )
 
 
+def _extract_reverb_listing(
+    item: dict,
+    serial_threshold: float = 0.70,
+) -> dict[str, Any]:
+    classification = classify_vintage_listing(
+        item
+    )
+    raw_text = _serial_text(
+        item
+    )
+    serial_candidate = select_serial(
+        raw_text,
+        threshold=serial_threshold,
+    )
+
+    source_listing_id = item.get("id")
+    if source_listing_id is None:
+        source_listing_id = item.get(
+            "listing_id"
+        )
+
+    published_at = (
+        item.get("published_at")
+        or item.get("created_at")
+    )
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    seller = _seller_name(
+        item
+    )
+    location_country = _location_value(
+        item,
+        "country_code",
+    )
+    location_region = _location_value(
+        item,
+        "region",
+    )
+
+    return {
+        "classification": classification,
+        "manufacturer": _text(
+            item.get("make")
+        ) or None,
+        "model": _text(
+            item.get("model")
+        ) or None,
+        "finish": _text(
+            item.get("finish")
+        ) or None,
+        "year": _text(
+            item.get("year")
+        ) or None,
+        "serial_number": (
+            serial_candidate.value
+            if serial_candidate
+            else None
+        ),
+        "serial_confidence": (
+            serial_candidate.confidence
+            if serial_candidate
+            else None
+        ),
+        "owner_name": seller,
+        "owner_type": (
+            "shop"
+            if seller
+            else None
+        ),
+        "owner_profile_url": _owner_profile_url(
+            item
+        ),
+        "seller": seller,
+        "location_country": (
+            location_country
+        ),
+        "location_region": (
+            location_region
+        ),
+        "source_site": "reverb",
+        "source_url": _source_url(
+            item
+        ),
+        "source_listing_id": (
+            str(source_listing_id)
+            if source_listing_id is not None
+            else None
+        ),
+        "image_url": listing_image_url(
+            item
+        ),
+        "listing_title": _text(
+            item.get("title")
+        ) or None,
+        "listing_date": (
+            str(published_at)
+            if published_at
+            else None
+        ),
+        "raw_text": raw_text,
+        "observed_at": now,
+        "created_at": now,
+        "extraction_version": (
+            EXTRACTION_VERSION
+        ),
+    }
+
+
+def to_listing_claim_data(
+    item: dict,
+    serial_threshold: float = 0.70,
+) -> dict[str, Any]:
+    """
+    Convert Reverb data into semantic Listing Claim data.
+
+    The returned structure contains meaning-bearing fields only.
+    It is suitable for claim_listing_items and Individual matching.
+    """
+    extracted = _extract_reverb_listing(
+        item,
+        serial_threshold,
+    )
+
+    return {
+        "manufacturer": extracted[
+            "manufacturer"
+        ],
+        "model": extracted["model"],
+        "finish": extracted["finish"],
+        "year": extracted["year"],
+        "serial_number": extracted[
+            "serial_number"
+        ],
+        "owner_name": extracted[
+            "owner_name"
+        ],
+        "owner_type": extracted[
+            "owner_type"
+        ],
+        "seller": extracted["seller"],
+        "location_country": extracted[
+            "location_country"
+        ],
+        "location_region": extracted[
+            "location_region"
+        ],
+        "listing_title": extracted[
+            "listing_title"
+        ],
+        "listing_date": extracted[
+            "listing_date"
+        ],
+        "source_site": extracted[
+            "source_site"
+        ],
+        "source_url": extracted[
+            "source_url"
+        ],
+        "source_listing_id": extracted[
+            "source_listing_id"
+        ],
+        "image_url": extracted[
+            "image_url"
+        ],
+        "vintage_status": extracted[
+            "classification"
+        ]["status"],
+        "vintage_reason": extracted[
+            "classification"
+        ]["reason"],
+        "estimated_year": extracted[
+            "classification"
+        ]["estimated_year"],
+        "serial_confidence": extracted[
+            "serial_confidence"
+        ],
+        "extraction_version": extracted[
+            "extraction_version"
+        ],
+    }
+
+
+def to_provenance_observation(
+    item: dict,
+    serial_threshold: float = 0.70,
+) -> dict[str, Any]:
+    """
+    Convert Reverb data into provenance-only Observation data.
+
+    Semantic guitar state intentionally stays out of this structure.
+    """
+    extracted = _extract_reverb_listing(
+        item,
+        serial_threshold,
+    )
+
+    return {
+        "individual_id": None,
+        "source_site": extracted[
+            "source_site"
+        ],
+        "source_url": (
+            extracted["source_url"]
+            or ""
+        ),
+        "source_listing_id": extracted[
+            "source_listing_id"
+        ],
+        "observed_at": extracted[
+            "observed_at"
+        ],
+        "listing_date": extracted[
+            "listing_date"
+        ],
+        "title": extracted[
+            "listing_title"
+        ],
+        "raw_text": extracted[
+            "raw_text"
+        ],
+        "serial_confidence": extracted[
+            "serial_confidence"
+        ],
+        "extraction_version": extracted[
+            "extraction_version"
+        ],
+        "image_url": extracted[
+            "image_url"
+        ],
+        "event_type": "listing",
+        "created_at": extracted[
+            "created_at"
+        ],
+        "vintage_status": extracted[
+            "classification"
+        ]["status"],
+        "vintage_reason": extracted[
+            "classification"
+        ]["reason"],
+        "estimated_year": extracted[
+            "classification"
+        ]["estimated_year"],
+    }
+
+
 def to_observation(
     item: dict,
     serial_threshold: float = 0.70,
