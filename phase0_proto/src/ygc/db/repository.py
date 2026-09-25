@@ -71,6 +71,9 @@ class Repository:
                 "display_order": "INTEGER",
             },
             "observations": {
+                "event_type": "TEXT NOT NULL DEFAULT 'listing'",
+                "actor_user_id": "INTEGER",
+                "occurred_at": "TEXT",
                 "finish": "TEXT",
                 "year": "TEXT",
                 "image_url": "TEXT",
@@ -1148,6 +1151,349 @@ class Repository:
                 cur.rowcount
                 > 0
             )
+
+
+    def create_owner_change_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        acquired_at: str | None = None,
+        previous_owner_text: str | None = None,
+        body: str | None = None,
+    ) -> tuple[int, int]:
+        now = utcnow()
+
+        with self.connect() as con:
+            user = con.execute(
+                "SELECT * FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                "SELECT * FROM individuals WHERE id = ?",
+                (individual_id,),
+            ).fetchone()
+
+            if not user or not individual:
+                raise ValueError(
+                    "User or Individual not found"
+                )
+
+            event_title = "Owner Change"
+            details = []
+            if previous_owner_text:
+                details.append(
+                    f"Previous owner: {previous_owner_text.strip()}"
+                )
+            if body:
+                details.append(body.strip())
+            raw_text = "\n".join(
+                value
+                for value in details
+                if value
+            ) or None
+
+            cur = con.execute(
+                """
+                INSERT INTO observations (
+                    individual_id,
+                    manufacturer,
+                    model,
+                    finish,
+                    year,
+                    serial_number,
+                    owner_name,
+                    owner_type,
+                    event_type,
+                    actor_user_id,
+                    occurred_at,
+                    source_site,
+                    source_url,
+                    observed_at,
+                    title,
+                    raw_text,
+                    created_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, 'user',
+                    'owner_change', ?, ?,
+                    'user', ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    individual["manufacturer"],
+                    individual["model"],
+                    individual["finish"],
+                    individual["year"],
+                    individual["serial_number"],
+                    user["display_name"],
+                    user_id,
+                    acquired_at,
+                    f"user://{user_id}",
+                    now,
+                    event_title,
+                    raw_text,
+                    now,
+                ),
+            )
+            observation_id = int(
+                cur.lastrowid
+            )
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, 'owner_change',
+                    'owner_user_id', ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    observation_id,
+                    user_id,
+                    str(user_id),
+                    raw_text,
+                    acquired_at,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(
+                cur.lastrowid
+            )
+
+            next_order = int(
+                con.execute(
+                    """
+                    SELECT COALESCE(
+                        MAX(display_order),
+                        -1
+                    ) + 1
+                    FROM user_guitars
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchone()[0]
+            )
+
+            con.execute(
+                """
+                INSERT INTO user_guitars (
+                    user_id,
+                    individual_id,
+                    ownership_status,
+                    display_order,
+                    acquired_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
+                ON CONFLICT(
+                    user_id,
+                    individual_id
+                )
+                DO UPDATE SET
+                    ownership_status = 'current_owner',
+                    acquired_at = COALESCE(
+                        excluded.acquired_at,
+                        user_guitars.acquired_at
+                    ),
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    user_id,
+                    individual_id,
+                    next_order,
+                    acquired_at,
+                    now,
+                    now,
+                ),
+            )
+
+            return (
+                observation_id,
+                claim_id,
+            )
+
+    def list_claims(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        c.*,
+                        u.display_name
+                            AS author_name,
+                        COALESCE(v.good_count, 0)
+                            AS good_count,
+                        COALESCE(v.bad_count, 0)
+                            AS bad_count
+                    FROM claims c
+                    INNER JOIN users u
+                      ON u.id = c.author_user_id
+                    LEFT JOIN (
+                        SELECT
+                            claim_id,
+                            SUM(
+                                CASE
+                                    WHEN vote = 'good'
+                                    THEN 1
+                                    ELSE 0
+                                END
+                            ) AS good_count,
+                            SUM(
+                                CASE
+                                    WHEN vote = 'bad'
+                                    THEN 1
+                                    ELSE 0
+                                END
+                            ) AS bad_count
+                        FROM claim_votes
+                        GROUP BY claim_id
+                    ) v
+                      ON v.claim_id = c.id
+                    WHERE c.individual_id = ?
+                    ORDER BY
+                        COALESCE(
+                            c.occurred_at,
+                            c.created_at
+                        ),
+                        c.id
+                    """,
+                    (individual_id,),
+                )
+            )
+
+    def set_claim_response(
+        self,
+        claim_id: int,
+        responder_user_id: int,
+        stance: str,
+    ) -> bool:
+        normalized = stance.strip().lower()
+        if normalized not in (
+            "endorse",
+            "dispute",
+            "neutral",
+        ):
+            raise ValueError(
+                "stance must be endorse, dispute, or neutral"
+            )
+
+        now = utcnow()
+        with self.connect() as con:
+            if not con.execute(
+                "SELECT 1 FROM claims WHERE id = ?",
+                (claim_id,),
+            ).fetchone():
+                return False
+            if not con.execute(
+                "SELECT 1 FROM users WHERE id = ?",
+                (responder_user_id,),
+            ).fetchone():
+                return False
+
+            con.execute(
+                """
+                INSERT INTO claim_responses (
+                    claim_id,
+                    responder_user_id,
+                    stance,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(
+                    claim_id,
+                    responder_user_id
+                )
+                DO UPDATE SET
+                    stance = excluded.stance,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    claim_id,
+                    responder_user_id,
+                    normalized,
+                    now,
+                    now,
+                ),
+            )
+            return True
+
+    def set_claim_vote(
+        self,
+        claim_id: int,
+        user_id: int,
+        vote: str,
+    ) -> bool:
+        normalized = vote.strip().lower()
+        if normalized not in (
+            "good",
+            "bad",
+        ):
+            raise ValueError(
+                "vote must be good or bad"
+            )
+
+        now = utcnow()
+        with self.connect() as con:
+            if not con.execute(
+                "SELECT 1 FROM claims WHERE id = ?",
+                (claim_id,),
+            ).fetchone():
+                return False
+            if not con.execute(
+                "SELECT 1 FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone():
+                return False
+
+            con.execute(
+                """
+                INSERT INTO claim_votes (
+                    claim_id,
+                    user_id,
+                    vote,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(
+                    claim_id,
+                    user_id
+                )
+                DO UPDATE SET
+                    vote = excluded.vote,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    claim_id,
+                    user_id,
+                    normalized,
+                    now,
+                    now,
+                ),
+            )
+            return True
 
 
     def start_run(
