@@ -53,7 +53,10 @@ class Repository:
             self._backfill_listing_claims(
                 con
             )
-            self._backfill_individual_locations_from_listing_claims(
+            self._backfill_listing_claim_items(
+                con
+            )
+            self._sync_individual_locations_from_listing_claims(
                 con
             )
 
@@ -306,40 +309,123 @@ class Repository:
                 ),
             )
 
-    def _backfill_individual_locations_from_listing_claims(
+    def _backfill_listing_claim_items(
         self,
         con: sqlite3.Connection,
     ) -> None:
+        """
+        One-time compatibility migration.
+
+        Older Listing Claims kept their structured values only on the
+        attached Observation. Copy those values into the Claim-owned
+        structured item table. After migration, normal reads must use
+        claim_listing_items rather than Observation metadata.
+        """
+        rows = list(
+            con.execute(
+                """
+                SELECT
+                    c.id AS claim_id,
+                    c.created_at,
+                    o.manufacturer,
+                    o.model,
+                    o.finish,
+                    o.year,
+                    o.serial_number,
+                    COALESCE(
+                        owner_user.display_name,
+                        o.owner_name
+                    ) AS owner_name,
+                    o.location_country,
+                    o.location_region
+                FROM claims c
+                INNER JOIN observations o
+                  ON o.id = c.observation_id
+                LEFT JOIN users owner_user
+                  ON owner_user.id = o.actor_user_id
+                 AND o.owner_type = 'user'
+                WHERE c.claim_type = 'listing'
+                ORDER BY c.id
+                """
+            )
+        )
+
+        fields = (
+            "manufacturer",
+            "model",
+            "finish",
+            "year",
+            "serial_number",
+            "owner_name",
+            "location_country",
+            "location_region",
+        )
+
+        for row in rows:
+            for field_name in fields:
+                value = row[field_name]
+                if value is None:
+                    continue
+                value_text = str(value).strip()
+                if not value_text:
+                    continue
+                con.execute(
+                    """
+                    INSERT OR IGNORE INTO claim_listing_items (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        row["claim_id"],
+                        field_name,
+                        value_text,
+                        row["created_at"],
+                    ),
+                )
+
+    def _sync_individual_locations_from_listing_claims(
+        self,
+        con: sqlite3.Connection,
+    ) -> None:
+        """
+        Individual Location is initialized from the earliest active
+        Listing Claim that explicitly defines Location. Observation is
+        not consulted here.
+        """
         rows = list(
             con.execute(
                 """
                 SELECT
                     i.id AS individual_id,
                     (
-                        SELECT o.location_country
+                        SELECT li.value_text
                         FROM claims c
-                        INNER JOIN observations o
-                          ON o.id = c.observation_id
+                        INNER JOIN claim_listing_items li
+                          ON li.claim_id = c.id
                         WHERE c.individual_id = i.id
                           AND c.claim_type = 'listing'
                           AND c.status = 'active'
-                          AND o.location_country IS NOT NULL
-                          AND TRIM(o.location_country) <> ''
+                          AND li.field_name = 'location_country'
+                          AND TRIM(li.value_text) <> ''
                         ORDER BY
                             COALESCE(c.occurred_at, c.created_at) ASC,
                             c.id ASC
                         LIMIT 1
                     ) AS location_country,
                     (
-                        SELECT o.location_region
+                        SELECT li.value_text
                         FROM claims c
-                        INNER JOIN observations o
-                          ON o.id = c.observation_id
+                        INNER JOIN claim_listing_items li
+                          ON li.claim_id = c.id
                         WHERE c.individual_id = i.id
                           AND c.claim_type = 'listing'
                           AND c.status = 'active'
-                          AND o.location_region IS NOT NULL
-                          AND TRIM(o.location_region) <> ''
+                          AND li.field_name = 'location_region'
+                          AND TRIM(li.value_text) <> ''
                         ORDER BY
                             COALESCE(c.occurred_at, c.created_at) ASC,
                             c.id ASC
@@ -350,18 +436,13 @@ class Repository:
                 """
             )
         )
+
         for row in rows:
             con.execute(
                 """
                 UPDATE individuals
-                SET location_country = COALESCE(
-                        NULLIF(location_country, ''),
-                        NULLIF(?, '')
-                    ),
-                    location_region = COALESCE(
-                        NULLIF(location_region, ''),
-                        NULLIF(?, '')
-                    )
+                SET location_country = ?,
+                    location_region = ?
                 WHERE id = ?
                 """,
                 (
@@ -736,41 +817,9 @@ class Repository:
                                 ) DESC,
                                 id DESC
                             LIMIT 1
-                        ) AS year,
-                        (
-                            SELECT o.location_country
-                            FROM claims c
-                            INNER JOIN observations o
-                              ON o.id = c.observation_id
-                            WHERE c.individual_id = ?
-                              AND c.claim_type = 'listing'
-                              AND c.status = 'active'
-                              AND o.location_country IS NOT NULL
-                              AND TRIM(o.location_country) <> ''
-                            ORDER BY
-                                COALESCE(c.occurred_at, c.created_at) ASC,
-                                c.id ASC
-                            LIMIT 1
-                        ) AS location_country,
-                        (
-                            SELECT o.location_region
-                            FROM claims c
-                            INNER JOIN observations o
-                              ON o.id = c.observation_id
-                            WHERE c.individual_id = ?
-                              AND c.claim_type = 'listing'
-                              AND c.status = 'active'
-                              AND o.location_region IS NOT NULL
-                              AND TRIM(o.location_region) <> ''
-                            ORDER BY
-                                COALESCE(c.occurred_at, c.created_at) ASC,
-                                c.id ASC
-                            LIMIT 1
-                        ) AS location_region
+                        ) AS year
                     """,
                     (
-                        individual_id,
-                        individual_id,
                         individual_id,
                         individual_id,
                         individual_id,
@@ -792,14 +841,6 @@ class Repository:
                             NULLIF(?, ''),
                             year
                         ),
-                        location_country = COALESCE(
-                            NULLIF(location_country, ''),
-                            NULLIF(?, '')
-                        ),
-                        location_region = COALESCE(
-                            NULLIF(location_region, ''),
-                            NULLIF(?, '')
-                        ),
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -807,8 +848,6 @@ class Repository:
                         source["model"],
                         source["finish"],
                         source["year"],
-                        source["location_country"],
-                        source["location_region"],
                         utcnow(),
                         individual_id,
                     ),
