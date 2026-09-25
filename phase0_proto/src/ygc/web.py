@@ -3211,7 +3211,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : claimTypeLabel(c.claim_type);
+    : (c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='owner_change'){
@@ -3530,7 +3530,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <div class="modal-backdrop" id="releaseClaimModal" onclick="closeReleaseClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Release Claim</h2>
+    <h2>Release</h2>
     <div class="sub" id="releaseClaimGuitar" style="margin-bottom:14px"></div>
     <div class="form-row">
       <label class="form-label" for="releaseClaimReason">Reason for release（任意）</label>
@@ -4024,7 +4024,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : claimTypeLabel(c.claim_type);
+    : (c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='owner_change'){
@@ -4189,7 +4189,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'release\')">Release Claim</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'release\')">Release</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -4279,7 +4279,7 @@ async function submitReleaseClaim(){
     renderAccount();
     await showIndividual(selectedIndividualId);
   }catch(e){
-    alert('Release Claimの登録に失敗しました。\n'+e.message);
+    alert('Releaseの登録に失敗しました。\n'+e.message);
   }finally{
     button.disabled=false;
   }
