@@ -4513,6 +4513,104 @@ class Repository:
             return True
 
 
+    def delete_claim(
+        self,
+        claim_id: int,
+    ) -> dict[str, Any] | None:
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT id, individual_id, claim_type, status
+                FROM claims
+                WHERE id = ?
+                """,
+                (claim_id,),
+            ).fetchone()
+            if not claim:
+                return None
+
+            individual_id = int(
+                claim["individual_id"]
+            )
+
+            if (
+                claim["claim_type"] == "listing"
+                and claim["status"] == "active"
+            ):
+                other_listing = con.execute(
+                    """
+                    SELECT 1
+                    FROM claims
+                    WHERE individual_id = ?
+                      AND claim_type = 'listing'
+                      AND status = 'active'
+                      AND id <> ?
+                    LIMIT 1
+                    """,
+                    (
+                        individual_id,
+                        claim_id,
+                    ),
+                ).fetchone()
+                if not other_listing:
+                    raise ValueError(
+                        "The last active Listing Claim cannot be deleted. "
+                        "Delete the Individual instead."
+                    )
+
+            con.execute(
+                "DELETE FROM claims WHERE id = ?",
+                (claim_id,),
+            )
+            snapshot = (
+                self._rebuild_individual_snapshot_in_connection(
+                    con,
+                    individual_id,
+                )
+            )
+
+            return {
+                "claim_id": claim_id,
+                "individual_id": individual_id,
+                "snapshot": snapshot,
+            }
+
+    def delete_individual(
+        self,
+        individual_id: int,
+    ) -> bool:
+        with self.connect() as con:
+            exists = con.execute(
+                """
+                SELECT 1
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+            if not exists:
+                return False
+
+            # observations.individual_id does not cascade. Delete provenance
+            # rows first; linked claims are detached automatically via
+            # ON DELETE SET NULL, then removed with the Individual cascade.
+            con.execute(
+                """
+                DELETE FROM observations
+                WHERE individual_id = ?
+                """,
+                (individual_id,),
+            )
+            con.execute(
+                """
+                DELETE FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            )
+            return True
+
+
     def start_run(
         self,
         source_site: str,
