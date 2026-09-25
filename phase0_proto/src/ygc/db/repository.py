@@ -4611,6 +4611,84 @@ class Repository:
             return True
 
 
+    def cache_listing_rejection(
+        self,
+        source_site: str,
+        source_listing_id: str,
+        status: str,
+        *,
+        recheck_after: str,
+    ) -> None:
+        now = utcnow()
+        with self.connect() as con:
+            con.execute(
+                """
+                INSERT INTO crawl_listing_cache (
+                    source_site,
+                    source_listing_id,
+                    status,
+                    checked_at,
+                    recheck_after
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(source_site, source_listing_id)
+                DO UPDATE SET
+                    status = excluded.status,
+                    checked_at = excluded.checked_at,
+                    recheck_after = excluded.recheck_after
+                """,
+                (
+                    source_site,
+                    source_listing_id,
+                    status,
+                    now,
+                    recheck_after,
+                ),
+            )
+
+    def active_cached_listing_ids(
+        self,
+        source_site: str,
+        listing_ids: list[str],
+        *,
+        now: str | None = None,
+    ) -> set[str]:
+        ids = [
+            str(value)
+            for value in listing_ids
+            if value
+        ]
+        if not ids:
+            return set()
+
+        current = now or utcnow()
+        result: set[str] = set()
+        with self.connect() as con:
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                placeholders = ",".join(
+                    "?" for _ in chunk
+                )
+                rows = con.execute(
+                    """
+                    SELECT source_listing_id
+                    FROM crawl_listing_cache
+                    WHERE source_site = ?
+                      AND recheck_after > ?
+                      AND source_listing_id IN (""" + placeholders + ")",
+                    [
+                        source_site,
+                        current,
+                        *chunk,
+                    ],
+                )
+                result.update(
+                    str(row["source_listing_id"])
+                    for row in rows
+                )
+        return result
+
+
     def start_run(
         self,
         source_site: str,
