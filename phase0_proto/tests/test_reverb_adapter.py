@@ -1,6 +1,8 @@
 from ygc.reverb_adapter import (
     classify_vintage_listing,
+    to_listing_claim_data,
     to_observation,
+    to_provenance_observation,
 )
 
 
@@ -338,3 +340,80 @@ def test_description_year_does_not_create_vintage():
         result["status"]
         == "unknown"
     )
+
+
+def test_claim_and_provenance_adapters_are_separated():
+    item = {
+        "id": 456,
+        "make": "Fender",
+        "model": "Telecaster",
+        "finish": "Blonde",
+        "year": "1968",
+        "title": "1968 Fender Telecaster",
+        "description": "Serial number 123456.",
+        "shop": {
+            "name": "Example Shop"
+        },
+        "location": {
+            "country_code": "US",
+            "region": "CA",
+        },
+        "_links": {
+            "web": {
+                "href": "https://reverb.example/item/456"
+            }
+        },
+        "published_at": "2026-09-20T00:00:00Z",
+    }
+
+    claim = to_listing_claim_data(
+        item
+    )
+    provenance = to_provenance_observation(
+        item
+    )
+
+    assert claim["manufacturer"] == "Fender"
+    assert claim["model"] == "Telecaster"
+    assert claim["finish"] == "Blonde"
+    assert claim["year"] == "1968"
+    assert claim["serial_number"] == "123456"
+    assert claim["owner_name"] == "Example Shop"
+    assert claim["owner_type"] == "shop"
+    assert claim["location_country"] == "US"
+    assert claim["location_region"] == "CA"
+    assert claim["source_listing_id"] == "456"
+    assert claim["vintage_status"] == "vintage"
+
+    assert provenance["source_site"] == "reverb"
+    assert provenance["source_listing_id"] == "456"
+    assert provenance["source_url"] == "https://reverb.example/item/456"
+    assert provenance["event_type"] == "listing"
+
+    assert "manufacturer" not in provenance
+    assert "model" not in provenance
+    assert "finish" not in provenance
+    assert "year" not in provenance
+    assert "serial_number" not in provenance
+    assert "owner_name" not in provenance
+    assert "location_country" not in provenance
+
+
+def test_legacy_observation_adapter_still_available_during_transition():
+    item = {
+        "id": 789,
+        "make": "Gibson",
+        "model": "Les Paul",
+        "year": "1978",
+        "title": "1978 Gibson Les Paul",
+        "description": "Serial number 99999999.",
+    }
+
+    legacy = to_observation(
+        item
+    )
+
+    assert legacy["manufacturer"] == "Gibson"
+    assert legacy["model"] == "Les Paul"
+    assert legacy["year"] == "1978"
+    assert legacy["source_listing_id"] == "789"
