@@ -50,15 +50,6 @@ class Repository:
             self._migrate_metadata_columns(
                 con
             )
-            self._backfill_listing_claims(
-                con
-            )
-            self._backfill_listing_claim_items(
-                con
-            )
-            self._sync_individual_locations_from_listing_claims(
-                con
-            )
 
     @staticmethod
     def _table_columns(
@@ -214,8 +205,9 @@ class Repository:
     def _backfill_listing_claims(
         self,
         con: sqlite3.Connection,
-    ) -> None:
+    ) -> int:
         source_ids: dict[str, int] = {}
+        created = 0
 
         rows = list(
             con.execute(
@@ -309,6 +301,7 @@ class Repository:
                 ),
             )
             claim_id = int(cur.lastrowid)
+            created += 1
 
             listing_values = {
                 "manufacturer": row["manufacturer"],
@@ -352,10 +345,12 @@ class Repository:
                     ),
                 )
 
+        return created
+
     def _backfill_listing_claim_items(
         self,
         con: sqlite3.Connection,
-    ) -> None:
+    ) -> int:
         """
         One-time compatibility migration.
 
@@ -364,6 +359,7 @@ class Repository:
         structured item table. After migration, normal reads must use
         claim_listing_items rather than Observation metadata.
         """
+        inserted = 0
         rows = list(
             con.execute(
                 """
@@ -432,7 +428,7 @@ class Repository:
                 value_text = str(value).strip()
                 if not value_text:
                     continue
-                con.execute(
+                cur = con.execute(
                     """
                     INSERT OR IGNORE INTO claim_listing_items (
                         claim_id,
@@ -449,6 +445,68 @@ class Repository:
                         row["created_at"],
                     ),
                 )
+                inserted += int(
+                    cur.rowcount > 0
+                )
+
+        return inserted
+
+    def migrate_legacy_observations_to_claims(
+        self,
+    ) -> dict[str, int]:
+        """
+        Explicit compatibility migration for pre-Claim-centered databases.
+
+        This operation is intentionally separate from init_db(). It is
+        idempotent: existing Listing Claims are detected by their linked
+        Observation, and structured Listing items use a unique
+        (claim_id, field_name) key with INSERT OR IGNORE.
+        """
+        with self.connect() as con:
+            claims_created = (
+                self._backfill_listing_claims(
+                    con
+                )
+            )
+            items_created = (
+                self._backfill_listing_claim_items(
+                    con
+                )
+            )
+
+            migrated_individuals = [
+                int(row["individual_id"])
+                for row
+                in con.execute(
+                    """
+                    SELECT DISTINCT c.individual_id
+                    FROM claims c
+                    WHERE c.claim_type = 'listing'
+                      AND c.observation_id IS NOT NULL
+                    ORDER BY c.individual_id
+                    """
+                )
+            ]
+
+            snapshots_rebuilt = 0
+            for individual_id in migrated_individuals:
+                try:
+                    self._rebuild_individual_snapshot_in_connection(
+                        con,
+                        individual_id,
+                    )
+                except ValueError:
+                    # Some legacy rows may not have enough identity data
+                    # to build a valid snapshot yet. Preserve them for a
+                    # later repair/backfill rather than aborting migration.
+                    continue
+                snapshots_rebuilt += 1
+
+            return {
+                "claims_created": claims_created,
+                "listing_items_created": items_created,
+                "snapshots_rebuilt": snapshots_rebuilt,
+            }
 
     def _sync_individual_locations_from_listing_claims(
         self,
