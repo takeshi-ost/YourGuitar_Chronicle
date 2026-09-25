@@ -87,6 +87,7 @@ class Repository:
             },
             "claims": {
                 "specification_kind": "TEXT",
+                "target_claim_id": "INTEGER",
             },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
@@ -2451,6 +2452,14 @@ class Repository:
                 raise ValueError(
                     "Specification Claims use the dedicated editor"
                 )
+            if claim["claim_type"] == "listing":
+                raise ValueError(
+                    "Listing Claims cannot be edited directly"
+                )
+            if claim["claim_type"] == "identity_correction":
+                raise ValueError(
+                    "Identity Correction Claims cannot be edited directly"
+                )
 
             con.execute(
                 """
@@ -2548,6 +2557,275 @@ class Repository:
                 )
 
             return True
+
+
+    def create_identity_correction(
+        self,
+        user_id: int,
+        listing_claim_id: int,
+        *,
+        manufacturer: str,
+        model: str | None,
+        year: str | None,
+        serial_number: str,
+        reason: str | None = None,
+    ) -> int:
+        maker = manufacturer.strip()
+        model_value = (
+            model.strip()
+            if model and model.strip()
+            else None
+        )
+        year_value = (
+            year.strip()
+            if year and year.strip()
+            else None
+        )
+        serial = serial_number.strip()
+        note = (
+            reason.strip()
+            if reason and reason.strip()
+            else None
+        )
+
+        normalized_maker = normalize_manufacturer(
+            maker
+        )
+        normalized_model = normalize_model(
+            model_value
+        )
+        normalized_serial = normalize_serial(
+            serial
+        )
+
+        if (
+            not normalized_maker
+            or not normalized_serial
+        ):
+            raise ValueError(
+                "Maker and Serial are required"
+            )
+
+        now = utcnow()
+
+        with self.connect() as con:
+            listing_claim = con.execute(
+                """
+                SELECT *
+                FROM claims
+                WHERE id = ?
+                  AND claim_type = 'listing'
+                  AND status = 'active'
+                """,
+                (listing_claim_id,),
+            ).fetchone()
+
+            if not listing_claim:
+                raise ValueError(
+                    "Listing Claim not found"
+                )
+
+            if int(
+                listing_claim["author_user_id"]
+            ) != int(user_id):
+                raise ValueError(
+                    "Only the Listing Claim author can create its Identity Correction"
+                )
+
+            individual = con.execute(
+                """
+                SELECT *
+                FROM individuals
+                WHERE id = ?
+                """,
+                (
+                    listing_claim[
+                        "individual_id"
+                    ],
+                ),
+            ).fetchone()
+            if not individual:
+                raise ValueError(
+                    "Individual not found"
+                )
+
+            duplicate = con.execute(
+                """
+                SELECT id
+                FROM individuals
+                WHERE id <> ?
+                  AND normalized_manufacturer = ?
+                  AND COALESCE(
+                        normalized_model,
+                        ''
+                      ) = COALESCE(?, '')
+                  AND normalized_serial = ?
+                ORDER BY id
+                LIMIT 1
+                """,
+                (
+                    individual["id"],
+                    normalized_maker,
+                    normalized_model,
+                    normalized_serial,
+                ),
+            ).fetchone()
+            if duplicate:
+                raise ValueError(
+                    "Identity Correction would duplicate "
+                    f"Individual #{duplicate['id']}. "
+                    "Consider merging the Individuals instead."
+                )
+
+            values = {
+                "manufacturer": maker,
+                "model": model_value,
+                "year": year_value,
+                "serial_number": serial,
+            }
+            changes: list[
+                tuple[str, str | None, str | None]
+            ] = []
+            for field, new_value in values.items():
+                old_value = individual[field]
+                if (
+                    (old_value or None)
+                    != (new_value or None)
+                ):
+                    changes.append(
+                        (
+                            field,
+                            old_value,
+                            new_value,
+                        )
+                    )
+
+            if not changes:
+                raise ValueError(
+                    "No identity fields were changed"
+                )
+
+            correction_date = (
+                listing_claim["occurred_at"]
+                or listing_claim["created_at"]
+            )
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    target_claim_id,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, NULL, ?, 'identity_correction',
+                    NULL, NULL, ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual["id"],
+                    user_id,
+                    note,
+                    listing_claim_id,
+                    correction_date,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(
+                cur.lastrowid
+            )
+
+            con.executemany(
+                """
+                INSERT INTO claim_identity_items (
+                    claim_id,
+                    field_name,
+                    old_value,
+                    new_value,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        claim_id,
+                        field,
+                        old_value,
+                        new_value,
+                        now,
+                    )
+                    for (
+                        field,
+                        old_value,
+                        new_value,
+                    ) in changes
+                ],
+            )
+
+            con.execute(
+                """
+                UPDATE individuals
+                SET manufacturer = ?,
+                    model = ?,
+                    year = ?,
+                    serial_number = ?,
+                    normalized_manufacturer = ?,
+                    normalized_model = ?,
+                    normalized_serial = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    maker,
+                    model_value,
+                    year_value,
+                    serial,
+                    normalized_maker,
+                    normalized_model,
+                    normalized_serial,
+                    now,
+                    individual["id"],
+                ),
+            )
+
+            return claim_id
+
+    def list_identity_correction_items(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        ii.*,
+                        c.individual_id,
+                        c.target_claim_id
+                    FROM claim_identity_items ii
+                    INNER JOIN claims c
+                      ON c.id = ii.claim_id
+                    WHERE c.individual_id = ?
+                      AND c.claim_type = 'identity_correction'
+                      AND c.status = 'active'
+                    ORDER BY
+                        ii.claim_id,
+                        ii.id
+                    """,
+                    (individual_id,),
+                )
+            )
 
 
     def list_specification_items(
