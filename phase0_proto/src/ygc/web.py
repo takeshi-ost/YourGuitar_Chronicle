@@ -345,6 +345,26 @@ class UserGuitarOrderRequest(BaseModel):
     )
 
 
+class SpecificationClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    field_name: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+    value_text: str = Field(
+        min_length=1,
+        max_length=500,
+    )
+    occurred_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 class OwnerChangeClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     acquired_at: str | None = Field(
@@ -1796,6 +1816,48 @@ def api_media(
             or "application/octet-stream"
         ),
     )
+
+
+@app.post("/api/individuals/{individual_id}/specification-claim")
+def api_specification_claim(
+    individual_id: int,
+    request: SpecificationClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        claim_id = (
+            repository.create_specification_claim(
+                request.user_id,
+                individual_id,
+                field_name=request.field_name,
+                value_text=request.value_text,
+                occurred_at=request.occurred_at,
+                body=request.body,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "claim_id": claim_id,
+    }
+
+
+@app.get("/api/individuals/{individual_id}/current-specifications")
+def api_current_specifications(
+    individual_id: int,
+) -> list[dict[str, Any]]:
+    return [
+        _row_dict(row)
+        for row
+        in repo().list_current_specifications(
+            individual_id
+        )
+    ]
 
 
 @app.post("/api/individuals/{individual_id}/owner-change-claim")
@@ -3268,6 +3330,55 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
+<div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Add Specification Claim</h2>
+    <div class="sub" id="specClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="specClaimField">Specification Item *</label>
+        <select id="specClaimField" onchange="toggleCustomSpecificationField()">
+          <option value="nut">Nut</option>
+          <option value="frets">Frets</option>
+          <option value="pickguard">Pickguard</option>
+          <option value="potentiometers">Potentiometers</option>
+          <option value="wiring">Wiring</option>
+          <option value="neck">Neck</option>
+          <option value="pickups">Pickups</option>
+          <option value="bridge">Bridge</option>
+          <option value="tuners">Tuners</option>
+          <option value="body">Body</option>
+          <option value="fingerboard">Fingerboard</option>
+          <option value="finish">Finish</option>
+          <option value="weight">Weight</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </div>
+      <div class="form-row" id="specClaimCustomRow" style="display:none">
+        <label class="form-label" for="specClaimCustomField">Custom Item *</label>
+        <input id="specClaimCustomField" maxlength="120" placeholder="e.g. neck_joint">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="specClaimValue">Value *</label>
+        <input id="specClaimValue" maxlength="500" placeholder="e.g. Bone / Leveled / Original 3-ply white">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="specClaimDate">Date</label>
+        <input id="specClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="specClaimBody">Memo（任意）</label>
+        <textarea id="specClaimBody" maxlength="2000" placeholder="修理・交換・調整の内容や補足"></textarea>
+      </div>
+    </div>
+    <div class="sub">同じ項目は時系列でスタックされ、Current Specificationには最新値が表示されます。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
+      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Specification Claimを追加</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="newGuitarModal" onclick="closeNewGuitar(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>新しいギターを登録する</h2>
@@ -3656,6 +3767,25 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
 }
 
+function specificationFieldLabel(value){
+  const labels={
+    nut:'Nut',
+    frets:'Frets',
+    pickguard:'Pickguard',
+    potentiometers:'Potentiometers',
+    wiring:'Wiring',
+    neck:'Neck',
+    pickups:'Pickups',
+    bridge:'Bridge',
+    tuners:'Tuners',
+    body:'Body',
+    fingerboard:'Fingerboard',
+    finish:'Finish',
+    weight:'Weight'
+  };
+  const key=String(value||'').trim();
+  return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase());
+}
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
@@ -3696,6 +3826,9 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='specification'){
+    body='<div><strong>'+esc(specificationFieldLabel(c.field_name))+': '+esc(c.value_text||'')+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -3792,9 +3925,10 @@ async function voteClaim(claimId,vote){
 
 async function showIndividual(id){
   selectedIndividualId=Number(id);
-  const [d,claims]=await Promise.all([
+  const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
-    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):''))
+    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
+    jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
   const i=d.individual;
   const observations=d.observations||[];
@@ -3817,9 +3951,76 @@ async function showIndividual(id){
     '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
     '</div>'+ownershipControlsHtml(i.id)+'</div>';
+  const specRows=(currentSpecifications||[]).map(s=>
+    '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
+  ).join('');
+  out+='<div class="chronicle-toolbar"><strong>Current Specification</strong><button onclick="openSpecificationClaim('+i.id+')">Add Specification</button></div>'+
+    (specRows?'<div class="detail-meta-grid">'+specRows+'</div>':'<div class="sub">Specification Claimはまだありません。</div>');
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
+}
+
+function openSpecificationClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('specClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('specClaimField').value='nut';
+  document.getElementById('specClaimCustomField').value='';
+  document.getElementById('specClaimCustomRow').style.display='none';
+  document.getElementById('specClaimValue').value='';
+  document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('specClaimBody').value='';
+  document.getElementById('specClaimModal').classList.add('open');
+  document.getElementById('specClaimValue').focus();
+}
+function closeSpecificationClaim(event){
+  if(event&&event.target&&event.target.id!=='specClaimModal')return;
+  document.getElementById('specClaimModal').classList.remove('open');
+}
+function toggleCustomSpecificationField(){
+  const custom=document.getElementById('specClaimField').value==='custom';
+  document.getElementById('specClaimCustomRow').style.display=custom?'block':'none';
+  if(custom)document.getElementById('specClaimCustomField').focus();
+}
+async function submitSpecificationClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const selected=document.getElementById('specClaimField').value;
+  const fieldName=(selected==='custom'
+    ? document.getElementById('specClaimCustomField').value.trim()
+    : selected);
+  const valueText=document.getElementById('specClaimValue').value.trim();
+  if(!fieldName||!valueText){
+    alert('Specification Item と Value は必須です。');
+    return;
+  }
+  const button=document.getElementById('specClaimSubmit');
+  button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+selectedIndividualId+'/specification-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        field_name:fieldName,
+        value_text:valueText,
+        occurred_at:document.getElementById('specClaimDate').value||null,
+        body:document.getElementById('specClaimBody').value.trim()||null
+      })
+    });
+    closeSpecificationClaim();
+    await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Specification Claimの登録に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
 }
 
 async function linkOwnedGuitar(individualId){
