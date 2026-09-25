@@ -3007,7 +3007,7 @@ async function runClaimMigration(){
     await refreshStatus();
     await loadIndividuals();
     const r=d.rebuild||{};
-    alert('Claim Migration / Snapshot Rebuild完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No'));
+    alert('Claim Migration / Snapshot Rebuild完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nReverb Listing ClaimのLocation等が不足しています。続けて「既存DBバックフィル（今回のみ）」を実行してください。':''));
   }catch(e){
     alert('Claim Migrationに失敗しました。\n'+e.message);
   }
