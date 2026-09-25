@@ -176,6 +176,17 @@ CREATE TABLE IF NOT EXISTS claim_evidence (
  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id) ON DELETE CASCADE,
  UNIQUE(claim_id, media_asset_id)
 );
+CREATE TABLE IF NOT EXISTS crawl_listing_cache (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ status TEXT NOT NULL,
+ checked_at TEXT NOT NULL,
+ recheck_after TEXT NOT NULL,
+ PRIMARY KEY(source_site, source_listing_id)
+);
+CREATE INDEX IF NOT EXISTS idx_crawl_listing_cache_recheck_after
+ON crawl_listing_cache(source_site, recheck_after);
+
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,
