@@ -1238,7 +1238,7 @@ def api_link_user_guitar(
     }
 
 
-@app.post("/api/users/{user_id}/guitars/reorder")
+@app.post("/api/users/{user_id}/guitar-order")
 def api_reorder_user_guitars(
     user_id: int,
     request: UserGuitarOrderRequest,
@@ -2093,7 +2093,7 @@ function renderAccount(){
     return;
   }
   const u=activeUser.user;
-  const guitars=activeUser.guitars||[];
+  const guitars=(activeUser.guitars||[]).filter(g=>g.ownership_status==='current_owner');
   el.className='';
   el.innerHTML=
     '<div class="detail-meta-grid">'+
@@ -2152,7 +2152,7 @@ async function ownedDragEnd(event){
   if(!list||!activeUser||!activeUser.user)return;
   const ids=[...list.querySelectorAll('.owned-row[data-individual-id]')].map(row=>Number(row.dataset.individualId));
   try{
-    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/reorder',{
+    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitar-order',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({individual_ids:ids})
