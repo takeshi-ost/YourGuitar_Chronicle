@@ -1448,9 +1448,17 @@ def test_release_marks_former_owner_and_sets_unknown(
     assert release["body"] == (
         "Sold to another collector."
     )
-    assert release["observed_owner_name"] == (
-        "Unknown"
+    assert release["field_name"] == "owner_user_id"
+    assert release["value_text"] == "unknown"
+
+    individual, _observations = (
+        repository.get_individual(
+            individual_id
+        )
     )
+    assert individual is not None
+    assert individual["current_owner_name"] == "Unknown"
+    assert individual["current_owner_type"] == "unknown"
 
 
 def test_release_claim_requires_current_ownership(
