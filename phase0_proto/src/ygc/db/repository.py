@@ -130,6 +130,14 @@ class Repository:
 
         con.execute(
             """
+            CREATE INDEX IF NOT EXISTS
+            idx_claims_target_claim_id
+            ON claims(target_claim_id)
+            """
+        )
+
+        con.execute(
+            """
             UPDATE observations
             SET owner_name = COALESCE(
                     NULLIF(owner_name, ''),
