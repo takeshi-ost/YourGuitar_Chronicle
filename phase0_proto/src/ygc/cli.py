@@ -444,6 +444,23 @@ def crawl(
     repository = repo()
     repository.init_db()
 
+    architecture = (
+        repository
+        .claim_architecture_status()
+    )
+    if not architecture["ready"]:
+        console.print(
+            "[red]"
+            "Database is not ready for "
+            "Claim-centered crawling. "
+            "Run ygc migrate-claims and "
+            "check ygc claim-status."
+            "[/red]"
+        )
+        raise typer.Exit(
+            code=2
+        )
+
     run_id = (
         repository.start_run(
             "reverb"
