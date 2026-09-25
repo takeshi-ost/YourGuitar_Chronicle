@@ -128,6 +128,26 @@ def test_init_db_migrates_existing_metadata_columns(
         "location_source"
         in observation_columns
     )
+    assert (
+        "representative_media_asset_id"
+        in individual_columns
+    )
+
+    with repository.connect() as con:
+        tables = {
+            row["name"]
+            for row
+            in con.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                """
+            )
+        }
+
+    assert "media_assets" in tables
+    assert "claim_evidence" in tables
 
 
 def test_metadata_flows_to_individual_and_observation(
@@ -665,6 +685,7 @@ def test_new_guitar_registration_creates_initial_listing_claim(
         individual_id,
         observation_id,
         claim_id,
+        media_asset_id,
     ) = repository.create_initial_listing_claim(
         user_id,
         manufacturer="Fender",
@@ -674,11 +695,15 @@ def test_new_guitar_registration_creates_initial_listing_claim(
         serial_number="524436",
         occurred_at="2026-09-25",
         body="Initial user registration.",
+        media_storage_path="media/test.jpg",
+        media_original_filename="guitar.jpg",
+        media_mime_type="image/jpeg",
     )
 
     assert individual_id > 0
     assert observation_id > 0
     assert claim_id > 0
+    assert media_asset_id > 0
 
     individual, observations = (
         repository.get_individual(
@@ -691,6 +716,12 @@ def test_new_guitar_registration_creates_initial_listing_claim(
     )
     assert individual["serial_number"] == (
         "524436"
+    )
+    assert (
+        individual[
+            "representative_media_asset_id"
+        ]
+        == media_asset_id
     )
     assert len(observations) == 1
     assert observations[0]["event_type"] == (
@@ -721,6 +752,41 @@ def test_new_guitar_registration_creates_initial_listing_claim(
     assert claims[0]["body"] == (
         "Initial user registration."
     )
+    assert claims[0]["evidence_media_id"] == (
+        media_asset_id
+    )
+
+    media = repository.get_media_asset(
+        media_asset_id
+    )
+    assert media is not None
+    assert media["individual_id"] == (
+        individual_id
+    )
+    assert media["uploader_user_id"] == (
+        user_id
+    )
+    assert media["storage_path"] == (
+        "media/test.jpg"
+    )
+    assert media["mime_type"] == (
+        "image/jpeg"
+    )
+
+    with repository.connect() as con:
+        evidence = con.execute(
+            """
+            SELECT *
+            FROM claim_evidence
+            WHERE claim_id = ?
+              AND media_asset_id = ?
+            """,
+            (
+                claim_id,
+                media_asset_id,
+            ),
+        ).fetchone()
+    assert evidence is not None
 
     _user, guitars = repository.get_user(
         user_id
@@ -751,6 +817,7 @@ def test_new_guitar_registration_rejects_duplicate_identity(
         manufacturer="Fender",
         model="Telecaster",
         serial_number="ABC123",
+        media_storage_path="media/first.jpg",
     )
 
     try:
@@ -759,10 +826,43 @@ def test_new_guitar_registration_rejects_duplicate_identity(
             manufacturer="Fender",
             model="Telecaster",
             serial_number="ABC123",
+            media_storage_path="media/second.jpg",
         )
     except ValueError as exc:
         assert "already exists" in str(exc)
     else:
         raise AssertionError(
             "duplicate registration should fail"
+        )
+
+
+
+def test_new_guitar_registration_requires_representative_image(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+
+    try:
+        repository.create_initial_listing_claim(
+            user_id,
+            manufacturer="Fender",
+            model="Jazzmaster",
+            serial_number="IMG001",
+            media_storage_path="",
+        )
+    except ValueError as exc:
+        assert (
+            "representative image is required"
+            in str(exc)
+        )
+    else:
+        raise AssertionError(
+            "representative image should be required"
         )
