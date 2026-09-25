@@ -3190,7 +3190,7 @@ async function showIndividual(id){
     '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
   ).join('');
   if(specRows){
-    out+='<div class="chronicle-toolbar"><strong>Current Specification</strong></div><div class="detail-meta-grid">'+specRows+'</div>';
+    out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="detail-meta-grid">'+specRows+'</div>';
   }
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
@@ -3359,6 +3359,24 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
+<div class="modal-backdrop" id="addClaimModal" onclick="closeAddClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Add Claim</h2>
+    <div class="sub" id="addClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label" for="addClaimType">Claim Type</label>
+      <select id="addClaimType">
+        <option value="specification">Specification</option>
+      </select>
+    </div>
+    <div class="sub">現在追加できるClaimはSpecificationのみです。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeAddClaim()">キャンセル</button>
+      <button onclick="continueAddClaim()">次へ</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Add Specification Claim</h2>
@@ -3400,7 +3418,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <textarea id="specClaimBody" maxlength="2000" placeholder="修理・交換・調整の内容や補足"></textarea>
       </div>
     </div>
-    <div class="sub">同じ項目は時系列でスタックされ、Current Specificationには最新値が表示されます。</div>
+    <div class="sub">同じ項目は時系列でスタックされ、Specificationには最新値が表示されます。</div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
       <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Specification Claimを追加</button>
@@ -3983,11 +4001,36 @@ async function showIndividual(id){
   const specRows=(currentSpecifications||[]).map(s=>
     '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
   ).join('');
-  out+='<div class="chronicle-toolbar"><strong>Current Specification</strong><button onclick="openSpecificationClaim('+i.id+')">Add Specification</button></div>'+
+  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div>'+
     (specRows?'<div class="detail-meta-grid">'+specRows+'</div>':'<div class="sub">Specification Claimはまだありません。</div>');
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><button onclick="openAddClaim('+i.id+')">Add Claim</button><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
+}
+
+function openAddClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('addClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('addClaimType').value='specification';
+  document.getElementById('addClaimModal').classList.add('open');
+}
+function closeAddClaim(event){
+  if(event&&event.target&&event.target.id!=='addClaimModal')return;
+  document.getElementById('addClaimModal').classList.remove('open');
+}
+function continueAddClaim(){
+  const type=document.getElementById('addClaimType').value;
+  closeAddClaim();
+  if(type==='specification'){
+    openSpecificationClaim(selectedIndividualId);
+  }
 }
 
 function openSpecificationClaim(individualId){
