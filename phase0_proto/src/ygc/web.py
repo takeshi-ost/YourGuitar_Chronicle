@@ -2869,7 +2869,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
-.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;width:48px;height:48px;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
@@ -3244,7 +3244,7 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.evidence_media_id)body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+  if(c.evidence_media_id)body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span></div>';
@@ -3370,7 +3370,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
-.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;width:48px;height:48px;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
@@ -3692,7 +3692,7 @@ function claimCard(c){
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
   if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+    body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
@@ -4665,7 +4665,7 @@ function claimCard(c){
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
   if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+    body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
