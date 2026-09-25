@@ -1070,3 +1070,154 @@ def test_specification_claim_requires_field_and_value(
             raise AssertionError(
                 "field and value should be required"
             )
+
+
+
+def test_grouped_specification_repair_claim_updates_multiple_fields(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster Thinline",
+        serial_number="SPEC003",
+        media_storage_path="media/spec003.jpg",
+    )
+
+    claim_id = (
+        repository.create_specification_claim_group(
+            user_id,
+            individual_id,
+            specification_kind="repair",
+            items=[
+                {
+                    "field_name": "nut",
+                    "value_text": "Bone",
+                },
+                {
+                    "field_name": "frets",
+                    "value_text": "Leveled",
+                },
+                {
+                    "field_name": "pickguard",
+                    "value_text": "New 3-ply white",
+                },
+            ],
+            occurred_at="2025-05-01",
+            body="Repair completed.",
+        )
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    claim = next(
+        row
+        for row in claims
+        if row["id"] == claim_id
+    )
+    assert (
+        claim["specification_kind"]
+        == "repair"
+    )
+    assert claim["field_name"] is None
+    assert claim["value_text"] is None
+
+    items = repository.list_specification_items(
+        individual_id
+    )
+    claim_items = [
+        row
+        for row in items
+        if row["claim_id"] == claim_id
+    ]
+    assert [
+        (
+            row["field_name"],
+            row["value_text"],
+        )
+        for row in claim_items
+    ] == [
+        ("nut", "Bone"),
+        ("frets", "Leveled"),
+        ("pickguard", "New 3-ply white"),
+    ]
+
+    current = repository.list_current_specifications(
+        individual_id
+    )
+    by_field = {
+        row["field_name"]: row
+        for row in current
+    }
+    assert by_field["nut"]["value_text"] == "Bone"
+    assert by_field["frets"]["value_text"] == "Leveled"
+    assert (
+        by_field["pickguard"]["value_text"]
+        == "New 3-ply white"
+    )
+    assert (
+        by_field["nut"]["specification_kind"]
+        == "repair"
+    )
+
+
+def test_grouped_specification_claim_rejects_duplicate_items(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="SPEC004",
+        media_storage_path="media/spec004.jpg",
+    )
+
+    try:
+        repository.create_specification_claim_group(
+            user_id,
+            individual_id,
+            specification_kind="specification",
+            items=[
+                {
+                    "field_name": "nut",
+                    "value_text": "Bone",
+                },
+                {
+                    "field_name": "nut",
+                    "value_text": "Plastic",
+                },
+            ],
+        )
+    except ValueError as exc:
+        assert "only once" in str(exc)
+    else:
+        raise AssertionError(
+            "duplicate items should be rejected"
+        )
