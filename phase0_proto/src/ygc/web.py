@@ -342,37 +342,6 @@ class UserGuitarOrderRequest(BaseModel):
     )
 
 
-class InitialListingClaimRequest(BaseModel):
-    manufacturer: str = Field(
-        min_length=1,
-        max_length=120,
-    )
-    model: str | None = Field(
-        default=None,
-        max_length=160,
-    )
-    finish: str | None = Field(
-        default=None,
-        max_length=160,
-    )
-    year: str | None = Field(
-        default=None,
-        max_length=40,
-    )
-    serial_number: str = Field(
-        min_length=1,
-        max_length=160,
-    )
-    occurred_at: str | None = Field(
-        default=None,
-        max_length=40,
-    )
-    body: str | None = Field(
-        default=None,
-        max_length=2000,
-    )
-
-
 class OwnerChangeClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     acquired_at: str | None = Field(
