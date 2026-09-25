@@ -2084,6 +2084,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
 .observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
+.chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.chronicle-toolbar select{width:auto;min-width:130px}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.claim-event-date{font-size:12px;color:var(--muted)}
+.claim-body{font-size:13px;line-height:1.55}
+.claim-memo{margin-top:8px;white-space:pre-wrap}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
@@ -2164,6 +2173,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 let individuals=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let currentObservations=[];
+let currentClaims=[];
+let chronicleSort='event';
 let pendingOwnerClaimIndividualId=null;
 let individualSortKey='id';
 let individualSortDirection=1;
@@ -2283,14 +2295,92 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
 
+function claimTypeLabel(value){
+  return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
+}
+function displayEventDate(value){
+  if(!value)return '日付不明';
+  const text=String(value);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;
+  const d=new Date(text);
+  return Number.isNaN(d.getTime())?text:d.toLocaleString('ja-JP');
+}
+function displayInputDate(value){
+  if(!value)return '入力日時不明';
+  const d=new Date(String(value));
+  return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
+}
+function claimCard(c){
+  const type=claimTypeLabel(c.claim_type);
+  const eventDate=displayEventDate(c.occurred_at);
+  let body='';
+  if(c.claim_type==='owner_change'){
+    body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else{
+    if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }
+  return '<div class="claim-card">'+
+    '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
+    '<div class="claim-body">'+body+'</div>'+
+    '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '</div>';
+}
+function chronologyValue(o,mode){
+  if(mode==='input')return String(o.created_at||o.observed_at||'');
+  return String(o.occurred_at||o.listing_date||o.observed_at||o.created_at||'');
+}
+function renderChronicle(){
+  const observations=currentObservations.slice().sort((a,b)=>{
+    const av=chronologyValue(a,chronicleSort);
+    const bv=chronologyValue(b,chronicleSort);
+    if(av<bv)return -1;
+    if(av>bv)return 1;
+    return Number(a.id)-Number(b.id);
+  });
+  const claimsByObservation=new Map();
+  const orphanClaims=[];
+  for(const claim of currentClaims){
+    if(claim.observation_id===null||claim.observation_id===undefined){
+      orphanClaims.push(claim);
+      continue;
+    }
+    const key=Number(claim.observation_id);
+    if(!claimsByObservation.has(key))claimsByObservation.set(key,[]);
+    claimsByObservation.get(key).push(claim);
+  }
+  let html='';
+  for(const o of observations){
+    html+=observationCard(o,false);
+    const attached=claimsByObservation.get(Number(o.id))||[];
+    attached.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    html+=attached.map(claimCard).join('');
+  }
+  if(orphanClaims.length){
+    orphanClaims.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    html+=orphanClaims.map(claimCard).join('');
+  }
+  const el=document.getElementById('chronicleEntries');
+  if(el)el.innerHTML=html||'<div class="sub">Chronicleはまだありません。</div>';
+}
+function setChronicleSort(value){
+  chronicleSort=value==='input'?'input':'event';
+  renderChronicle();
+}
+
 async function showIndividual(id){
   selectedIndividualId=Number(id);
-  renderIndividuals();
-  const d=await jfetch('/api/individuals/'+id);
+  if(typeof renderIndividuals==='function')renderIndividuals();
+  const [d,claims]=await Promise.all([
+    jfetch('/api/individuals/'+id),
+    jfetch('/api/individuals/'+id+'/claims')
+  ]);
   const i=d.individual;
   const observations=d.observations||[];
-  const latestIndex=observations.length-1;
-  const latest=latestIndex>=0?observations[latestIndex]:null;
+  currentObservations=observations;
+  currentClaims=claims||[];
+  const latest=observations.length?observations[observations.length-1]:null;
   let out='';
   if(latest&&latest.image_url){
     const latestUrl=String(latest.source_url||'');
@@ -2304,10 +2394,9 @@ async function showIndividual(id){
     '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
     '</div>'+ownershipControlsHtml(i.id)+'</div>';
-  if(latest)out+='<div class="detail-section">最新Observation</div>'+observationCard(latest,true);
-  const history=observations.slice(0,Math.max(0,latestIndex)).reverse();
-  if(history.length)out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('');
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
+  renderChronicle();
 }
 
 function openOwnerClaim(individualId){
@@ -2413,6 +2502,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
 .observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
+.chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.chronicle-toolbar select{width:auto;min-width:130px}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.claim-event-date{font-size:12px;color:var(--muted)}
+.claim-body{font-size:13px;line-height:1.55}
+.claim-memo{margin-top:8px;white-space:pre-wrap}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
@@ -2466,6 +2564,9 @@ let individuals=[];
 let users=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let currentObservations=[];
+let currentClaims=[];
+let chronicleSort='event';
 let individualSortKey='id';
 let individualSortDirection=1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
@@ -2741,6 +2842,80 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
 }
 
+function claimTypeLabel(value){
+  return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
+}
+function displayEventDate(value){
+  if(!value)return '日付不明';
+  const text=String(value);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;
+  const d=new Date(text);
+  return Number.isNaN(d.getTime())?text:d.toLocaleString('ja-JP');
+}
+function displayInputDate(value){
+  if(!value)return '入力日時不明';
+  const d=new Date(String(value));
+  return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
+}
+function claimCard(c){
+  const type=claimTypeLabel(c.claim_type);
+  const eventDate=displayEventDate(c.occurred_at);
+  let body='';
+  if(c.claim_type==='owner_change'){
+    body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else{
+    if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }
+  return '<div class="claim-card">'+
+    '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
+    '<div class="claim-body">'+body+'</div>'+
+    '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '</div>';
+}
+function chronologyValue(o,mode){
+  if(mode==='input')return String(o.created_at||o.observed_at||'');
+  return String(o.occurred_at||o.listing_date||o.observed_at||o.created_at||'');
+}
+function renderChronicle(){
+  const observations=currentObservations.slice().sort((a,b)=>{
+    const av=chronologyValue(a,chronicleSort);
+    const bv=chronologyValue(b,chronicleSort);
+    if(av<bv)return -1;
+    if(av>bv)return 1;
+    return Number(a.id)-Number(b.id);
+  });
+  const claimsByObservation=new Map();
+  const orphanClaims=[];
+  for(const claim of currentClaims){
+    if(claim.observation_id===null||claim.observation_id===undefined){
+      orphanClaims.push(claim);
+      continue;
+    }
+    const key=Number(claim.observation_id);
+    if(!claimsByObservation.has(key))claimsByObservation.set(key,[]);
+    claimsByObservation.get(key).push(claim);
+  }
+  let html='';
+  for(const o of observations){
+    html+=observationCard(o,false);
+    const attached=claimsByObservation.get(Number(o.id))||[];
+    attached.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    html+=attached.map(claimCard).join('');
+  }
+  if(orphanClaims.length){
+    orphanClaims.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    html+=orphanClaims.map(claimCard).join('');
+  }
+  const el=document.getElementById('chronicleEntries');
+  if(el)el.innerHTML=html||'<div class="sub">Chronicleはまだありません。</div>';
+}
+function setChronicleSort(value){
+  chronicleSort=value==='input'?'input':'event';
+  renderChronicle();
+}
+
 async function showIndividual(id){
   selectedIndividualId=Number(id);
   const d=await jfetch('/api/individuals/'+id);
@@ -2761,10 +2936,9 @@ async function showIndividual(id){
     '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
     '</div>'+ownershipControlsHtml(i.id)+'</div>';
-  if(latest)out+='<div class="detail-section">最新Observation</div>'+observationCard(latest,true);
-  const history=observations.slice(0,Math.max(0,latestIndex)).reverse();
-  if(history.length)out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('');
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
+  renderChronicle();
 }
 
 async function linkOwnedGuitar(individualId){
