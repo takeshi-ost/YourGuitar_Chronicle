@@ -923,3 +923,150 @@ def test_user_owner_name_tracks_account_display_name(
     assert claims[0]["observed_owner_name"] == (
         "New Name"
     )
+
+
+
+def test_specification_claims_stack_by_field_and_date(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster Thinline",
+        serial_number="SPEC001",
+        media_storage_path="media/spec001.jpg",
+    )
+
+    first_nut = (
+        repository.create_specification_claim(
+            user_id,
+            individual_id,
+            field_name="nut",
+            value_text="Original",
+            occurred_at="1976-01-01",
+            body="Factory state.",
+        )
+    )
+    fret_claim = (
+        repository.create_specification_claim(
+            user_id,
+            individual_id,
+            field_name="frets",
+            value_text="Leveled",
+            occurred_at="2024-06-01",
+            body="Fret dressing completed.",
+        )
+    )
+    latest_nut = (
+        repository.create_specification_claim(
+            user_id,
+            individual_id,
+            field_name="nut",
+            value_text="Bone",
+            occurred_at="2025-05-01",
+            body="Nut replaced.",
+        )
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    specifications = [
+        row
+        for row in claims
+        if row["claim_type"]
+           == "specification"
+    ]
+
+    assert [
+        row["id"]
+        for row in specifications
+    ] == [
+        first_nut,
+        fret_claim,
+        latest_nut,
+    ]
+
+    current = (
+        repository.list_current_specifications(
+            individual_id
+        )
+    )
+    by_field = {
+        row["field_name"]: row
+        for row in current
+    }
+
+    assert (
+        by_field["nut"]["value_text"]
+        == "Bone"
+    )
+    assert (
+        by_field["nut"]["id"]
+        == latest_nut
+    )
+    assert (
+        by_field["frets"]["value_text"]
+        == "Leveled"
+    )
+    assert (
+        by_field["frets"]["id"]
+        == fret_claim
+    )
+
+
+def test_specification_claim_requires_field_and_value(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+    (
+        individual_id,
+        _observation_id,
+        _claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="SPEC002",
+        media_storage_path="media/spec002.jpg",
+    )
+
+    for field_name, value_text in (
+        ("", "Bone"),
+        ("nut", ""),
+    ):
+        try:
+            repository.create_specification_claim(
+                user_id,
+                individual_id,
+                field_name=field_name,
+                value_text=value_text,
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(
+                "field and value should be required"
+            )
