@@ -406,3 +406,69 @@ def test_user_account_and_guitar_ownership_link(
         users[0]["current_guitar_count"]
         == 1
     )
+
+
+def test_user_owned_guitar_order_can_be_rearranged(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path
+        / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user()
+
+    first_id = match_or_create(
+        repository,
+        "Fender",
+        "Stratocaster",
+        "S10001",
+    )
+    second_id = match_or_create(
+        repository,
+        "Fender",
+        "Jazzmaster",
+        "S10002",
+    )
+
+    assert repository.link_user_guitar(
+        user_id,
+        first_id,
+    )
+    assert repository.link_user_guitar(
+        user_id,
+        second_id,
+    )
+
+    _user, guitars = repository.get_user(
+        user_id
+    )
+    assert [
+        row["individual_id"]
+        for row
+        in guitars
+    ] == [
+        first_id,
+        second_id,
+    ]
+
+    assert repository.reorder_user_guitars(
+        user_id,
+        [
+            second_id,
+            first_id,
+        ],
+    )
+
+    _user, guitars = repository.get_user(
+        user_id
+    )
+    assert [
+        row["individual_id"]
+        for row
+        in guitars
+    ] == [
+        second_id,
+        first_id,
+    ]
