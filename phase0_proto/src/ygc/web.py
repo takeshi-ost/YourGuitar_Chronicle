@@ -2013,6 +2013,46 @@ async def api_create_new_guitar(
     }
 
 
+@app.delete("/api/claims/{claim_id}")
+def api_delete_claim(
+    claim_id: int,
+) -> dict[str, Any]:
+    repository = repo()
+    try:
+        result = repository.delete_claim(
+            claim_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim not found",
+        )
+    return result
+
+
+@app.delete("/api/individuals/{individual_id}")
+def api_delete_individual(
+    individual_id: int,
+) -> dict[str, Any]:
+    deleted = repo().delete_individual(
+        individual_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Individual not found",
+        )
+    return {
+        "deleted": True,
+        "individual_id": individual_id,
+    }
+
+
 @app.get("/api/media/{media_asset_id}")
 def api_media(
     media_asset_id: int,
@@ -3247,7 +3287,7 @@ function claimCard(c){
   if(c.evidence_media_id)body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
-  const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span></div>';
+  const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span><button class="claim-vote bad" onclick="deleteClaim('+c.id+')">Delete</button></div>';
   return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
 function renderAdminChronicle(claims){
@@ -3296,13 +3336,41 @@ async function showIndividual(id){
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i.id)+'</div>';
+    ownershipControlsHtml(i.id)+
+    '<div class="toolbar" style="margin-top:8px"><button class="secondary bad" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div></div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong></div><div id="chronicleEntries">'+renderAdminChronicle(claims)+'</div>';
   document.getElementById('detail').innerHTML=out;
+}
+async function deleteClaim(claimId){
+  if(!confirm('Claim #'+claimId+' を完全に削除します。\nこの操作は元に戻せません。続行しますか？'))return;
+  try{
+    const d=await jfetch('/api/claims/'+claimId,{method:'DELETE'});
+    if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
+    await loadIndividuals();
+  }catch(e){
+    alert('Claim削除に失敗しました。\n'+e.message);
+  }
+}
+async function deleteIndividual(individualId){
+  const individual=individuals.find(x=>Number(x.id)===Number(individualId));
+  const label=individual?(individual.manufacturer+' '+(individual.model||'')+' / '+(individual.serial_number||'')):('Individual #'+individualId);
+  if(!confirm(label+' を関連するClaim・Observation・所有紐づけを含め完全に削除します。\n\nこの操作は元に戻せません。続行しますか？'))return;
+  const typed=prompt('確認のため DELETE と入力してください。');
+  if(typed!=='DELETE')return;
+  try{
+    await jfetch('/api/individuals/'+individualId,{method:'DELETE'});
+    if(selectedIndividualId===Number(individualId))selectedIndividualId=null;
+    document.getElementById('detail').textContent='Individualを削除しました。';
+    await loadIndividuals();
+    await loadStatistics();
+    if(activeUser&&activeUser.user)await loadActiveUser();
+  }catch(e){
+    alert('Individual削除に失敗しました。\n'+e.message);
+  }
 }
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
