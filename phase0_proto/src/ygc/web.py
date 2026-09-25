@@ -27,9 +27,7 @@ from ygc.db.repository import Repository
 from ygc.extractors.serial import extract_serial_candidates
 from ygc.reverb_adapter import (
     classify_vintage_listing,
-    listing_image_url,
     to_listing_claim_data,
-    to_observation,
     to_provenance_observation,
 )
 
@@ -284,14 +282,6 @@ def _existing_listing_ids(repository: Repository, listing_ids: list[str]) -> set
             )
             result.update(str(row["source_listing_id"]) for row in rows)
     return result
-
-
-def _remove_temporary_fields(observation: dict[str, Any]) -> tuple[str, str, int | None]:
-    status = str(observation.pop("vintage_status", "unknown"))
-    reason = str(observation.pop("vintage_reason", ""))
-    year = observation.pop("estimated_year", None)
-    observation.pop("is_vintage_listing", None)
-    return status, reason, year
 
 
 def _set_job(job_id: str, **values: Any) -> None:
@@ -647,16 +637,12 @@ def _run_metadata_backfill(
     repository = repo()
     rows = (
         repository
-        .list_observations_for_backfill()
+        .list_listing_claims_for_backfill()
     )
     total = len(rows)
 
     try:
         if total == 0:
-            synced = (
-                repository
-                .sync_individual_metadata_from_observations()
-            )
             _set_job(
                 job_id,
                 status="done",
@@ -665,9 +651,8 @@ def _run_metadata_backfill(
                 ),
                 progress=1.0,
                 aggregate={
-                    "target_observations": 0,
-                    "metadata_updated": 0,
-                    "individuals_synced": synced,
+                    "target_claims": 0,
+                    "claims_updated": 0,
                 },
                 finished_at=time.time(),
             )
@@ -675,14 +660,13 @@ def _run_metadata_backfill(
 
         row_by_listing = {
             str(
-                row[
-                    "source_listing_id"
-                ]
+                row["source_listing_id"]
             ): row
             for row in rows
+            if row["source_listing_id"]
         }
 
-        metadata_updated = 0
+        claims_updated = 0
         processed = 0
 
         with ReverbAPICollector(
@@ -692,14 +676,14 @@ def _run_metadata_backfill(
             delay=0.15,
             max_workers=6,
         ) as collector:
-            for start in range(
+            for start_index in range(
                 0,
                 total,
                 100,
             ):
                 chunk = rows[
-                    start:
-                    start + 100
+                    start_index:
+                    start_index + 100
                 ]
 
                 items = [
@@ -720,6 +704,7 @@ def _run_metadata_backfill(
                         },
                     }
                     for row in chunk
+                    if row["source_listing_id"]
                 ]
 
                 for detail in (
@@ -752,103 +737,27 @@ def _run_metadata_backfill(
                         processed += 1
                         continue
 
-                    model = str(
-                        detail.get(
-                            "model"
-                        )
-                        or ""
-                    ).strip() or None
-
-                    finish = str(
-                        detail.get(
-                            "finish"
-                        )
-                        or ""
-                    ).strip() or None
-
-                    year = str(
-                        detail.get(
-                            "year"
-                        )
-                        or ""
-                    ).strip() or None
-
-                    image_url = (
-                        listing_image_url(
-                            detail
-                        )
-                    )
-
-                    parsed_observation = (
-                        to_observation(
+                    claim_data = (
+                        to_listing_claim_data(
                             detail,
                             config.SERIAL_CONFIDENCE_THRESHOLD,
                         )
                     )
-                    owner_name = (
-                        parsed_observation.get(
-                            "owner_name"
-                        )
-                    )
-                    owner_type = (
-                        parsed_observation.get(
-                            "owner_type"
-                        )
-                    )
-                    owner_profile_url = (
-                        parsed_observation.get(
-                            "owner_profile_url"
-                        )
-                    )
-                    location_country = (
-                        parsed_observation.get(
-                            "location_country"
-                        )
-                    )
-                    location_region = (
-                        parsed_observation.get(
-                            "location_region"
-                        )
-                    )
-                    location_source = (
-                        parsed_observation.get(
-                            "location_source"
-                        )
-                    )
 
-                    repository.update_observation_metadata(
+                    if repository.supplement_listing_claim(
                         int(
-                            row["id"]
+                            row["claim_id"]
                         ),
-                        model=model,
-                        finish=finish,
-                        year=year,
-                        image_url=image_url,
-                        owner_name=owner_name,
-                        owner_type=owner_type,
-                        owner_profile_url=owner_profile_url,
-                        location_country=location_country,
-                        location_region=location_region,
-                        location_source=location_source,
-                    )
-
-                    if (
-                        model
-                        or finish
-                        or year
-                        or image_url
-                        or owner_profile_url
-                        or location_country
-                        or location_region
+                        claim_data,
                     ):
-                        metadata_updated += 1
+                        claims_updated += 1
 
                     processed += 1
 
                     _set_job(
                         job_id,
                         message=(
-                            "既存DBをバックフィル中 "
+                            "Listing Claimをバックフィル中 "
                             f"{processed}/{total}"
                         ),
                         progress=(
@@ -860,26 +769,17 @@ def _run_metadata_backfill(
                         ),
                     )
 
-        synced = (
-            repository
-            .sync_individual_metadata_from_observations()
-        )
-
         _set_job(
             job_id,
             status="done",
             message=(
-                "model / finish / year / image / location "
-                "バックフィル完了"
+                "Listing Claimバックフィル完了"
             ),
             progress=1.0,
             aggregate={
-                "target_observations": total,
-                "metadata_updated": (
-                    metadata_updated
-                ),
-                "individuals_synced": (
-                    synced
+                "target_claims": total,
+                "claims_updated": (
+                    claims_updated
                 ),
             },
             finished_at=time.time(),
@@ -3245,9 +3145,9 @@ function currentOwnerHtml(o){if(!o)return '—';const name=String(o.owner_user_n
 function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl){return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>'}return esc(label)}
 function observationCard(o,isLatest){const url=String(o.source_url||'');const source=sourceName(o);const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);const owner=ownerLabel(o);const seller=String(o.seller||'').trim();let rows='';if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';if(seller&&seller!==String(o.owner_user_name||o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>'}
 async function showIndividual(id){selectedIndividualId=Number(id);const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const listing=d.current_listing||null;const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(listing&&listing.image_url){const listingUrl=String(listing.source_url||'');const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(listingUrl){out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer" title="Listingを開く">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>'}else{out+=image+'<span class="detail-source">Listing Claim</span>'}}out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid"><div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentSnapshotOwnerHtml(i)+'</span></div></div>'+ownershipControlsHtml(i.id)+'</div>';if(latest){out+='<div class="detail-section">最新Observation</div><div class="latest-observation-scroll">'+observationCard(latest,true)+'</div>'}const history=observations.slice(0,Math.max(0,latestIndex)).reverse();if(history.length){out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('')}document.getElementById('detail').innerHTML=out}
-async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して model / finish / year / image URL / Owner / Location をバックフィルします。初回移行用の処理です。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_observations!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_observations+', updated '+d.aggregate.metadata_updated+', individuals '+d.aggregate.individuals_synced+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 (async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
 </script>
 </body></html>"""
