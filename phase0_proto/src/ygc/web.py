@@ -2541,7 +2541,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-#detail{white-space:normal}.detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:10px}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+#detail{white-space:normal}.detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}@media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
 </style>
@@ -2896,7 +2896,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
 .detail-image-link{display:block;margin:0 0 6px}
 .detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}
-.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:10px}
+.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}
 .detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
 .detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}
@@ -3279,18 +3279,40 @@ async function showIndividual(id){
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
     else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
   }
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid">'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
-    '</div>'+ownershipControlsHtml(i.id)+'</div>';
-  const specRows=(currentSpecifications||[]).map(s=>
-    '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
-  ).join('');
-  if(specRows){
-    out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="detail-meta-grid">'+specRows+'</div>';
-  }
+  const specMap={};
+  for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
+  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
+  const fixedSpecRows=[
+    ['Maker',i.manufacturer||'—'],
+    ['Model',i.model||'—'],
+    ['Finish',finishValue||'—'],
+    ['Year',i.year||'—'],
+    ['Serial',i.serial_number||'—']
+  ];
+  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
+  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
+  const dynamicSpecs=(currentSpecifications||[])
+    .filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase()))
+    .slice()
+    .sort((a,b)=>{
+      const ak=String(a.field_name||'').toLowerCase();
+      const bk=String(b.field_name||'').toLowerCase();
+      const ai=preferredOrder.indexOf(ak);
+      const bi=preferredOrder.indexOf(bk);
+      if(ai>=0||bi>=0){
+        if(ai<0)return 1;
+        if(bi<0)return-1;
+        if(ai!==bi)return ai-bi;
+      }
+      return ak.localeCompare(bk);
+    });
+  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
+    ownershipControlsHtml(i.id)+'</div>';
+  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
+    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
+    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
+    '</div>';
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
@@ -3386,7 +3408,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
 .detail-image-link{display:block;margin:0 0 6px}
 .detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}
-.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:10px}
+.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}
 .detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
 .detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}
@@ -3460,7 +3482,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Specification/Repair Claim</h2>
+    <h2 id="specClaimTitle">Specification/Repair Claim</h2>
     <div class="sub" id="specClaimGuitar" style="margin-bottom:14px"></div>
 
     <div class="spec-kind">
@@ -3981,10 +4003,12 @@ function claimCard(c){
     '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
     '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
     '</div>';
+  const canEdit=activeUser&&activeUser.user&&c.claim_type==='specification'&&Number(c.author_user_id)===Number(activeUser.user.id);
+  const editButton=canEdit?'<button class="claim-vote" onclick="editSpecificationClaim('+c.id+')">Edit</button>':'';
   return '<div class="claim-card">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
+    '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
     '</div>';
 }
 function chronologyValue(c,mode){
@@ -4066,17 +4090,40 @@ async function showIndividual(id){
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
     else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
   }
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid">'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
-    '</div>'+ownershipControlsHtml(i.id)+'</div>';
-  const specRows=(currentSpecifications||[]).map(s=>
-    '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
-  ).join('');
-  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div>'+
-    (specRows?'<div class="detail-meta-grid">'+specRows+'</div>':'<div class="sub">Specification Claimはまだありません。</div>');
+  const specMap={};
+  for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
+  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
+  const fixedSpecRows=[
+    ['Maker',i.manufacturer||'—'],
+    ['Model',i.model||'—'],
+    ['Finish',finishValue||'—'],
+    ['Year',i.year||'—'],
+    ['Serial',i.serial_number||'—']
+  ];
+  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
+  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
+  const dynamicSpecs=(currentSpecifications||[])
+    .filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase()))
+    .slice()
+    .sort((a,b)=>{
+      const ak=String(a.field_name||'').toLowerCase();
+      const bk=String(b.field_name||'').toLowerCase();
+      const ai=preferredOrder.indexOf(ak);
+      const bi=preferredOrder.indexOf(bk);
+      if(ai>=0||bi>=0){
+        if(ai<0)return 1;
+        if(bi<0)return-1;
+        if(ai!==bi)return ai-bi;
+      }
+      return ak.localeCompare(bk);
+    });
+  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
+    ownershipControlsHtml(i.id)+'</div>';
+  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
+    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
+    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
+    '</div>';
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button></div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
@@ -4099,6 +4146,7 @@ const SPEC_FIELDS=[
 ];
 let specificationKind='specification';
 let specificationItems=[];
+let editingSpecificationClaimId=null;
 
 function toggleAddClaimMenu(event,individualId){
   event.stopPropagation();
@@ -4132,11 +4180,43 @@ function openSpecificationClaim(individualId){
   document.getElementById('specClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
+  editingSpecificationClaimId=null;
   specificationKind='specification';
   specificationItems=[];
   setSpecificationKind('specification');
+  document.getElementById('specClaimTitle').textContent='Specification/Repair Claim';
+  document.getElementById('specClaimSubmit').textContent='Claimを追加';
   document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('specClaimBody').value='';
+  renderSpecificationItems();
+  renderSpecItemMenu();
+  document.getElementById('specClaimModal').classList.add('open');
+}
+function editSpecificationClaim(claimId){
+  if(!activeUser||!activeUser.user)return;
+  const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
+  if(!claim||Number(claim.author_user_id)!==Number(activeUser.user.id))return;
+  if(claim.claim_type!=='specification')return;
+
+  editingSpecificationClaimId=Number(claimId);
+  specificationKind=claim.specification_kind==='repair'?'repair':'specification';
+  const sourceItems=(claim.spec_items&&claim.spec_items.length)
+    ? claim.spec_items
+    : (claim.field_name?[{field_name:claim.field_name,value_text:claim.value_text}]:[]);
+  specificationItems=sourceItems.map(item=>({
+    field_name:String(item.field_name||''),
+    label:specificationFieldLabel(item.field_name),
+    value_text:String(item.value_text||'')
+  }));
+  setSpecificationKind(specificationKind);
+  document.getElementById('specClaimTitle').textContent='Edit Specification/Repair Claim';
+  document.getElementById('specClaimSubmit').textContent='更新';
+  document.getElementById('specClaimDate').value=String(claim.occurred_at||'').slice(0,10);
+  document.getElementById('specClaimBody').value=claim.body||'';
+  const guitar=individuals.find(x=>Number(x.id)===Number(selectedIndividualId));
+  document.getElementById('specClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+selectedIndividualId;
   renderSpecificationItems();
   renderSpecItemMenu();
   document.getElementById('specClaimModal').classList.add('open');
@@ -4144,6 +4224,7 @@ function openSpecificationClaim(individualId){
 function closeSpecificationClaim(event){
   if(event&&event.target&&event.target.id!=='specClaimModal')return;
   document.getElementById('specClaimModal').classList.remove('open');
+  editingSpecificationClaimId=null;
   const menu=document.getElementById('specItemMenu');
   if(menu)menu.classList.remove('open');
 }
@@ -4224,16 +4305,20 @@ async function submitSpecificationClaim(){
   const button=document.getElementById('specClaimSubmit');
   button.disabled=true;
   try{
-    await jfetch('/api/individuals/'+selectedIndividualId+'/specification-claim',{
-      method:'POST',
+    const payload={
+      user_id:Number(activeUser.user.id),
+      specification_kind:specificationKind,
+      items,
+      occurred_at:document.getElementById('specClaimDate').value||null,
+      body:document.getElementById('specClaimBody').value.trim()||null
+    };
+    const url=editingSpecificationClaimId===null
+      ? '/api/individuals/'+selectedIndividualId+'/specification-claim'
+      : '/api/claims/'+editingSpecificationClaimId+'/specification';
+    await jfetch(url,{
+      method:editingSpecificationClaimId===null?'POST':'PATCH',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        user_id:Number(activeUser.user.id),
-        specification_kind:specificationKind,
-        items,
-        occurred_at:document.getElementById('specClaimDate').value||null,
-        body:document.getElementById('specClaimBody').value.trim()||null
-      })
+      body:JSON.stringify(payload)
     });
     closeSpecificationClaim();
     await showIndividual(selectedIndividualId);
