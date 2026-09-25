@@ -1343,7 +1343,7 @@ def test_specification_claim_author_can_edit_group(
 
 
 
-def test_release_claim_unlinks_owner_and_sets_unknown(
+def test_release_marks_former_owner_and_sets_unknown(
     tmp_path,
 ):
     repository = Repository(
@@ -1381,10 +1381,15 @@ def test_release_claim_unlinks_owner_and_sets_unknown(
     _user, guitars = repository.get_user(
         user_id
     )
-    assert not any(
-        row["individual_id"] == individual_id
+    former = next(
+        row
         for row in guitars
+        if row["individual_id"] == individual_id
     )
+    assert former["ownership_status"] == (
+        "former_owner"
+    )
+    assert former["released_at"] is not None
 
     _individual, observations = (
         repository.get_individual(
