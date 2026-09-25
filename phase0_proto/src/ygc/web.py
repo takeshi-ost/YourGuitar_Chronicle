@@ -376,6 +376,14 @@ class SpecificationClaimRequest(BaseModel):
     )
 
 
+class ReleaseClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    reason: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 class OwnerChangeClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     acquired_at: str | None = Field(
@@ -1954,6 +1962,43 @@ def api_current_specifications(
     ]
 
 
+@app.post("/api/individuals/{individual_id}/release-claim")
+def api_release_claim(
+    individual_id: int,
+    request: ReleaseClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        (
+            observation_id,
+            claim_id,
+        ) = repository.create_release_claim(
+            request.user_id,
+            individual_id,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    user, guitars = repository.get_user(
+        request.user_id
+    )
+
+    return {
+        "observation_id": observation_id,
+        "claim_id": claim_id,
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row in guitars
+        ],
+    }
+
+
 @app.post("/api/individuals/{individual_id}/owner-change-claim")
 def api_owner_change_claim(
     individual_id: int,
@@ -3172,6 +3217,9 @@ function claimCard(c){
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='release'){
+    body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='specification'){
     const items=(c.spec_items&&c.spec_items.length)
       ? c.spec_items
@@ -3479,6 +3527,21 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <button class="secondary" onclick="window.location.href='/user-view'">Close</button>
 </div>
 </main>
+
+<div class="modal-backdrop" id="releaseClaimModal" onclick="closeReleaseClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Release Claim</h2>
+    <div class="sub" id="releaseClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label" for="releaseClaimReason">Reason for release（任意）</label>
+      <textarea id="releaseClaimReason" maxlength="2000" placeholder="Sold / Gifted / Traded / Other ..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeReleaseClaim()">キャンセル</button>
+      <button class="bad" id="releaseClaimSubmit" onclick="submitReleaseClaim()">Release</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -3967,6 +4030,9 @@ function claimCard(c){
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='release'){
+    body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='specification'){
     const items=(c.spec_items&&c.spec_items.length)
       ? c.spec_items
@@ -4118,13 +4184,12 @@ async function showIndividual(id){
       return ak.localeCompare(bk);
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div>'+
-    ownershipControlsHtml(i.id)+'</div>';
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentOwnerHtml(latest)+'</div></div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button></div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'release\')">Release Claim</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -4163,8 +4228,63 @@ function chooseClaimType(type){
   if(menu)menu.classList.remove('open');
   if(type==='specification_repair'){
     openSpecificationClaim(selectedIndividualId);
+  }else if(type==='release'){
+    openReleaseClaim(selectedIndividualId);
   }
 }
+function openReleaseClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  if(!activeUserOwns(individualId)){
+    alert('現在のUserが所有中のギターだけReleaseできます。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('releaseClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('releaseClaimReason').value='';
+  document.getElementById('releaseClaimModal').classList.add('open');
+  document.getElementById('releaseClaimReason').focus();
+}
+function closeReleaseClaim(event){
+  if(event&&event.target&&event.target.id!=='releaseClaimModal')return;
+  document.getElementById('releaseClaimModal').classList.remove('open');
+}
+async function submitReleaseClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const guitar=individuals.find(x=>Number(x.id)===Number(selectedIndividualId));
+  const label=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')
+    : 'このギター';
+  if(!confirm(label+' の所有紐づけを解除し、Current OwnerをUnknownに変更します。\n\nこの内容でReleaseしますか？')){
+    return;
+  }
+  const button=document.getElementById('releaseClaimSubmit');
+  button.disabled=true;
+  try{
+    const d=await jfetch('/api/individuals/'+selectedIndividualId+'/release-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        reason:document.getElementById('releaseClaimReason').value.trim()||null
+      })
+    });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeReleaseClaim();
+    renderAccount();
+    await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Release Claimの登録に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
 function setSpecificationKind(kind){
   specificationKind=kind==='repair'?'repair':'specification';
   document.getElementById('specKindSpecification').classList.toggle('active',specificationKind==='specification');
