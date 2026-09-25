@@ -2044,6 +2044,158 @@ class Repository:
 
             return claim_id
 
+    def update_specification_claim_group(
+        self,
+        claim_id: int,
+        user_id: int,
+        *,
+        specification_kind: str,
+        items: list[dict[str, str]],
+        occurred_at: str | None = None,
+        body: str | None = None,
+    ) -> bool:
+        kind = specification_kind.strip().lower()
+        if kind not in (
+            "specification",
+            "repair",
+        ):
+            raise ValueError(
+                "specification_kind must be specification or repair"
+            )
+
+        normalized_items: list[
+            tuple[str, str]
+        ] = []
+        seen_fields: set[str] = set()
+
+        for item in items:
+            field = str(
+                item.get(
+                    "field_name",
+                    "",
+                )
+            ).strip().lower()
+            value = str(
+                item.get(
+                    "value_text",
+                    "",
+                )
+            ).strip()
+
+            if not field:
+                raise ValueError(
+                    "field_name is required"
+                )
+            if not value:
+                raise ValueError(
+                    "value_text is required"
+                )
+            if field in seen_fields:
+                raise ValueError(
+                    "Each specification item can appear only once per Claim"
+                )
+
+            seen_fields.add(field)
+            normalized_items.append(
+                (field, value)
+            )
+
+        if not normalized_items:
+            raise ValueError(
+                "At least one specification item is required"
+            )
+
+        note = (
+            body.strip()
+            if body and body.strip()
+            else None
+        )
+        event_date = (
+            occurred_at.strip()
+            if occurred_at
+            and occurred_at.strip()
+            else None
+        )
+        now = utcnow()
+
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT *
+                FROM claims
+                WHERE id = ?
+                  AND claim_type = 'specification'
+                  AND status = 'active'
+                """,
+                (claim_id,),
+            ).fetchone()
+
+            if not claim:
+                return False
+
+            if int(
+                claim["author_user_id"]
+            ) != int(user_id):
+                raise ValueError(
+                    "Only the Claim author can edit this Claim"
+                )
+
+            con.execute(
+                """
+                UPDATE claims
+                SET field_name = NULL,
+                    value_text = NULL,
+                    specification_kind = ?,
+                    body = ?,
+                    occurred_at = COALESCE(
+                        ?,
+                        occurred_at
+                    ),
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    kind,
+                    note,
+                    event_date,
+                    now,
+                    claim_id,
+                ),
+            )
+
+            con.execute(
+                """
+                DELETE FROM claim_spec_items
+                WHERE claim_id = ?
+                """,
+                (claim_id,),
+            )
+
+            con.executemany(
+                """
+                INSERT INTO claim_spec_items (
+                    claim_id,
+                    field_name,
+                    value_text,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (
+                        claim_id,
+                        field,
+                        value,
+                        now,
+                    )
+                    for field, value
+                    in normalized_items
+                ],
+            )
+
+            return True
+
+
     def list_specification_items(
         self,
         individual_id: int,
