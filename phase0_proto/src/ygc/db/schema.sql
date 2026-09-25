@@ -42,6 +42,28 @@ CREATE TABLE IF NOT EXISTS observations (
  FOREIGN KEY(individual_id) REFERENCES individuals(id),
  UNIQUE(source_site, source_listing_id)
 );
+CREATE TABLE IF NOT EXISTS users (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ display_name TEXT NOT NULL,
+ account_type TEXT NOT NULL DEFAULT 'user',
+ location_country TEXT,
+ location_region TEXT,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_guitars (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ user_id INTEGER NOT NULL,
+ individual_id INTEGER NOT NULL,
+ ownership_status TEXT NOT NULL DEFAULT 'current_owner',
+ acquired_at TEXT,
+ released_at TEXT,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
+ UNIQUE(user_id, individual_id)
+);
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,
@@ -55,3 +77,6 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_observations_individual_id ON observations(individual_id);
 CREATE INDEX IF NOT EXISTS idx_observations_source_url ON observations(source_url);
+
+CREATE INDEX IF NOT EXISTS idx_user_guitars_user_id ON user_guitars(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_guitars_individual_id ON user_guitars(individual_id);
