@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS observations (
  location_region TEXT,
  location_source TEXT,
  seller TEXT,
+ event_type TEXT NOT NULL DEFAULT 'listing',
+ actor_user_id INTEGER,
+ occurred_at TEXT,
  source_site TEXT NOT NULL,
  source_url TEXT NOT NULL,
  image_url TEXT,
@@ -65,6 +68,46 @@ CREATE TABLE IF NOT EXISTS user_guitars (
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
  UNIQUE(user_id, individual_id)
 );
+
+CREATE TABLE IF NOT EXISTS claims (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ individual_id INTEGER NOT NULL,
+ observation_id INTEGER,
+ author_user_id INTEGER NOT NULL,
+ claim_type TEXT NOT NULL,
+ field_name TEXT,
+ value_text TEXT,
+ body TEXT,
+ occurred_at TEXT,
+ status TEXT NOT NULL DEFAULT 'active',
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
+ FOREIGN KEY(observation_id) REFERENCES observations(id) ON DELETE SET NULL,
+ FOREIGN KEY(author_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS claim_responses (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ responder_user_id INTEGER NOT NULL,
+ stance TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE,
+ FOREIGN KEY(responder_user_id) REFERENCES users(id) ON DELETE CASCADE,
+ UNIQUE(claim_id, responder_user_id)
+);
+CREATE TABLE IF NOT EXISTS claim_votes (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ user_id INTEGER NOT NULL,
+ vote TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE,
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ UNIQUE(claim_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,
@@ -81,3 +124,8 @@ CREATE INDEX IF NOT EXISTS idx_observations_source_url ON observations(source_ur
 
 CREATE INDEX IF NOT EXISTS idx_user_guitars_user_id ON user_guitars(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_guitars_individual_id ON user_guitars(individual_id);
+
+CREATE INDEX IF NOT EXISTS idx_claims_individual_id ON claims(individual_id);
+CREATE INDEX IF NOT EXISTS idx_claims_observation_id ON claims(observation_id);
+CREATE INDEX IF NOT EXISTS idx_claim_responses_claim_id ON claim_responses(claim_id);
+CREATE INDEX IF NOT EXISTS idx_claim_votes_claim_id ON claim_votes(claim_id);
