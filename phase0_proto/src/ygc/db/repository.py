@@ -487,6 +487,274 @@ class Repository:
                 ),
             )
 
+    def rebuild_individual_snapshot(
+        self,
+        individual_id: int,
+    ) -> dict[str, Any]:
+        """
+        Rebuild one Individual's materialized current-state snapshot
+        exclusively from active Claims.
+
+        Observation metadata is intentionally not consulted here.
+        """
+        with self.connect() as con:
+            return self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+
+    def _rebuild_individual_snapshot_in_connection(
+        self,
+        con: sqlite3.Connection,
+        individual_id: int,
+    ) -> dict[str, Any]:
+        individual = con.execute(
+            """
+            SELECT id
+            FROM individuals
+            WHERE id = ?
+            """,
+            (individual_id,),
+        ).fetchone()
+        if not individual:
+            raise ValueError(
+                "Individual not found"
+            )
+
+        state: dict[str, str | None] = {
+            "manufacturer": None,
+            "model": None,
+            "finish": None,
+            "year": None,
+            "serial_number": None,
+            "location_country": None,
+            "location_region": None,
+        }
+
+        listing_rows = list(
+            con.execute(
+                """
+                SELECT
+                    c.id AS claim_id,
+                    li.field_name,
+                    li.value_text
+                FROM claims c
+                INNER JOIN claim_listing_items li
+                  ON li.claim_id = c.id
+                WHERE c.individual_id = ?
+                  AND c.claim_type = 'listing'
+                  AND c.status = 'active'
+                ORDER BY
+                    COALESCE(
+                        c.occurred_at,
+                        c.created_at
+                    ),
+                    c.created_at,
+                    c.id,
+                    li.id
+                """,
+                (individual_id,),
+            )
+        )
+
+        first_listing_id: int | None = None
+        identity_fields = {
+            "manufacturer",
+            "model",
+            "year",
+            "serial_number",
+        }
+        listing_snapshot_fields = set(
+            state.keys()
+        )
+
+        for row in listing_rows:
+            claim_id = int(
+                row["claim_id"]
+            )
+            field = str(
+                row["field_name"]
+                or ""
+            ).strip().lower()
+            value = (
+                str(row["value_text"]).strip()
+                if row["value_text"] is not None
+                else None
+            )
+            if (
+                field not in listing_snapshot_fields
+                or not value
+            ):
+                continue
+
+            if first_listing_id is None:
+                first_listing_id = claim_id
+
+            if claim_id == first_listing_id:
+                state[field] = value
+                continue
+
+            if field in (
+                "location_country",
+                "location_region",
+            ):
+                state[field] = value
+            elif (
+                field == "finish"
+                and state["finish"] is None
+            ):
+                state["finish"] = value
+            elif (
+                field in identity_fields
+                and state[field] is None
+            ):
+                state[field] = value
+
+        correction_rows = list(
+            con.execute(
+                """
+                SELECT
+                    ci.field_name,
+                    ci.new_value
+                FROM claims c
+                INNER JOIN claim_identity_items ci
+                  ON ci.claim_id = c.id
+                WHERE c.individual_id = ?
+                  AND c.claim_type = 'identity_correction'
+                  AND c.status = 'active'
+                ORDER BY
+                    COALESCE(
+                        c.occurred_at,
+                        c.created_at
+                    ),
+                    c.created_at,
+                    c.id,
+                    ci.id
+                """,
+                (individual_id,),
+            )
+        )
+
+        for row in correction_rows:
+            field = str(
+                row["field_name"]
+                or ""
+            ).strip().lower()
+            if field not in identity_fields:
+                continue
+            value = row["new_value"]
+            state[field] = (
+                str(value).strip()
+                if value is not None
+                and str(value).strip()
+                else None
+            )
+
+        specification_rows = list(
+            con.execute(
+                """
+                SELECT
+                    si.field_name,
+                    si.value_text
+                FROM claims c
+                INNER JOIN claim_spec_items si
+                  ON si.claim_id = c.id
+                WHERE c.individual_id = ?
+                  AND c.claim_type = 'specification'
+                  AND c.status = 'active'
+                ORDER BY
+                    COALESCE(
+                        c.occurred_at,
+                        c.created_at
+                    ),
+                    c.created_at,
+                    c.id,
+                    si.id
+                """,
+                (individual_id,),
+            )
+        )
+
+        for row in specification_rows:
+            field = str(
+                row["field_name"]
+                or ""
+            ).strip().lower()
+            value = (
+                str(row["value_text"]).strip()
+                if row["value_text"] is not None
+                else None
+            )
+            if field == "finish" and value:
+                state["finish"] = value
+
+        normalized_maker = normalize_manufacturer(
+            state["manufacturer"]
+            or ""
+        )
+        normalized_model = normalize_model(
+            state["model"]
+        )
+        normalized_serial = normalize_serial(
+            state["serial_number"]
+            or ""
+        )
+
+        if (
+            not normalized_maker
+            or not normalized_serial
+        ):
+            raise ValueError(
+                "Active Claims do not define a complete Individual identity"
+            )
+
+        now = utcnow()
+        con.execute(
+            """
+            UPDATE individuals
+            SET manufacturer = ?,
+                model = ?,
+                finish = ?,
+                year = ?,
+                serial_number = ?,
+                location_country = ?,
+                location_region = ?,
+                normalized_manufacturer = ?,
+                normalized_model = ?,
+                normalized_serial = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                state["manufacturer"],
+                state["model"],
+                state["finish"],
+                state["year"],
+                state["serial_number"],
+                state["location_country"],
+                state["location_region"],
+                normalized_maker,
+                normalized_model,
+                normalized_serial,
+                now,
+                individual_id,
+            ),
+        )
+
+        return {
+            "id": individual_id,
+            **state,
+            "normalized_manufacturer": (
+                normalized_maker
+            ),
+            "normalized_model": (
+                normalized_model
+            ),
+            "normalized_serial": (
+                normalized_serial
+            ),
+        }
+
     def find_individual(
         self,
         maker: str,
