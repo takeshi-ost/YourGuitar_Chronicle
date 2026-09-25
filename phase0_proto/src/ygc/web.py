@@ -3547,6 +3547,16 @@ function currentOwnerHtml(o){
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
+function currentSnapshotOwnerHtml(i){
+  if(!i)return '—';
+  const name=String(i.current_owner_name||'').trim();
+  if(!name)return '—';
+  const type=String(i.current_owner_type||'').trim();
+  const listingUrl=String(i.current_owner_source_url||'').trim();
+  const label=type==='shop'?name+' (Shop)':name;
+  if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
+  return esc(label);
+}
 function currentLocationHtml(o){
   if(!o)return '—';
   const country=String(o.location_country||'').trim();
