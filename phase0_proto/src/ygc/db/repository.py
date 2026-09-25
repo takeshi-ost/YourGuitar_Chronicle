@@ -946,6 +946,387 @@ class Repository:
                 ),
             )
 
+    def persist_reverb_listing_claim(
+        self,
+        claim_data: dict[str, Any],
+        provenance: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Persist one Reverb Listing through the Claim-centered pipeline.
+
+        External duplicate detection uses Observation provenance.
+        Physical guitar matching uses the current Individual snapshot.
+        Semantic state is written only to Listing Claim items, then the
+        Individual snapshot is rebuilt from active Claims.
+        """
+        source_site = str(
+            provenance.get("source_site")
+            or "reverb"
+        ).strip()
+        source_listing_id = str(
+            provenance.get("source_listing_id")
+            or ""
+        ).strip()
+        if not source_listing_id:
+            raise ValueError(
+                "source_listing_id is required"
+            )
+
+        maker = str(
+            claim_data.get("manufacturer")
+            or ""
+        ).strip()
+        model = (
+            str(claim_data.get("model")).strip()
+            if claim_data.get("model") is not None
+            and str(claim_data.get("model")).strip()
+            else None
+        )
+        serial = str(
+            claim_data.get("serial_number")
+            or ""
+        ).strip()
+
+        normalized_maker = normalize_manufacturer(
+            maker
+        )
+        normalized_model = normalize_model(
+            model
+        )
+        normalized_serial = normalize_serial(
+            serial
+        )
+
+        with self.connect() as con:
+            existing_observation = con.execute(
+                """
+                SELECT
+                    id,
+                    individual_id
+                FROM observations
+                WHERE source_site = ?
+                  AND source_listing_id = ?
+                ORDER BY id
+                LIMIT 1
+                """,
+                (
+                    source_site,
+                    source_listing_id,
+                ),
+            ).fetchone()
+            if existing_observation:
+                return {
+                    "created": False,
+                    "observation_id": int(
+                        existing_observation["id"]
+                    ),
+                    "claim_id": None,
+                    "individual_id": (
+                        int(
+                            existing_observation[
+                                "individual_id"
+                            ]
+                        )
+                        if existing_observation[
+                            "individual_id"
+                        ] is not None
+                        else None
+                    ),
+                }
+
+            individual_id: int | None = None
+
+            if (
+                normalized_maker
+                and normalized_serial
+            ):
+                existing_individual = con.execute(
+                    """
+                    SELECT *
+                    FROM individuals
+                    WHERE normalized_manufacturer = ?
+                      AND COALESCE(
+                            normalized_model,
+                            ''
+                          ) = COALESCE(?, '')
+                      AND normalized_serial = ?
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (
+                        normalized_maker,
+                        normalized_model,
+                        normalized_serial,
+                    ),
+                ).fetchone()
+
+                if existing_individual:
+                    individual_id = int(
+                        existing_individual["id"]
+                    )
+                    has_listing_claim = con.execute(
+                        """
+                        SELECT 1
+                        FROM claims
+                        WHERE individual_id = ?
+                          AND claim_type = 'listing'
+                          AND status = 'active'
+                        LIMIT 1
+                        """,
+                        (
+                            individual_id,
+                        ),
+                    ).fetchone()
+                    if not has_listing_claim:
+                        raise ValueError(
+                            "Matched Individual has no active Listing Claim. "
+                            "Run legacy Observation migration before crawling."
+                        )
+                else:
+                    pending_token = (
+                        "__pending__:"
+                        + uuid.uuid4().hex
+                    )
+                    cur = con.execute(
+                        """
+                        INSERT INTO individuals (
+                            manufacturer,
+                            normalized_manufacturer,
+                            normalized_serial,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "__pending__",
+                            pending_token,
+                            pending_token,
+                            provenance.get(
+                                "created_at"
+                            )
+                            or utcnow(),
+                            provenance.get(
+                                "created_at"
+                            )
+                            or utcnow(),
+                        ),
+                    )
+                    individual_id = int(
+                        cur.lastrowid
+                    )
+
+            observation_columns = [
+                "individual_id",
+                "event_type",
+                "source_site",
+                "source_url",
+                "image_url",
+                "source_listing_id",
+                "observed_at",
+                "listing_date",
+                "title",
+                "raw_text",
+                "serial_confidence",
+                "extraction_version",
+                "created_at",
+            ]
+            observation_values = {
+                "individual_id": individual_id,
+                "event_type": (
+                    provenance.get(
+                        "event_type"
+                    )
+                    or "listing"
+                ),
+                "source_site": source_site,
+                "source_url": (
+                    provenance.get(
+                        "source_url"
+                    )
+                    or ""
+                ),
+                "image_url": provenance.get(
+                    "image_url"
+                ),
+                "source_listing_id": (
+                    source_listing_id
+                ),
+                "observed_at": (
+                    provenance.get(
+                        "observed_at"
+                    )
+                    or utcnow()
+                ),
+                "listing_date": provenance.get(
+                    "listing_date"
+                ),
+                "title": provenance.get(
+                    "title"
+                ),
+                "raw_text": provenance.get(
+                    "raw_text"
+                ),
+                "serial_confidence": (
+                    provenance.get(
+                        "serial_confidence"
+                    )
+                ),
+                "extraction_version": (
+                    provenance.get(
+                        "extraction_version"
+                    )
+                ),
+                "created_at": (
+                    provenance.get(
+                        "created_at"
+                    )
+                    or utcnow()
+                ),
+            }
+            placeholders = ",".join(
+                "?"
+                for _ in observation_columns
+            )
+            cur = con.execute(
+                f"""
+                INSERT INTO observations (
+                    {",".join(observation_columns)}
+                )
+                VALUES ({placeholders})
+                """,
+                [
+                    observation_values[column]
+                    for column
+                    in observation_columns
+                ],
+            )
+            observation_id = int(
+                cur.lastrowid
+            )
+
+            if individual_id is None:
+                return {
+                    "created": True,
+                    "observation_id": observation_id,
+                    "claim_id": None,
+                    "individual_id": None,
+                }
+
+            author_user_id = self._source_user_id(
+                con,
+                "Reverb",
+            )
+            occurred_at = (
+                claim_data.get(
+                    "listing_date"
+                )
+                or provenance.get(
+                    "listing_date"
+                )
+                or provenance.get(
+                    "observed_at"
+                )
+                or utcnow()
+            )
+            now = provenance.get(
+                "created_at"
+            ) or utcnow()
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, 'listing',
+                    'listing', ?, NULL, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    source_listing_id,
+                    occurred_at,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(
+                cur.lastrowid
+            )
+
+            listing_fields = (
+                "manufacturer",
+                "model",
+                "finish",
+                "year",
+                "serial_number",
+                "owner_name",
+                "owner_type",
+                "seller",
+                "location_country",
+                "location_region",
+                "listing_title",
+                "listing_date",
+                "source_site",
+                "source_url",
+                "source_listing_id",
+                "image_url",
+            )
+            for field_name in listing_fields:
+                value = claim_data.get(
+                    field_name
+                )
+                if value is None:
+                    continue
+                value_text = str(
+                    value
+                ).strip()
+                if not value_text:
+                    continue
+                con.execute(
+                    """
+                    INSERT INTO claim_listing_items (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        claim_id,
+                        field_name,
+                        value_text,
+                        now,
+                    ),
+                )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+
+            return {
+                "created": True,
+                "observation_id": observation_id,
+                "claim_id": claim_id,
+                "individual_id": individual_id,
+            }
+
     def upsert_observation(
         self,
         obs: dict[str, Any],
