@@ -472,3 +472,77 @@ def test_user_owned_guitar_order_can_be_rearranged(
         second_id,
         first_id,
     ]
+
+
+def test_owner_change_claim_response_and_vote(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    owner_id = repository.create_user(
+        "Owner"
+    )
+    other_id = repository.create_user(
+        "Other User"
+    )
+    individual_id = match_or_create(
+        repository,
+        "Fender",
+        "Telecaster",
+        "S20001",
+    )
+
+    observation_id, claim_id = (
+        repository.create_owner_change_claim(
+            owner_id,
+            individual_id,
+            acquired_at="2026-09-25",
+            previous_owner_text="Shop A",
+            body="Purchased in person.",
+        )
+    )
+
+    assert observation_id > 0
+    assert claim_id > 0
+
+    user, guitars = repository.get_user(
+        owner_id
+    )
+    assert user is not None
+    assert guitars[0]["individual_id"] == (
+        individual_id
+    )
+    assert guitars[0]["ownership_status"] == (
+        "current_owner"
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    assert len(claims) == 1
+    assert claims[0]["claim_type"] == (
+        "owner_change"
+    )
+    assert claims[0]["author_user_id"] == (
+        owner_id
+    )
+
+    assert repository.set_claim_response(
+        claim_id,
+        owner_id,
+        "endorse",
+    )
+    assert repository.set_claim_vote(
+        claim_id,
+        other_id,
+        "good",
+    )
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    assert claims[0]["good_count"] == 1
+    assert claims[0]["bad_count"] == 0
