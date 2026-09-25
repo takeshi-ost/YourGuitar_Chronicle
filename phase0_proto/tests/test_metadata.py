@@ -1340,3 +1340,114 @@ def test_specification_claim_author_can_edit_group(
         raise AssertionError(
             "non-author should not edit a Claim"
         )
+
+
+
+def test_release_claim_unlinks_owner_and_sets_unknown(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+    (
+        individual_id,
+        _listing_observation_id,
+        _listing_claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="REL001",
+        media_storage_path="media/rel001.jpg",
+    )
+
+    observation_id, claim_id = (
+        repository.create_release_claim(
+            user_id,
+            individual_id,
+            reason="Sold to another collector.",
+        )
+    )
+
+    assert observation_id > 0
+    assert claim_id > 0
+
+    _user, guitars = repository.get_user(
+        user_id
+    )
+    assert not any(
+        row["individual_id"] == individual_id
+        for row in guitars
+    )
+
+    _individual, observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    latest = observations[-1]
+    assert latest["event_type"] == "release"
+    assert latest["owner_name"] == "Unknown"
+    assert latest["owner_type"] == "unknown"
+
+    claims = repository.list_claims(
+        individual_id
+    )
+    release = next(
+        row
+        for row in claims
+        if row["id"] == claim_id
+    )
+    assert release["claim_type"] == "release"
+    assert release["body"] == (
+        "Sold to another collector."
+    )
+    assert release["observed_owner_name"] == (
+        "Unknown"
+    )
+
+
+def test_release_claim_requires_current_ownership(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+    other_id = repository.create_user(
+        "Other"
+    )
+    (
+        individual_id,
+        _listing_observation_id,
+        _listing_claim_id,
+        _media_asset_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Jazzmaster",
+        serial_number="REL002",
+        media_storage_path="media/rel002.jpg",
+    )
+
+    try:
+        repository.create_release_claim(
+            other_id,
+            individual_id,
+        )
+    except ValueError as exc:
+        assert "current owner" in str(exc)
+    else:
+        raise AssertionError(
+            "non-owner should not be able to release"
+        )
