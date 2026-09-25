@@ -2918,11 +2918,15 @@ function setChronicleSort(value){
 
 async function showIndividual(id){
   selectedIndividualId=Number(id);
-  const d=await jfetch('/api/individuals/'+id);
+  const [d,claims]=await Promise.all([
+    jfetch('/api/individuals/'+id),
+    jfetch('/api/individuals/'+id+'/claims')
+  ]);
   const i=d.individual;
   const observations=d.observations||[];
-  const latestIndex=observations.length-1;
-  const latest=latestIndex>=0?observations[latestIndex]:null;
+  currentObservations=observations;
+  currentClaims=claims||[];
+  const latest=observations.length?observations[observations.length-1]:null;
   let out='';
   if(latest&&latest.image_url){
     const latestUrl=String(latest.source_url||'');
