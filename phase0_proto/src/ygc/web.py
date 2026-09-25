@@ -1898,6 +1898,49 @@ def api_specification_claim(
     }
 
 
+@app.patch("/api/claims/{claim_id}/specification")
+def api_update_specification_claim(
+    claim_id: int,
+    request: SpecificationClaimRequest,
+) -> dict[str, bool]:
+    repository = repo()
+
+    try:
+        updated = (
+            repository.update_specification_claim_group(
+                claim_id,
+                request.user_id,
+                specification_kind=(
+                    request.specification_kind
+                ),
+                items=[
+                    {
+                        "field_name": item.field_name,
+                        "value_text": item.value_text,
+                    }
+                    for item in request.items
+                ],
+                occurred_at=request.occurred_at,
+                body=request.body,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403
+            if "author" in str(exc).lower()
+            else 400,
+            detail=str(exc),
+        ) from exc
+
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="Specification Claim not found",
+        )
+
+    return {"ok": True}
+
+
 @app.get("/api/individuals/{individual_id}/current-specifications")
 def api_current_specifications(
     individual_id: int,
