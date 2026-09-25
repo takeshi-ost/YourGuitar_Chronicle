@@ -430,6 +430,18 @@ class ClaimVoteRequest(BaseModel):
     vote: str = Field(max_length=10)
 
 
+class ClaimEditRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    occurred_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 def _run_batch(
     job_id: str,
     request: CrawlRequest,
@@ -2149,6 +2161,37 @@ def api_update_specification_claim(
     return {"ok": True}
 
 
+@app.patch("/api/claims/{claim_id}")
+def api_update_claim(
+    claim_id: int,
+    request: ClaimEditRequest,
+) -> dict[str, bool]:
+    repository = repo()
+
+    try:
+        updated = repository.update_claim(
+            claim_id,
+            request.user_id,
+            occurred_at=request.occurred_at,
+            body=request.body,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403
+            if "author" in str(exc).lower()
+            else 400,
+            detail=str(exc),
+        ) from exc
+
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim not found",
+        )
+
+    return {"ok": True}
+
+
 @app.get("/api/individuals/{individual_id}/current-specifications")
 def api_current_specifications(
     individual_id: int,
@@ -3453,7 +3496,7 @@ function claimCard(c){
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
   if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
@@ -3745,6 +3788,25 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeReleaseClaim()">キャンセル</button>
       <button class="bad" id="releaseClaimSubmit" onclick="submitReleaseClaim()">Release</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="claimEditModal" onclick="closeClaimEdit(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2 id="claimEditTitle">Edit Claim</h2>
+    <div class="sub" id="claimEditType" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label" for="claimEditDate">Date</label>
+      <input id="claimEditDate" type="date">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="claimEditBody">Memo</label>
+      <textarea id="claimEditBody" maxlength="2000"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeClaimEdit()">キャンセル</button>
+      <button id="claimEditSubmit" onclick="submitClaimEdit()">更新</button>
     </div>
   </div>
 </div>
@@ -4311,14 +4373,17 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
+  if(c.evidence_media_id){
+    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+  }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const votes='<div class="claim-votes">'+
     '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
     '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
     '</div>';
-  const canEdit=activeUser&&activeUser.user&&c.claim_type==='specification'&&Number(c.author_user_id)===Number(activeUser.user.id);
-  const editButton=canEdit?'<button class="claim-vote" onclick="editSpecificationClaim('+c.id+')">Edit</button>':'';
+  const canEdit=activeUser&&activeUser.user&&c.status==='active'&&Number(c.author_user_id)===Number(activeUser.user.id);
+  const editButton=canEdit?'<button class="claim-vote" onclick="editOwnClaim('+c.id+')">Edit</button>':'';
   return '<div class="claim-card">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
@@ -4562,6 +4627,55 @@ function openSpecificationClaim(individualId){
   renderSpecItemMenu();
   document.getElementById('specClaimModal').classList.add('open');
 }
+let editingClaimId=null;
+
+function editOwnClaim(claimId){
+  if(!activeUser||!activeUser.user)return;
+  const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
+  if(!claim||Number(claim.author_user_id)!==Number(activeUser.user.id))return;
+  if(claim.claim_type==='specification'){
+    editSpecificationClaim(claimId);
+    return;
+  }
+  editingClaimId=Number(claimId);
+  document.getElementById('claimEditTitle').textContent='Edit '+claimTypeLabel(claim.claim_type)+' Claim';
+  document.getElementById('claimEditType').textContent=claimTypeLabel(claim.claim_type);
+  document.getElementById('claimEditDate').value=String(claim.occurred_at||'').slice(0,10);
+  document.getElementById('claimEditBody').value=claim.body||'';
+  document.getElementById('claimEditModal').classList.add('open');
+}
+
+function closeClaimEdit(event){
+  if(event&&event.target&&event.target.id!=='claimEditModal')return;
+  document.getElementById('claimEditModal').classList.remove('open');
+  editingClaimId=null;
+}
+
+async function submitClaimEdit(){
+  if(!activeUser||!activeUser.user||editingClaimId===null)return;
+  const claimId=editingClaimId;
+  const button=document.getElementById('claimEditSubmit');
+  button.disabled=true;
+  try{
+    await jfetch('/api/claims/'+claimId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        occurred_at:document.getElementById('claimEditDate').value||null,
+        body:document.getElementById('claimEditBody').value.trim()||null
+      })
+    });
+    closeClaimEdit();
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await loadActiveUser();
+  }catch(e){
+    alert('Claimの更新に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
 function editSpecificationClaim(claimId){
   if(!activeUser||!activeUser.user)return;
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
