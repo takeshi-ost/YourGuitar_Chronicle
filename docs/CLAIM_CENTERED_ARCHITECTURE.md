@@ -185,3 +185,56 @@ Baseline commit:
 `e3cfd238926bb8de1e92d39d8fb6c1dce3f3455b`
 
 No architectural migration code should be backported to the baseline branch until the new pipeline passes parity and regression checks.
+
+
+## Stage 10: operational migration and trial readiness
+
+The Claim-centered write/read paths are now the normal runtime path.
+
+### Existing database migration
+
+For an existing pre-migration database:
+
+1. Back up the current database and media.
+2. Install/restore the database under the new code.
+3. Run Claim architecture diagnostics.
+   - CLI: `ygc claim-status`
+   - Web UI: use **Claim Migration** from the Browser Console.
+4. If migration is required, run:
+   - CLI: `ygc migrate-claims`
+   - Web UI: **Claim Migration**
+5. Confirm the readiness result reports:
+   - `ready = true`
+   - `unmigrated_listing_observations = 0`
+   - `claimless_individuals = 0`
+   - `incomplete_identity_claims = 0`
+   - `pending_shells = 0`
+6. Only after readiness is true, run Reverb crawl or begin normal trial use.
+
+Re-running the legacy migration is safe: Listing Claims are detected by their linked Observation and Listing item insertion is idempotent.
+
+### Crawl safety
+
+Both Web and CLI crawl paths perform a Claim architecture readiness preflight.
+
+If the database is not ready, crawling is rejected before a crawl run begins. This prevents partial mixing of legacy Observation-centered Individuals with new Claim-centered writes.
+
+### Backfill behavior
+
+The Reverb backfill operation supplements missing structured fields on existing Listing Claims.
+
+It does not update semantic fields on Observations and it does not directly update Individuals. Any resulting current-state change is applied through `rebuild_individual_snapshot(individual_id)`.
+
+### Trial readiness
+
+A database is suitable for normal trial use only when Claim architecture diagnostics report `ready = true`.
+
+At that point:
+
+- user guitar registration is Claim-first,
+- Reverb ingestion is Claim-first,
+- Current Owner and Location are snapshot-derived,
+- Listing display values come from Claims,
+- Observations are provenance/ingestion records,
+- Identity Correction and other current-state Claim changes rebuild the Individual snapshot,
+- Web and CLI crawls share the same Claim-centered persistence path.
