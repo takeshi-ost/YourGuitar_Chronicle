@@ -1853,6 +1853,144 @@ class Repository:
                 claim_id,
             )
 
+    def create_specification_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        field_name: str,
+        value_text: str,
+        occurred_at: str | None = None,
+        body: str | None = None,
+    ) -> int:
+        field = field_name.strip().lower()
+        value = value_text.strip()
+        note = (
+            body.strip()
+            if body and body.strip()
+            else None
+        )
+
+        if not field:
+            raise ValueError(
+                "field_name is required"
+            )
+        if not value:
+            raise ValueError(
+                "value_text is required"
+            )
+
+        now = utcnow()
+        event_date = (
+            occurred_at.strip()
+            if occurred_at
+            and occurred_at.strip()
+            else now[:10]
+        )
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT id
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                """
+                SELECT id
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+
+            if not user or not individual:
+                raise ValueError(
+                    "User or Individual not found"
+                )
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, NULL, ?, 'specification',
+                    ?, ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    user_id,
+                    field,
+                    value,
+                    note,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+
+            return int(
+                cur.lastrowid
+            )
+
+    def list_current_specifications(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    WITH ranked AS (
+                        SELECT
+                            c.*,
+                            u.display_name
+                                AS author_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY c.field_name
+                                ORDER BY
+                                    COALESCE(
+                                        c.occurred_at,
+                                        c.created_at
+                                    ) DESC,
+                                    c.created_at DESC,
+                                    c.id DESC
+                            ) AS row_number
+                        FROM claims c
+                        INNER JOIN users u
+                          ON u.id = c.author_user_id
+                        WHERE c.individual_id = ?
+                          AND c.claim_type = 'specification'
+                          AND c.status = 'active'
+                          AND c.field_name IS NOT NULL
+                          AND TRIM(c.field_name) <> ''
+                    )
+                    SELECT *
+                    FROM ranked
+                    WHERE row_number = 1
+                    ORDER BY
+                        field_name COLLATE NOCASE
+                    """,
+                    (individual_id,),
+                )
+            )
+
     def list_claims(
         self,
         individual_id: int,
