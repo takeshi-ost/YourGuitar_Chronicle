@@ -17,7 +17,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
@@ -48,6 +48,26 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+
+
+NO_PICTURE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="No picture">
+<rect width="640" height="360" rx="24" fill="#14171a"/>
+<rect x="18" y="18" width="604" height="324" rx="18" fill="none" stroke="#343b43" stroke-width="4"/>
+<g fill="none" stroke="#8b949e" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+<path d="M204 221c34-55 75-75 112-54 26 15 43 10 66-11 27-24 62-7 57 25-4 28-35 38-63 25-29-13-44-11-66 13-31 34-78 37-106 2z"/>
+<path d="M383 171l94-94"/>
+<path d="M464 91l38-38"/>
+<path d="M487 66l24 24"/>
+</g>
+<text x="320" y="300" text-anchor="middle" fill="#8b949e" font-family="Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="3">NO PICTURE</text>
+</svg>"""
+
+NO_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="No user icon">
+<rect width="256" height="256" rx="36" fill="#14171a"/>
+<circle cx="128" cy="92" r="42" fill="#59636d"/>
+<path d="M51 218c7-47 36-76 77-76s70 29 77 76" fill="#59636d"/>
+<rect x="12" y="12" width="232" height="232" rx="30" fill="none" stroke="#343b43" stroke-width="4"/>
+</svg>"""
 
 
 def repo() -> Repository:
@@ -1619,6 +1639,186 @@ def api_reset_db(request: ResetDatabaseRequest) -> dict[str, Any]:
     }
 
 
+@app.get("/assets/no-picture.svg")
+def no_picture_asset() -> Response:
+    return Response(
+        NO_PICTURE_SVG,
+        media_type="image/svg+xml",
+    )
+
+
+@app.get("/assets/no-icon.svg")
+def no_icon_asset() -> Response:
+    return Response(
+        NO_ICON_SVG,
+        media_type="image/svg+xml",
+    )
+
+
+@app.get("/api/users/{user_id}/avatar")
+def api_user_avatar(
+    user_id: int,
+):
+    repository = repo()
+    user, _guitars = repository.get_user(
+        user_id
+    )
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    raw_path = str(
+        user["avatar_storage_path"]
+        or ""
+    ).strip()
+    if raw_path:
+        data_root = config.DATA_DIR.resolve()
+        path = (
+            config.DATA_DIR
+            / raw_path
+        ).resolve()
+        if (
+            path.is_relative_to(data_root)
+            and path.is_file()
+        ):
+            return FileResponse(
+                path,
+                media_type=(
+                    user["avatar_mime_type"]
+                    or "application/octet-stream"
+                ),
+            )
+
+    return Response(
+        NO_ICON_SVG,
+        media_type="image/svg+xml",
+    )
+
+
+@app.post("/api/users/{user_id}/avatar")
+async def api_update_user_avatar(
+    user_id: int,
+    avatar: UploadFile = File(...),
+) -> dict[str, Any]:
+    repository = repo()
+    user, _guitars = repository.get_user(
+        user_id
+    )
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    content_type = (
+        avatar.content_type
+        or ""
+    ).lower()
+    extension = ALLOWED_IMAGE_TYPES.get(
+        content_type
+    )
+    if not extension:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "User image must be JPEG, PNG, "
+                "WebP, or GIF"
+            ),
+        )
+
+    image_bytes = await avatar.read(
+        MAX_IMAGE_BYTES + 1
+    )
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="User image is empty",
+        )
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "User image must be "
+                "12 MB or smaller"
+            ),
+        )
+
+    avatar_dir = MEDIA_DIR / "users"
+    avatar_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    stored_name = (
+        uuid.uuid4().hex
+        + extension
+    )
+    stored_path = (
+        avatar_dir
+        / stored_name
+    )
+    relative_storage_path = (
+        Path("media")
+        / "users"
+        / stored_name
+    ).as_posix()
+
+    try:
+        stored_path.write_bytes(
+            image_bytes
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save user image",
+        ) from exc
+
+    old_path = str(
+        user["avatar_storage_path"]
+        or ""
+    ).strip()
+
+    try:
+        updated = repository.update_user_avatar(
+            user_id,
+            storage_path=(
+                relative_storage_path
+            ),
+            original_filename=avatar.filename,
+            mime_type=content_type,
+        )
+    except Exception:
+        _safe_unlink(stored_path)
+        raise
+
+    if not updated:
+        _safe_unlink(stored_path)
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    if old_path:
+        old_file = (
+            config.DATA_DIR
+            / old_path
+        ).resolve()
+        media_root = MEDIA_DIR.resolve()
+        if (
+            old_file.is_relative_to(media_root)
+            and old_file != stored_path.resolve()
+        ):
+            _safe_unlink(old_file)
+
+    return {
+        "ok": True,
+        "avatar_url": (
+            f"/api/users/{user_id}/avatar"
+        ),
+    }
+
+
 @app.get("/api/individuals")
 def api_individuals() -> list[dict[str, Any]]:
     return [_row_dict(row) for row in repo().list_individuals()]
@@ -2960,11 +3160,11 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .chronicle-toolbar select{width:auto;min-width:130px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
-.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-.claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
-.claim-body{font-size:13px;line-height:1.55}
+.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
+.claim-body{font-size:12px;line-height:1.5}
 .claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
@@ -3322,12 +3522,14 @@ async function showIndividual(id){
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
-    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy"><span class="detail-source">Representative Image</span>';
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(imageObservation){
     const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
+    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
     else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
+  }else{
+    out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
   const specMap={};
   for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
@@ -3476,13 +3678,14 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .chronicle-toolbar select{width:auto;min-width:130px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
-.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-.claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
-.claim-body{font-size:13px;line-height:1.55}
+.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
+.claim-body{font-size:12px;line-height:1.5}
 .claim-memo{margin-top:8px;white-space:pre-wrap}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}.spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-scroll-modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
+.user-profile-row{display:flex;align-items:center;gap:14px;margin:2px 0 14px}.user-avatar{width:84px;height:84px;object-fit:cover;border:1px solid var(--line);border-radius:14px;background:#111418}.user-avatar-controls{flex:1;min-width:0}.user-avatar-controls input{margin-top:5px}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
@@ -3723,6 +3926,10 @@ function renderAccount(){
   const formerGuitars=allGuitars.filter(g=>g.ownership_status==='former_owner');
   el.className='';
   el.innerHTML=
+    '<div class="user-profile-row">'+
+      '<img class="user-avatar" id="userAvatarPreview" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<div class="user-avatar-controls"><span class="detail-meta-label">User Image</span><input id="accountAvatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="uploadUserAvatar(this)"><div class="sub">JPEG / PNG / WebP / GIF、12MB以下</div></div>'+
+    '</div>'+
     '<div class="detail-meta-grid">'+
       '<div class="detail-meta-item"><span class="detail-meta-label">Display Name</span><input id="accountName" value="'+esc(u.display_name||'')+'"></div>'+
       '<div class="detail-meta-item"><span class="detail-meta-label">Account Type</span><select id="accountType"><option value="user"'+(u.account_type==='user'?' selected':'')+'>User</option><option value="shop"'+(u.account_type==='shop'?' selected':'')+'>Shop</option></select></div>'+
@@ -3878,6 +4085,24 @@ async function submitNewGuitar(){
     alert('新規ギター登録に失敗しました.\n'+e.message);
   }finally{
     button.disabled=false;
+  }
+}
+
+async function uploadUserAvatar(input){
+  if(!activeUser||!activeUser.user||!input||!input.files||!input.files[0])return;
+  const form=new FormData();
+  form.append('avatar',input.files[0]);
+  input.disabled=true;
+  try{
+    await jfetch('/api/users/'+activeUser.user.id+'/avatar',{
+      method:'POST',
+      body:form
+    });
+    activeUser=await jfetch('/api/users/'+activeUser.user.id);
+    renderAccount();
+  }catch(e){
+    alert('ユーザー画像の保存に失敗しました。\\n'+e.message);
+    input.disabled=false;
   }
 }
 
@@ -4172,12 +4397,14 @@ async function showIndividual(id){
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
-    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy"><span class="detail-source">Representative Image</span>';
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(imageObservation){
     const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';
+    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(sourceName(imageObservation))+'</a></span>';
     else out+=image+'<span class="detail-source">Source: '+esc(sourceName(imageObservation))+'</span>';
+  }else{
+    out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
   const specMap={};
   for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
