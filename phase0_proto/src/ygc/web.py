@@ -325,6 +325,13 @@ class UserGuitarLinkRequest(BaseModel):
     )
 
 
+class UserGuitarOrderRequest(BaseModel):
+    individual_ids: list[int] = Field(
+        min_length=0,
+        max_length=500,
+    )
+
+
 def _run_batch(
     job_id: str,
     request: CrawlRequest,
@@ -1231,6 +1238,47 @@ def api_link_user_guitar(
     }
 
 
+@app.post("/api/users/{user_id}/guitars/reorder")
+def api_reorder_user_guitars(
+    user_id: int,
+    request: UserGuitarOrderRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    reordered = repository.reorder_user_guitars(
+        user_id,
+        request.individual_ids,
+    )
+
+    if not reordered:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Owned guitar order does not match "
+                "the user's current guitars"
+            ),
+        )
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    return {
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row
+            in guitars
+        ],
+    }
+
+
 @app.delete(
     "/api/users/{user_id}/guitars/{individual_id}"
 )
@@ -1894,6 +1942,12 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
 .observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
+.owned-list{display:flex;flex-direction:column;gap:6px}
+.owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}
+.owned-row.dragging{opacity:.45}
+.drag-handle{cursor:grab;color:var(--muted);font-size:16px;text-align:center;user-select:none}
+.owned-cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.owned-head{color:var(--muted);font-size:10px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
 </style>
@@ -1998,6 +2052,7 @@ async function createUser(){
 }
 
 async function setActiveUser(value){
+  selectedIndividualId=null;
   if(value){
     localStorage.setItem(ACTIVE_USER_KEY,String(value));
     await loadActiveUser();
@@ -2019,6 +2074,10 @@ async function loadActiveUser(){
   try{
     activeUser=await jfetch('/api/users/'+id);
     renderAccount();
+    const firstOwned=(activeUser.guitars||[]).find(g=>g.ownership_status==='current_owner');
+    if(firstOwned&&selectedIndividualId===null){
+      await showIndividual(firstOwned.individual_id);
+    }
   }catch(e){
     activeUser=null;
     localStorage.removeItem(ACTIVE_USER_KEY);
@@ -2046,14 +2105,63 @@ function renderAccount(){
     '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">User ID '+esc(u.id)+'</span></div>'+
     '<div class="detail-section">Owned Guitars</div>'+
     (guitars.length
-      ? guitars.map(g=>
-        '<div class="observation-card">'+
-          '<div class="observation-card-head"><div class="observation-date">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div><div class="observation-source">'+esc(g.ownership_status||'')+'</div></div>'+
-          '<div class="sub">'+esc(g.year||'')+(g.finish?' / '+esc(g.finish):'')+(g.serial_number?' / '+esc(g.serial_number):'')+'</div>'+
-          '<div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button><button class="bad" onclick="unlinkOwnedGuitar('+g.individual_id+')">紐づけ解除</button></div>'+
+      ? '<div class="owned-list" id="ownedGuitarList">'+
+        '<div class="owned-row" style="background:transparent;border:0;padding-top:0;padding-bottom:2px">'+
+          '<div></div><div class="owned-head">Guitar</div><div class="owned-head">Year</div><div class="owned-head">Finish</div><div class="owned-head">Serial</div><div class="owned-head">Status</div><div></div>'+
+        '</div>'+
+        guitars.map(g=>
+          '<div class="owned-row" draggable="true" data-individual-id="'+g.individual_id+'" ondragstart="ownedDragStart(event)" ondragover="ownedDragOver(event)" ondrop="ownedDrop(event)" ondragend="ownedDragEnd(event)">'+
+            '<div class="drag-handle" title="ドラッグして並び替え">☰</div>'+
+            '<div class="owned-cell" title="'+esc(g.manufacturer)+' '+esc(g.model||'')+'">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div>'+
+            '<div class="owned-cell">'+esc(g.year||'—')+'</div>'+
+            '<div class="owned-cell" title="'+esc(g.finish||'')+'">'+esc(g.finish||'—')+'</div>'+
+            '<div class="owned-cell mono" title="'+esc(g.serial_number||'')+'">'+esc(g.serial_number||'—')+'</div>'+
+            '<div class="owned-cell">'+esc(g.ownership_status||'')+'</div>'+
+            '<div><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button></div>'+
+          '</div>'
+        ).join('')+
         '</div>'
-      ).join('')
       : '<div class="sub">まだ所有ギターは登録されていません。</div>');
+}
+
+let ownedDraggedId=null;
+function ownedDragStart(event){
+  const row=event.currentTarget;
+  ownedDraggedId=Number(row.dataset.individualId);
+  row.classList.add('dragging');
+  event.dataTransfer.effectAllowed='move';
+}
+function ownedDragOver(event){
+  event.preventDefault();
+  const row=event.currentTarget;
+  if(Number(row.dataset.individualId)===ownedDraggedId)return;
+  const list=document.getElementById('ownedGuitarList');
+  const dragging=list&&list.querySelector('.owned-row.dragging');
+  if(!dragging)return;
+  const rect=row.getBoundingClientRect();
+  if(event.clientY<rect.top+rect.height/2)list.insertBefore(dragging,row);
+  else list.insertBefore(dragging,row.nextSibling);
+}
+function ownedDrop(event){
+  event.preventDefault();
+}
+async function ownedDragEnd(event){
+  event.currentTarget.classList.remove('dragging');
+  ownedDraggedId=null;
+  const list=document.getElementById('ownedGuitarList');
+  if(!list||!activeUser||!activeUser.user)return;
+  const ids=[...list.querySelectorAll('.owned-row[data-individual-id]')].map(row=>Number(row.dataset.individualId));
+  try{
+    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/reorder',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({individual_ids:ids})
+    });
+    renderAccount();
+  }catch(e){
+    alert('並び替えの保存に失敗しました。\n'+e.message);
+    await loadActiveUser();
+  }
 }
 
 async function saveUser(){
