@@ -771,6 +771,293 @@ class Repository:
             }
 
 
+    def create_user(
+        self,
+        display_name: str | None = None,
+    ) -> int:
+        now = utcnow()
+
+        with self.connect() as con:
+            if display_name:
+                name = display_name.strip()
+            else:
+                next_id = int(
+                    con.execute(
+                        "SELECT COALESCE(MAX(id), 0) + 1 FROM users"
+                    ).fetchone()[0]
+                )
+                name = f"User {next_id}"
+
+            cur = con.execute(
+                """
+                INSERT INTO users (
+                    display_name,
+                    account_type,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, 'user', ?, ?)
+                """,
+                (
+                    name or "User",
+                    now,
+                    now,
+                ),
+            )
+
+            return int(
+                cur.lastrowid
+            )
+
+    def list_users(
+        self,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        u.*,
+                        COUNT(
+                            CASE
+                                WHEN ug.ownership_status
+                                     = 'current_owner'
+                                THEN 1
+                            END
+                        ) AS current_guitar_count
+                    FROM users u
+                    LEFT JOIN user_guitars ug
+                      ON ug.user_id = u.id
+                    GROUP BY u.id
+                    ORDER BY u.id
+                    """
+                )
+            )
+
+    def get_user(
+        self,
+        user_id: int,
+    ) -> tuple[
+        sqlite3.Row | None,
+        list[sqlite3.Row],
+    ]:
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE id = ?
+                """,
+                (
+                    user_id,
+                ),
+            ).fetchone()
+
+            guitars = list(
+                con.execute(
+                    """
+                    SELECT
+                        ug.*,
+                        i.manufacturer,
+                        i.model,
+                        i.finish,
+                        i.year,
+                        i.serial_number
+                    FROM user_guitars ug
+                    INNER JOIN individuals i
+                      ON i.id = ug.individual_id
+                    WHERE ug.user_id = ?
+                    ORDER BY
+                        CASE
+                            WHEN ug.ownership_status
+                                 = 'current_owner'
+                            THEN 0
+                            ELSE 1
+                        END,
+                        i.manufacturer,
+                        i.model,
+                        i.id
+                    """,
+                    (
+                        user_id,
+                    ),
+                )
+            )
+
+            return (
+                user,
+                guitars,
+            )
+
+    def update_user(
+        self,
+        user_id: int,
+        *,
+        display_name: str,
+        account_type: str,
+        location_country: str | None,
+        location_region: str | None,
+    ) -> bool:
+        name = display_name.strip()
+        account = account_type.strip().lower()
+
+        if not name:
+            raise ValueError(
+                "display_name is required"
+            )
+
+        if account not in (
+            "user",
+            "shop",
+        ):
+            raise ValueError(
+                "account_type must be user or shop"
+            )
+
+        with self.connect() as con:
+            cur = con.execute(
+                """
+                UPDATE users
+                SET display_name = ?,
+                    account_type = ?,
+                    location_country = ?,
+                    location_region = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    name,
+                    account,
+                    (
+                        location_country.strip()
+                        if location_country
+                        else None
+                    ),
+                    (
+                        location_region.strip()
+                        if location_region
+                        else None
+                    ),
+                    utcnow(),
+                    user_id,
+                ),
+            )
+
+            return (
+                cur.rowcount
+                > 0
+            )
+
+    def link_user_guitar(
+        self,
+        user_id: int,
+        individual_id: int,
+        ownership_status: str = (
+            "current_owner"
+        ),
+        acquired_at: str | None = None,
+        released_at: str | None = None,
+    ) -> bool:
+        status = (
+            ownership_status
+            .strip()
+            .lower()
+        )
+
+        if status not in (
+            "current_owner",
+            "former_owner",
+        ):
+            raise ValueError(
+                "ownership_status must be "
+                "current_owner or former_owner"
+            )
+
+        now = utcnow()
+
+        with self.connect() as con:
+            if not con.execute(
+                "SELECT 1 FROM users WHERE id = ?",
+                (
+                    user_id,
+                ),
+            ).fetchone():
+                return False
+
+            if not con.execute(
+                "SELECT 1 FROM individuals WHERE id = ?",
+                (
+                    individual_id,
+                ),
+            ).fetchone():
+                return False
+
+            con.execute(
+                """
+                INSERT INTO user_guitars (
+                    user_id,
+                    individual_id,
+                    ownership_status,
+                    acquired_at,
+                    released_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(
+                    user_id,
+                    individual_id
+                )
+                DO UPDATE SET
+                    ownership_status
+                        = excluded.ownership_status,
+                    acquired_at
+                        = COALESCE(
+                            excluded.acquired_at,
+                            user_guitars.acquired_at
+                        ),
+                    released_at
+                        = excluded.released_at,
+                    updated_at
+                        = excluded.updated_at
+                """,
+                (
+                    user_id,
+                    individual_id,
+                    status,
+                    acquired_at,
+                    released_at,
+                    now,
+                    now,
+                ),
+            )
+
+            return True
+
+    def unlink_user_guitar(
+        self,
+        user_id: int,
+        individual_id: int,
+    ) -> bool:
+        with self.connect() as con:
+            cur = con.execute(
+                """
+                DELETE FROM user_guitars
+                WHERE user_id = ?
+                  AND individual_id = ?
+                """,
+                (
+                    user_id,
+                    individual_id,
+                ),
+            )
+
+            return (
+                cur.rowcount
+                > 0
+            )
+
+
     def start_run(
         self,
         source_site: str,
