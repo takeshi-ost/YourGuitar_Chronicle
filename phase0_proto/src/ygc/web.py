@@ -332,6 +332,37 @@ class UserGuitarOrderRequest(BaseModel):
     )
 
 
+class InitialListingClaimRequest(BaseModel):
+    manufacturer: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+    model: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+    finish: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+    year: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    serial_number: str = Field(
+        min_length=1,
+        max_length=160,
+    )
+    occurred_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 class OwnerChangeClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     acquired_at: str | None = Field(
@@ -1130,6 +1161,56 @@ def api_individual_claims(
             viewer_user_id=viewer_user_id,
         )
     ]
+
+
+@app.post("/api/users/{user_id}/new-guitar")
+def api_create_new_guitar(
+    user_id: int,
+    request: InitialListingClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        (
+            individual_id,
+            observation_id,
+            claim_id,
+        ) = repository.create_initial_listing_claim(
+            user_id,
+            manufacturer=request.manufacturer,
+            model=request.model,
+            finish=request.finish,
+            year=request.year,
+            serial_number=request.serial_number,
+            occurred_at=request.occurred_at,
+            body=request.body,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = (
+            409
+            if "already exists" in message
+            else 400
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=message,
+        ) from exc
+
+    user, guitars = repository.get_user(
+        user_id
+    )
+
+    return {
+        "individual_id": individual_id,
+        "observation_id": observation_id,
+        "claim_id": claim_id,
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row in guitars
+        ],
+    }
 
 
 @app.post("/api/individuals/{individual_id}/owner-change-claim")
@@ -2332,7 +2413,10 @@ function claimCard(c){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
     const details=[];
-    if(c.seller)details.push('Seller: '+c.seller);
+    const listingOwner=String(c.observed_owner_name||'').trim();
+    const seller=String(c.seller||'').trim();
+    if(listingOwner&&listingOwner!==seller)details.push('Owner: '+listingOwner);
+    if(seller)details.push('Seller: '+seller);
     const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
     if(location)details.push('Location: '+location);
     const specs=[
@@ -2343,6 +2427,7 @@ function claimCard(c){
     ].filter(Boolean).join(' / ');
     if(specs)details.push(specs);
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
+    if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
     if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
@@ -2543,6 +2628,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-memo{margin-top:8px;white-space:pre-wrap}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
@@ -2590,6 +2676,48 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <button class="secondary" onclick="window.location.href='/user-view'">Close</button>
 </div>
 </main>
+
+<div class="modal-backdrop" id="newGuitarModal" onclick="closeNewGuitar(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>新しいギターを登録する</h2>
+    <div class="sub" style="margin-bottom:14px">最初のListing Claimを作成し、このUserを初期Ownerとして登録します。</div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="newGuitarMaker">Maker *</label>
+        <input id="newGuitarMaker" maxlength="120" placeholder="Fender">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newGuitarModel">Model</label>
+        <input id="newGuitarModel" maxlength="160" placeholder="Telecaster Thinline">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newGuitarYear">Year</label>
+        <input id="newGuitarYear" maxlength="40" placeholder="1976">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newGuitarFinish">Finish</label>
+        <input id="newGuitarFinish" maxlength="160" placeholder="Natural">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newGuitarSerial">Serial *</label>
+        <input id="newGuitarSerial" maxlength="160" placeholder="Serial number">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newGuitarDate">Listing Date</label>
+        <input id="newGuitarDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="newGuitarMemo">Claim memo（任意）</label>
+        <textarea id="newGuitarMemo" maxlength="2000" placeholder="初期状態についてのメモ"></textarea>
+      </div>
+    </div>
+    <div class="sub">同じMaker / Model / SerialのIndividualが既にある場合は新規作成しません。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeNewGuitar()">キャンセル</button>
+      <button id="newGuitarSubmit" onclick="submitNewGuitar()">Listing Claimを作成</button>
+    </div>
+  </div>
+</div>
 
 <script>
 let individuals=[];
@@ -2761,7 +2889,59 @@ async function ownedDragEnd(event){
 }
 
 function registerNewGuitar(){
-  window.location.href='/user-view';
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  document.getElementById('newGuitarMaker').value='';
+  document.getElementById('newGuitarModel').value='';
+  document.getElementById('newGuitarYear').value='';
+  document.getElementById('newGuitarFinish').value='';
+  document.getElementById('newGuitarSerial').value='';
+  document.getElementById('newGuitarDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('newGuitarMemo').value='';
+  document.getElementById('newGuitarModal').classList.add('open');
+  document.getElementById('newGuitarMaker').focus();
+}
+function closeNewGuitar(event){
+  if(event&&event.target&&event.target.id!=='newGuitarModal')return;
+  document.getElementById('newGuitarModal').classList.remove('open');
+}
+async function submitNewGuitar(){
+  if(!activeUser||!activeUser.user)return;
+  const manufacturer=document.getElementById('newGuitarMaker').value.trim();
+  const serial=document.getElementById('newGuitarSerial').value.trim();
+  if(!manufacturer||!serial){
+    alert('Maker と Serial は必須です。');
+    return;
+  }
+  const button=document.getElementById('newGuitarSubmit');
+  button.disabled=true;
+  try{
+    const payload={
+      manufacturer,
+      model:document.getElementById('newGuitarModel').value.trim()||null,
+      year:document.getElementById('newGuitarYear').value.trim()||null,
+      finish:document.getElementById('newGuitarFinish').value.trim()||null,
+      serial_number:serial,
+      occurred_at:document.getElementById('newGuitarDate').value||null,
+      body:document.getElementById('newGuitarMemo').value.trim()||null
+    };
+    const d=await jfetch('/api/users/'+activeUser.user.id+'/new-guitar',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeNewGuitar();
+    renderAccount();
+    selectedIndividualId=Number(d.individual_id);
+    await showIndividual(d.individual_id);
+  }catch(e){
+    alert('新規ギター登録に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
 }
 
 async function saveUser(){
@@ -2919,7 +3099,10 @@ function claimCard(c){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
     const details=[];
-    if(c.seller)details.push('Seller: '+c.seller);
+    const listingOwner=String(c.observed_owner_name||'').trim();
+    const seller=String(c.seller||'').trim();
+    if(listingOwner&&listingOwner!==seller)details.push('Owner: '+listingOwner);
+    if(seller)details.push('Seller: '+seller);
     const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
     if(location)details.push('Location: '+location);
     const specs=[
@@ -2930,6 +3113,7 @@ function claimCard(c){
     ].filter(Boolean).join(' / ');
     if(specs)details.push(specs);
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
+    if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
     if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
