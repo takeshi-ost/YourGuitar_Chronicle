@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import shutil
 import sqlite3
 import tempfile
 import threading
 import time
 import uuid
 import webbrowser
+import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import uvicorn
@@ -798,6 +801,244 @@ def _run_metadata_backfill(
                 _active_job_id = None
 
 
+def _backup_manifest(
+    media_count: int,
+) -> dict[str, Any]:
+    return {
+        "format": "your-guitar-chronicle-backup",
+        "version": 1,
+        "exported_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "database": "chronicle.db",
+        "media_root": "media",
+        "media_count": media_count,
+    }
+
+
+def _safe_backup_member(
+    name: str,
+) -> PurePosixPath:
+    path = PurePosixPath(
+        name
+    )
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or not path.parts
+    ):
+        raise ValueError(
+            "Backup contains an unsafe path"
+        )
+
+    allowed = (
+        name == "chronicle.db"
+        or name == "manifest.json"
+        or (
+            path.parts[0] == "media"
+            and len(path.parts) >= 2
+        )
+    )
+    if not allowed:
+        raise ValueError(
+            f"Unexpected backup entry: {name}"
+        )
+
+    return path
+
+
+def _validate_backup_archive(
+    archive_path: Path,
+    extract_root: Path,
+) -> tuple[Path, Path, dict[str, Any]]:
+    max_uncompressed = (
+        1024
+        * 1024
+        * 1024
+    )
+    total_uncompressed = 0
+
+    try:
+        with zipfile.ZipFile(
+            archive_path,
+            "r",
+        ) as archive:
+            infos = archive.infolist()
+            names = {
+                info.filename
+                for info in infos
+            }
+            if "chronicle.db" not in names:
+                raise ValueError(
+                    "Backup does not contain chronicle.db"
+                )
+
+            for info in infos:
+                if info.is_dir():
+                    continue
+
+                member = _safe_backup_member(
+                    info.filename
+                )
+                total_uncompressed += (
+                    info.file_size
+                )
+                if (
+                    total_uncompressed
+                    > max_uncompressed
+                ):
+                    raise ValueError(
+                        "Backup expands beyond the 1 GB safety limit"
+                    )
+
+                destination = (
+                    extract_root
+                    / Path(
+                        *member.parts
+                    )
+                )
+                destination.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+                with archive.open(
+                    info,
+                    "r",
+                ) as source:
+                    with destination.open(
+                        "wb",
+                    ) as output:
+                        shutil.copyfileobj(
+                            source,
+                            output,
+                            length=1024 * 1024,
+                        )
+
+    except zipfile.BadZipFile as exc:
+        raise ValueError(
+            "Selected file is not a valid YGC backup ZIP"
+        ) from exc
+
+    manifest_path = (
+        extract_root
+        / "manifest.json"
+    )
+    manifest: dict[str, Any] = {}
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(
+                manifest_path.read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (
+            json.JSONDecodeError,
+            OSError,
+        ) as exc:
+            raise ValueError(
+                "Backup manifest is invalid"
+            ) from exc
+
+        if (
+            manifest.get("format")
+            != "your-guitar-chronicle-backup"
+        ):
+            raise ValueError(
+                "Backup manifest format is not supported"
+            )
+        if int(
+            manifest.get(
+                "version",
+                0,
+            )
+        ) != 1:
+            raise ValueError(
+                "Backup version is not supported"
+            )
+
+    db_path = (
+        extract_root
+        / "chronicle.db"
+    )
+    media_root = (
+        extract_root
+        / "media"
+    )
+
+    return (
+        db_path,
+        media_root,
+        manifest,
+    )
+
+
+def _validate_backup_media_references(
+    db_path: Path,
+    media_root: Path,
+) -> int:
+    with sqlite3.connect(
+        db_path
+    ) as con:
+        tables = {
+            str(row[0])
+            for row in con.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                """
+            )
+        }
+        if "media_assets" not in tables:
+            return 0
+
+        rows = list(
+            con.execute(
+                """
+                SELECT storage_path
+                FROM media_assets
+                WHERE media_type = 'image'
+                  AND storage_path IS NOT NULL
+                  AND TRIM(storage_path) <> ''
+                """
+            )
+        )
+
+    checked = 0
+    for row in rows:
+        raw = str(
+            row[0]
+        ).strip()
+        rel = PurePosixPath(
+            raw
+        )
+        if (
+            rel.is_absolute()
+            or ".." in rel.parts
+            or not rel.parts
+            or rel.parts[0] != "media"
+        ):
+            raise ValueError(
+                f"Invalid media path in backup database: {raw}"
+            )
+
+        file_path = (
+            media_root.parent
+            / Path(
+                *rel.parts
+            )
+        )
+        if not file_path.is_file():
+            raise ValueError(
+                "Backup is missing a media file "
+                f"referenced by the database: {raw}"
+            )
+        checked += 1
+
+    return checked
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     return HTMLResponse(INDEX_HTML)
@@ -849,30 +1090,103 @@ def api_statistics() -> dict[str, Any]:
 @app.get("/api/export-db")
 def api_export_db() -> FileResponse:
     repository = repo()
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    download_name = f"ygc_chronicle_{timestamp}.db"
-
-    temp_file = tempfile.NamedTemporaryFile(
-        prefix="ygc_export_",
-        suffix=".db",
-        delete=False,
+    timestamp = datetime.now(
+        timezone.utc
+    ).strftime(
+        "%Y%m%d_%H%M%S"
     )
-    temp_path = Path(temp_file.name)
-    temp_file.close()
+    download_name = (
+        f"ygc_backup_{timestamp}.zip"
+    )
+
+    temp_dir = Path(
+        tempfile.mkdtemp(
+            prefix="ygc_backup_",
+        )
+    )
+    db_snapshot = (
+        temp_dir
+        / "chronicle.db"
+    )
+    archive_path = (
+        temp_dir
+        / "backup.zip"
+    )
 
     try:
         with repository.connect() as source:
-            with sqlite3.connect(temp_path) as destination:
-                source.backup(destination)
+            with sqlite3.connect(
+                db_snapshot
+            ) as destination:
+                source.backup(
+                    destination
+                )
+
+        media_files = (
+            [
+                path
+                for path
+                in MEDIA_DIR.rglob("*")
+                if path.is_file()
+            ]
+            if MEDIA_DIR.is_dir()
+            else []
+        )
+
+        with zipfile.ZipFile(
+            archive_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            archive.write(
+                db_snapshot,
+                "chronicle.db",
+            )
+
+            for media_path in media_files:
+                relative = (
+                    media_path
+                    .relative_to(
+                        MEDIA_DIR
+                    )
+                )
+                archive.write(
+                    media_path,
+                    (
+                        Path("media")
+                        / relative
+                    ).as_posix(),
+                )
+
+            archive.writestr(
+                "manifest.json",
+                json.dumps(
+                    _backup_manifest(
+                        len(
+                            media_files
+                        )
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
 
         return FileResponse(
-            path=temp_path,
+            path=archive_path,
             filename=download_name,
-            media_type="application/vnd.sqlite3",
-            background=BackgroundTask(_safe_unlink, temp_path),
+            media_type="application/zip",
+            background=BackgroundTask(
+                shutil.rmtree,
+                temp_dir,
+                True,
+            ),
         )
     except Exception:
-        _safe_unlink(temp_path)
+        shutil.rmtree(
+            temp_dir,
+            ignore_errors=True,
+        )
         raise
 
 
@@ -892,7 +1206,7 @@ async def api_import_db(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Cannot import a database "
+                    "Cannot import a backup "
                     "while a background job is running"
                 ),
             )
@@ -904,7 +1218,7 @@ async def api_import_db(
     )
 
     max_size = (
-        100
+        512
         * 1024
         * 1024
     )
@@ -920,8 +1234,8 @@ async def api_import_db(
                 raise HTTPException(
                     status_code=413,
                     detail=(
-                        "Database file is too large "
-                        "(maximum 100 MB)"
+                        "Backup file is too large "
+                        "(maximum 512 MB)"
                     ),
                 )
         except ValueError:
@@ -933,7 +1247,7 @@ async def api_import_db(
         raise HTTPException(
             status_code=400,
             detail=(
-                "No database file was uploaded"
+                "No backup file was uploaded"
             ),
         )
 
@@ -941,8 +1255,8 @@ async def api_import_db(
         raise HTTPException(
             status_code=413,
             detail=(
-                "Database file is too large "
-                "(maximum 100 MB)"
+                "Backup file is too large "
+                "(maximum 512 MB)"
             ),
         )
 
@@ -954,31 +1268,71 @@ async def api_import_db(
         exist_ok=True,
     )
 
-    temp_file = (
-        tempfile
-        .NamedTemporaryFile(
+    work_root = Path(
+        tempfile.mkdtemp(
             prefix="ygc_import_",
-            suffix=".db",
             dir=db_path.parent,
-            delete=False,
         )
     )
-
-    temp_path = Path(
-        temp_file.name
+    upload_path = (
+        work_root
+        / "upload.bin"
     )
+    upload_path.write_bytes(
+        payload
+    )
+
+    is_zip = zipfile.is_zipfile(
+        upload_path
+    )
+    imported_media_count = 0
+    legacy_database = not is_zip
 
     try:
-        temp_file.write(
-            payload
-        )
-        temp_file.flush()
-        temp_file.close()
+        if is_zip:
+            extract_root = (
+                work_root
+                / "extracted"
+            )
+            extract_root.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            try:
+                (
+                    imported_db,
+                    imported_media_root,
+                    _manifest,
+                ) = _validate_backup_archive(
+                    upload_path,
+                    extract_root,
+                )
+                imported_media_count = (
+                    _validate_backup_media_references(
+                        imported_db,
+                        imported_media_root,
+                    )
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(exc),
+                ) from exc
+        else:
+            imported_db = upload_path
+            imported_media_root = (
+                work_root
+                / "empty_media"
+            )
+            imported_media_root.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
 
         try:
             imported_counts = (
                 _validate_import_database(
-                    temp_path
+                    imported_db
                 )
             )
         except ValueError as exc:
@@ -987,9 +1341,38 @@ async def api_import_db(
                 detail=str(exc),
             ) from exc
 
+        rollback_db = (
+            work_root
+            / "rollback.db"
+        )
+        repository = Repository(
+            db_path
+        )
+        repository.init_db()
+        with repository.connect() as source:
+            with sqlite3.connect(
+                rollback_db
+            ) as destination:
+                source.backup(
+                    destination
+                )
+
+        rollback_media = (
+            work_root
+            / "rollback_media"
+        )
+        had_media = (
+            MEDIA_DIR.is_dir()
+        )
+        if had_media:
+            shutil.copytree(
+                MEDIA_DIR,
+                rollback_media,
+            )
+
         try:
             with sqlite3.connect(
-                temp_path
+                imported_db
             ) as source:
                 with sqlite3.connect(
                     db_path
@@ -1000,36 +1383,90 @@ async def api_import_db(
                     destination.execute(
                         "PRAGMA wal_checkpoint(TRUNCATE)"
                     )
-        except (
-            sqlite3.Error,
-            OSError,
-        ) as exc:
+
+            for sidecar in (
+                Path(
+                    str(db_path)
+                    + "-wal"
+                ),
+                Path(
+                    str(db_path)
+                    + "-shm"
+                ),
+            ):
+                _safe_unlink(
+                    sidecar
+                )
+
+            if MEDIA_DIR.exists():
+                shutil.rmtree(
+                    MEDIA_DIR
+                )
+
+            if (
+                not legacy_database
+                and imported_media_root.is_dir()
+            ):
+                shutil.copytree(
+                    imported_media_root,
+                    MEDIA_DIR,
+                )
+            else:
+                MEDIA_DIR.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+            repository = Repository(
+                db_path
+            )
+            repository.init_db()
+
+        except Exception as exc:
+            try:
+                with sqlite3.connect(
+                    rollback_db
+                ) as source:
+                    with sqlite3.connect(
+                        db_path
+                    ) as destination:
+                        source.backup(
+                            destination
+                        )
+
+                if MEDIA_DIR.exists():
+                    shutil.rmtree(
+                        MEDIA_DIR
+                    )
+
+                if (
+                    had_media
+                    and rollback_media.is_dir()
+                ):
+                    shutil.copytree(
+                        rollback_media,
+                        MEDIA_DIR,
+                    )
+                else:
+                    MEDIA_DIR.mkdir(
+                        parents=True,
+                        exist_ok=True,
+                    )
+            except Exception:
+                pass
+
+            if isinstance(
+                exc,
+                HTTPException,
+            ):
+                raise
             raise HTTPException(
                 status_code=500,
                 detail=(
                     "Could not install imported "
-                    f"database: {exc}"
+                    f"backup: {exc}"
                 ),
             ) from exc
-
-        for sidecar in (
-            Path(
-                str(db_path)
-                + "-wal"
-            ),
-            Path(
-                str(db_path)
-                + "-shm"
-            ),
-        ):
-            _safe_unlink(
-                sidecar
-            )
-
-        repository = Repository(
-            db_path
-        )
-        repository.init_db()
 
         return {
             "ok": True,
@@ -1039,19 +1476,21 @@ async def api_import_db(
             "imported_counts": (
                 imported_counts
             ),
+            "imported_media_count": (
+                imported_media_count
+            ),
+            "legacy_database": (
+                legacy_database
+            ),
             "stats": (
                 repository.stats()
             ),
         }
 
     finally:
-        try:
-            temp_file.close()
-        except OSError:
-            pass
-
-        _safe_unlink(
-            temp_path
+        shutil.rmtree(
+            work_root,
+            ignore_errors=True,
         )
 
 
@@ -1922,7 +2361,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">DBエクスポート</button><button class="secondary" onclick="openDatabaseImport()">DBインポート</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -1973,7 +2412,7 @@ Gibson ES-335</textarea>
 </section>
 </div>
 </main>
-<input id="dbImportInput" type="file" accept=".db,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
+<input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <div class="modal-backdrop" id="tokenModal" onclick="closeTokenSettings(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Reverb API Token</h2>
@@ -2011,7 +2450,7 @@ function openDatabaseImport(){const input=document.getElementById('dbImportInput
 async function importDatabaseFile(input){
   const file=input.files&&input.files[0];
   if(!file)return;
-  const message='現在のDBを選択したエクスポートDBで置き換えます。\n\n'+file.name+'\n\n実行前に必要であれば現在のDBをエクスポートしてください。続行しますか？';
+  const message='現在のDBとMediaを選択したバックアップで置き換えます。\n\n'+file.name+'\n\n旧形式の .db も復元できますが、その場合Mediaは含まれません。\n\n実行前に必要であれば現在の状態をバックアップしてください。続行しますか？';
   if(!confirm(message)){input.value='';return}
   try{
     const d=await jfetch('/api/import-db',{
@@ -2022,15 +2461,16 @@ async function importDatabaseFile(input){
     individuals=[];
     document.getElementById('detail').textContent='Individuals の行をクリックすると履歴を表示します。';
     document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='DBをインポートしました';
+    document.getElementById('jobMessage').textContent='バックアップを復元しました';
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
     const imported=d.imported_counts||{};
-    alert('DBをインポートしました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??''));
+    const media=d.legacy_database?'旧DB形式（Mediaなし）':('Media: '+(d.imported_media_count??0));
+    alert('バックアップを復元しました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media);
   }catch(e){
-    alert('DBインポートに失敗しました。\n'+e.message);
+    alert('バックアップ復元に失敗しました。\n'+e.message);
   }finally{
     input.value='';
   }
