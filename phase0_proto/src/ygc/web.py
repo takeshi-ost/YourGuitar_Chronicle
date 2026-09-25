@@ -3718,7 +3718,9 @@ function renderAccount(){
     return;
   }
   const u=activeUser.user;
-  const guitars=(activeUser.guitars||[]).filter(g=>g.ownership_status==='current_owner');
+  const allGuitars=activeUser.guitars||[];
+  const guitars=allGuitars.filter(g=>g.ownership_status==='current_owner');
+  const formerGuitars=allGuitars.filter(g=>g.ownership_status==='former_owner');
   el.className='';
   el.innerHTML=
     '<div class="detail-meta-grid">'+
@@ -3746,7 +3748,25 @@ function renderAccount(){
         ).join('')+
         '</div>'
       : '<div class="sub">まだ所有ギターは登録されていません。</div>')+
-    '<div class="toolbar" style="margin-top:12px"><button onclick="registerNewGuitar()">新しいギターを登録する</button></div>';
+    '<div class="toolbar" style="margin-top:12px"><button onclick="registerNewGuitar()">新しいギターを登録する</button></div>'+
+    '<div class="detail-section">Formerly Owned Guitars</div>'+
+    (formerGuitars.length
+      ? '<div class="owned-list">'+
+        '<div class="owned-row" style="background:transparent;border:0;padding-top:0;padding-bottom:2px">'+
+          '<div></div><div class="owned-head">Guitar</div><div class="owned-head">Year</div><div class="owned-head">Finish</div><div class="owned-head">Serial</div><div class="owned-head">Status</div>'+
+        '</div>'+
+        formerGuitars.map(g=>
+          '<div class="owned-row" data-individual-id="'+g.individual_id+'" onclick="showIndividual('+g.individual_id+')">'+
+            '<div></div>'+
+            '<div class="owned-cell" title="'+esc(g.manufacturer)+' '+esc(g.model||'')+'">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div>'+
+            '<div class="owned-cell">'+esc(g.year||'—')+'</div>'+
+            '<div class="owned-cell" title="'+esc(g.finish||'')+'">'+esc(g.finish||'—')+'</div>'+
+            '<div class="owned-cell mono" title="'+esc(g.serial_number||'')+'">'+esc(g.serial_number||'—')+'</div>'+
+            '<div class="owned-cell">Former Owner</div>'+
+          '</div>'
+        ).join('')+
+        '</div>'
+      : '<div class="sub">過去に所有していたギターはまだありません。</div>');
 }
 
 let ownedDraggedId=null;
