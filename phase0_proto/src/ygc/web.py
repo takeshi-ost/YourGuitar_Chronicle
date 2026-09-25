@@ -4860,7 +4860,7 @@ async function submitIdentityCorrection(){
       })
     });
     closeIdentityCorrection();
-    await loadIndividuals();
+    individuals=await jfetch('/api/individuals');
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
     await loadActiveUser();
   }catch(e){
