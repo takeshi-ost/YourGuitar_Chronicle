@@ -80,6 +80,9 @@ class Repository:
             "user_guitars": {
                 "display_order": "INTEGER",
             },
+            "claims": {
+                "specification_kind": "TEXT",
+            },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
                 "actor_user_id": "INTEGER",
@@ -1863,22 +1866,91 @@ class Repository:
         occurred_at: str | None = None,
         body: str | None = None,
     ) -> int:
-        field = field_name.strip().lower()
-        value = value_text.strip()
+        return self.create_specification_claim_group(
+            user_id,
+            individual_id,
+            specification_kind="specification",
+            items=[
+                {
+                    "field_name": field_name,
+                    "value_text": value_text,
+                }
+            ],
+            occurred_at=occurred_at,
+            body=body,
+        )
+
+    def create_specification_claim_group(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        specification_kind: str,
+        items: list[dict[str, str]],
+        occurred_at: str | None = None,
+        body: str | None = None,
+    ) -> int:
+        kind = specification_kind.strip().lower()
+        if kind not in (
+            "specification",
+            "repair",
+        ):
+            raise ValueError(
+                "specification_kind must be specification or repair"
+            )
+
+        normalized_items: list[
+            tuple[str, str]
+        ] = []
+        seen_fields: set[str] = set()
+
+        for item in items:
+            field = str(
+                item.get(
+                    "field_name",
+                    "",
+                )
+            ).strip().lower()
+            value = str(
+                item.get(
+                    "value_text",
+                    "",
+                )
+            ).strip()
+
+            if not field:
+                raise ValueError(
+                    "field_name is required"
+                )
+            if not value:
+                raise ValueError(
+                    "value_text is required"
+                )
+            if field in seen_fields:
+                raise ValueError(
+                    "Each specification item can appear only once per Claim"
+                )
+
+            seen_fields.add(
+                field
+            )
+            normalized_items.append(
+                (
+                    field,
+                    value,
+                )
+            )
+
+        if not normalized_items:
+            raise ValueError(
+                "At least one specification item is required"
+            )
+
         note = (
             body.strip()
             if body and body.strip()
             else None
         )
-
-        if not field:
-            raise ValueError(
-                "field_name is required"
-            )
-        if not value:
-            raise ValueError(
-                "value_text is required"
-            )
 
         now = utcnow()
         event_date = (
@@ -1921,6 +1993,7 @@ class Repository:
                     claim_type,
                     field_name,
                     value_text,
+                    specification_kind,
                     body,
                     occurred_at,
                     status,
@@ -1929,24 +2002,71 @@ class Repository:
                 )
                 VALUES (
                     ?, NULL, ?, 'specification',
-                    ?, ?, ?, ?,
+                    NULL, NULL, ?, ?, ?,
                     'active', ?, ?
                 )
                 """,
                 (
                     individual_id,
                     user_id,
-                    field,
-                    value,
+                    kind,
                     note,
                     event_date,
                     now,
                     now,
                 ),
             )
-
-            return int(
+            claim_id = int(
                 cur.lastrowid
+            )
+
+            con.executemany(
+                """
+                INSERT INTO claim_spec_items (
+                    claim_id,
+                    field_name,
+                    value_text,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (
+                        claim_id,
+                        field,
+                        value,
+                        now,
+                    )
+                    for field, value
+                    in normalized_items
+                ],
+            )
+
+            return claim_id
+
+    def list_specification_items(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        si.*,
+                        c.individual_id
+                    FROM claim_spec_items si
+                    INNER JOIN claims c
+                      ON c.id = si.claim_id
+                    WHERE c.individual_id = ?
+                      AND c.claim_type = 'specification'
+                      AND c.status = 'active'
+                    ORDER BY
+                        si.claim_id,
+                        si.id
+                    """,
+                    (individual_id,),
+                )
             )
 
     def list_current_specifications(
@@ -1957,21 +2077,20 @@ class Repository:
             return list(
                 con.execute(
                     """
-                    WITH ranked AS (
+                    WITH candidates AS (
                         SELECT
-                            c.*,
+                            c.id AS claim_id,
+                            c.field_name,
+                            c.value_text,
+                            COALESCE(
+                                c.specification_kind,
+                                'specification'
+                            ) AS specification_kind,
+                            c.occurred_at,
+                            c.created_at,
+                            c.author_user_id,
                             u.display_name
-                                AS author_name,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY c.field_name
-                                ORDER BY
-                                    COALESCE(
-                                        c.occurred_at,
-                                        c.created_at
-                                    ) DESC,
-                                    c.created_at DESC,
-                                    c.id DESC
-                            ) AS row_number
+                                AS author_name
                         FROM claims c
                         INNER JOIN users u
                           ON u.id = c.author_user_id
@@ -1980,6 +2099,45 @@ class Repository:
                           AND c.status = 'active'
                           AND c.field_name IS NOT NULL
                           AND TRIM(c.field_name) <> ''
+
+                        UNION ALL
+
+                        SELECT
+                            c.id AS claim_id,
+                            si.field_name,
+                            si.value_text,
+                            COALESCE(
+                                c.specification_kind,
+                                'specification'
+                            ) AS specification_kind,
+                            c.occurred_at,
+                            c.created_at,
+                            c.author_user_id,
+                            u.display_name
+                                AS author_name
+                        FROM claim_spec_items si
+                        INNER JOIN claims c
+                          ON c.id = si.claim_id
+                        INNER JOIN users u
+                          ON u.id = c.author_user_id
+                        WHERE c.individual_id = ?
+                          AND c.claim_type = 'specification'
+                          AND c.status = 'active'
+                    ),
+                    ranked AS (
+                        SELECT
+                            *,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY field_name
+                                ORDER BY
+                                    COALESCE(
+                                        occurred_at,
+                                        created_at
+                                    ) DESC,
+                                    created_at DESC,
+                                    claim_id DESC
+                            ) AS row_number
+                        FROM candidates
                     )
                     SELECT *
                     FROM ranked
@@ -1987,7 +2145,10 @@ class Repository:
                     ORDER BY
                         field_name COLLATE NOCASE
                     """,
-                    (individual_id,),
+                    (
+                        individual_id,
+                        individual_id,
+                    ),
                 )
             )
 
