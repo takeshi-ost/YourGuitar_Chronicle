@@ -2087,12 +2087,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
-.claim-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-.claim-event-date{font-size:12px;color:var(--muted)}
+.claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
 .claim-memo{margin-top:8px;white-space:pre-wrap}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);text-align:right}
+#chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
@@ -2300,10 +2301,15 @@ function claimTypeLabel(value){
 }
 function displayEventDate(value){
   if(!value)return '日付不明';
-  const text=String(value);
-  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;
+  const text=String(value).trim();
+  const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(direct)return direct[1];
   const d=new Date(text);
-  return Number.isNaN(d.getTime())?text:d.toLocaleString('ja-JP');
+  if(Number.isNaN(d.getTime()))return text;
+  const year=d.getFullYear();
+  const month=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return year+'-'+month+'-'+day;
 }
 function displayInputDate(value){
   if(!value)return '入力日時不明';
@@ -2334,13 +2340,13 @@ function claimCard(c){
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
     if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
-    if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
+    if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
   return '<div class="claim-card">'+
     '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '<div class="claim-footer">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
     '</div>';
 }
 function chronologyValue(c,mode){
@@ -2351,9 +2357,9 @@ function renderChronicle(){
   const claims=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
-    if(av<bv)return -1;
-    if(av>bv)return 1;
-    return Number(a.id)-Number(b.id);
+    if(av<bv)return 1;
+    if(av>bv)return -1;
+    return Number(b.id)-Number(a.id);
   });
   const el=document.getElementById('chronicleEntries');
   if(el)el.innerHTML=claims.length
@@ -2502,12 +2508,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
-.claim-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
-.claim-event-date{font-size:12px;color:var(--muted)}
+.claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
 .claim-memo{margin-top:8px;white-space:pre-wrap}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);text-align:right}
+#chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
@@ -2844,10 +2851,15 @@ function claimTypeLabel(value){
 }
 function displayEventDate(value){
   if(!value)return '日付不明';
-  const text=String(value);
-  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return text;
+  const text=String(value).trim();
+  const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(direct)return direct[1];
   const d=new Date(text);
-  return Number.isNaN(d.getTime())?text:d.toLocaleString('ja-JP');
+  if(Number.isNaN(d.getTime()))return text;
+  const year=d.getFullYear();
+  const month=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return year+'-'+month+'-'+day;
 }
 function displayInputDate(value){
   if(!value)return '入力日時不明';
@@ -2878,13 +2890,13 @@ function claimCard(c){
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
     if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
-    if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
+    if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
   return '<div class="claim-card">'+
     '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '<div class="claim-footer">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
     '</div>';
 }
 function chronologyValue(c,mode){
@@ -2895,9 +2907,9 @@ function renderChronicle(){
   const claims=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
-    if(av<bv)return -1;
-    if(av>bv)return 1;
-    return Number(a.id)-Number(b.id);
+    if(av<bv)return 1;
+    if(av>bv)return -1;
+    return Number(b.id)-Number(a.id);
   });
   const el=document.getElementById('chronicleEntries');
   if(el)el.innerHTML=claims.length
