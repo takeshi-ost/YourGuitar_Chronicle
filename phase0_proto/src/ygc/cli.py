@@ -17,12 +17,10 @@ from ygc.db.repository import Repository
 from ygc.extractors.serial import (
     extract_serial_candidates,
 )
-from ygc.matching.individual_matcher import (
-    match_or_create,
-)
 from ygc.reverb_adapter import (
     classify_vintage_listing,
-    to_observation,
+    to_listing_claim_data,
+    to_provenance_observation,
 )
 
 
@@ -223,42 +221,6 @@ def _short_context(
     return (
         value[: length - 3]
         + "..."
-    )
-
-
-def _remove_temporary_fields(
-    observation: dict,
-) -> tuple[
-    str,
-    str,
-    int | None,
-]:
-    status = observation.pop(
-        "vintage_status",
-        "unknown",
-    )
-
-    reason = observation.pop(
-        "vintage_reason",
-        "",
-    )
-
-    estimated_year = (
-        observation.pop(
-            "estimated_year",
-            None,
-        )
-    )
-
-    observation.pop(
-        "is_vintage_listing",
-        None,
-    )
-
-    return (
-        status,
-        reason,
-        estimated_year,
     )
 
 
@@ -595,21 +557,18 @@ def crawl(
             ):
                 detailed += 1
 
-                obs = (
-                    to_observation(
+                claim_data = (
+                    to_listing_claim_data(
                         item,
                         config
                         .SERIAL_CONFIDENCE_THRESHOLD,
                     )
                 )
 
-                (
-                    status,
-                    _reason,
-                    _estimated_year,
-                ) = (
-                    _remove_temporary_fields(
-                        obs
+                status = str(
+                    claim_data.get(
+                        "vintage_status",
+                        "unknown",
                     )
                 )
 
@@ -628,53 +587,23 @@ def crawl(
                     skipped_unknown += 1
                     continue
 
-                if (
-                    obs[
-                        "manufacturer"
-                    ]
-                    and obs[
-                        "serial_number"
-                    ]
-                ):
-                    obs[
-                        "individual_id"
-                    ] = (
-                        match_or_create(
-                            repository,
-                            obs[
-                                "manufacturer"
-                            ],
-                            obs[
-                                "model"
-                            ],
-                            obs[
-                                "serial_number"
-                            ],
-                            finish=(
-                                obs.get(
-                                    "finish"
-                                )
-                            ),
-                            year=(
-                                obs.get(
-                                    "year"
-                                )
-                            ),
-                        )
-                    )
-                else:
-                    obs[
-                        "individual_id"
-                    ] = None
-
-                _, was_created = (
-                    repository
-                    .upsert_observation(
-                        obs
+                provenance = (
+                    to_provenance_observation(
+                        item,
+                        config
+                        .SERIAL_CONFIDENCE_THRESHOLD,
                     )
                 )
 
-                if was_created:
+                result = (
+                    repository
+                    .persist_reverb_listing_claim(
+                        claim_data,
+                        provenance,
+                    )
+                )
+
+                if result["created"]:
                     created += 1
 
         repository.finish_run(
