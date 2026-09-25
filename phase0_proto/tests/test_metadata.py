@@ -647,3 +647,122 @@ def test_listing_observation_is_backfilled_as_claim(
     assert claim["source_url"] == (
         "https://example.com/listing/1"
     )
+
+
+def test_new_guitar_registration_creates_initial_listing_claim(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+
+    (
+        individual_id,
+        observation_id,
+        claim_id,
+    ) = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster Thinline",
+        finish="Natural",
+        year="1976",
+        serial_number="524436",
+        occurred_at="2026-09-25",
+        body="Initial user registration.",
+    )
+
+    assert individual_id > 0
+    assert observation_id > 0
+    assert claim_id > 0
+
+    individual, observations = (
+        repository.get_individual(
+            individual_id
+        )
+    )
+    assert individual is not None
+    assert individual["manufacturer"] == (
+        "Fender"
+    )
+    assert individual["serial_number"] == (
+        "524436"
+    )
+    assert len(observations) == 1
+    assert observations[0]["event_type"] == (
+        "listing"
+    )
+    assert observations[0]["owner_name"] == (
+        "Collector"
+    )
+    assert observations[0]["owner_type"] == (
+        "user"
+    )
+
+    claims = repository.list_claims(
+        individual_id,
+        viewer_user_id=user_id,
+    )
+    assert len(claims) == 1
+    assert claims[0]["id"] == claim_id
+    assert claims[0]["claim_type"] == (
+        "listing"
+    )
+    assert claims[0]["author_user_id"] == (
+        user_id
+    )
+    assert claims[0]["observed_owner_name"] == (
+        "Collector"
+    )
+    assert claims[0]["body"] == (
+        "Initial user registration."
+    )
+
+    _user, guitars = repository.get_user(
+        user_id
+    )
+    assert len(guitars) == 1
+    assert guitars[0]["individual_id"] == (
+        individual_id
+    )
+    assert guitars[0]["ownership_status"] == (
+        "current_owner"
+    )
+
+
+def test_new_guitar_registration_rejects_duplicate_identity(
+    tmp_path,
+):
+    repository = Repository(
+        tmp_path / "chronicle.db"
+    )
+    repository.init_db()
+
+    user_id = repository.create_user(
+        "Collector"
+    )
+
+    repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Telecaster",
+        serial_number="ABC123",
+    )
+
+    try:
+        repository.create_initial_listing_claim(
+            user_id,
+            manufacturer="Fender",
+            model="Telecaster",
+            serial_number="ABC123",
+        )
+    except ValueError as exc:
+        assert "already exists" in str(exc)
+    else:
+        raise AssertionError(
+            "duplicate registration should fail"
+        )
