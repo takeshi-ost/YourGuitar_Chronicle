@@ -2671,6 +2671,25 @@ def api_vintage_audit(
     return {"counts": counts, "rows": rows}
 
 
+@app.get("/api/claim-architecture-status")
+def api_claim_architecture_status() -> dict[str, Any]:
+    repository = repo()
+    return repository.claim_architecture_status()
+
+
+@app.post("/api/migrate-claims")
+def api_migrate_claims() -> dict[str, Any]:
+    repository = repo()
+    before = repository.claim_architecture_status()
+    result = repository.migrate_legacy_observations_to_claims()
+    after = repository.claim_architecture_status()
+    return {
+        "before": before,
+        "migration": result,
+        "after": after,
+    }
+
+
 @app.post("/api/crawl")
 def api_crawl(
     request: CrawlRequest,
@@ -2689,6 +2708,16 @@ def api_crawl(
             status_code=400,
             detail=(
                 "Reverb API Token is not configured"
+            ),
+        )
+
+    architecture = repo().claim_architecture_status()
+    if not architecture["ready"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Database is not ready for Claim-centered crawling. "
+                "Run Claim migration and resolve any incomplete identities first."
             ),
         )
 
@@ -2840,7 +2869,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -2947,13 +2976,34 @@ async function importDatabaseFile(input){
     await loadUsers();
     const imported=d.imported_counts||{};
     const media=d.legacy_database?'旧DB形式（Mediaなし）':('Media: '+(d.imported_media_count??0));
-    alert('バックアップを復元しました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media);
+    const architecture=await jfetch('/api/claim-architecture-status');
+    alert('バックアップを復元しました。\nObservations: '+(imported.observations??'')+'\nIndividuals: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media+'\nClaim Migration: '+(architecture.ready?'不要':'必要'));
   }catch(e){
     alert('バックアップ復元に失敗しました。\n'+e.message);
   }finally{
     input.value='';
   }
 }
+async function runClaimMigration(){
+  try{
+    const status=await jfetch('/api/claim-architecture-status');
+    if(status.ready){
+      alert('このDBはすでにClaim-centered構造へ移行済みです。');
+      return;
+    }
+    const message='旧Observation中心DBをClaim-centered構造へ移行します。\n\n未移行Listing Observation: '+status.unmigrated_listing_observations+'\nClaimなしIndividual: '+status.claimless_individuals+'\n\n既存Claimは重複生成しません。続行しますか？';
+    if(!confirm(message))return;
+    const d=await jfetch('/api/migrate-claims',{method:'POST'});
+    const m=d.migration||{};
+    const a=d.after||{};
+    await refreshStatus();
+    await loadIndividuals();
+    alert('Claim Migration完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nSnapshots rebuilt: '+(m.snapshots_rebuilt??0)+'\nReady: '+(a.ready?'Yes':'No'));
+  }catch(e){
+    alert('Claim Migrationに失敗しました。\n'+e.message);
+  }
+}
+
 async function resetDatabase(){
   const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
   if(!confirm(message))return;
