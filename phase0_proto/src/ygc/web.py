@@ -1931,7 +1931,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}
 th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
 th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margin-left:4px}
-.clickable{cursor:pointer}.clickable:hover{background:#20252a}
+.clickable{cursor:pointer}.clickable:hover{background:#20252a}.clickable.selected{background:#3a3326}.clickable.selected:hover{background:#463c2c}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}
 .detail-image{display:block;width:100%;max-height:360px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
@@ -2036,7 +2036,18 @@ async function loadActiveUser(){
 
 async function loadIndividuals(){
   individuals=await jfetch('/api/individuals');
+  if(individuals.length){
+    const randomIndex=Math.floor(Math.random()*individuals.length);
+    selectedIndividualId=Number(individuals[randomIndex].id);
+  }else{
+    selectedIndividualId=null;
+  }
   renderIndividuals();
+  if(selectedIndividualId!==null){
+    await showIndividual(selectedIndividualId);
+  }else{
+    document.getElementById('detail').textContent='表示できるIndividualがありません。';
+  }
 }
 function normalizeSortValue(value,key){
   if(key==='id'||key==='observation_count')return Number(value||0);
@@ -2064,7 +2075,7 @@ function renderIndividuals(){
   });
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
-    '<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>'
+    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>'
   ).join('');
 }
 
@@ -2115,6 +2126,7 @@ function ownershipControlsHtml(individualId){
 
 async function showIndividual(id){
   selectedIndividualId=Number(id);
+  renderIndividuals();
   const d=await jfetch('/api/individuals/'+id);
   const i=d.individual;
   const observations=d.observations||[];
@@ -2213,7 +2225,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
 .owned-list{display:flex;flex-direction:column;gap:6px}
-.owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}
+.owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
 .drag-handle{cursor:grab;color:var(--muted);font-size:16px;text-align:center;user-select:none}
 .owned-cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
@@ -2359,24 +2371,32 @@ function renderAccount(){
     (guitars.length
       ? '<div class="owned-list" id="ownedGuitarList">'+
         '<div class="owned-row" style="background:transparent;border:0;padding-top:0;padding-bottom:2px">'+
-          '<div></div><div class="owned-head">Guitar</div><div class="owned-head">Year</div><div class="owned-head">Finish</div><div class="owned-head">Serial</div><div class="owned-head">Status</div><div></div>'+
+          '<div></div><div class="owned-head">Guitar</div><div class="owned-head">Year</div><div class="owned-head">Finish</div><div class="owned-head">Serial</div><div class="owned-head">Status</div>'+
         '</div>'+
         guitars.map(g=>
-          '<div class="owned-row" draggable="true" data-individual-id="'+g.individual_id+'" ondragstart="ownedDragStart(event)" ondragover="ownedDragOver(event)" ondrop="ownedDrop(event)" ondragend="ownedDragEnd(event)">'+
+          '<div class="owned-row" draggable="true" data-individual-id="'+g.individual_id+'" onclick="ownedRowClick(event,'+g.individual_id+')" ondragstart="ownedDragStart(event)" ondragover="ownedDragOver(event)" ondrop="ownedDrop(event)" ondragend="ownedDragEnd(event)">'+
             '<div class="drag-handle" title="ドラッグして並び替え">☰</div>'+
             '<div class="owned-cell" title="'+esc(g.manufacturer)+' '+esc(g.model||'')+'">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div>'+
             '<div class="owned-cell">'+esc(g.year||'—')+'</div>'+
             '<div class="owned-cell" title="'+esc(g.finish||'')+'">'+esc(g.finish||'—')+'</div>'+
             '<div class="owned-cell mono" title="'+esc(g.serial_number||'')+'">'+esc(g.serial_number||'—')+'</div>'+
             '<div class="owned-cell">'+esc(g.ownership_status||'')+'</div>'+
-            '<div><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button></div>'+
           '</div>'
         ).join('')+
         '</div>'
-      : '<div class="sub">まだ所有ギターは登録されていません。</div>');
+      : '<div class="sub">まだ所有ギターは登録されていません。</div>')+
+    '<div class="toolbar" style="margin-top:12px"><button onclick="registerNewGuitar()">新しいギターを登録する</button></div>';
 }
 
 let ownedDraggedId=null;
+let ownedDidDrag=false;
+function ownedRowClick(event,individualId){
+  if(ownedDidDrag){
+    ownedDidDrag=false;
+    return;
+  }
+  showIndividual(individualId);
+}
 function ownedDragStart(event){
   const row=event.currentTarget;
   ownedDraggedId=Number(row.dataset.individualId);
@@ -2385,6 +2405,7 @@ function ownedDragStart(event){
 }
 function ownedDragOver(event){
   event.preventDefault();
+  ownedDidDrag=true;
   const row=event.currentTarget;
   if(Number(row.dataset.individualId)===ownedDraggedId)return;
   const list=document.getElementById('ownedGuitarList');
@@ -2414,6 +2435,10 @@ async function ownedDragEnd(event){
     alert('並び替えの保存に失敗しました。\n'+e.message);
     await loadActiveUser();
   }
+}
+
+function registerNewGuitar(){
+  window.location.href='/user-view';
 }
 
 async function saveUser(){
