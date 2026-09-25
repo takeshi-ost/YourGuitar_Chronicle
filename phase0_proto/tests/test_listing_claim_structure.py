@@ -314,6 +314,7 @@ def test_legacy_listing_claim_backfill_copies_complete_structure(
         )
 
     repository.init_db()
+    repository.migrate_legacy_observations_to_claims()
 
     rows = repository.list_claims(
         individual_id
