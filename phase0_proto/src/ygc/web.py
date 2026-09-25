@@ -3664,7 +3664,6 @@ async function showIndividual(id){
   const latest=observations.length?observations[observations.length-1]:null;
   const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
-  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
@@ -4647,6 +4646,7 @@ async function showIndividual(id){
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
   const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
+  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
   let out='';
   if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
