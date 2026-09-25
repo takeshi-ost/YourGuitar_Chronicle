@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS users (
  account_type TEXT NOT NULL DEFAULT 'user',
  location_country TEXT,
  location_region TEXT,
+ avatar_storage_path TEXT,
+ avatar_original_filename TEXT,
+ avatar_mime_type TEXT,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL
 );
