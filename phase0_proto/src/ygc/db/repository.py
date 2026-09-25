@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -311,6 +312,7 @@ class Repository:
                 "serial_number": row["serial_number"],
                 "owner_name": row["owner_name"],
                 "owner_type": row["owner_type"],
+                "owner_user_id": row["actor_user_id"],
                 "seller": row["seller"],
                 "location_country": row["location_country"],
                 "location_region": row["location_region"],
@@ -378,6 +380,11 @@ class Repository:
                     o.location_country,
                     o.location_region,
                     o.owner_type,
+                    CASE
+                        WHEN o.owner_type = 'user'
+                        THEN o.actor_user_id
+                        ELSE NULL
+                    END AS owner_user_id,
                     o.seller,
                     o.title AS listing_title,
                     COALESCE(
@@ -409,6 +416,7 @@ class Repository:
             "serial_number",
             "owner_name",
             "owner_type",
+            "owner_user_id",
             "seller",
             "location_country",
             "location_region",
@@ -2018,35 +2026,25 @@ class Repository:
                     "An Individual with the same maker, model, and serial already exists"
                 )
 
+            pending_token = (
+                "__pending__:"
+                + uuid.uuid4().hex
+            )
             cur = con.execute(
                 """
                 INSERT INTO individuals (
                     manufacturer,
-                    model,
-                    finish,
-                    year,
-                    serial_number,
-                    location_country,
-                    location_region,
                     normalized_manufacturer,
-                    normalized_model,
                     normalized_serial,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    maker,
-                    model_value,
-                    finish_value,
-                    year_value,
-                    serial,
-                    user["location_country"],
-                    user["location_region"],
-                    normalized_maker,
-                    normalized_model,
-                    normalized_serial,
+                    "__pending__",
+                    pending_token,
+                    pending_token,
                     now,
                     now,
                 ),
@@ -2072,16 +2070,6 @@ class Repository:
                 """
                 INSERT INTO observations (
                     individual_id,
-                    manufacturer,
-                    model,
-                    finish,
-                    year,
-                    serial_number,
-                    owner_name,
-                    owner_type,
-                    location_country,
-                    location_region,
-                    location_source,
                     event_type,
                     actor_user_id,
                     occurred_at,
@@ -2095,22 +2083,12 @@ class Repository:
                     created_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, 'user',
-                    ?, ?, 'user_profile',
-                    'listing', ?, ?, 'user', '',
-                    ?, ?, ?, ?, ?, ?
+                    ?, 'listing', ?, ?,
+                    'user', '', ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
                     individual_id,
-                    maker,
-                    model_value,
-                    finish_value,
-                    year_value,
-                    serial,
-                    user["display_name"],
-                    user["location_country"],
-                    user["location_region"],
                     user_id,
                     event_date,
                     source_listing_id,
@@ -2121,6 +2099,7 @@ class Repository:
                     now,
                 ),
             )
+
             observation_id = int(
                 cur.lastrowid
             )
@@ -2169,6 +2148,7 @@ class Repository:
                 "serial_number": serial,
                 "owner_name": user["display_name"],
                 "owner_type": "user",
+                "owner_user_id": str(user_id),
                 "location_country": user["location_country"],
                 "location_region": user["location_region"],
                 "listing_title": title,
@@ -2199,6 +2179,11 @@ class Repository:
                         now,
                     ),
                 )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
 
             next_order = int(
                 con.execute(
@@ -3583,12 +3568,23 @@ class Repository:
                               AND li.field_name = 'seller'
                             LIMIT 1
                         ) AS seller,
-                        (
-                            SELECT li.value_text
-                            FROM claim_listing_items li
-                            WHERE li.claim_id = c.id
-                              AND li.field_name = 'owner_name'
-                            LIMIT 1
+                        COALESCE(
+                            (
+                                SELECT ou.display_name
+                                FROM claim_listing_items li
+                                INNER JOIN users ou
+                                  ON CAST(ou.id AS TEXT) = li.value_text
+                                WHERE li.claim_id = c.id
+                                  AND li.field_name = 'owner_user_id'
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT li.value_text
+                                FROM claim_listing_items li
+                                WHERE li.claim_id = c.id
+                                  AND li.field_name = 'owner_name'
+                                LIMIT 1
+                            )
                         ) AS observed_owner_name,
                         (
                             SELECT li.value_text
