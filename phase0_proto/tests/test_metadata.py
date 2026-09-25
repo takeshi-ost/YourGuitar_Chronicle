@@ -546,3 +546,81 @@ def test_owner_change_claim_response_and_vote(
     )
     assert claims[0]["good_count"] == 1
     assert claims[0]["bad_count"] == 0
+
+
+def test_listing_observation_is_backfilled_as_claim(
+    tmp_path,
+):
+    db_path = tmp_path / "chronicle.db"
+    repository = Repository(
+        db_path
+    )
+    repository.init_db()
+
+    individual_id = match_or_create(
+        repository,
+        "Fender",
+        "Jazzmaster",
+        "S30001",
+    )
+
+    observation_id, created = (
+        repository.upsert_observation(
+            {
+                "individual_id": individual_id,
+                "manufacturer": "Fender",
+                "model": "Jazzmaster",
+                "finish": "Sunburst",
+                "year": "1965",
+                "serial_number": "S30001",
+                "owner_name": "Example Shop",
+                "owner_type": "shop",
+                "owner_profile_url": None,
+                "location_country": "US",
+                "location_region": "CA",
+                "location_source": "reverb_listing",
+                "seller": "Example Shop",
+                "source_site": "reverb",
+                "source_url": "https://example.com/listing/1",
+                "image_url": None,
+                "source_listing_id": "listing-1",
+                "observed_at": "2026-09-25T00:00:00+00:00",
+                "listing_date": "2026-09-24",
+                "title": "1965 Fender Jazzmaster",
+                "raw_text": None,
+                "serial_confidence": 1.0,
+                "extraction_version": "test",
+                "created_at": "2026-09-25T00:00:00+00:00",
+            }
+        )
+    )
+
+    assert created
+    assert observation_id > 0
+
+    repository.init_db()
+
+    claims = repository.list_claims(
+        individual_id
+    )
+
+    listing_claims = [
+        row
+        for row
+        in claims
+        if row["claim_type"]
+           == "listing"
+    ]
+
+    assert len(listing_claims) == 1
+    claim = listing_claims[0]
+    assert claim["observation_id"] == (
+        observation_id
+    )
+    assert claim["author_name"] == "Reverb"
+    assert claim["listing_title"] == (
+        "1965 Fender Jazzmaster"
+    )
+    assert claim["source_url"] == (
+        "https://example.com/listing/1"
+    )
