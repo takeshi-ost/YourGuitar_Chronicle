@@ -1120,12 +1120,14 @@ def api_individual(individual_id: int) -> dict[str, Any]:
 @app.get("/api/individuals/{individual_id}/claims")
 def api_individual_claims(
     individual_id: int,
+    viewer_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
     return [
         _row_dict(row)
         for row
         in repo().list_claims(
-            individual_id
+            individual_id,
+            viewer_user_id=viewer_user_id,
         )
     ]
 
@@ -2092,7 +2094,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
 .claim-memo{margin-top:8px;white-space:pre-wrap}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);text-align:right}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
@@ -2316,6 +2318,9 @@ function displayInputDate(value){
   const d=new Date(String(value));
   return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
 }
+function claimHeaderHtml(c,type,eventDate){
+  return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>';
+}
 function claimCard(c){
   const type=claimTypeLabel(c.claim_type);
   const eventDate=displayEventDate(c.occurred_at);
@@ -2343,10 +2348,16 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
+  const good=String(Number(c.good_count||0)).padStart(2,'0');
+  const bad=String(Number(c.bad_count||0)).padStart(2,'0');
+  const votes='<div class="claim-votes">'+
+    '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
+    '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
+    '</div>';
   return '<div class="claim-card">'+
-    '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
+    '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
     '</div>';
 }
 function chronologyValue(c,mode){
@@ -2371,12 +2382,29 @@ function setChronicleSort(value){
   renderChronicle();
 }
 
+async function voteClaim(claimId,vote){
+  if(!activeUser||!activeUser.user){
+    window.location.href='/user-view/edit';
+    return;
+  }
+  try{
+    await jfetch('/api/claims/'+claimId+'/vote',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(activeUser.user.id),vote})
+    });
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Voteの更新に失敗しました。\n'+e.message);
+  }
+}
+
 async function showIndividual(id){
   selectedIndividualId=Number(id);
   if(typeof renderIndividuals==='function')renderIndividuals();
   const [d,claims]=await Promise.all([
     jfetch('/api/individuals/'+id),
-    jfetch('/api/individuals/'+id+'/claims')
+    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):''))
   ]);
   const i=d.individual;
   const observations=d.observations||[];
@@ -2513,7 +2541,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
 .claim-memo{margin-top:8px;white-space:pre-wrap}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);text-align:right}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
@@ -2866,6 +2894,20 @@ function displayInputDate(value){
   const d=new Date(String(value));
   return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
 }
+function claimHeaderHtml(c,type,eventDate){
+  let response='';
+  const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
+  const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
+  if(isOtherUser){
+    const current=c.viewer_stance||'neutral';
+    response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
+      '<option value="endorse"'+(current==='endorse'?' selected':'')+'>positive</option>'+
+      '<option value="dispute"'+(current==='dispute'?' selected':'')+'>negative</option>'+
+      '<option value="neutral"'+(current==='neutral'?' selected':'')+'>Unverified</option>'+
+      '</select>';
+  }
+  return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
+}
 function claimCard(c){
   const type=claimTypeLabel(c.claim_type);
   const eventDate=displayEventDate(c.occurred_at);
@@ -2893,10 +2935,16 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
+  const good=String(Number(c.good_count||0)).padStart(2,'0');
+  const bad=String(Number(c.bad_count||0)).padStart(2,'0');
+  const votes='<div class="claim-votes">'+
+    '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
+    '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
+    '</div>';
   return '<div class="claim-card">'+
-    '<div class="claim-head"><span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span></div>'+
+    '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
+    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
     '</div>';
 }
 function chronologyValue(c,mode){
@@ -2921,11 +2969,46 @@ function setChronicleSort(value){
   renderChronicle();
 }
 
+async function setClaimResponse(claimId,stance){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    await jfetch('/api/claims/'+claimId+'/response',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        responder_user_id:Number(activeUser.user.id),
+        stance
+      })
+    });
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Claim評価の更新に失敗しました。\n'+e.message);
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }
+}
+
+async function voteClaim(claimId,vote){
+  if(!activeUser||!activeUser.user){
+    window.location.href='/user-view/edit';
+    return;
+  }
+  try{
+    await jfetch('/api/claims/'+claimId+'/vote',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(activeUser.user.id),vote})
+    });
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Voteの更新に失敗しました。\n'+e.message);
+  }
+}
+
 async function showIndividual(id){
   selectedIndividualId=Number(id);
   const [d,claims]=await Promise.all([
     jfetch('/api/individuals/'+id),
-    jfetch('/api/individuals/'+id+'/claims')
+    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):''))
   ]);
   const i=d.individual;
   const observations=d.observations||[];
