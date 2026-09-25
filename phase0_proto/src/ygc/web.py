@@ -11,7 +11,7 @@ import time
 import uuid
 import webbrowser
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -281,7 +281,46 @@ def _existing_listing_ids(repository: Repository, listing_ids: list[str]) -> set
                 ["reverb", *chunk],
             )
             result.update(str(row["source_listing_id"]) for row in rows)
+
+    result.update(
+        repository.active_cached_listing_ids(
+            "reverb",
+            ids,
+        )
+    )
     return result
+
+
+def _cache_rejected_listing(
+    repository: Repository,
+    listing_id: str | None,
+    status: str,
+) -> None:
+    if not listing_id:
+        return
+
+    normalized = str(status or "").strip().lower()
+    if normalized not in {
+        "modern",
+        "non_target",
+        "unknown",
+    }:
+        return
+
+    ttl = (
+        timedelta(days=1)
+        if normalized == "unknown"
+        else timedelta(days=30)
+    )
+    recheck_after = (
+        datetime.now(timezone.utc) + ttl
+    ).isoformat()
+    repository.cache_listing_rejection(
+        "reverb",
+        str(listing_id),
+        normalized,
+        recheck_after=recheck_after,
+    )
 
 
 def _set_job(job_id: str, **values: Any) -> None:
@@ -549,14 +588,32 @@ def _run_batch(
                             )
                         )
 
+                        detail_listing_id = (
+                            collector.listing_id(item)
+                        )
                         if status == "modern":
                             skipped_modern += 1
+                            _cache_rejected_listing(
+                                repository,
+                                detail_listing_id,
+                                status,
+                            )
                             continue
                         if status == "non_target":
                             skipped_non_target += 1
+                            _cache_rejected_listing(
+                                repository,
+                                detail_listing_id,
+                                status,
+                            )
                             continue
                         if status != "vintage":
                             skipped_unknown += 1
+                            _cache_rejected_listing(
+                                repository,
+                                detail_listing_id,
+                                "unknown",
+                            )
                             continue
 
                         provenance = to_provenance_observation(
