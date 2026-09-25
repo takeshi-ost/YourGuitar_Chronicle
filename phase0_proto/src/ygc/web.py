@@ -442,6 +442,30 @@ class ClaimEditRequest(BaseModel):
     )
 
 
+class IdentityCorrectionRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    manufacturer: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+    model: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+    year: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    serial_number: str = Field(
+        min_length=1,
+        max_length=160,
+    )
+    reason: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 def _run_batch(
     job_id: str,
     request: CrawlRequest,
@@ -1897,9 +1921,36 @@ def api_individual_claims(
             item
         )
 
+    identity_items_by_claim: dict[
+        int,
+        list[dict[str, Any]],
+    ] = {}
+    for row in repository.list_identity_correction_items(
+        individual_id
+    ):
+        item = _row_dict(
+            row
+        )
+        identity_items_by_claim.setdefault(
+            int(
+                item["claim_id"]
+            ),
+            [],
+        ).append(
+            item
+        )
+
     for claim in claims:
         claim["spec_items"] = (
             items_by_claim.get(
+                int(
+                    claim["id"]
+                ),
+                [],
+            )
+        )
+        claim["identity_items"] = (
+            identity_items_by_claim.get(
                 int(
                     claim["id"]
                 ),
@@ -2190,6 +2241,37 @@ def api_update_claim(
         )
 
     return {"ok": True}
+
+
+@app.post("/api/claims/{listing_claim_id}/identity-correction")
+def api_identity_correction(
+    listing_claim_id: int,
+    request: IdentityCorrectionRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        claim_id = repository.create_identity_correction(
+            request.user_id,
+            listing_claim_id,
+            manufacturer=request.manufacturer,
+            model=request.model,
+            year=request.year,
+            serial_number=request.serial_number,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        raise HTTPException(
+            status_code=409
+            if "duplicate" in message.lower()
+            else 400,
+            detail=message,
+        ) from exc
+
+    return {
+        "claim_id": claim_id,
+    }
 
 
 @app.get("/api/individuals/{individual_id}/current-specifications")
@@ -3201,7 +3283,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail{white-space:normal}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
-.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -3430,6 +3512,15 @@ function specificationFieldLabel(value){
   const key=String(value||'').trim();
   return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase());
 }
+function identityFieldLabel(value){
+  const labels={
+    manufacturer:'Maker',
+    model:'Model',
+    year:'Year',
+    serial_number:'Serial'
+  };
+  return labels[String(value||'')]||String(value||'').replace(/_/g,' ');
+}
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
@@ -3471,6 +3562,13 @@ function claimCard(c){
       : (c.field_name?[{field_name:c.field_name,value_text:c.value_text}]:[]);
     body=items.map(item=>'<div><strong>'+esc(specificationFieldLabel(item.field_name))+': '+esc(item.value_text||'')+'</strong></div>').join('');
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='identity_correction'){
+    const items=c.identity_items||[];
+    body=items.map(item=>
+      '<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+
+      esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>'
+    ).join('');
+    if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
@@ -3504,7 +3602,7 @@ function claimCard(c){
     '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
     '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
     '</div>';
-  return '<div class="claim-card">'+
+  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
     '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
@@ -3515,13 +3613,33 @@ function chronologyValue(c,mode){
   return String(c.occurred_at||c.created_at||'');
 }
 function renderChronicle(){
-  const claims=currentClaims.slice().sort((a,b)=>{
+  const sorted=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
     if(av<bv)return 1;
     if(av>bv)return -1;
     return Number(b.id)-Number(a.id);
   });
+  const correctionsByTarget=new Map();
+  const roots=[];
+  for(const claim of sorted){
+    if(claim.claim_type==='identity_correction'&&claim.target_claim_id){
+      const key=Number(claim.target_claim_id);
+      if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);
+      correctionsByTarget.get(key).push(claim);
+    }else{
+      roots.push(claim);
+    }
+  }
+  const claims=[];
+  for(const claim of roots){
+    claims.push(claim);
+    const corrections=correctionsByTarget.get(Number(claim.id))||[];
+    corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    claims.push(...corrections);
+    correctionsByTarget.delete(Number(claim.id));
+  }
+  for(const corrections of correctionsByTarget.values())claims.push(...corrections);
   const el=document.getElementById('chronicleEntries');
   if(el)el.innerHTML=claims.length
     ? claims.map(claimCard).join('')
@@ -3719,7 +3837,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail{white-space:normal}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
-.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -3788,6 +3906,40 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeReleaseClaim()">キャンセル</button>
       <button class="bad" id="releaseClaimSubmit" onclick="submitReleaseClaim()">Release</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="identityCorrectionModal" onclick="closeIdentityCorrection(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Identity Correction</h2>
+    <div class="sub" style="margin-bottom:14px">Listingそのものは変更せず、訂正内容を履歴として残してIndividualの現在値を更新します。</div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="identityMaker">Maker *</label>
+        <input id="identityMaker" maxlength="120">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="identityModel">Model</label>
+        <input id="identityModel" maxlength="160">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="identityYear">Year</label>
+        <input id="identityYear" maxlength="40">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="identitySerial">Serial *</label>
+        <input id="identitySerial" maxlength="160">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="identityReason">Reason（任意）</label>
+        <textarea id="identityReason" maxlength="2000" placeholder="Typo / Transcription error / Misidentification ..."></textarea>
+      </div>
+    </div>
+    <div class="sub">保存前にMaker / Model / Serialで既存Individualとの重複を確認します。重複した場合は更新を中断します。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeIdentityCorrection()">キャンセル</button>
+      <button id="identityCorrectionSubmit" onclick="submitIdentityCorrection()">Identity Correctionを作成</button>
     </div>
   </div>
 </div>
@@ -3902,6 +4054,7 @@ let activeUser=null;
 let selectedIndividualId=null;
 let currentObservations=[];
 let currentClaims=[];
+let currentIndividual=null;
 let chronicleSort='event';
 let individualSortKey='id';
 let individualSortDirection=1;
@@ -4297,6 +4450,15 @@ function specificationFieldLabel(value){
   const key=String(value||'').trim();
   return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase());
 }
+function identityFieldLabel(value){
+  const labels={
+    manufacturer:'Maker',
+    model:'Model',
+    year:'Year',
+    serial_number:'Serial'
+  };
+  return labels[String(value||'')]||String(value||'').replace(/_/g,' ');
+}
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
@@ -4349,6 +4511,13 @@ function claimCard(c){
       : (c.field_name?[{field_name:c.field_name,value_text:c.value_text}]:[]);
     body=items.map(item=>'<div><strong>'+esc(specificationFieldLabel(item.field_name))+': '+esc(item.value_text||'')+'</strong></div>').join('');
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='identity_correction'){
+    const items=c.identity_items||[];
+    body=items.map(item=>
+      '<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+
+      esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>'
+    ).join('');
+    if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
@@ -4382,9 +4551,9 @@ function claimCard(c){
     '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
     '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
     '</div>';
-  const canEdit=activeUser&&activeUser.user&&c.status==='active'&&Number(c.author_user_id)===Number(activeUser.user.id);
+  const canEdit=activeUser&&activeUser.user&&c.status==='active'&&c.claim_type!=='identity_correction'&&Number(c.author_user_id)===Number(activeUser.user.id);
   const editButton=canEdit?'<button class="claim-vote" onclick="editOwnClaim('+c.id+')">Edit</button>':'';
-  return '<div class="claim-card">'+
+  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
     '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
@@ -4395,13 +4564,33 @@ function chronologyValue(c,mode){
   return String(c.occurred_at||c.created_at||'');
 }
 function renderChronicle(){
-  const claims=currentClaims.slice().sort((a,b)=>{
+  const sorted=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
     if(av<bv)return 1;
     if(av>bv)return -1;
     return Number(b.id)-Number(a.id);
   });
+  const correctionsByTarget=new Map();
+  const roots=[];
+  for(const claim of sorted){
+    if(claim.claim_type==='identity_correction'&&claim.target_claim_id){
+      const key=Number(claim.target_claim_id);
+      if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);
+      correctionsByTarget.get(key).push(claim);
+    }else{
+      roots.push(claim);
+    }
+  }
+  const claims=[];
+  for(const claim of roots){
+    claims.push(claim);
+    const corrections=correctionsByTarget.get(Number(claim.id))||[];
+    corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    claims.push(...corrections);
+    correctionsByTarget.delete(Number(claim.id));
+  }
+  for(const corrections of correctionsByTarget.values())claims.push(...corrections);
   const el=document.getElementById('chronicleEntries');
   if(el)el.innerHTML=claims.length
     ? claims.map(claimCard).join('')
@@ -4455,6 +4644,7 @@ async function showIndividual(id){
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
   const i=d.individual;
+  currentIndividual=i;
   const observations=d.observations||[];
   currentObservations=observations;
   currentClaims=claims||[];
@@ -4627,16 +4817,76 @@ function openSpecificationClaim(individualId){
   renderSpecItemMenu();
   document.getElementById('specClaimModal').classList.add('open');
 }
+let identityCorrectionListingClaimId=null;
+
+function openIdentityCorrection(listingClaimId){
+  if(!activeUser||!activeUser.user||!currentIndividual)return;
+  identityCorrectionListingClaimId=Number(listingClaimId);
+  document.getElementById('identityMaker').value=currentIndividual.manufacturer||'';
+  document.getElementById('identityModel').value=currentIndividual.model||'';
+  document.getElementById('identityYear').value=currentIndividual.year||'';
+  document.getElementById('identitySerial').value=currentIndividual.serial_number||'';
+  document.getElementById('identityReason').value='';
+  document.getElementById('identityCorrectionModal').classList.add('open');
+}
+
+function closeIdentityCorrection(event){
+  if(event&&event.target&&event.target.id!=='identityCorrectionModal')return;
+  document.getElementById('identityCorrectionModal').classList.remove('open');
+  identityCorrectionListingClaimId=null;
+}
+
+async function submitIdentityCorrection(){
+  if(!activeUser||!activeUser.user||identityCorrectionListingClaimId===null)return;
+  const maker=document.getElementById('identityMaker').value.trim();
+  const serial=document.getElementById('identitySerial').value.trim();
+  if(!maker||!serial){
+    alert('MakerとSerialは必須です。');
+    return;
+  }
+  const button=document.getElementById('identityCorrectionSubmit');
+  button.disabled=true;
+  try{
+    await jfetch('/api/claims/'+identityCorrectionListingClaimId+'/identity-correction',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        manufacturer:maker,
+        model:document.getElementById('identityModel').value.trim()||null,
+        year:document.getElementById('identityYear').value.trim()||null,
+        serial_number:serial,
+        reason:document.getElementById('identityReason').value.trim()||null
+      })
+    });
+    closeIdentityCorrection();
+    await loadIndividuals();
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await loadActiveUser();
+  }catch(e){
+    alert('Identity Correctionを作成できませんでした。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
 let editingClaimId=null;
 
 function editOwnClaim(claimId){
   if(!activeUser||!activeUser.user)return;
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
   if(!claim||Number(claim.author_user_id)!==Number(activeUser.user.id))return;
+  if(claim.claim_type==='listing'){
+    if(window.confirm('Listingは編集できません。Identity Correctionを作成しますか？')){
+      openIdentityCorrection(claimId);
+    }
+    return;
+  }
   if(claim.claim_type==='specification'){
     editSpecificationClaim(claimId);
     return;
   }
+  if(claim.claim_type==='identity_correction')return;
   editingClaimId=Number(claimId);
   document.getElementById('claimEditTitle').textContent='Edit '+claimTypeLabel(claim.claim_type)+' Claim';
   document.getElementById('claimEditType').textContent=claimTypeLabel(claim.claim_type);
