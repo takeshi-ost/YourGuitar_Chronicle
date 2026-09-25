@@ -1357,10 +1357,6 @@ def api_media(
             media["mime_type"]
             or "application/octet-stream"
         ),
-        filename=(
-            media["original_filename"]
-            or path.name
-        ),
     )
 
 
@@ -2325,7 +2321,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:12px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:13px;line-height:1.55}
-.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
@@ -2583,21 +2579,6 @@ function claimCard(c){
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
-  }
-  if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
-  }
-  if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
-  }
-  if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
-  }
-  if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
-  }
-  if(c.evidence_media_id){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
   }
   if(c.evidence_media_id){
     body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy"></div>';
