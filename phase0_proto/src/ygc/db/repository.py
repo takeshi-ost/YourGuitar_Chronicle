@@ -2117,10 +2117,46 @@ class Repository:
                 ),
             )
 
-            return (
+            updated = (
                 cur.rowcount
                 > 0
             )
+            if updated:
+                individual_ids = {
+                    int(row["individual_id"])
+                    for row
+                    in con.execute(
+                        """
+                        SELECT DISTINCT c.individual_id
+                        FROM claims c
+                        WHERE c.status = 'active'
+                          AND (
+                                (
+                                    c.claim_type = 'owner_change'
+                                    AND c.value_text = ?
+                                )
+                                OR EXISTS (
+                                    SELECT 1
+                                    FROM claim_listing_items li
+                                    WHERE li.claim_id = c.id
+                                      AND li.field_name = 'owner_user_id'
+                                      AND li.value_text = ?
+                                )
+                              )
+                        """,
+                        (
+                            str(user_id),
+                            str(user_id),
+                        ),
+                    )
+                }
+                for individual_id in individual_ids:
+                    self._rebuild_individual_snapshot_in_connection(
+                        con,
+                        individual_id,
+                    )
+
+            return updated
 
     def update_user_avatar(
         self,
