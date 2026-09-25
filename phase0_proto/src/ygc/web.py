@@ -3027,6 +3027,25 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
 
+function specificationFieldLabel(value){
+  const labels={
+    nut:'Nut',
+    frets:'Frets',
+    pickguard:'Pickguard',
+    potentiometers:'Potentiometers',
+    wiring:'Wiring',
+    neck:'Neck',
+    pickups:'Pickups',
+    bridge:'Bridge',
+    tuners:'Tuners',
+    body:'Body',
+    fingerboard:'Fingerboard',
+    finish:'Finish',
+    weight:'Weight'
+  };
+  const key=String(value||'').trim();
+  return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase());
+}
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
@@ -3056,6 +3075,9 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='specification'){
+    body='<div><strong>'+esc(specificationFieldLabel(c.field_name))+': '+esc(c.value_text||'')+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -3138,9 +3160,10 @@ async function voteClaim(claimId,vote){
 async function showIndividual(id){
   selectedIndividualId=Number(id);
   if(typeof renderIndividuals==='function')renderIndividuals();
-  const [d,claims]=await Promise.all([
+  const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
-    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):''))
+    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
+    jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
   const i=d.individual;
   const observations=d.observations||[];
@@ -3163,6 +3186,12 @@ async function showIndividual(id){
     '<div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div>'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentOwnerHtml(latest)+'</span></div>'+
     '</div>'+ownershipControlsHtml(i.id)+'</div>';
+  const specRows=(currentSpecifications||[]).map(s=>
+    '<div class="detail-meta-item"><span class="detail-meta-label">'+esc(specificationFieldLabel(s.field_name))+'</span><span class="detail-meta-value">'+esc(s.value_text||'—')+'</span><span class="sub">'+esc(displayEventDate(s.occurred_at))+' · By '+esc(s.author_name||'User')+'</span></div>'
+  ).join('');
+  if(specRows){
+    out+='<div class="chronicle-toolbar"><strong>Current Specification</strong></div><div class="detail-meta-grid">'+specRows+'</div>';
+  }
   out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
