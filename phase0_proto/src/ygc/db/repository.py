@@ -2407,6 +2407,153 @@ class Repository:
             return True
 
 
+    def update_claim(
+        self,
+        claim_id: int,
+        user_id: int,
+        *,
+        occurred_at: str | None = None,
+        body: str | None = None,
+    ) -> bool:
+        note = (
+            body.strip()
+            if body and body.strip()
+            else None
+        )
+        event_date = (
+            occurred_at.strip()
+            if occurred_at
+            and occurred_at.strip()
+            else None
+        )
+        now = utcnow()
+
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT *
+                FROM claims
+                WHERE id = ?
+                  AND status = 'active'
+                """,
+                (claim_id,),
+            ).fetchone()
+
+            if not claim:
+                return False
+
+            if int(claim["author_user_id"]) != int(user_id):
+                raise ValueError(
+                    "Only the Claim author can edit this Claim"
+                )
+
+            if claim["claim_type"] == "specification":
+                raise ValueError(
+                    "Specification Claims use the dedicated editor"
+                )
+
+            con.execute(
+                """
+                UPDATE claims
+                SET body = ?,
+                    occurred_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    note,
+                    event_date,
+                    now,
+                    claim_id,
+                ),
+            )
+
+            observation_id = claim["observation_id"]
+            if observation_id is not None:
+                if claim["claim_type"] == "listing":
+                    con.execute(
+                        """
+                        UPDATE observations
+                        SET raw_text = ?,
+                            occurred_at = ?,
+                            listing_date = ?,
+                            updated_at = COALESCE(
+                                updated_at,
+                                created_at
+                            )
+                        WHERE id = ?
+                        """,
+                        (
+                            note,
+                            event_date,
+                            event_date,
+                            observation_id,
+                        ),
+                    )
+                elif claim["claim_type"] == "release":
+                    con.execute(
+                        """
+                        UPDATE observations
+                        SET raw_text = ?,
+                            occurred_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            note,
+                            event_date,
+                            observation_id,
+                        ),
+                    )
+                else:
+                    con.execute(
+                        """
+                        UPDATE observations
+                        SET occurred_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            event_date,
+                            observation_id,
+                        ),
+                    )
+
+            if claim["claim_type"] == "owner_change":
+                con.execute(
+                    """
+                    UPDATE user_guitars
+                    SET acquired_at = ?,
+                        updated_at = ?
+                    WHERE user_id = ?
+                      AND individual_id = ?
+                    """,
+                    (
+                        event_date,
+                        now,
+                        user_id,
+                        claim["individual_id"],
+                    ),
+                )
+            elif claim["claim_type"] == "release":
+                con.execute(
+                    """
+                    UPDATE user_guitars
+                    SET released_at = ?,
+                        updated_at = ?
+                    WHERE user_id = ?
+                      AND individual_id = ?
+                      AND ownership_status = 'former_owner'
+                    """,
+                    (
+                        event_date,
+                        now,
+                        user_id,
+                        claim["individual_id"],
+                    ),
+                )
+
+            return True
+
+
     def list_specification_items(
         self,
         individual_id: int,
