@@ -2866,6 +2866,12 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 #detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+.chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
+.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-evidence-image{display:block;max-width:220px;max-height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
+#chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}@media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
 </style>
@@ -3193,11 +3199,111 @@ function setIndividualSort(key){if(individualSortKey===key){individualSortDirect
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
-function ownerLabel(o){const name=String(o.owner_user_name||o.owner_name||o.seller||'').trim();if(!name)return '';const type=String(o.owner_type||'').trim();return type==='shop'?name+' (Shop)':(type==='user'?name+' (User)':name)}
-function currentOwnerHtml(o){if(!o)return '—';const name=String(o.owner_user_name||o.owner_name||o.seller||'').trim();if(!name)return '—';const type=String(o.owner_type||'').trim();const profileUrl=String(o.owner_profile_url||'').trim();const listingUrl=String(o.source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl){return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>'}if(type==='user'&&profileUrl){return '<a href="'+esc(profileUrl)+'">'+esc(label)+'</a>'}return esc(label)}
-function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl){return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>'}return esc(label)}
-function observationCard(o,isLatest){const url=String(o.source_url||'');const source=sourceName(o);const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);const owner=ownerLabel(o);const seller=String(o.seller||'').trim();let rows='';if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';if(seller&&seller!==String(o.owner_user_name||o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>'}
-async function showIndividual(id){selectedIndividualId=Number(id);const d=await jfetch('/api/individuals/'+id);const i=d.individual;const observations=d.observations||[];const listing=d.current_listing||null;const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;const latestIndex=observations.length-1;const latest=latestIndex>=0?observations[latestIndex]:null;let out='';if(listing&&listing.image_url){const listingUrl=String(listing.source_url||'');const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(listingUrl){out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer" title="Listingを開く">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>'}else{out+=image+'<span class="detail-source">Listing Claim</span>'}}else if(imageObservation){const imageUrl=String(imageObservation.source_url||'');const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer">';if(imageUrl){out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer" title="Reverb Listingを開く">'+image+'</a><span class="detail-source">Source: Reverb image (provenance)</span>'}else{out+=image+'<span class="detail-source">Source: Reverb image (provenance)</span>'}}out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div><div class="detail-meta-grid"><div class="detail-meta-item"><span class="detail-meta-label">Finish</span><span class="detail-meta-value">'+esc(i.finish||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Year</span><span class="detail-meta-value">'+esc(i.year||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Serial</span><span class="detail-meta-value mono">'+esc(i.serial_number||'—')+'</span></div><div class="detail-meta-item"><span class="detail-meta-label">Current Owner</span><span class="detail-meta-value">'+currentSnapshotOwnerHtml(i)+'</span></div></div>'+ownershipControlsHtml(i.id)+'</div>';if(latest){out+='<div class="detail-section">最新Observation</div><div class="latest-observation-scroll">'+observationCard(latest,true)+'</div>'}const history=observations.slice(0,Math.max(0,latestIndex)).reverse();if(history.length){out+='<div class="detail-section">履歴</div>'+history.map(o=>observationCard(o,false)).join('')}document.getElementById('detail').innerHTML=out}
+function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';return esc(label)}
+function currentLocationHtml(i){const parts=[i&&i.location_country,i&&i.location_region].filter(Boolean);return parts.length?esc(parts.join(' / ')):'—'}
+function specificationFieldLabel(value){const labels={body:'Body',bridge:'Bridge',fingerboard:'Fingerboard',frets:'Frets',neck:'Neck',nut:'Nut',pickups:'Pickups',pickguard:'Pickguard',potentiometers:'Potentiometers',tuners:'Tuners',wiring:'Wiring',weight:'Weight',finish:'Finish'};const key=String(value||'').trim();return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
+function identityFieldLabel(value){const labels={manufacturer:'Maker',model:'Model',year:'Year',serial_number:'Serial'};return labels[String(value||'')]||String(value||'').replace(/_/g,' ')}
+function claimTypeLabel(value){return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ')}
+function displayEventDate(value){if(!value)return '日付不明';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
+function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
+function claimCard(c){
+  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
+  const eventDate=displayEventDate(c.occurred_at);
+  let body='';
+  if(c.claim_type==='owner_change'){
+    body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='release'){
+    body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='specification'){
+    const items=(c.spec_items&&c.spec_items.length)?c.spec_items:(c.field_name?[{field_name:c.field_name,value_text:c.value_text}]:[]);
+    body=items.map(item=>'<div><strong>'+esc(specificationFieldLabel(item.field_name))+': '+esc(item.value_text||'')+'</strong></div>').join('');
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='identity_correction'){
+    const items=c.identity_items||[];
+    body=items.map(item=>'<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>').join('');
+    if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
+  }else if(c.claim_type==='listing'){
+    const title=c.listing_title||c.body||'Listing observed';
+    body='<div><strong>'+esc(title)+'</strong></div>';
+    const details=[];
+    const listingOwner=String(c.observed_owner_name||'').trim();
+    const seller=String(c.seller||'').trim();
+    if(listingOwner&&listingOwner!==seller)details.push('Owner: '+listingOwner);
+    if(seller)details.push('Seller: '+seller);
+    const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
+    if(location)details.push('Location: '+location);
+    const specs=[c.observed_model&&('Model: '+c.observed_model),c.observed_finish&&('Finish: '+c.observed_finish),c.observed_year&&('Year: '+c.observed_year),c.observed_serial_number&&('Serial: '+c.observed_serial_number)].filter(Boolean).join(' / ');
+    if(specs)details.push(specs);
+    if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
+    if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
+  }else{
+    if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }
+  if(c.evidence_media_id)body+='<div class="claim-memo"><img class="claim-evidence-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+  const good=String(Number(c.good_count||0)).padStart(2,'0');
+  const bad=String(Number(c.bad_count||0)).padStart(2,'0');
+  const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span></div>';
+  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
+}
+function renderAdminChronicle(claims){
+  const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'');const bv=String(b.occurred_at||b.created_at||'');if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
+  const correctionsByTarget=new Map();const roots=[];
+  for(const claim of sorted){if(claim.claim_type==='identity_correction'&&claim.target_claim_id){const key=Number(claim.target_claim_id);if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);correctionsByTarget.get(key).push(claim)}else roots.push(claim)}
+  const ordered=[];for(const claim of roots){ordered.push(claim);const corrections=correctionsByTarget.get(Number(claim.id))||[];corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));ordered.push(...corrections);correctionsByTarget.delete(Number(claim.id))}
+  for(const corrections of correctionsByTarget.values())ordered.push(...corrections);
+  return ordered.length?ordered.map(claimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
+}
+async function showIndividual(id){
+  selectedIndividualId=Number(id);
+  const [d,claims,currentSpecifications]=await Promise.all([
+    jfetch('/api/individuals/'+id),
+    jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
+    jfetch('/api/individuals/'+id+'/current-specifications')
+  ]);
+  const i=d.individual;
+  const observations=d.observations||[];
+  const listing=d.current_listing||null;
+  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  let out='';
+  if(i.representative_image_url){
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
+  }else if(listing&&listing.image_url){
+    const listingUrl=String(listing.source_url||'');
+    const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(listingUrl)out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>';
+    else out+=image+'<span class="detail-source">Listing Claim</span>';
+  }else if(imageObservation){
+    const imageUrl=String(imageObservation.source_url||'');
+    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: Reverb image (provenance)</span>';
+    else out+=image+'<span class="detail-source">Source: Reverb image (provenance)</span>';
+  }else{
+    out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
+  }
+
+  const specMap={};for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
+  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
+  const fixedSpecRows=[['Maker',i.manufacturer||'—'],['Model',i.model||'—'],['Finish',finishValue||'—'],['Year',i.year||'—'],['Serial',i.serial_number||'—']];
+  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
+  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
+  const dynamicSpecs=(currentSpecifications||[]).filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase())).slice().sort((a,b)=>{const ak=String(a.field_name||'').toLowerCase();const bk=String(b.field_name||'').toLowerCase();const ai=preferredOrder.indexOf(ak);const bi=preferredOrder.indexOf(bk);if(ai>=0||bi>=0){if(ai<0)return 1;if(bi<0)return-1;if(ai!==bi)return ai-bi}return ak.localeCompare(bk)});
+
+  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
+    ownershipControlsHtml(i.id)+'</div>';
+  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
+    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
+    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
+    '</div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong></div><div id="chronicleEntries">'+renderAdminChronicle(claims)+'</div>';
+  document.getElementById('detail').innerHTML=out;
+}
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
