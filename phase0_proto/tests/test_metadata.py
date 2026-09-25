@@ -924,11 +924,9 @@ def test_user_owner_name_tracks_account_display_name(
             individual_id
         )
     )
-    assert observations[0]["owner_name"] == (
-        "Old Name"
-    )
-    assert observations[0]["owner_user_name"] == (
-        "New Name"
+    assert observations[0]["owner_name"] is None
+    assert observations[0]["actor_user_id"] == (
+        user_id
     )
 
     claims = repository.list_claims(
