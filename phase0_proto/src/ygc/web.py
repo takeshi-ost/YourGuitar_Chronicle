@@ -2317,6 +2317,22 @@ function claimCard(c){
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='listing'){
+    const title=c.listing_title||c.body||'Listing observed';
+    body='<div><strong>'+esc(title)+'</strong></div>';
+    const details=[];
+    if(c.seller)details.push('Seller: '+c.seller);
+    const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
+    if(location)details.push('Location: '+location);
+    const specs=[
+      c.observed_model&&('Model: '+c.observed_model),
+      c.observed_finish&&('Finish: '+c.observed_finish),
+      c.observed_year&&('Year: '+c.observed_year),
+      c.observed_serial_number&&('Serial: '+c.observed_serial_number)
+    ].filter(Boolean).join(' / ');
+    if(specs)details.push(specs);
+    if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
+    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
@@ -2327,42 +2343,22 @@ function claimCard(c){
     '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
     '</div>';
 }
-function chronologyValue(o,mode){
-  if(mode==='input')return String(o.created_at||o.observed_at||'');
-  return String(o.occurred_at||o.listing_date||o.observed_at||o.created_at||'');
+function chronologyValue(c,mode){
+  if(mode==='input')return String(c.created_at||'');
+  return String(c.occurred_at||c.created_at||'');
 }
 function renderChronicle(){
-  const observations=currentObservations.slice().sort((a,b)=>{
+  const claims=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
     if(av<bv)return -1;
     if(av>bv)return 1;
     return Number(a.id)-Number(b.id);
   });
-  const claimsByObservation=new Map();
-  const orphanClaims=[];
-  for(const claim of currentClaims){
-    if(claim.observation_id===null||claim.observation_id===undefined){
-      orphanClaims.push(claim);
-      continue;
-    }
-    const key=Number(claim.observation_id);
-    if(!claimsByObservation.has(key))claimsByObservation.set(key,[]);
-    claimsByObservation.get(key).push(claim);
-  }
-  let html='';
-  for(const o of observations){
-    html+=observationCard(o,false);
-    const attached=claimsByObservation.get(Number(o.id))||[];
-    attached.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    html+=attached.map(claimCard).join('');
-  }
-  if(orphanClaims.length){
-    orphanClaims.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    html+=orphanClaims.map(claimCard).join('');
-  }
   const el=document.getElementById('chronicleEntries');
-  if(el)el.innerHTML=html||'<div class="sub">Chronicleはまだありません。</div>';
+  if(el)el.innerHTML=claims.length
+    ? claims.map(claimCard).join('')
+    : '<div class="sub">Claimはまだありません。</div>';
 }
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
@@ -2864,6 +2860,22 @@ function claimCard(c){
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='listing'){
+    const title=c.listing_title||c.body||'Listing observed';
+    body='<div><strong>'+esc(title)+'</strong></div>';
+    const details=[];
+    if(c.seller)details.push('Seller: '+c.seller);
+    const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
+    if(location)details.push('Location: '+location);
+    const specs=[
+      c.observed_model&&('Model: '+c.observed_model),
+      c.observed_finish&&('Finish: '+c.observed_finish),
+      c.observed_year&&('Year: '+c.observed_year),
+      c.observed_serial_number&&('Serial: '+c.observed_serial_number)
+    ].filter(Boolean).join(' / ');
+    if(specs)details.push(specs);
+    if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
+    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div>'+esc(c.value_text)+'</div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
@@ -2874,42 +2886,22 @@ function claimCard(c){
     '<div class="claim-footer">入力日時 '+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div>'+
     '</div>';
 }
-function chronologyValue(o,mode){
-  if(mode==='input')return String(o.created_at||o.observed_at||'');
-  return String(o.occurred_at||o.listing_date||o.observed_at||o.created_at||'');
+function chronologyValue(c,mode){
+  if(mode==='input')return String(c.created_at||'');
+  return String(c.occurred_at||c.created_at||'');
 }
 function renderChronicle(){
-  const observations=currentObservations.slice().sort((a,b)=>{
+  const claims=currentClaims.slice().sort((a,b)=>{
     const av=chronologyValue(a,chronicleSort);
     const bv=chronologyValue(b,chronicleSort);
     if(av<bv)return -1;
     if(av>bv)return 1;
     return Number(a.id)-Number(b.id);
   });
-  const claimsByObservation=new Map();
-  const orphanClaims=[];
-  for(const claim of currentClaims){
-    if(claim.observation_id===null||claim.observation_id===undefined){
-      orphanClaims.push(claim);
-      continue;
-    }
-    const key=Number(claim.observation_id);
-    if(!claimsByObservation.has(key))claimsByObservation.set(key,[]);
-    claimsByObservation.get(key).push(claim);
-  }
-  let html='';
-  for(const o of observations){
-    html+=observationCard(o,false);
-    const attached=claimsByObservation.get(Number(o.id))||[];
-    attached.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    html+=attached.map(claimCard).join('');
-  }
-  if(orphanClaims.length){
-    orphanClaims.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    html+=orphanClaims.map(claimCard).join('');
-  }
   const el=document.getElementById('chronicleEntries');
-  if(el)el.innerHTML=html||'<div class="sub">Chronicleはまだありません。</div>';
+  if(el)el.innerHTML=claims.length
+    ? claims.map(claimCard).join('')
+    : '<div class="sub">Claimはまだありません。</div>';
 }
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
