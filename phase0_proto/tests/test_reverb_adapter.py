@@ -1,7 +1,6 @@
 from ygc.reverb_adapter import (
     classify_vintage_listing,
     to_listing_claim_data,
-    to_observation,
     to_provenance_observation,
 )
 
@@ -57,112 +56,34 @@ def test_adapter():
         ),
     }
 
-    observation = (
-        to_observation(
-            item
-        )
+    claim = to_listing_claim_data(
+        item
+    )
+    provenance = to_provenance_observation(
+        item
     )
 
-    assert (
-        observation[
-            "manufacturer"
-        ]
-        == "Fender"
+    assert claim["manufacturer"] == "Fender"
+    assert claim["model"] == "Stratocaster"
+    assert claim["finish"] == "Olympic White"
+    assert claim["year"] == "1985"
+    assert claim["serial_number"] == "E556368"
+    assert claim["seller"] == "Example Vintage"
+    assert claim["owner_name"] == "Example Vintage"
+    assert claim["owner_type"] == "shop"
+    assert claim["source_listing_id"] == "123"
+    assert claim["location_country"] == "NL"
+    assert claim["location_region"] == "NH"
+    assert claim["image_url"] == (
+        "https://images.reverb.com/"
+        "example.jpg"
     )
+    assert claim["vintage_status"] == "modern"
 
-    assert (
-        observation[
-            "model"
-        ]
-        == "Stratocaster"
-    )
-
-    assert (
-        observation[
-            "finish"
-        ]
-        == "Olympic White"
-    )
-
-    assert (
-        observation[
-            "year"
-        ]
-        == "1985"
-    )
-
-    assert (
-        observation[
-            "serial_number"
-        ]
-        == "E556368"
-    )
-
-    assert (
-        observation[
-            "seller"
-        ]
-        == "Example Vintage"
-    )
-
-    assert (
-        observation[
-            "owner_name"
-        ]
-        == "Example Vintage"
-    )
-
-    assert (
-        observation[
-            "owner_type"
-        ]
-        == "shop"
-    )
-
-    assert (
-        observation[
-            "source_listing_id"
-        ]
-        == "123"
-    )
-
-    assert (
-        observation[
-            "location_country"
-        ]
-        == "NL"
-    )
-
-    assert (
-        observation[
-            "location_region"
-        ]
-        == "NH"
-    )
-
-    assert (
-        observation[
-            "location_source"
-        ]
-        == "reverb_listing"
-    )
-
-    assert (
-        observation[
-            "image_url"
-        ]
-        == (
-            "https://images.reverb.com/"
-            "example.jpg"
-        )
-    )
-
-    assert (
-        observation[
-            "vintage_status"
-        ]
-        == "modern"
-    )
+    assert provenance["source_site"] == "reverb"
+    assert provenance["source_listing_id"] == "123"
+    assert "manufacturer" not in provenance
+    assert "serial_number" not in provenance
 
 
 def test_real_1974_title_is_vintage():
@@ -397,23 +318,3 @@ def test_claim_and_provenance_adapters_are_separated():
     assert "serial_number" not in provenance
     assert "owner_name" not in provenance
     assert "location_country" not in provenance
-
-
-def test_legacy_observation_adapter_still_available_during_transition():
-    item = {
-        "id": 789,
-        "make": "Gibson",
-        "model": "Les Paul",
-        "year": "1978",
-        "title": "1978 Gibson Les Paul",
-        "description": "Serial number 99999999.",
-    }
-
-    legacy = to_observation(
-        item
-    )
-
-    assert legacy["manufacturer"] == "Gibson"
-    assert legacy["model"] == "Les Paul"
-    assert legacy["year"] == "1978"
-    assert legacy["source_listing_id"] == "789"
