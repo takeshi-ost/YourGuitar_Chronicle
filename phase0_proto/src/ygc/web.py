@@ -345,8 +345,7 @@ class UserGuitarOrderRequest(BaseModel):
     )
 
 
-class SpecificationClaimRequest(BaseModel):
-    user_id: int = Field(ge=1)
+class SpecificationItemRequest(BaseModel):
     field_name: str = Field(
         min_length=1,
         max_length=120,
@@ -354,6 +353,18 @@ class SpecificationClaimRequest(BaseModel):
     value_text: str = Field(
         min_length=1,
         max_length=500,
+    )
+
+
+class SpecificationClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    specification_kind: str = Field(
+        default="specification",
+        max_length=20,
+    )
+    items: list[SpecificationItemRequest] = Field(
+        min_length=1,
+        max_length=50,
     )
     occurred_at: str | None = Field(
         default=None,
@@ -1637,14 +1648,46 @@ def api_individual_claims(
     individual_id: int,
     viewer_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    return [
+    repository = repo()
+    claims = [
         _row_dict(row)
         for row
-        in repo().list_claims(
+        in repository.list_claims(
             individual_id,
             viewer_user_id=viewer_user_id,
         )
     ]
+
+    items_by_claim: dict[
+        int,
+        list[dict[str, Any]],
+    ] = {}
+    for row in repository.list_specification_items(
+        individual_id
+    ):
+        item = _row_dict(
+            row
+        )
+        items_by_claim.setdefault(
+            int(
+                item["claim_id"]
+            ),
+            [],
+        ).append(
+            item
+        )
+
+    for claim in claims:
+        claim["spec_items"] = (
+            items_by_claim.get(
+                int(
+                    claim["id"]
+                ),
+                [],
+            )
+        )
+
+    return claims
 
 
 @app.post("/api/users/{user_id}/new-guitar")
@@ -1827,11 +1870,19 @@ def api_specification_claim(
 
     try:
         claim_id = (
-            repository.create_specification_claim(
+            repository.create_specification_claim_group(
                 request.user_id,
                 individual_id,
-                field_name=request.field_name,
-                value_text=request.value_text,
+                specification_kind=(
+                    request.specification_kind
+                ),
+                items=[
+                    {
+                        "field_name": item.field_name,
+                        "value_text": item.value_text,
+                    }
+                    for item in request.items
+                ],
                 occurred_at=request.occurred_at,
                 body=request.body,
             )
@@ -3070,14 +3121,19 @@ function claimHeaderHtml(c,type,eventDate){
   return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>';
 }
 function claimCard(c){
-  const type=claimTypeLabel(c.claim_type);
+  const type=c.claim_type==='specification'
+    ? (c.specification_kind==='repair'?'Repair':'Specification')
+    : claimTypeLabel(c.claim_type);
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='specification'){
-    body='<div><strong>'+esc(specificationFieldLabel(c.field_name))+': '+esc(c.value_text||'')+'</strong></div>';
+    const items=(c.spec_items&&c.spec_items.length)
+      ? c.spec_items
+      : (c.field_name?[{field_name:c.field_name,value_text:c.value_text}]:[]);
+    body=items.map(item=>'<div><strong>'+esc(specificationFieldLabel(item.field_name))+': '+esc(item.value_text||'')+'</strong></div>').join('');
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -3310,7 +3366,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-memo{margin-top:8px;white-space:pre-wrap}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:11px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
-.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}.spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
 .owned-row.dragging{opacity:.45}
@@ -3359,69 +3415,39 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
-<div class="modal-backdrop" id="addClaimModal" onclick="closeAddClaim(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>Add Claim</h2>
-    <div class="sub" id="addClaimGuitar" style="margin-bottom:14px"></div>
-    <div class="form-row">
-      <label class="form-label" for="addClaimType">Claim Type</label>
-      <select id="addClaimType">
-        <option value="specification">Specification</option>
-      </select>
-    </div>
-    <div class="sub">現在追加できるClaimはSpecificationのみです。</div>
-    <div class="modal-actions">
-      <button class="secondary" onclick="closeAddClaim()">キャンセル</button>
-      <button onclick="continueAddClaim()">次へ</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Add Specification Claim</h2>
+    <h2>Specification/Repair Claim</h2>
     <div class="sub" id="specClaimGuitar" style="margin-bottom:14px"></div>
+
+    <div class="spec-kind">
+      <button id="specKindSpecification" type="button" class="active" onclick="setSpecificationKind('specification')">Specification</button>
+      <button id="specKindRepair" type="button" onclick="setSpecificationKind('repair')">Repair</button>
+    </div>
+
+    <div class="spec-add-wrap">
+      <button type="button" class="spec-add-button" onclick="toggleSpecItemMenu(event)">＋</button>
+      <div class="claim-menu spec-item-menu" id="specItemMenu"></div>
+    </div>
+    <span class="sub" style="margin-left:8px">項目を追加</span>
+
+    <div class="spec-items" id="specClaimItems"></div>
+
     <div class="modal-grid">
-      <div class="form-row">
-        <label class="form-label" for="specClaimField">Specification Item *</label>
-        <select id="specClaimField" onchange="toggleCustomSpecificationField()">
-          <option value="nut">Nut</option>
-          <option value="frets">Frets</option>
-          <option value="pickguard">Pickguard</option>
-          <option value="potentiometers">Potentiometers</option>
-          <option value="wiring">Wiring</option>
-          <option value="neck">Neck</option>
-          <option value="pickups">Pickups</option>
-          <option value="bridge">Bridge</option>
-          <option value="tuners">Tuners</option>
-          <option value="body">Body</option>
-          <option value="fingerboard">Fingerboard</option>
-          <option value="finish">Finish</option>
-          <option value="weight">Weight</option>
-          <option value="custom">Custom…</option>
-        </select>
-      </div>
-      <div class="form-row" id="specClaimCustomRow" style="display:none">
-        <label class="form-label" for="specClaimCustomField">Custom Item *</label>
-        <input id="specClaimCustomField" maxlength="120" placeholder="e.g. neck_joint">
-      </div>
-      <div class="form-row full">
-        <label class="form-label" for="specClaimValue">Value *</label>
-        <input id="specClaimValue" maxlength="500" placeholder="e.g. Bone / Leveled / Original 3-ply white">
-      </div>
       <div class="form-row">
         <label class="form-label" for="specClaimDate">Date</label>
         <input id="specClaimDate" type="date">
       </div>
       <div class="form-row full">
         <label class="form-label" for="specClaimBody">Memo（任意）</label>
-        <textarea id="specClaimBody" maxlength="2000" placeholder="修理・交換・調整の内容や補足"></textarea>
+        <textarea id="specClaimBody" maxlength="2000" placeholder="仕様、交換、調整、修理内容などの補足"></textarea>
       </div>
     </div>
-    <div class="sub">同じ項目は時系列でスタックされ、Specificationには最新値が表示されます。</div>
+
+    <div class="sub">追加した各項目は、この1件のClaimとして保存されます。Specificationには各項目の最新値が表示されます。</div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
-      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Specification Claimを追加</button>
+      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Claimを追加</button>
     </div>
   </div>
 </div>
@@ -3868,14 +3894,19 @@ function claimHeaderHtml(c,type,eventDate){
   return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
 }
 function claimCard(c){
-  const type=claimTypeLabel(c.claim_type);
+  const type=c.claim_type==='specification'
+    ? (c.specification_kind==='repair'?'Repair':'Specification')
+    : claimTypeLabel(c.claim_type);
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='specification'){
-    body='<div><strong>'+esc(specificationFieldLabel(c.field_name))+': '+esc(c.value_text||'')+'</strong></div>';
+    const items=(c.spec_items&&c.spec_items.length)
+      ? c.spec_items
+      : (c.field_name?[{field_name:c.field_name,value_text:c.value_text}]:[]);
+    body=items.map(item=>'<div><strong>'+esc(specificationFieldLabel(item.field_name))+': '+esc(item.value_text||'')+'</strong></div>').join('');
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -4003,36 +4034,51 @@ async function showIndividual(id){
   ).join('');
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div>'+
     (specRows?'<div class="detail-meta-grid">'+specRows+'</div>':'<div class="sub">Specification Claimはまだありません。</div>');
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><button onclick="openAddClaim('+i.id+')">Add Claim</button><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button></div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
 
-function openAddClaim(individualId){
+const SPEC_FIELDS=[
+  ['nut','Nut'],
+  ['frets','Frets'],
+  ['pickguard','Pickguard'],
+  ['potentiometers','Potentiometers'],
+  ['wiring','Wiring'],
+  ['neck','Neck'],
+  ['pickups','Pickups'],
+  ['bridge','Bridge'],
+  ['tuners','Tuners'],
+  ['body','Body'],
+  ['fingerboard','Fingerboard'],
+  ['finish','Finish'],
+  ['weight','Weight']
+];
+let specificationKind='specification';
+let specificationItems=[];
+
+function toggleAddClaimMenu(event,individualId){
+  event.stopPropagation();
   if(!activeUser||!activeUser.user){
     alert('先にUserを選択してください。');
     return;
   }
   selectedIndividualId=Number(individualId);
-  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
-  document.getElementById('addClaimGuitar').textContent=guitar
-    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
-    : 'Individual #'+individualId;
-  document.getElementById('addClaimType').value='specification';
-  document.getElementById('addClaimModal').classList.add('open');
+  const menu=document.getElementById('addClaimMenu');
+  if(menu)menu.classList.toggle('open');
 }
-function closeAddClaim(event){
-  if(event&&event.target&&event.target.id!=='addClaimModal')return;
-  document.getElementById('addClaimModal').classList.remove('open');
-}
-function continueAddClaim(){
-  const type=document.getElementById('addClaimType').value;
-  closeAddClaim();
-  if(type==='specification'){
+function chooseClaimType(type){
+  const menu=document.getElementById('addClaimMenu');
+  if(menu)menu.classList.remove('open');
+  if(type==='specification_repair'){
     openSpecificationClaim(selectedIndividualId);
   }
 }
-
+function setSpecificationKind(kind){
+  specificationKind=kind==='repair'?'repair':'specification';
+  document.getElementById('specKindSpecification').classList.toggle('active',specificationKind==='specification');
+  document.getElementById('specKindRepair').classList.toggle('active',specificationKind==='repair');
+}
 function openSpecificationClaim(individualId){
   if(!activeUser||!activeUser.user){
     alert('先にUserを選択してください。');
@@ -4043,33 +4089,93 @@ function openSpecificationClaim(individualId){
   document.getElementById('specClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  document.getElementById('specClaimField').value='nut';
-  document.getElementById('specClaimCustomField').value='';
-  document.getElementById('specClaimCustomRow').style.display='none';
-  document.getElementById('specClaimValue').value='';
+  specificationKind='specification';
+  specificationItems=[];
+  setSpecificationKind('specification');
   document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('specClaimBody').value='';
+  renderSpecificationItems();
+  renderSpecItemMenu();
   document.getElementById('specClaimModal').classList.add('open');
-  document.getElementById('specClaimValue').focus();
 }
 function closeSpecificationClaim(event){
   if(event&&event.target&&event.target.id!=='specClaimModal')return;
   document.getElementById('specClaimModal').classList.remove('open');
+  const menu=document.getElementById('specItemMenu');
+  if(menu)menu.classList.remove('open');
 }
-function toggleCustomSpecificationField(){
-  const custom=document.getElementById('specClaimField').value==='custom';
-  document.getElementById('specClaimCustomRow').style.display=custom?'block':'none';
-  if(custom)document.getElementById('specClaimCustomField').focus();
+function toggleSpecItemMenu(event){
+  event.stopPropagation();
+  renderSpecItemMenu();
+  document.getElementById('specItemMenu').classList.toggle('open');
+}
+function renderSpecItemMenu(){
+  const menu=document.getElementById('specItemMenu');
+  if(!menu)return;
+  const used=new Set(specificationItems.map(x=>x.field_name));
+  menu.innerHTML=SPEC_FIELDS
+    .filter(([key])=>!used.has(key))
+    .map(([key,label])=>'<button type="button" onclick="addSpecificationItem(\''+key+'\')">'+esc(label)+'</button>')
+    .join('')+
+    '<button type="button" onclick="addCustomSpecificationItem()">Custom…</button>';
+}
+function addSpecificationItem(fieldName,label){
+  if(specificationItems.some(x=>x.field_name===fieldName))return;
+  const found=SPEC_FIELDS.find(([key])=>key===fieldName);
+  specificationItems.push({
+    field_name:fieldName,
+    label:label||(found?found[1]:specificationFieldLabel(fieldName)),
+    value_text:''
+  });
+  document.getElementById('specItemMenu').classList.remove('open');
+  renderSpecificationItems();
+}
+function addCustomSpecificationItem(){
+  const raw=prompt('Specification項目名を入力してください。');
+  if(!raw)return;
+  const fieldName=raw.trim().toLowerCase().replace(/\s+/g,'_');
+  if(!fieldName)return;
+  if(specificationItems.some(x=>x.field_name===fieldName)){
+    alert('同じ項目はすでに追加されています。');
+    return;
+  }
+  addSpecificationItem(fieldName,raw.trim());
+}
+function removeSpecificationItem(index){
+  specificationItems.splice(index,1);
+  renderSpecificationItems();
+  renderSpecItemMenu();
+}
+function updateSpecificationItem(index,value){
+  if(specificationItems[index])specificationItems[index].value_text=value;
+}
+function renderSpecificationItems(){
+  const el=document.getElementById('specClaimItems');
+  if(!el)return;
+  el.innerHTML=specificationItems.length
+    ? specificationItems.map((item,index)=>
+      '<div class="spec-item-row">'+
+        '<div class="spec-item-label">'+esc(item.label)+'</div>'+
+        '<input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value">'+
+        '<button type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button>'+
+      '</div>'
+    ).join('')
+    : '<div class="sub">＋から入力したい項目を追加してください。</div>';
 }
 async function submitSpecificationClaim(){
   if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
-  const selected=document.getElementById('specClaimField').value;
-  const fieldName=(selected==='custom'
-    ? document.getElementById('specClaimCustomField').value.trim()
-    : selected);
-  const valueText=document.getElementById('specClaimValue').value.trim();
-  if(!fieldName||!valueText){
-    alert('Specification Item と Value は必須です。');
+  const items=specificationItems
+    .map(item=>({
+      field_name:item.field_name,
+      value_text:String(item.value_text||'').trim()
+    }))
+    .filter(item=>item.value_text);
+  if(!items.length){
+    alert('少なくとも1つの項目とValueを入力してください。');
+    return;
+  }
+  if(items.length!==specificationItems.length){
+    alert('追加した項目のValueをすべて入力してください。');
     return;
   }
   const button=document.getElementById('specClaimSubmit');
@@ -4080,8 +4186,8 @@ async function submitSpecificationClaim(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         user_id:Number(activeUser.user.id),
-        field_name:fieldName,
-        value_text:valueText,
+        specification_kind:specificationKind,
+        items,
         occurred_at:document.getElementById('specClaimDate').value||null,
         body:document.getElementById('specClaimBody').value.trim()||null
       })
@@ -4089,11 +4195,18 @@ async function submitSpecificationClaim(){
     closeSpecificationClaim();
     await showIndividual(selectedIndividualId);
   }catch(e){
-    alert('Specification Claimの登録に失敗しました。\n'+e.message);
+    alert('Specification/Repair Claimの登録に失敗しました.\n'+e.message);
   }finally{
     button.disabled=false;
   }
 }
+
+document.addEventListener('click',()=>{
+  const claimMenu=document.getElementById('addClaimMenu');
+  if(claimMenu)claimMenu.classList.remove('open');
+  const specMenu=document.getElementById('specItemMenu');
+  if(specMenu)specMenu.classList.remove('open');
+});
 
 async function linkOwnedGuitar(individualId){
   if(!activeUser||!activeUser.user)return;
