@@ -53,6 +53,9 @@ class Repository:
             self._backfill_listing_claims(
                 con
             )
+            self._backfill_individual_locations_from_listing_claims(
+                con
+            )
 
     @staticmethod
     def _table_columns(
@@ -75,6 +78,8 @@ class Repository:
             "individuals": {
                 "finish": "TEXT",
                 "year": "TEXT",
+                "location_country": "TEXT",
+                "location_region": "TEXT",
                 "representative_media_asset_id": "INTEGER",
             },
             "users": {
@@ -298,6 +303,71 @@ class Repository:
                     occurred_at,
                     row["created_at"],
                     row["created_at"],
+                ),
+            )
+
+    def _backfill_individual_locations_from_listing_claims(
+        self,
+        con: sqlite3.Connection,
+    ) -> None:
+        rows = list(
+            con.execute(
+                """
+                SELECT
+                    i.id AS individual_id,
+                    (
+                        SELECT o.location_country
+                        FROM claims c
+                        INNER JOIN observations o
+                          ON o.id = c.observation_id
+                        WHERE c.individual_id = i.id
+                          AND c.claim_type = 'listing'
+                          AND c.status = 'active'
+                          AND o.location_country IS NOT NULL
+                          AND TRIM(o.location_country) <> ''
+                        ORDER BY
+                            COALESCE(c.occurred_at, c.created_at) ASC,
+                            c.id ASC
+                        LIMIT 1
+                    ) AS location_country,
+                    (
+                        SELECT o.location_region
+                        FROM claims c
+                        INNER JOIN observations o
+                          ON o.id = c.observation_id
+                        WHERE c.individual_id = i.id
+                          AND c.claim_type = 'listing'
+                          AND c.status = 'active'
+                          AND o.location_region IS NOT NULL
+                          AND TRIM(o.location_region) <> ''
+                        ORDER BY
+                            COALESCE(c.occurred_at, c.created_at) ASC,
+                            c.id ASC
+                        LIMIT 1
+                    ) AS location_region
+                FROM individuals i
+                ORDER BY i.id
+                """
+            )
+        )
+        for row in rows:
+            con.execute(
+                """
+                UPDATE individuals
+                SET location_country = COALESCE(
+                        NULLIF(location_country, ''),
+                        NULLIF(?, '')
+                    ),
+                    location_region = COALESCE(
+                        NULLIF(location_region, ''),
+                        NULLIF(?, '')
+                    )
+                WHERE id = ?
+                """,
+                (
+                    row["location_country"],
+                    row["location_region"],
+                    row["individual_id"],
                 ),
             )
 
@@ -666,9 +736,41 @@ class Repository:
                                 ) DESC,
                                 id DESC
                             LIMIT 1
-                        ) AS year
+                        ) AS year,
+                        (
+                            SELECT o.location_country
+                            FROM claims c
+                            INNER JOIN observations o
+                              ON o.id = c.observation_id
+                            WHERE c.individual_id = ?
+                              AND c.claim_type = 'listing'
+                              AND c.status = 'active'
+                              AND o.location_country IS NOT NULL
+                              AND TRIM(o.location_country) <> ''
+                            ORDER BY
+                                COALESCE(c.occurred_at, c.created_at) ASC,
+                                c.id ASC
+                            LIMIT 1
+                        ) AS location_country,
+                        (
+                            SELECT o.location_region
+                            FROM claims c
+                            INNER JOIN observations o
+                              ON o.id = c.observation_id
+                            WHERE c.individual_id = ?
+                              AND c.claim_type = 'listing'
+                              AND c.status = 'active'
+                              AND o.location_region IS NOT NULL
+                              AND TRIM(o.location_region) <> ''
+                            ORDER BY
+                                COALESCE(c.occurred_at, c.created_at) ASC,
+                                c.id ASC
+                            LIMIT 1
+                        ) AS location_region
                     """,
                     (
+                        individual_id,
+                        individual_id,
                         individual_id,
                         individual_id,
                         individual_id,
@@ -690,6 +792,14 @@ class Repository:
                             NULLIF(?, ''),
                             year
                         ),
+                        location_country = COALESCE(
+                            NULLIF(location_country, ''),
+                            NULLIF(?, '')
+                        ),
+                        location_region = COALESCE(
+                            NULLIF(location_region, ''),
+                            NULLIF(?, '')
+                        ),
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -697,6 +807,8 @@ class Repository:
                         source["model"],
                         source["finish"],
                         source["year"],
+                        source["location_country"],
+                        source["location_region"],
                         utcnow(),
                         individual_id,
                     ),
@@ -1486,13 +1598,15 @@ class Repository:
                     finish,
                     year,
                     serial_number,
+                    location_country,
+                    location_region,
                     normalized_manufacturer,
                     normalized_model,
                     normalized_serial,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     maker,
@@ -1500,6 +1614,8 @@ class Repository:
                     finish_value,
                     year_value,
                     serial,
+                    user["location_country"],
+                    user["location_region"],
                     normalized_maker,
                     normalized_model,
                     normalized_serial,
@@ -1535,6 +1651,9 @@ class Repository:
                     serial_number,
                     owner_name,
                     owner_type,
+                    location_country,
+                    location_region,
+                    location_source,
                     event_type,
                     actor_user_id,
                     occurred_at,
@@ -1549,6 +1668,7 @@ class Repository:
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, 'user',
+                    ?, ?, 'user_profile',
                     'listing', ?, ?, 'user', '',
                     ?, ?, ?, ?, ?, ?
                 )
@@ -1561,6 +1681,8 @@ class Repository:
                     year_value,
                     serial,
                     user["display_name"],
+                    user["location_country"],
+                    user["location_region"],
                     user_id,
                     event_date,
                     source_listing_id,
