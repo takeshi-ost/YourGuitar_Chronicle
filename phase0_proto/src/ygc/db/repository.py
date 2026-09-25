@@ -2926,6 +2926,11 @@ class Repository:
                 ),
             )
 
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+
             return (
                 observation_id,
                 claim_id,
@@ -3086,6 +3091,11 @@ class Repository:
                     user_id,
                     individual_id,
                 ),
+            )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
             )
 
             return (
@@ -3279,6 +3289,11 @@ class Repository:
                 ],
             )
 
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+
             return claim_id
 
     def update_specification_claim_group(
@@ -3428,6 +3443,11 @@ class Repository:
                     for field, value
                     in normalized_items
                 ],
+            )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                int(claim["individual_id"]),
             )
 
             return True
@@ -3580,6 +3600,11 @@ class Repository:
                         claim["individual_id"],
                     ),
                 )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                int(claim["individual_id"]),
+            )
 
             return True
 
@@ -3798,30 +3823,9 @@ class Repository:
                 ],
             )
 
-            con.execute(
-                """
-                UPDATE individuals
-                SET manufacturer = ?,
-                    model = ?,
-                    year = ?,
-                    serial_number = ?,
-                    normalized_manufacturer = ?,
-                    normalized_model = ?,
-                    normalized_serial = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    maker,
-                    model_value,
-                    year_value,
-                    serial,
-                    normalized_maker,
-                    normalized_model,
-                    normalized_serial,
-                    now,
-                    individual["id"],
-                ),
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                int(individual["id"]),
             )
 
             return claim_id
