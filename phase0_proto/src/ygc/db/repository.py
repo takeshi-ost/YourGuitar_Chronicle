@@ -559,11 +559,33 @@ class Repository:
                 ).fetchone()[0]
             )
 
+            stale_owner_snapshots = int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM individuals i
+                    WHERE i.current_owner_name IS NULL
+                      AND EXISTS (
+                            SELECT 1
+                            FROM claims c
+                            INNER JOIN claim_listing_items li
+                              ON li.claim_id = c.id
+                             AND li.field_name = 'owner_name'
+                             AND TRIM(li.value_text) <> ''
+                            WHERE c.individual_id = i.id
+                              AND c.claim_type = 'listing'
+                              AND c.status = 'active'
+                      )
+                    """
+                ).fetchone()[0]
+            )
+
             ready = (
                 unmigrated_listing_observations == 0
                 and claimless_individuals == 0
                 and incomplete_identity_claims == 0
                 and pending_shells == 0
+                and stale_owner_snapshots == 0
             )
 
             return {
@@ -587,7 +609,45 @@ class Repository:
                 "pending_shells": (
                     pending_shells
                 ),
+                "stale_owner_snapshots": (
+                    stale_owner_snapshots
+                ),
             }
+
+    def rebuild_all_individual_snapshots(
+        self,
+    ) -> dict[str, int]:
+        rebuilt = 0
+        skipped = 0
+
+        with self.connect() as con:
+            individual_ids = [
+                int(row["id"])
+                for row
+                in con.execute(
+                    """
+                    SELECT id
+                    FROM individuals
+                    ORDER BY id
+                    """
+                )
+            ]
+
+            for individual_id in individual_ids:
+                try:
+                    self._rebuild_individual_snapshot_in_connection(
+                        con,
+                        individual_id,
+                    )
+                except ValueError:
+                    skipped += 1
+                    continue
+                rebuilt += 1
+
+        return {
+            "snapshots_rebuilt": rebuilt,
+            "snapshots_skipped": skipped,
+        }
 
     def migrate_legacy_observations_to_claims(
         self,
