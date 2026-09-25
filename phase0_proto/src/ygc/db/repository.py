@@ -1997,11 +1997,17 @@ class Repository:
 
             con.execute(
                 """
-                DELETE FROM user_guitars
+                UPDATE user_guitars
+                SET ownership_status = 'former_owner',
+                    released_at = ?,
+                    updated_at = ?
                 WHERE user_id = ?
                   AND individual_id = ?
+                  AND ownership_status = 'current_owner'
                 """,
                 (
+                    event_date,
+                    now,
                     user_id,
                     individual_id,
                 ),
