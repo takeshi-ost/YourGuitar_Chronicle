@@ -332,6 +332,32 @@ class UserGuitarOrderRequest(BaseModel):
     )
 
 
+class OwnerChangeClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    acquired_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    previous_owner_text: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
+class ClaimResponseRequest(BaseModel):
+    responder_user_id: int = Field(ge=1)
+    stance: str = Field(max_length=20)
+
+
+class ClaimVoteRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    vote: str = Field(max_length=10)
+
+
 def _run_batch(
     job_id: str,
     request: CrawlRequest,
@@ -1089,6 +1115,114 @@ def api_individual(individual_id: int) -> dict[str, Any]:
         "individual": _row_dict(individual),
         "observations": [_row_dict(row) for row in observations],
     }
+
+
+@app.get("/api/individuals/{individual_id}/claims")
+def api_individual_claims(
+    individual_id: int,
+) -> list[dict[str, Any]]:
+    return [
+        _row_dict(row)
+        for row
+        in repo().list_claims(
+            individual_id
+        )
+    ]
+
+
+@app.post("/api/individuals/{individual_id}/owner-change-claim")
+def api_owner_change_claim(
+    individual_id: int,
+    request: OwnerChangeClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        (
+            observation_id,
+            claim_id,
+        ) = repository.create_owner_change_claim(
+            request.user_id,
+            individual_id,
+            acquired_at=request.acquired_at,
+            previous_owner_text=(
+                request.previous_owner_text
+            ),
+            body=request.body,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    user, guitars = repository.get_user(
+        request.user_id
+    )
+
+    return {
+        "observation_id": observation_id,
+        "claim_id": claim_id,
+        "user": _row_dict(user),
+        "guitars": [
+            _row_dict(row)
+            for row in guitars
+        ],
+    }
+
+
+@app.post("/api/claims/{claim_id}/response")
+def api_claim_response(
+    claim_id: int,
+    request: ClaimResponseRequest,
+) -> dict[str, bool]:
+    repository = repo()
+    try:
+        ok = repository.set_claim_response(
+            claim_id,
+            request.responder_user_id,
+            request.stance,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim or User not found",
+        )
+
+    return {"ok": True}
+
+
+@app.post("/api/claims/{claim_id}/vote")
+def api_claim_vote(
+    claim_id: int,
+    request: ClaimVoteRequest,
+) -> dict[str, bool]:
+    repository = repo()
+    try:
+        ok = repository.set_claim_vote(
+            claim_id,
+            request.user_id,
+            request.vote,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim or User not found",
+        )
+
+    return {"ok": True}
 
 
 @app.get("/api/users")
@@ -1950,6 +2084,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
 .observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
 </style>
@@ -2001,10 +2136,35 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
+<div class="modal-backdrop" id="ownerClaimModal" onclick="closeOwnerClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Add to Your Chronicle</h2>
+    <div class="sub" id="ownerClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label" for="ownerClaimDate">取得日 / Owner Change Date</label>
+      <input id="ownerClaimDate" type="date">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="ownerClaimPrevious">以前の所有者・入手元（任意）</label>
+      <input id="ownerClaimPrevious" placeholder="Former owner / Shop / Family ...">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="ownerClaimBody">Claimメモ（任意）</label>
+      <textarea id="ownerClaimBody" placeholder="この個体を所有することになった経緯など"></textarea>
+    </div>
+    <div class="sub">登録すると Owner Change Observation と ownership Claim が作成され、このギターがあなたのChronicleに追加されます。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeOwnerClaim()">キャンセル</button>
+      <button id="ownerClaimSubmit" onclick="submitOwnerClaim()">Add to Your Chronicle</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let individuals=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let pendingOwnerClaimIndividualId=null;
 let individualSortKey='id';
 let individualSortDirection=1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
@@ -2117,11 +2277,10 @@ function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
 function ownershipControlsHtml(individualId){
-  if(!activeUser||!activeUser.user)return '';
-  if(activeUserOwns(individualId)){
+  if(activeUser&&activeUser.user&&activeUserOwns(individualId)){
     return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
   }
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">Add to Your Chronicle</button></div>';
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
 
 async function showIndividual(id){
@@ -2151,20 +2310,50 @@ async function showIndividual(id){
   document.getElementById('detail').innerHTML=out;
 }
 
-async function linkOwnedGuitar(individualId){
+function openOwnerClaim(individualId){
   if(!activeUser||!activeUser.user){
     window.location.href='/user-view/edit';
     return;
   }
+  pendingOwnerClaimIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('ownerClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('ownerClaimDate').value='';
+  document.getElementById('ownerClaimPrevious').value='';
+  document.getElementById('ownerClaimBody').value='';
+  document.getElementById('ownerClaimModal').classList.add('open');
+}
+function closeOwnerClaim(event){
+  if(event&&event.target&&event.target.id!=='ownerClaimModal')return;
+  document.getElementById('ownerClaimModal').classList.remove('open');
+  pendingOwnerClaimIndividualId=null;
+}
+async function submitOwnerClaim(){
+  if(!activeUser||!activeUser.user||pendingOwnerClaimIndividualId===null)return;
+  const button=document.getElementById('ownerClaimSubmit');
+  button.disabled=true;
   try{
-    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{
+    const body={
+      user_id:Number(activeUser.user.id),
+      acquired_at:document.getElementById('ownerClaimDate').value||null,
+      previous_owner_text:document.getElementById('ownerClaimPrevious').value.trim()||null,
+      body:document.getElementById('ownerClaimBody').value.trim()||null
+    };
+    const individualId=pendingOwnerClaimIndividualId;
+    const d=await jfetch('/api/individuals/'+individualId+'/owner-change-claim',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ownership_status:'current_owner'})
+      body:JSON.stringify(body)
     });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeOwnerClaim();
     await showIndividual(individualId);
   }catch(e){
-    alert('所有ギターの紐づけに失敗しました。\\n'+e.message);
+    alert('Claimの登録に失敗しました。\\n'+e.message);
+  }finally{
+    button.disabled=false;
   }
 }
 
