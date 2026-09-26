@@ -4762,15 +4762,15 @@ class Repository:
             return list(
                 con.execute(
                     """
-                    SELECT
+                    SELECT DISTINCT
                         ma.*,
                         c.claim_type AS claim_type,
                         c.body AS claim_caption,
                         c.occurred_at AS claim_occurred_at
                     FROM media_assets ma
-                    LEFT JOIN claim_evidence ce
+                    INNER JOIN claim_evidence ce
                       ON ce.media_asset_id = ma.id
-                    LEFT JOIN claims c
+                    INNER JOIN claims c
                       ON c.id = ce.claim_id
                      AND c.status = 'active'
                     WHERE ma.individual_id = ?
