@@ -31,13 +31,14 @@ Your Guitar Chronicle で現在できることを、**一般ユーザー**と**�
 - 同一Maker / Model / SerialのIndividualが既に存在する場合は重複作成を防止する
 
 ### 既存Individualを自分のChronicleへ追加する
-- 「Add to Your Chronicle」からOwner Changeを作成する
-- 取得日、以前の所有者・入手元、メモを記録する
+- 「Add to Your Chronicle」からOwnership Claimを作成する
+- Ownership Tagとして Acquire / Transfer / Inherit を選択する
+- 日付、以前の所有者・入手元、メモを記録する
 
 ### Claimを追加・編集する
 - Specification Claimを追加する
 - Repair Claimを追加する
-- 自分が現在OwnerのギターをReleaseする
+- 自分が現在OwnerのギターをOwnership / ReleaseとしてReleaseする
 - 自分が作成した編集可能なClaimを編集する
 - Listing Claimを直接編集せず、Identity Correctionとして訂正する
 - Identity Correction時はMaker / Model / Serialの重複を再チェックする
@@ -103,6 +104,8 @@ Individual Snapshot再構築
 ```
 
 - **Claim**: 履歴・意味情報のSource of Truth
+  - Owner Change / Releaseは新規作成では **Ownership** Typeへ統合され、`ownership_kind`（Acquire / Transfer / Inherit / Release）で意味を区別する
+  - 既存のlegacy Owner Change / Release Claimは互換性のため読み取り可能
 - **Individual**: active Claimから作られる現在状態のSnapshot
 - **Observation**: Reverb等の取得元・証拠・provenance
 
