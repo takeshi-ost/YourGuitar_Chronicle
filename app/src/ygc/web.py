@@ -3356,7 +3356,7 @@ function displayEventDate(value){if(!value)return '日付不明';const text=Stri
 function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
 function claimCard(c){
-  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
+  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
