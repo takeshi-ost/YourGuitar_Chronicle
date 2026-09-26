@@ -4964,6 +4964,66 @@ class Repository:
             return True
 
 
+    def deactivate_claim(
+        self,
+        claim_id: int,
+        user_id: int,
+    ) -> dict[str, Any] | None:
+        now = utcnow()
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT *
+                FROM claims
+                WHERE id = ?
+                  AND status = 'active'
+                """,
+                (claim_id,),
+            ).fetchone()
+            if not claim:
+                return None
+
+            if int(claim["author_user_id"]) != int(user_id):
+                raise ValueError(
+                    "Only the Claim author can deactivate this Claim"
+                )
+
+            if claim["claim_type"] in (
+                "listing",
+                "identity_correction",
+            ):
+                raise ValueError(
+                    "This Claim type cannot be deactivated from Edit"
+                )
+
+            individual_id = int(claim["individual_id"])
+            con.execute(
+                """
+                UPDATE claims
+                SET status = 'inactive',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    now,
+                    claim_id,
+                ),
+            )
+
+            snapshot = (
+                self._rebuild_individual_snapshot_in_connection(
+                    con,
+                    individual_id,
+                )
+            )
+
+            return {
+                "claim_id": claim_id,
+                "individual_id": individual_id,
+                "snapshot": snapshot,
+            }
+
+
     def delete_claim(
         self,
         claim_id: int,
