@@ -506,6 +506,10 @@ class ClaimEditRequest(BaseModel):
     )
 
 
+class ClaimDeactivateRequest(BaseModel):
+    user_id: int = Field(ge=1)
+
+
 class IdentityCorrectionRequest(BaseModel):
     user_id: int = Field(ge=1)
     manufacturer: str = Field(
@@ -2498,6 +2502,33 @@ def api_update_claim(
         )
 
     return {"ok": True}
+
+
+@app.post("/api/claims/{claim_id}/deactivate")
+def api_deactivate_claim(
+    claim_id: int,
+    request: ClaimDeactivateRequest,
+) -> dict[str, Any]:
+    repository = repo()
+    try:
+        result = repository.deactivate_claim(
+            claim_id,
+            request.user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403
+            if "author" in str(exc).lower()
+            else 400,
+            detail=str(exc),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Active Claim not found",
+        )
+    return result
 
 
 @app.post("/api/claims/{listing_claim_id}/identity-correction")
@@ -4705,6 +4736,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <textarea id="claimEditBody" maxlength="2000"></textarea>
     </div>
     <div class="modal-actions">
+      <button id="claimEditDelete" type="button" class="secondary bad" style="margin-right:auto" onclick="deactivateEditingClaim()">Delete Claim</button>
       <button class="secondary" onclick="closeClaimEdit()">キャンセル</button>
       <button id="claimEditSubmit" onclick="submitClaimEdit()">更新</button>
     </div>
@@ -4827,6 +4859,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
     <div class="sub">追加した各項目は、この1件のClaimとして保存されます。Specificationには各項目の最新値が表示されます。</div>
     <div class="modal-actions">
+      <button id="specClaimDelete" type="button" class="secondary bad" style="margin-right:auto;display:none" onclick="deactivateSpecificationClaim()">Delete Claim</button>
       <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
       <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Claimを追加</button>
     </div>
@@ -5957,6 +5990,8 @@ function openSpecificationClaim(individualId){
     : 'Individual #'+individualId;
   editingSpecificationClaimId=null;
   specificationKind='specification';
+  const deleteButton=document.getElementById('specClaimDelete');
+  if(deleteButton)deleteButton.style.display='none';
   specificationItems=[];
   setSpecificationKind('specification');
   document.getElementById('specClaimTitle').textContent='Specification/Repair Claim';
@@ -6076,6 +6111,50 @@ async function submitClaimEdit(){
   }
 }
 
+async function deactivateEditingClaim(){
+  if(!activeUser||!activeUser.user||editingClaimId===null)return;
+  const claimId=editingClaimId;
+  if(!confirm('このClaimをDeactivateします。\nChronicle上では無効となり、現在状態の計算から除外されます。続行しますか？'))return;
+  const button=document.getElementById('claimEditDelete');
+  button.disabled=true;
+  try{
+    const d=await jfetch('/api/claims/'+claimId+'/deactivate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(activeUser.user.id)})
+    });
+    closeClaimEdit();
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await loadActiveUser();
+  }catch(e){
+    alert('ClaimのDeactivateに失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
+async function deactivateSpecificationClaim(){
+  if(!activeUser||!activeUser.user||editingSpecificationClaimId===null)return;
+  const claimId=editingSpecificationClaimId;
+  if(!confirm('このClaimをDeactivateします。\nChronicle上では無効となり、現在Specificationの計算から除外されます。続行しますか？'))return;
+  const button=document.getElementById('specClaimDelete');
+  button.disabled=true;
+  try{
+    await jfetch('/api/claims/'+claimId+'/deactivate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:Number(activeUser.user.id)})
+    });
+    closeSpecificationClaim();
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await loadActiveUser();
+  }catch(e){
+    alert('ClaimのDeactivateに失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
 function editSpecificationClaim(claimId){
   if(!activeUser||!activeUser.user)return;
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
@@ -6095,6 +6174,7 @@ function editSpecificationClaim(claimId){
   setSpecificationKind(specificationKind);
   document.getElementById('specClaimTitle').textContent='Edit Specification/Repair Claim';
   document.getElementById('specClaimSubmit').textContent='更新';
+  document.getElementById('specClaimDelete').style.display='';
   document.getElementById('specClaimDate').value=String(claim.occurred_at||'').slice(0,10);
   document.getElementById('specClaimBody').value=claim.body||'';
   const guitar=individuals.find(x=>Number(x.id)===Number(selectedIndividualId));
