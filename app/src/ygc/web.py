@@ -1943,6 +1943,7 @@ def api_individual_claims(
             individual_id,
             viewer_user_id=viewer_user_id,
         )
+        if row["status"] == "active"
     ]
 
     items_by_claim: dict[
