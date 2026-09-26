@@ -1160,6 +1160,13 @@ def user_edit() -> HTMLResponse:
     return HTMLResponse(USER_EDIT_HTML)
 
 
+@app.get("/users/{user_id}", response_class=HTMLResponse)
+def user_profile(
+    user_id: int,
+) -> HTMLResponse:
+    return HTMLResponse(USER_PROFILE_HTML)
+
+
 @app.get("/api/status")
 def api_status(
     request: Request,
@@ -3915,6 +3922,109 @@ async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.ge
 
 
 
+USER_PROFILE_HTML = r"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — User Profile</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
+:root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Noto Sans JP",sans-serif}
+header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-size:19px;margin:0}.sub{color:var(--muted);font-size:11px}
+button{border:0;border-radius:8px;padding:8px 12px;background:#2a3036;color:var(--text);font:inherit;font-weight:700;cursor:pointer}
+button.primary{background:var(--accent);color:#18130c}
+main{max-width:1120px;margin:auto;padding:24px}
+.profile-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.avatar{width:88px;height:88px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line)}
+.name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.name{font-size:24px;font-weight:800}.you{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 7px;border-radius:999px;background:#2a3036;color:var(--muted)}
+.meta{margin-top:5px;color:var(--muted);font-size:12px}.bio{margin-top:11px;color:#c8ced4;max-width:680px}
+.hero-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{padding:12px;text-align:center;border-right:1px solid var(--line)}.stat:last-child{border-right:0}.stat-value{display:block;font-size:18px;font-weight:800}.stat-label{display:block;margin-top:3px;color:var(--muted);font-size:10px}
+.section{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}.section h2{font-size:15px;margin:0 0 12px}
+.guitar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.guitar-card{display:block;text-decoration:none;color:var(--text);background:#14171a;border:1px solid var(--line);border-radius:10px;padding:12px}.guitar-card:hover{background:#1d2125}.guitar-title{font-weight:700}.guitar-meta{font-size:10px;color:var(--muted);margin-top:4px}.empty{color:var(--muted);font-size:11px;padding:6px 0}.placeholder{border:1px dashed #363c43;border-radius:10px;padding:14px;color:var(--muted);font-size:11px}
+@media(max-width:760px){.profile-hero{grid-template-columns:auto 1fr}.hero-actions{grid-column:1/-1;justify-content:flex-start}.stats{grid-template-columns:repeat(2,1fr)}.stat{border-bottom:1px solid var(--line)}.guitar-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Your Guitar Chronicle <span class="sub">User Profile</span></h1>
+  <button onclick="window.location.href='/user-view'">User View</button>
+</header>
+<main>
+  <div id="profile"><div class="empty">Loading...</div></div>
+</main>
+<script>
+const ACTIVE_USER_KEY='ygc_active_user_id';
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+async function jfetch(url){const r=await fetch(url);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function profileUserId(){const m=location.pathname.match(/\/users\/(\d+)$/);return m?Number(m[1]):null}
+function guitarCard(g){
+  const title=[g.manufacturer,g.model].filter(Boolean).join(' ')||('Individual #'+g.individual_id);
+  const meta=[g.year,g.finish,g.serial_number&&('S/N '+g.serial_number)].filter(Boolean).join(' · ');
+  return '<a class="guitar-card" href="/user-view#individual-'+Number(g.individual_id)+'">'+
+    '<div class="guitar-title">'+esc(title)+'</div>'+
+    '<div class="guitar-meta">'+esc(meta||'No additional details')+'</div>'+
+  '</a>';
+}
+async function loadProfile(){
+  const id=profileUserId();
+  if(!id)return;
+  const root=document.getElementById('profile');
+  try{
+    const d=await jfetch('/api/users/'+id);
+    const u=d.user||{};
+    const guitars=d.guitars||[];
+    const summary=d.summary||{};
+    const viewerId=Number(localStorage.getItem(ACTIVE_USER_KEY)||0);
+    const own=viewerId===Number(id);
+    const owned=guitars.filter(g=>g.ownership_status==='current_owner');
+    const former=guitars.filter(g=>g.ownership_status==='former_owner');
+    const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
+    const accountType=String(u.account_type||'user');
+    const joined=u.created_at?('Member since '+String(u.created_at).slice(0,10)):'';
+    const actions=own
+      ? '<button class="primary" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button>'
+      : '<button class="primary" type="button">Follow</button><button type="button">Message</button>';
+    root.innerHTML=
+      '<section class="profile-hero">'+
+        '<img class="avatar" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+        '<div>'+
+          '<div class="name-row"><span class="name">'+esc(u.display_name||'User')+'</span>'+(own?'<span class="you">You</span>':'')+'</div>'+
+          '<div class="meta">'+esc(locationText)+' · '+esc(accountType)+(joined?' · '+esc(joined):'')+'</div>'+
+          '<div class="bio">Bio has not been added yet.</div>'+
+        '</div>'+
+        '<div class="hero-actions">'+actions+'</div>'+
+      '</section>'+
+      '<section class="stats">'+
+        '<div class="stat"><span class="stat-value">'+Number(summary.owned_count||0)+'</span><span class="stat-label">Owned</span></div>'+
+        '<div class="stat"><span class="stat-value">'+Number(summary.former_count||0)+'</span><span class="stat-label">Formerly Owned</span></div>'+
+        '<div class="stat"><span class="stat-value">'+Number(summary.claim_count||0)+'</span><span class="stat-label">Claims</span></div>'+
+        '<div class="stat"><span class="stat-value">0</span><span class="stat-label">Followers</span></div>'+
+        '<div class="stat"><span class="stat-value">0</span><span class="stat-label">Following</span></div>'+
+      '</section>'+
+      '<section class="section"><h2>Owned Guitars</h2><div class="guitar-grid">'+
+        (owned.length?owned.map(guitarCard).join(''):'<div class="empty">No owned guitars.</div>')+
+      '</div></section>'+
+      '<section class="section"><h2>Formerly Owned Guitars</h2><div class="guitar-grid">'+
+        (former.length?former.map(guitarCard).join(''):'<div class="empty">No formerly owned guitars.</div>')+
+      '</div></section>'+
+      '<section class="section"><h2>Recent Activity</h2><div class="placeholder">Recent Claims / Media / Follow activity will appear here.</div></section>';
+    document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
+  }catch(e){
+    root.innerHTML='<div class="empty">User Profileを読み込めませんでした。 '+esc(e.message)+'</div>';
+  }
+}
+loadProfile();
+</script>
+</body>
+</html>"""
+
+
 USER_VIEW_HTML = r"""<!doctype html>
 <html lang="ja">
 <head>
@@ -4320,7 +4430,7 @@ function renderAccountHub(){
     '<div class="account-hub-actions">'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
       '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
-      '<button class="account-hub-action" type="button">View Profile</button>'+
+      '<button class="account-hub-action" type="button" onclick="window.location.href=\'/users/'+u.id+'\'">View Profile</button>'+
       '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button>'+
     '</div>';
 }
