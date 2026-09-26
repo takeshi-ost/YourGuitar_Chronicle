@@ -5910,13 +5910,13 @@ async function loadUsers(){
   const select=document.getElementById('activeUserSelect');
   const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
   select.innerHTML='<option value="">User未選択</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
-  const target=users.some(u=>String(u.id)===String(saved))?saved:(users[0]?String(users[0].id):'');
+  const target=users.some(u=>String(u.id)===String(saved))?saved:'';
   select.value=target;
   if(target){
-    localStorage.setItem(ACTIVE_USER_KEY,target);
     await loadActiveUser();
   }else{
     activeUser=null;
+    localStorage.removeItem(ACTIVE_USER_KEY);
     renderAccount();
   }
 }
@@ -5925,7 +5925,7 @@ async function createUser(){
   try{
     const d=await jfetch('/api/users',{method:'POST'});
     localStorage.setItem(ACTIVE_USER_KEY,String(d.user.id));
-    await loadUsers();
+    window.location.href='/user-view';
   }catch(e){
     alert('アカウント作成に失敗しました。\\n'+e.message);
   }
@@ -5935,13 +5935,12 @@ async function setActiveUser(value){
   selectedIndividualId=null;
   if(value){
     localStorage.setItem(ACTIVE_USER_KEY,String(value));
-    await loadActiveUser();
-  }else{
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    activeUser=null;
-    renderAccount();
+    window.location.href='/user-view';
+    return;
   }
-  if(selectedIndividualId)await showIndividual(selectedIndividualId);
+  localStorage.removeItem(ACTIVE_USER_KEY);
+  activeUser=null;
+  renderAccount();
 }
 
 async function loadActiveUser(){
