@@ -3114,7 +3114,7 @@ Gibson ES-335</textarea>
 <section>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
-<div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
@@ -3400,10 +3400,10 @@ async function unlinkOwnedGuitar(individualId){
     alert('所有ギターの紐づけ解除に失敗しました。\n'+e.message);
   }
 }
-function normalizeSortValue(value,key){if(key==='id'||key==='observation_count')return Number(value||0);return String(value??'').toLowerCase()}
+function normalizeSortValue(value,key){if(key==='id'||key==='claim_count')return Number(value||0);return String(value??'').toLowerCase()}
 function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
-function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
-function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
+function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
+function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>').join('')}
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
 function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';return esc(label)}
 function currentLocationHtml(i){const parts=[i&&i.location_country,i&&i.location_region].filter(Boolean);return parts.length?esc(parts.join(' / ')):'—'}
@@ -3679,7 +3679,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
           <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
           <th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th>
           <th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th>
-          <th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th>
+          <th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th>
         </tr></thead>
         <tbody id="individualBody"></tbody>
       </table>
@@ -3782,7 +3782,7 @@ async function loadIndividuals(){
   }
 }
 function normalizeSortValue(value,key){
-  if(key==='id'||key==='observation_count')return Number(value||0);
+  if(key==='id'||key==='claim_count')return Number(value||0);
   return String(value??'').toLowerCase();
 }
 function setIndividualSort(key){
@@ -3791,7 +3791,7 @@ function setIndividualSort(key){
   renderIndividuals();
 }
 function updateSortIndicators(){
-  for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){
+  for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
     const el=document.getElementById('sort-'+key);
     if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
   }
@@ -3807,7 +3807,7 @@ function renderIndividuals(){
   });
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
-    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>'
+    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
   ).join('');
 }
 
@@ -4887,7 +4887,7 @@ async function loadIndividuals(){
 }
 
 function normalizeSortValue(value,key){
-  if(key==='id'||key==='observation_count')return Number(value||0);
+  if(key==='id'||key==='claim_count')return Number(value||0);
   return String(value??'').toLowerCase();
 }
 function setIndividualSort(key){
@@ -4896,7 +4896,7 @@ function setIndividualSort(key){
   renderIndividuals();
 }
 function updateSortIndicators(){
-  for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){
+  for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
     const el=document.getElementById('sort-'+key);
     if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
   }
@@ -4916,7 +4916,7 @@ function renderIndividuals(){
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
     '<tr class="clickable" onclick="showIndividual('+x.id+')">'+
-      '<td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td>'+
+      '<td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td>'+
     '</tr>'
   ).join('');
 }
