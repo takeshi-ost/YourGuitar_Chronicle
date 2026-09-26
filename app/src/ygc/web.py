@@ -3893,7 +3893,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
 .claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
-.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
+.claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
 .claim-card:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:12px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
@@ -4328,7 +4328,19 @@ function displayInputDate(value){
   return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
 }
 function claimHeaderHtml(c,type,eventDate){
-  return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>';
+  let response='';
+  const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
+  const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
+  const verifiableTypes=new Set(['specification','incident','event','media']);
+  if(isOtherUser&&verifiableTypes.has(String(c.claim_type||''))){
+    const current=String(c.verification_status||'unverified').toLowerCase();
+    response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
+      '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
+      '<option value="negative"'+(current==='negative'?' selected':'')+'>Negative</option>'+
+      '<option value="unverified"'+(current==='unverified'?' selected':'')+'>Unverified</option>'+
+      '</select>';
+  }
+  return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
 }
 function claimVisualTypeClass(c){
   if(c.claim_type==='ownership'||c.claim_type==='owner_change'||c.claim_type==='release')return ' claim-type-ownership';
@@ -4472,6 +4484,24 @@ function renderChronicle(){
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
   renderChronicle();
+}
+
+async function setClaimResponse(claimId,stance){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    await jfetch('/api/claims/'+claimId+'/response',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        responder_user_id:Number(activeUser.user.id),
+        stance
+      })
+    });
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Owner Verificationの更新に失敗しました。\n'+e.message);
+    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+  }
 }
 
 async function voteClaim(claimId,vote){
