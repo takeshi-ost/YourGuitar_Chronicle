@@ -3277,6 +3277,97 @@ class Repository:
             body=reason,
         )
 
+    def create_incident_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        incident_kind: str,
+        occurred_at: str | None = None,
+        detail: str | None = None,
+    ) -> int:
+        kind = incident_kind.strip().lower()
+        if kind not in ("damage", "lost", "theft"):
+            raise ValueError(
+                "incident_kind must be damage, lost, or theft"
+            )
+
+        note = (
+            detail.strip()
+            if detail and detail.strip()
+            else None
+        )
+        if not note:
+            raise ValueError("detail is required")
+
+        now = utcnow()
+        event_date = (
+            occurred_at.strip()
+            if occurred_at and occurred_at.strip()
+            else now[:10]
+        )
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT id
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                """
+                SELECT id
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+            if not user or not individual:
+                raise ValueError("User or Individual not found")
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, NULL, ?, 'incident',
+                    'incident_kind', ?, ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    user_id,
+                    kind,
+                    note,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(cur.lastrowid)
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+            return claim_id
+
+
     def create_specification_claim(
         self,
         user_id: int,
