@@ -3040,7 +3040,13 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 #detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
-.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}
+.claim-card.claim-type-specification{background:#101820;border-color:#29465d}
+.claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
+.claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
+.claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
+.claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
@@ -3380,6 +3386,12 @@ function claimTypeLabel(value){return String(value||'claim').split('_').map(x=>x
 function displayEventDate(value){if(!value)return '日付不明';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
+function claimVisualTypeClass(c){
+  if(c.claim_type==='ownership'||c.claim_type==='owner_change'||c.claim_type==='release')return ' claim-type-ownership';
+  if(c.claim_type==='specification')return ' claim-type-specification';
+  if(c.claim_type==='incident')return ' claim-type-incident';
+  return '';
+}
 function claimCard(c){
   const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
@@ -3441,7 +3453,7 @@ function claimCard(c){
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span><button class="claim-vote bad" onclick="deleteClaim('+c.id+')">Delete</button></div>';
-  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
+  return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
 function renderAdminChronicle(claims){
   const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'');const bv=String(b.occurred_at||b.created_at||'');if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
@@ -3586,7 +3598,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail{white-space:normal}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
-.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}
+.claim-card.claim-type-specification{background:#101820;border-color:#29465d}
+.claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
+.claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
+.claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
+.claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -3873,6 +3891,12 @@ function displayInputDate(value){
 function claimHeaderHtml(c,type,eventDate){
   return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>';
 }
+function claimVisualTypeClass(c){
+  if(c.claim_type==='ownership'||c.claim_type==='owner_change'||c.claim_type==='release')return ' claim-type-ownership';
+  if(c.claim_type==='specification')return ' claim-type-specification';
+  if(c.claim_type==='incident')return ' claim-type-incident';
+  return '';
+}
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
@@ -3951,7 +3975,7 @@ function claimCard(c){
     '<button class="claim-vote'+(c.viewer_vote==='good'?' active':'')+'" onclick="voteClaim('+c.id+',\'good\')">👍 '+good+'</button>'+
     '<button class="claim-vote'+(c.viewer_vote==='bad'?' active':'')+'" onclick="voteClaim('+c.id+',\'bad\')">👎 '+bad+'</button>'+
     '</div>';
-  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
+  return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
     '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
@@ -4230,7 +4254,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail{white-space:normal}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
-.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
+.claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}
+.claim-card.claim-type-specification{background:#101820;border-color:#29465d}
+.claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
+.claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
+.claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
+.claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -4950,6 +4980,12 @@ function claimHeaderHtml(c,type,eventDate){
   }
   return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
 }
+function claimVisualTypeClass(c){
+  if(c.claim_type==='ownership'||c.claim_type==='owner_change'||c.claim_type==='release')return ' claim-type-ownership';
+  if(c.claim_type==='specification')return ' claim-type-specification';
+  if(c.claim_type==='incident')return ' claim-type-incident';
+  return '';
+}
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
@@ -5030,7 +5066,7 @@ function claimCard(c){
     '</div>';
   const canEdit=activeUser&&activeUser.user&&c.status==='active'&&c.claim_type!=='identity_correction'&&Number(c.author_user_id)===Number(activeUser.user.id);
   const editButton=canEdit?'<button class="claim-vote" onclick="editOwnClaim('+c.id+')">Edit</button>':'';
-  return '<div class="claim-card'+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
+  return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
     '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
