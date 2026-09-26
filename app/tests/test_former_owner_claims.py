@@ -60,10 +60,37 @@ def test_former_owner_creates_acquire_release_and_former_link(tmp_path: Path):
     ]
     assert claims[0]["body"] == "Owned before the current owner."
     assert claims[1]["body"] is None
+    assert all(row["ownership_source"] == "former_owner" for row in claims)
+    assert all(row["verification_status"] == "unverified" for row in claims)
+    assert len({row["ownership_pair_id"] for row in claims}) == 1
 
     individual, _ = repository.get_individual(individual_id)
     assert individual is not None
     assert int(individual["current_owner_user_id"]) == current_owner_id
+
+    assert repository.set_claim_response(
+        int(claims[0]["id"]),
+        current_owner_id,
+        "positive",
+    )
+    verified = [
+        row
+        for row in repository.list_claims(individual_id)
+        if int(row["id"]) in result["claim_ids"]
+    ]
+    assert all(row["verification_status"] == "positive" for row in verified)
+
+    assert repository.set_claim_response(
+        int(claims[1]["id"]),
+        current_owner_id,
+        "negative",
+    )
+    rejected = [
+        row
+        for row in repository.list_claims(individual_id)
+        if int(row["id"]) in result["claim_ids"]
+    ]
+    assert all(row["verification_status"] == "negative" for row in rejected)
 
     _, guitars = repository.get_user(former_owner_id)
     guitar = next(
@@ -117,4 +144,43 @@ def test_former_owner_requires_acquisition_before_release(tmp_path: Path):
             individual_id,
             acquisition_date="2024-09-20",
             release_date="2024-09-20",
+        )
+
+
+def test_former_owner_cannot_be_verified_without_current_owner(tmp_path: Path):
+    repository = Repository(tmp_path / "former-owner-no-current.db")
+    repository.init_db()
+
+    claimant_id = repository.create_user("Claimant")
+    individual_id, _, _, _ = repository.create_initial_listing_claim(
+        claimant_id,
+        manufacturer="Fender",
+        model="Jazzmaster",
+        serial_number="FORMER-002",
+        media_storage_path="media/base.jpg",
+        occurred_at="2020-01-01",
+    )
+    repository.create_ownership_claim(
+        claimant_id,
+        individual_id,
+        ownership_kind="release",
+        occurred_at="2021-01-01",
+    )
+
+    other_id = repository.create_user("Other")
+    result = repository.create_former_owner_claims(
+        other_id,
+        individual_id,
+        acquisition_date="2018-01-01",
+        release_date="2019-01-01",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Only the current owner can verify",
+    ):
+        repository.set_claim_response(
+            int(result["claim_ids"][0]),
+            claimant_id,
+            "positive",
         )
