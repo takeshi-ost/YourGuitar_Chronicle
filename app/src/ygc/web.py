@@ -426,6 +426,13 @@ class SpecificationClaimRequest(BaseModel):
     )
 
 
+class IncidentClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    incident_kind: str = Field(max_length=20)
+    occurred_at: str | None = Field(default=None, max_length=40)
+    detail: str = Field(min_length=1, max_length=2000)
+
+
 class OwnershipClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     ownership_kind: str = Field(
@@ -2171,6 +2178,24 @@ def api_media(
     )
 
 
+@app.post("/api/individuals/{individual_id}/incident-claim")
+def api_incident_claim(
+    individual_id: int,
+    request: IncidentClaimRequest,
+) -> dict[str, Any]:
+    try:
+        claim_id = repo().create_incident_claim(
+            request.user_id,
+            individual_id,
+            incident_kind=request.incident_kind,
+            occurred_at=request.occurred_at,
+            detail=request.detail,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"claim_id": claim_id}
+
+
 @app.post("/api/individuals/{individual_id}/specification-claim")
 def api_specification_claim(
     individual_id: int,
@@ -3356,7 +3381,7 @@ function displayEventDate(value){if(!value)return '日付不明';const text=Stri
 function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
 function claimCard(c){
-  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -3377,6 +3402,8 @@ function claimCard(c){
       body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='incident'){
+    if(c.body)body+='<div><strong>'+esc(c.body)+'</strong></div>';
   }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
@@ -3849,7 +3876,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -3870,6 +3897,8 @@ function claimCard(c){
       body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='incident'){
+    if(c.body)body+='<div><strong>'+esc(c.body)+'</strong></div>';
   }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
@@ -4341,6 +4370,35 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeClaimEdit()">キャンセル</button>
       <button id="claimEditSubmit" onclick="submitClaimEdit()">更新</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="incidentClaimModal" onclick="closeIncidentClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Incident Claim</h2>
+    <div class="sub" id="incidentClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="incidentClaimKind">Tag</label>
+        <select id="incidentClaimKind">
+          <option value="damage">Damage</option>
+          <option value="lost">Lost</option>
+          <option value="theft">Theft</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="incidentClaimDate">Date</label>
+        <input id="incidentClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="incidentClaimDetail">Detail</label>
+        <textarea id="incidentClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeIncidentClaim()">キャンセル</button>
+      <button id="incidentClaimSubmit" onclick="submitIncidentClaim()">Claimを追加</button>
     </div>
   </div>
 </div>
@@ -4895,7 +4953,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -4916,6 +4974,8 @@ function claimCard(c){
       body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='incident'){
+    if(c.body)body+='<div><strong>'+esc(c.body)+'</strong></div>';
   }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
@@ -5119,7 +5179,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -5160,8 +5220,58 @@ function chooseClaimType(type){
   if(menu)menu.classList.remove('open');
   if(type==='specification_repair'){
     openSpecificationClaim(selectedIndividualId);
+  }else if(type==='incident'){
+    openIncidentClaim(selectedIndividualId);
   }else if(type==='ownership'){
     openOwnershipClaim(selectedIndividualId,'add_claim');
+  }
+}
+
+function openIncidentClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('incidentClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('incidentClaimKind').value='damage';
+  document.getElementById('incidentClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('incidentClaimDetail').value='';
+  document.getElementById('incidentClaimModal').classList.add('open');
+}
+function closeIncidentClaim(event){
+  if(event&&event.target&&event.target.id!=='incidentClaimModal')return;
+  document.getElementById('incidentClaimModal').classList.remove('open');
+}
+async function submitIncidentClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const detail=document.getElementById('incidentClaimDetail').value.trim();
+  if(!detail){
+    alert('Detailを入力してください。');
+    return;
+  }
+  const button=document.getElementById('incidentClaimSubmit');
+  button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+selectedIndividualId+'/incident-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        incident_kind:document.getElementById('incidentClaimKind').value,
+        occurred_at:document.getElementById('incidentClaimDate').value||null,
+        detail
+      })
+    });
+    closeIncidentClaim();
+    await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Incident Claimの登録に失敗しました.\\n'+e.message);
+  }finally{
+    button.disabled=false;
   }
 }
 
