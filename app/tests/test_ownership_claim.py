@@ -8,6 +8,13 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
     repository.init_db()
 
     user_id = repository.create_user("Owner")
+    repository.update_user(
+        user_id,
+        display_name="Owner",
+        account_type="user",
+        location_country="Japan",
+        location_region="Kyoto",
+    )
     individual_id, _, _, _ = repository.create_initial_listing_claim(
         user_id,
         manufacturer="Fender",
@@ -27,6 +34,19 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
 
     assert acquired["current_owner_name"] == "Owner"
     assert int(acquired["current_owner_user_id"]) == user_id
+    assert acquired["location_country"] == "Japan"
+    assert acquired["location_region"] == "Kyoto"
+
+    repository.update_user(
+        user_id,
+        display_name="Owner",
+        account_type="user",
+        location_country="Japan",
+        location_region="Osaka",
+    )
+    refreshed = repository.rebuild_individual_snapshot(individual_id)
+    assert refreshed["location_country"] == "Japan"
+    assert refreshed["location_region"] == "Osaka"
 
 
 def test_transfer_release_and_inherit_end_ownership(tmp_path: Path):
