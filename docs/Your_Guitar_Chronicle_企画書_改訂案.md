@@ -718,7 +718,7 @@ Confirmed / Rejected / Disputed
 
 # 19. 開発方針
 
-## Phase 0 — Local Chronicle Engine
+## Phase 1 — Local Chronicle Engine
 
 ローカルPC上で以下を実装する。
 

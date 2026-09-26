@@ -47,7 +47,7 @@ Your Guitar Chronicle で現在できることを、**一般ユーザー**と**�
 
 ## 管理者としてできること
 
-管理者操作はローカルの **Phase 0 Browser Console** を前提とします。
+管理者操作はローカルの **Phase 1 Browser Console** を前提とします。
 
 ### Reverb収集
 - Reverb API Tokenを設定する

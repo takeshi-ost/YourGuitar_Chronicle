@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "your-guitar-chronicle"
 version = "0.2.0"
-description = "Phase 0 local Chronicle Engine for Reverb API observations"
+description = "Phase 1 local Chronicle Engine for Reverb API observations"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27,<1",

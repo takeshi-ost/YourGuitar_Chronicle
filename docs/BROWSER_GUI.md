@@ -1,4 +1,4 @@
-# Phase 0 Browser GUI
+# Phase 1 Browser GUI
 
 CLIで行っていた繰り返し作業を、ローカルブラウザから操作するためのGUIです。
 
@@ -7,7 +7,7 @@ CLIで行っていた繰り返し作業を、ローカルブラウザから操�
 既存の仮想環境を有効にして、依存関係を更新します。
 
 ```powershell
-cd phase0_proto
+cd phase1_proto
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ```
@@ -110,7 +110,7 @@ ygc-web --no-browser
 
 ## 既定のBatch Query
 
-GUIには現在のPhase 0検証で使っている以下を初期値として入れています。
+GUIには現在のPhase 1検証で使っている以下を初期値として入れています。
 
 ```text
 Fender Stratocaster
@@ -127,7 +127,7 @@ Gibson ES-335
 GUIはCLIと同じSQLite DBを使用します。
 
 ```text
-phase0_proto/data/chronicle.db
+phase1_proto/data/chronicle.db
 ```
 
 CLIで収集したデータはGUIからそのまま見えます。逆にGUIで収集したデータもCLIの `ygc stats`, `ygc individuals`, `ygc serial-audit` から確認できます。
@@ -148,14 +148,14 @@ LAN内の別端末から使う必要がある場合のみ、明示的に:
 ygc-web --host 0.0.0.0
 ```
 
-としてください。Phase 0には認証機能がないため、外部公開はしないでください。
+としてください。Phase 1には認証機能がないため、外部公開はしないでください。
 
 
 ## Reverb Year Filter
 
 Reverb Listings API の検索パラメータ `year_min` と `year_max` を利用します。
 
-Phase 0では WebUI の既定値を次のようにしています。
+Phase 1では WebUI の既定値を次のようにしています。
 
 ```text
 Year Min: 空欄
@@ -190,7 +190,7 @@ Serialを持つObservationからGuitar Individualを作成する際にも同じ�
 
 ## WebUI simplification
 
-Vintage Audit と Serial Audit はPhase 0の初期検証で役割を果たしたため、WebUIからは削除しました。
+Vintage Audit と Serial Audit はPhase 1の初期検証で役割を果たしたため、WebUIからは削除しました。
 内部のVintage分類とSerial抽出処理はCrawl時に引き続き使用されます。
 
 
@@ -227,7 +227,7 @@ start_webui.bat
 
 をダブルクリックします。
 
-どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`phase0_proto/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
+どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`phase1_proto/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
 
 ブランチ切り替えは自動では行いません。検証したいブランチへ一度 `git switch <branch>` した後は、そのままランチャーを繰り返し利用できます。
 

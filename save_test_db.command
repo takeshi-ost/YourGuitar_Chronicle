@@ -3,17 +3,17 @@ set -e
 
 cd "$(dirname "$0")"
 
-SOURCE="phase0_proto/data/chronicle.db"
-TARGET="phase0_proto/tests/data/ygc_test_snapshot.db"
+SOURCE="phase1_proto/data/chronicle.db"
+TARGET="phase1_proto/tests/data/ygc_test_snapshot.db"
 
 if [ ! -f "$SOURCE" ]; then
   echo "Source DB not found: $SOURCE"
   exit 1
 fi
 
-mkdir -p "phase0_proto/tests/data"
+mkdir -p "phase1_proto/tests/data"
 
-PYTHON="phase0_proto/.venv/bin/python"
+PYTHON="phase1_proto/.venv/bin/python"
 if [ ! -x "$PYTHON" ]; then
   PYTHON="python3"
 fi

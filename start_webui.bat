@@ -14,7 +14,7 @@ if errorlevel 1 goto :error
 
 echo.
 echo [2/4] Preparing Python environment...
-cd phase0_proto
+cd phase1_proto
 
 if not exist ".venv\Scripts\python.exe" (
     echo Creating .venv with py -3.12...

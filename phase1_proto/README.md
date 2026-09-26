@@ -1,4 +1,4 @@
-# Your Guitar Chronicle — Phase 0 (Reverb API)
+# Your Guitar Chronicle — Phase 1 (Reverb API)
 
 ローカルPC上でReverb公式APIからListingsを読み取り、`manufacturer / model / serial / seller` をObservationとしてSQLiteへ保存し、同一 `maker + model + serial` を同じIndividualに関連付けるPoCです。
 
@@ -31,7 +31,7 @@ TokenはChatやGitHubへ貼らないでください。
 
 ## セットアップ
 ```bash
-cd your-guitar-chronicle-phase0
+cd your-guitar-chronicle-phase1
 python3.12 -m venv .venv
 source .venv/bin/activate     # macOS/Linux
 # .venv\Scripts\Activate.ps1  # Windows PowerShell
@@ -102,5 +102,5 @@ export YGC_REQUEST_DELAY=2.0
 export YGC_SERIAL_CONFIDENCE_THRESHOLD=0.80
 ```
 
-## Phase 0後の確認
+## Phase 1後の確認
 100件取得後に、SN取得率・誤抽出率・Make/Model/Seller取得率・同一個体再発見件数・Timelineとして面白い個体が生まれたかを確認し、次にReverb継続、SN抽出改善、別Collector追加のどれを優先するか決めます。

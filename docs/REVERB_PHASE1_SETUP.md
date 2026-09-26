@@ -1,8 +1,8 @@
-# Your Guitar Chronicle Phase 0 — Reverb API セットアップとリスト生成手順
+# Your Guitar Chronicle Phase 1 — Reverb API セットアップとリスト生成手順
 
-このドキュメントは、**Your Guitar Chronicle (YGC) Phase 0** を別のPC／開発環境で再現し、Reverb API の Personal Access Token を取得して、Vintage Guitar の Observation / Individual リストを生成するまでの手順をまとめたものです。
+このドキュメントは、**Your Guitar Chronicle (YGC) Phase 1** を別のPC／開発環境で再現し、Reverb API の Personal Access Token を取得して、Vintage Guitar の Observation / Individual リストを生成するまでの手順をまとめたものです。
 
-対象は現在の Phase 0 実装です。Reverb の公開 Listing を公式 API 経由で取得し、Vintage 判定、Serial Number 抽出、Individual 生成を行います。
+対象は現在の Phase 1 実装です。Reverb の公開 Listing を公式 API 経由で取得し、Vintage 判定、Serial Number 抽出、Individual 生成を行います。
 
 ## 1. 前提
 
@@ -18,7 +18,7 @@ Windows PowerShell を基準に記載します。
 
 ## 2. Reverb Personal Access Token を取得する
 
-YGC Phase 0 は Reverb の HTML をスクレイピングせず、**Reverb 公式 API** を利用します。
+YGC Phase 1 は Reverb の HTML をスクレイピングせず、**Reverb 公式 API** を利用します。
 
 Reverb 公式ドキュメント:
 
@@ -34,7 +34,7 @@ Reverb 公式ドキュメント:
 5. Token 名を入力する。
 6. 必要な Scope を選択して Token を生成する。
 
-Phase 0 は公開 Listing の読み取りが目的なので、書き込み権限は不要です。可能な限り読み取りに必要な最小権限だけを使用してください。
+Phase 1 は公開 Listing の読み取りが目的なので、書き込み権限は不要です。可能な限り読み取りに必要な最小権限だけを使用してください。
 
 Reverb の Personal Access Token は公式ドキュメント上、期限切れしません。
 
@@ -48,7 +48,7 @@ Python ファイル、README、設定ファイルなどに実際の Token 文字
 
 ```powershell
 git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd YourGuitar_Chronicle\phase0_proto
+cd YourGuitar_Chronicle\phase1_proto
 ```
 
 すでに clone 済みなら対象ディレクトリへ移動します。
@@ -62,7 +62,7 @@ python -m venv .venv
 
 PowerShell の先頭に `(.venv)` が出れば有効です。
 
-## 5. YGC Phase 0 をインストールする
+## 5. YGC Phase 1 をインストールする
 
 ```powershell
 python -m pip install --upgrade pip
@@ -176,9 +176,9 @@ non_target
 - タイトル中の信頼できる年式を次に使う
 - description 中の古い年号だけでは Vintage と判定しない
 - `Custom Shop`, `American Vintage`, `American Vintage II`, `Time Capsule`, `Reissue`, `Vintera`, `Anniversary`, `Historic`, `Tribute` などは現代製品判定の材料にする
-- 現在の Phase 0 では概ね 1980 年以前を Vintage 自動収集対象とする
+- 現在の Phase 1 では概ね 1980 年以前を Vintage 自動収集対象とする
 
-これはサービスへの登録条件ではなく、自動収集の対象を絞るための Phase 0 上のルールです。
+これはサービスへの登録条件ではなく、自動収集の対象を絞るための Phase 1 上のルールです。
 
 ## 12. Listing をクロールする
 
@@ -285,7 +285,7 @@ L6XXXX
 
 このため Serial validation は今後の改善対象です。
 
-## 16. 現時点で確認済みの Phase 0 動作
+## 16. 現時点で確認済みの Phase 1 動作
 
 ```text
 Reverb API
@@ -316,7 +316,7 @@ Serial: 524436
 
 ## 17. Chronicle の成立を確認する指標
 
-重要な Phase 0 KPI:
+重要な Phase 1 KPI:
 
 ```text
 repeated_individuals
@@ -366,7 +366,7 @@ echo "$REVERB_API_TOKEN"
 ## 20. 最短セットアップ手順
 
 ```powershell
-cd YourGuitar_Chronicle\phase0_proto
+cd YourGuitar_Chronicle\phase1_proto
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1

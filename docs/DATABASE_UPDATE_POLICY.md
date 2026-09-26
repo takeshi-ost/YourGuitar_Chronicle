@@ -267,7 +267,7 @@ This supports large-scale crawling while keeping API usage controlled.
 
 ## Current implementation status
 
-The current Phase 0 implementation already has several parts of this model:
+The current Phase 1 implementation already has several parts of this model:
 
 - `source_listing_id` is unique per source Observation
 - existing Listing IDs are skipped during crawl
