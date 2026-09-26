@@ -956,6 +956,7 @@ class Repository:
                     c.id,
                     c.claim_type,
                     c.value_text,
+                    c.ownership_kind,
                     c.occurred_at,
                     c.created_at
                 FROM claims c
@@ -963,6 +964,7 @@ class Repository:
                   AND c.status = 'active'
                   AND c.claim_type IN (
                         'listing',
+                        'ownership',
                         'owner_change',
                         'release'
                   )
