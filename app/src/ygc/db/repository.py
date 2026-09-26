@@ -3247,6 +3247,329 @@ class Repository:
             )
             return observation_id, claim_id
 
+    def create_former_owner_claims(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        acquisition_date: str,
+        release_date: str,
+        detail: str | None = None,
+    ) -> dict[str, Any]:
+        acquired = acquisition_date.strip()
+        released = release_date.strip()
+        try:
+            datetime.strptime(acquired, "%Y-%m-%d")
+            datetime.strptime(released, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError(
+                "Acquisition Date and Release Date must use YYYY-MM-DD"
+            ) from exc
+
+        if acquired >= released:
+            raise ValueError(
+                "Acquisition Date must be earlier than Release Date"
+            )
+
+        note = (
+            detail.strip()
+            if detail and detail.strip()
+            else None
+        )
+        now = utcnow()
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                """
+                SELECT *
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+            if not user or not individual:
+                raise ValueError("User or Individual not found")
+
+            if (
+                individual["current_owner_user_id"] is not None
+                and str(individual["current_owner_user_id"]) == str(user_id)
+            ):
+                raise ValueError(
+                    "Current owner cannot use Former Owner Claim"
+                )
+
+            current_owner_user_id = (
+                str(individual["current_owner_user_id"]).strip()
+                if individual["current_owner_user_id"] is not None
+                else ""
+            )
+
+            if current_owner_user_id:
+                current_owner_start = con.execute(
+                    """
+                    SELECT effective_at
+                    FROM (
+                        SELECT
+                            c.id,
+                            COALESCE(
+                                c.occurred_at,
+                                c.created_at
+                            ) AS effective_at,
+                            c.created_at
+                        FROM claims c
+                        WHERE c.individual_id = ?
+                          AND c.status = 'active'
+                          AND c.claim_type IN (
+                                'ownership',
+                                'owner_change'
+                          )
+                          AND COALESCE(
+                                c.ownership_kind,
+                                'acquire'
+                              ) NOT IN (
+                                'transfer',
+                                'release',
+                                'inherit'
+                              )
+                          AND TRIM(COALESCE(c.value_text, '')) = ?
+
+                        UNION ALL
+
+                        SELECT
+                            c.id,
+                            COALESCE(
+                                c.occurred_at,
+                                c.created_at
+                            ) AS effective_at,
+                            c.created_at
+                        FROM claims c
+                        INNER JOIN claim_listing_items li
+                          ON li.claim_id = c.id
+                         AND li.field_name = 'owner_user_id'
+                        WHERE c.individual_id = ?
+                          AND c.status = 'active'
+                          AND c.claim_type = 'listing'
+                          AND TRIM(COALESCE(li.value_text, '')) = ?
+                    )
+                    ORDER BY effective_at DESC, created_at DESC, id DESC
+                    LIMIT 1
+                    """,
+                    (
+                        individual_id,
+                        current_owner_user_id,
+                        individual_id,
+                        current_owner_user_id,
+                    ),
+                ).fetchone()
+
+                if not current_owner_start:
+                    raise ValueError(
+                        "Current owner acquisition date could not be determined"
+                    )
+
+                current_owner_date = str(
+                    current_owner_start["effective_at"]
+                )[:10]
+                if released >= current_owner_date:
+                    raise ValueError(
+                        "Release Date must be earlier than the current owner's acquisition date "
+                        f"({current_owner_date})"
+                    )
+
+            observation_ids: list[int] = []
+            claim_ids: list[int] = []
+
+            def insert_ownership_event(
+                kind: str,
+                event_date: str,
+                body: str | None,
+            ) -> tuple[int, int]:
+                ending = kind == "release"
+                owner_name = (
+                    "Unknown"
+                    if ending
+                    else str(user["display_name"])
+                )
+                owner_type = (
+                    "unknown"
+                    if ending
+                    else "user"
+                )
+                raw_text = body if body else None
+
+                cur = con.execute(
+                    """
+                    INSERT INTO observations (
+                        individual_id,
+                        manufacturer,
+                        model,
+                        finish,
+                        year,
+                        serial_number,
+                        owner_name,
+                        owner_type,
+                        event_type,
+                        actor_user_id,
+                        occurred_at,
+                        source_site,
+                        source_url,
+                        observed_at,
+                        title,
+                        raw_text,
+                        created_at
+                    )
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        'ownership', ?, ?,
+                        'user', ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        individual_id,
+                        individual["manufacturer"],
+                        individual["model"],
+                        individual["finish"],
+                        individual["year"],
+                        individual["serial_number"],
+                        owner_name,
+                        owner_type,
+                        user_id,
+                        event_date,
+                        f"user://{user_id}",
+                        now,
+                        f"Ownership / {kind.capitalize()}",
+                        raw_text,
+                        now,
+                    ),
+                )
+                observation_id = int(cur.lastrowid)
+
+                cur = con.execute(
+                    """
+                    INSERT INTO claims (
+                        individual_id,
+                        observation_id,
+                        author_user_id,
+                        claim_type,
+                        field_name,
+                        value_text,
+                        ownership_kind,
+                        body,
+                        occurred_at,
+                        status,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        ?, ?, ?, 'ownership',
+                        'owner_user_id', ?, ?, ?, ?,
+                        'active', ?, ?
+                    )
+                    """,
+                    (
+                        individual_id,
+                        observation_id,
+                        user_id,
+                        "unknown" if ending else str(user_id),
+                        kind,
+                        body,
+                        event_date,
+                        now,
+                        now,
+                    ),
+                )
+                return observation_id, int(cur.lastrowid)
+
+            acquire_observation_id, acquire_claim_id = (
+                insert_ownership_event(
+                    "acquire",
+                    acquired,
+                    note,
+                )
+            )
+            release_observation_id, release_claim_id = (
+                insert_ownership_event(
+                    "release",
+                    released,
+                    None,
+                )
+            )
+            observation_ids.extend(
+                [
+                    acquire_observation_id,
+                    release_observation_id,
+                ]
+            )
+            claim_ids.extend(
+                [
+                    acquire_claim_id,
+                    release_claim_id,
+                ]
+            )
+
+            next_order = int(
+                con.execute(
+                    """
+                    SELECT COALESCE(MAX(display_order), -1) + 1
+                    FROM user_guitars
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchone()[0]
+            )
+            con.execute(
+                """
+                INSERT INTO user_guitars (
+                    user_id,
+                    individual_id,
+                    ownership_status,
+                    display_order,
+                    acquired_at,
+                    released_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, 'former_owner', ?, ?, ?, ?, ?
+                )
+                ON CONFLICT(user_id, individual_id)
+                DO UPDATE SET
+                    ownership_status = 'former_owner',
+                    acquired_at = excluded.acquired_at,
+                    released_at = excluded.released_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    user_id,
+                    individual_id,
+                    next_order,
+                    acquired,
+                    released,
+                    now,
+                    now,
+                ),
+            )
+
+            snapshot = self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+
+            return {
+                "observation_ids": observation_ids,
+                "claim_ids": claim_ids,
+                "snapshot": snapshot,
+            }
+
     def create_owner_change_claim(
         self,
         user_id: int,
