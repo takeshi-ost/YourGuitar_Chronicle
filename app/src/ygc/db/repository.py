@@ -4699,6 +4699,26 @@ class Repository:
                 )
             )
 
+    def list_media_assets(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT *
+                    FROM media_assets
+                    WHERE individual_id = ?
+                      AND media_type = 'image'
+                    ORDER BY
+                        COALESCE(captured_at, created_at),
+                        id
+                    """,
+                    (individual_id,),
+                )
+            )
+
     def get_media_asset(
         self,
         media_asset_id: int,
