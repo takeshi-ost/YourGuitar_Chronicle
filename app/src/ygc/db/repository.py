@@ -92,6 +92,8 @@ class Repository:
             "claims": {
                 "specification_kind": "TEXT",
                 "ownership_kind": "TEXT",
+                "ownership_source": "TEXT",
+                "ownership_pair_id": "TEXT",
                 "target_claim_id": "INTEGER",
                 "verification_status": "TEXT NOT NULL DEFAULT 'positive'",
             },
