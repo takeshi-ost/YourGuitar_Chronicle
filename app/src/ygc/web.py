@@ -3900,6 +3900,10 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
+
+.claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}
+.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}
+.spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-scroll-modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}.media-image-inputs{display:flex;flex-direction:column;gap:7px;max-height:220px;overflow-y:auto;padding-right:4px}.media-image-slot{display:none}.media-image-slot.visible{display:block}.media-image-slot input{font-size:11px;padding:7px 8px}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -3948,6 +3952,128 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </section>
 </div>
 </main>
+
+<div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Media Claim</h2>
+    <div class="sub" id="mediaClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row full">
+        <label class="form-label">Images <span class="sub">最大10枚</span></label>
+        <div class="media-image-inputs" id="mediaClaimImages"><div class="media-image-slot visible" id="mediaImageSlot0"><input class="media-image-input" data-index="0" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot1"><input class="media-image-input" data-index="1" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot2"><input class="media-image-input" data-index="2" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot3"><input class="media-image-input" data-index="3" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot4"><input class="media-image-input" data-index="4" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot5"><input class="media-image-input" data-index="5" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot6"><input class="media-image-input" data-index="6" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot7"><input class="media-image-input" data-index="7" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot8"><input class="media-image-input" data-index="8" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot9"><input class="media-image-input" data-index="9" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div></div>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="mediaClaimDate">Date</label>
+        <input id="mediaClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="mediaClaimCaption">Caption</label>
+        <textarea id="mediaClaimCaption" maxlength="2000" placeholder="Caption or detail"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeMediaClaim()">キャンセル</button>
+      <button id="mediaClaimSubmit" onclick="submitMediaClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="eventClaimModal" onclick="closeEventClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Event Claim</h2>
+    <div class="sub" id="eventClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="eventClaimKind">Tag</label>
+        <select id="eventClaimKind">
+          <option value="exhibition">Exhibition</option>
+          <option value="performance">Performance</option>
+          <option value="recording">Recording</option>
+          <option value="auction">Auction</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="eventClaimDate">Date</label>
+        <input id="eventClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="eventClaimDetail">Detail</label>
+        <textarea id="eventClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeEventClaim()">キャンセル</button>
+      <button id="eventClaimSubmit" onclick="submitEventClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="incidentClaimModal" onclick="closeIncidentClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Incident Claim</h2>
+    <div class="sub" id="incidentClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="incidentClaimKind">Tag</label>
+        <select id="incidentClaimKind">
+          <option value="damage">Damage</option>
+          <option value="lost">Lost</option>
+          <option value="theft">Theft</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="incidentClaimDate">Date</label>
+        <input id="incidentClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="incidentClaimDetail">Detail</label>
+        <textarea id="incidentClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeIncidentClaim()">キャンセル</button>
+      <button id="incidentClaimSubmit" onclick="submitIncidentClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
+  <div class="modal spec-scroll-modal" onclick="event.stopPropagation()">
+    <h2 id="specClaimTitle">Specification/Repair Claim</h2>
+    <div class="sub" id="specClaimGuitar" style="margin-bottom:14px"></div>
+
+    <div class="spec-kind">
+      <button id="specKindSpecification" type="button" class="active" onclick="setSpecificationKind('specification')">Specification</button>
+      <button id="specKindRepair" type="button" onclick="setSpecificationKind('repair')">Repair</button>
+    </div>
+
+    <div class="spec-add-wrap">
+      <button type="button" class="spec-add-button" onclick="toggleSpecItemMenu(event)">＋</button>
+      <div class="claim-menu spec-item-menu" id="specItemMenu"></div>
+    </div>
+    <span class="sub" style="margin-left:8px">項目を追加</span>
+
+    <div class="spec-items" id="specClaimItems"></div>
+
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="specClaimDate">Date</label>
+        <input id="specClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="specClaimBody">Memo（任意）</label>
+        <textarea id="specClaimBody" maxlength="2000" placeholder="仕様、交換、調整、修理内容などの補足"></textarea>
+      </div>
+    </div>
+
+    <div class="sub">追加した各項目は、この1件のClaimとして保存されます。Specificationには各項目の最新値が表示されます。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
+      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -4434,10 +4560,216 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
+
+
+const SPEC_FIELDS=[
+  ['nut','Nut'],['frets','Frets'],['pickguard','Pickguard'],
+  ['potentiometers','Potentiometers'],['wiring','Wiring'],['neck','Neck'],
+  ['pickups','Pickups'],['bridge','Bridge'],['tuners','Tuners'],
+  ['body','Body'],['fingerboard','Fingerboard'],['finish','Finish'],['weight','Weight']
+];
+let specificationKind='specification';
+let specificationItems=[];
+let editingSpecificationClaimId=null;
+
+function toggleAddClaimMenu(event,individualId){
+  event.stopPropagation();
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const menu=document.getElementById('addClaimMenu');
+  if(menu)menu.classList.toggle('open');
+}
+function chooseClaimType(type){
+  const menu=document.getElementById('addClaimMenu');
+  if(menu)menu.classList.remove('open');
+  if(type==='specification_repair')openSpecificationClaim(selectedIndividualId);
+  else if(type==='incident')openIncidentClaim(selectedIndividualId);
+  else if(type==='event')openEventClaim(selectedIndividualId);
+  else if(type==='media')openMediaClaim(selectedIndividualId);
+  else if(type==='ownership')openOwnershipClaim(selectedIndividualId,'add_claim');
+}
+
+function mediaImageInputs(){
+  return Array.from(document.querySelectorAll('#mediaClaimImages .media-image-input'));
+}
+function resetMediaImageInputs(){
+  mediaImageInputs().forEach((input,index)=>{
+    input.value='';
+    const slot=document.getElementById('mediaImageSlot'+index);
+    if(slot)slot.classList.toggle('visible',index===0);
+  });
+}
+function updateMediaImageSlots(){
+  const inputs=mediaImageInputs();
+  let lastSelected=-1;
+  inputs.forEach((input,index)=>{if(input.files&&input.files.length)lastSelected=index;});
+  const next=Math.min(lastSelected+1,inputs.length-1);
+  inputs.forEach((input,index)=>{
+    const slot=document.getElementById('mediaImageSlot'+index);
+    if(slot)slot.classList.toggle('visible',index===0||index<=next||(input.files&&input.files.length>0));
+  });
+}
+function openMediaClaim(individualId){
+  if(!activeUser||!activeUser.user)return;
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('mediaClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
+  resetMediaImageInputs();
+  document.getElementById('mediaClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('mediaClaimCaption').value='';
+  document.getElementById('mediaClaimModal').classList.add('open');
+}
+function closeMediaClaim(event){
+  if(event&&event.target&&event.target.id!=='mediaClaimModal')return;
+  document.getElementById('mediaClaimModal').classList.remove('open');
+}
+async function submitMediaClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const images=mediaImageInputs().map(input=>input.files&&input.files[0]).filter(Boolean);
+  if(!images.length){alert('画像ファイルを1枚以上選択してください。');return;}
+  for(const image of images){
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){alert('JPEG / PNG / WebP / GIF画像を選択してください。');return;}
+    if(image.size>12*1024*1024){alert('画像は1枚12MB以下にしてください。');return;}
+  }
+  const form=new FormData();
+  form.append('user_id',String(activeUser.user.id));
+  images.forEach(image=>form.append('images',image));
+  form.append('occurred_at',document.getElementById('mediaClaimDate').value||'');
+  form.append('caption',document.getElementById('mediaClaimCaption').value.trim());
+  const button=document.getElementById('mediaClaimSubmit');
+  button.disabled=true;
+  try{
+    const response=await fetch('/api/individuals/'+selectedIndividualId+'/media-claim',{method:'POST',body:form});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||response.statusText);
+    closeMediaClaim();
+    await showIndividual(selectedIndividualId);
+  }catch(e){alert('Media Claimの登録に失敗しました。\n'+e.message);}
+  finally{button.disabled=false;}
+}
+
+function openEventClaim(individualId){
+  if(!activeUser||!activeUser.user)return;
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('eventClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
+  document.getElementById('eventClaimKind').value='exhibition';
+  document.getElementById('eventClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('eventClaimDetail').value='';
+  document.getElementById('eventClaimModal').classList.add('open');
+}
+function closeEventClaim(event){
+  if(event&&event.target&&event.target.id!=='eventClaimModal')return;
+  document.getElementById('eventClaimModal').classList.remove('open');
+}
+async function submitEventClaim(){
+  const detail=document.getElementById('eventClaimDetail').value.trim();
+  if(!detail){alert('Detailを入力してください。');return;}
+  const button=document.getElementById('eventClaimSubmit');button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
+    closeEventClaim();await showIndividual(selectedIndividualId);
+  }catch(e){alert('Event Claimの登録に失敗しました。\n'+e.message);}
+  finally{button.disabled=false;}
+}
+
+function openIncidentClaim(individualId){
+  if(!activeUser||!activeUser.user)return;
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('incidentClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
+  document.getElementById('incidentClaimKind').value='damage';
+  document.getElementById('incidentClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('incidentClaimDetail').value='';
+  document.getElementById('incidentClaimModal').classList.add('open');
+}
+function closeIncidentClaim(event){
+  if(event&&event.target&&event.target.id!=='incidentClaimModal')return;
+  document.getElementById('incidentClaimModal').classList.remove('open');
+}
+async function submitIncidentClaim(){
+  const detail=document.getElementById('incidentClaimDetail').value.trim();
+  if(!detail){alert('Detailを入力してください。');return;}
+  const button=document.getElementById('incidentClaimSubmit');button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+selectedIndividualId+'/incident-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),incident_kind:document.getElementById('incidentClaimKind').value,occurred_at:document.getElementById('incidentClaimDate').value||null,detail})});
+    closeIncidentClaim();await showIndividual(selectedIndividualId);
+  }catch(e){alert('Incident Claimの登録に失敗しました。\n'+e.message);}
+  finally{button.disabled=false;}
+}
+
+function setSpecificationKind(kind){
+  specificationKind=kind==='repair'?'repair':'specification';
+  document.getElementById('specKindSpecification').classList.toggle('active',specificationKind==='specification');
+  document.getElementById('specKindRepair').classList.toggle('active',specificationKind==='repair');
+}
+function openSpecificationClaim(individualId){
+  if(!activeUser||!activeUser.user)return;
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('specClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
+  editingSpecificationClaimId=null;specificationItems=[];setSpecificationKind('specification');
+  document.getElementById('specClaimTitle').textContent='Specification/Repair Claim';
+  document.getElementById('specClaimSubmit').textContent='Claimを追加';
+  document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('specClaimBody').value='';
+  renderSpecificationItems();renderSpecItemMenu();
+  document.getElementById('specClaimModal').classList.add('open');
+}
+function closeSpecificationClaim(event){
+  if(event&&event.target&&event.target.id!=='specClaimModal')return;
+  document.getElementById('specClaimModal').classList.remove('open');
+  const menu=document.getElementById('specItemMenu');if(menu)menu.classList.remove('open');
+}
+function toggleSpecItemMenu(event){
+  event.stopPropagation();renderSpecItemMenu();document.getElementById('specItemMenu').classList.toggle('open');
+}
+function renderSpecItemMenu(){
+  const menu=document.getElementById('specItemMenu');if(!menu)return;
+  const used=new Set(specificationItems.map(x=>x.field_name));
+  menu.innerHTML=SPEC_FIELDS.filter(([key])=>!used.has(key)).map(([key,label])=>'<button type="button" onclick="addSpecificationItem(\''+key+'\')">'+esc(label)+'</button>').join('')+'<button type="button" onclick="addCustomSpecificationItem()">Custom…</button>';
+}
+function addSpecificationItem(fieldName,label){
+  if(specificationItems.some(x=>x.field_name===fieldName))return;
+  const found=SPEC_FIELDS.find(([key])=>key===fieldName);
+  specificationItems.push({field_name:fieldName,label:label||(found?found[1]:specificationFieldLabel(fieldName)),value_text:''});
+  document.getElementById('specItemMenu').classList.remove('open');renderSpecificationItems();
+}
+function addCustomSpecificationItem(){
+  const raw=prompt('Specification項目名を入力してください。');if(!raw)return;
+  const fieldName=raw.trim().toLowerCase().replace(/\s+/g,'_');if(!fieldName)return;
+  if(specificationItems.some(x=>x.field_name===fieldName)){alert('同じ項目はすでに追加されています。');return;}
+  addSpecificationItem(fieldName,raw.trim());
+}
+function removeSpecificationItem(index){specificationItems.splice(index,1);renderSpecificationItems();renderSpecItemMenu();}
+function updateSpecificationItem(index,value){if(specificationItems[index])specificationItems[index].value_text=value;}
+function renderSpecificationItems(){
+  const el=document.getElementById('specClaimItems');if(!el)return;
+  el.innerHTML=specificationItems.length?specificationItems.map((item,index)=>'<div class="spec-item-row"><div class="spec-item-label">'+esc(item.label)+'</div><input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value"><button type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button></div>').join(''):'<div class="sub">＋から入力したい項目を追加してください。</div>';
+}
+async function submitSpecificationClaim(){
+  const items=specificationItems.map(item=>({field_name:item.field_name,value_text:String(item.value_text||'').trim()})).filter(item=>item.value_text);
+  if(!items.length){alert('少なくとも1つの項目とValueを入力してください。');return;}
+  if(items.length!==specificationItems.length){alert('追加した項目のValueをすべて入力してください。');return;}
+  const button=document.getElementById('specClaimSubmit');button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+selectedIndividualId+'/specification-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),specification_kind:specificationKind,items,occurred_at:document.getElementById('specClaimDate').value||null,body:document.getElementById('specClaimBody').value.trim()||null})});
+    closeSpecificationClaim();await showIndividual(selectedIndividualId);
+  }catch(e){alert('Specification/Repair Claimの登録に失敗しました。\n'+e.message);}
+  finally{button.disabled=false;}
+}
+
+document.addEventListener('click',()=>{
+  const claimMenu=document.getElementById('addClaimMenu');if(claimMenu)claimMenu.classList.remove('open');
+  const specMenu=document.getElementById('specItemMenu');if(specMenu)specMenu.classList.remove('open');
+});
 
 function configureOwnershipClaim(mode){
   ownershipClaimMode=mode==='add_claim'?'add_claim':'acquire';
