@@ -4115,15 +4115,15 @@ header{padding:13px 22px;border-bottom:1px solid var(--line)}
 h1{font-size:20px;margin:0}.sub{color:var(--muted);font-size:12px}
 main{max-width:1500px;margin:auto;padding:14px 22px 22px}
 .grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(380px,.85fr);gap:18px;align-items:stretch}
-.left-column{display:grid;grid-template-rows:150px minmax(0,1fr);gap:12px;min-height:0}
+.left-column{display:grid;grid-template-rows:146px minmax(0,1fr);gap:12px;min-height:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
 .discovery-panel{min-height:0;overflow:hidden}
-.discovery-list{height:96px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
-.discovery-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.discovery-list{height:72px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
+.discovery-item{display:grid;grid-template-columns:minmax(90px,1.1fr) minmax(110px,1.6fr) minmax(54px,.55fr) minmax(100px,1fr) minmax(96px,.9fr) minmax(120px,1.2fr);gap:0;border-bottom:1px solid var(--line);cursor:pointer;min-height:27px;align-items:center}
 .discovery-item:last-child{border-bottom:0}.discovery-item:hover{background:#20252a}
-.discovery-main{min-width:0}.discovery-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.discovery-meta{font-size:10px;color:var(--muted);margin-top:2px}.discovery-time{font-size:10px;color:var(--muted);white-space:nowrap}
+.discovery-cell{min-width:0;padding:5px 8px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid #242a30}.discovery-cell:last-child{border-right:0}.discovery-maker,.discovery-model{font-size:11px}.discovery-maker{font-weight:700}.discovery-muted{color:var(--muted)}
 .product-list-panel{height:620px;min-height:0;display:flex;flex-direction:column}
-.detail-panel{height:782px;min-height:0;display:flex;flex-direction:column}
+.detail-panel{height:778px;min-height:0;display:flex;flex-direction:column}
 .product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
 .detail-panel #detail{flex:1;min-height:0;overflow-y:auto;padding-right:4px}
 h2{font-size:17px;margin:0 0 14px}
@@ -4133,15 +4133,15 @@ input,button{font:inherit}
 input{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}
 button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}
 button.secondary{background:#2a3036;color:var(--text)}
-.account-hub{width:100%;display:grid;grid-template-columns:minmax(220px,1.05fr) auto minmax(280px,1fr);gap:12px;align-items:center;padding:8px 22px;background:#15181b;color:var(--text);border-bottom:1px solid var(--line)}
-.account-hub-user{display:flex;align-items:center;gap:12px;min-width:0}
-.account-hub-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
-.account-hub-user-copy{min-width:0}.account-hub-name-row{display:flex;align-items:center;gap:7px;min-width:0}.account-hub-name{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:2px 6px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
-.account-hub-location{font-size:11px;color:var(--muted);margin-top:3px}
-.account-hub-guest-title{font-size:14px;font-weight:800}.account-hub-guest-copy{font-size:10px;color:var(--muted);margin-top:2px;max-width:620px}.account-hub-guest-mark{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#24201a;border:1px solid #4b402e;color:var(--accent);font-size:20px;font-weight:800;flex:0 0 auto}
-.account-hub-summary{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#14171a}
-.account-hub-stat{min-width:74px;padding:5px 10px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
-.account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
+.account-hub{width:100%;height:47px;display:grid;grid-template-columns:minmax(220px,1.05fr) auto minmax(280px,1fr);gap:10px;align-items:center;padding:4px 22px;background:#15181b;color:var(--text);border-bottom:1px solid var(--line);overflow:hidden}
+.account-hub-user{display:flex;align-items:center;gap:8px;min-width:0}
+.account-hub-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
+.account-hub-user-copy{min-width:0;display:flex;align-items:center;gap:8px}.account-hub-name-row{display:flex;align-items:center;gap:6px;min-width:0}.account-hub-name{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:1px 5px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:8px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.account-hub-location{font-size:9px;color:var(--muted);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.account-hub-guest-title{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-guest-copy{display:none}.account-hub-guest-mark{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#24201a;border:1px solid #4b402e;color:var(--accent);font-size:13px;font-weight:800;flex:0 0 auto}
+.account-hub-summary{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#14171a;height:30px}
+.account-hub-stat{min-width:68px;padding:3px 8px;text-align:center;border-right:1px solid var(--line);white-space:nowrap}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:inline;font-size:12px;font-weight:800;line-height:1}.account-hub-stat-label{display:inline;margin-left:4px;color:var(--muted);font-size:8px;white-space:nowrap}
+.account-hub-actions{display:flex;justify-content:flex-end;gap:5px;flex-wrap:nowrap;min-width:0}.account-hub-action{display:flex;align-items:center;gap:5px;padding:4px 7px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
 .notification-panel{display:none;margin:-8px 0 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .notification-panel.open{display:block}
 .notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
@@ -4150,9 +4150,16 @@ button.secondary{background:#2a3036;color:var(--text)}
 @media(max-width:1050px){.account-hub{grid-template-columns:minmax(230px,1fr) auto}.account-hub-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(max-width:650px){.account-hub{grid-template-columns:1fr}.account-hub-summary{width:100%}.account-hub-stat{flex:1;min-width:0}.account-hub-actions{grid-column:auto}}
 .table-wrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}
-th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+th,td{text-align:left;border-bottom:1px solid var(--line);padding:5px 7px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:28px}
+th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel);z-index:2}
+.product-list-panel th:nth-child(1),.product-list-panel td:nth-child(1){width:52px}
+.product-list-panel th:nth-child(2),.product-list-panel td:nth-child(2){width:120px}
+.product-list-panel th:nth-child(3),.product-list-panel td:nth-child(3){width:190px}
+.product-list-panel th:nth-child(4),.product-list-panel td:nth-child(4){width:120px}
+.product-list-panel th:nth-child(5),.product-list-panel td:nth-child(5){width:72px}
+.product-list-panel th:nth-child(6),.product-list-panel td:nth-child(6){width:145px}
+.product-list-panel th:nth-child(7),.product-list-panel td:nth-child(7){width:64px}
 th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margin-left:4px}
 .clickable{cursor:pointer}.clickable:hover{background:#20252a}.clickable.selected{background:#3a3326}.clickable.selected:hover{background:#463c2c}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
@@ -4254,7 +4261,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <section class="left-column">
   <div class="panel discovery-panel">
     <div class="toolbar"><h2>New discovery</h2></div>
-    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:10px">最近の更新を読み込み中...</div></div>
+    <div class="discovery-item" style="cursor:default;background:#181b1f;font-weight:600">
+      <div class="discovery-cell discovery-muted">Maker</div>
+      <div class="discovery-cell discovery-muted">Model</div>
+      <div class="discovery-cell discovery-muted">Year</div>
+      <div class="discovery-cell discovery-muted">Serial</div>
+      <div class="discovery-cell discovery-muted">Activity</div>
+      <div class="discovery-cell discovery-muted">Updated</div>
+    </div>
+    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">最近の更新を読み込み中...</div></div>
   </div>
   <div class="panel product-list-panel">
     <div class="toolbar">
@@ -4657,13 +4672,15 @@ function renderNewDiscoveries(){
     return;
   }
   root.innerHTML=newDiscoveries.map(item=>{
-    const title=[item.manufacturer,item.model,item.year].filter(Boolean).join(' ');
-    const serial=item.serial_number?(' / '+item.serial_number):'';
     const when=displayInputDate(item.activity_at||'');
     return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')">'+
-      '<div class="discovery-main"><div class="discovery-title">'+esc(title||('Product #'+item.id))+'</div>'+
-      '<div class="discovery-meta">'+esc(discoveryLabel(item))+esc(serial)+'</div></div>'+
-      '<div class="discovery-time">'+esc(when)+'</div></div>';
+      '<div class="discovery-cell discovery-maker" title="'+esc(item.manufacturer||'')+'">'+esc(item.manufacturer||'—')+'</div>'+
+      '<div class="discovery-cell discovery-model" title="'+esc(item.model||'')+'">'+esc(item.model||'—')+'</div>'+
+      '<div class="discovery-cell" title="'+esc(item.year||'')+'">'+esc(item.year||'—')+'</div>'+
+      '<div class="discovery-cell discovery-muted" title="'+esc(item.serial_number||'')+'">'+esc(item.serial_number||'—')+'</div>'+
+      '<div class="discovery-cell discovery-muted" title="'+esc(discoveryLabel(item))+'">'+esc(discoveryLabel(item))+'</div>'+
+      '<div class="discovery-cell discovery-muted" title="'+esc(when)+'">'+esc(when)+'</div>'+
+    '</div>';
   }).join('');
 }
 
