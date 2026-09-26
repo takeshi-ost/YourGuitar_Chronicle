@@ -2362,6 +2362,7 @@ async def api_media_claim(
             _safe_unlink(path)
         raise
 
+    repository.create_claim_notification(claim_id)
     return {
         "claim_id": claim_id,
         "media_asset_ids": media_asset_ids,
@@ -2373,8 +2374,9 @@ def api_event_claim(
     individual_id: int,
     request: EventClaimRequest,
 ) -> dict[str, Any]:
+    repository = repo()
     try:
-        claim_id = repo().create_event_claim(
+        claim_id = repository.create_event_claim(
             request.user_id,
             individual_id,
             event_kind=request.event_kind,
@@ -2383,6 +2385,7 @@ def api_event_claim(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    repository.create_claim_notification(claim_id)
     return {"claim_id": claim_id}
 
 
@@ -2391,8 +2394,9 @@ def api_incident_claim(
     individual_id: int,
     request: IncidentClaimRequest,
 ) -> dict[str, Any]:
+    repository = repo()
     try:
-        claim_id = repo().create_incident_claim(
+        claim_id = repository.create_incident_claim(
             request.user_id,
             individual_id,
             incident_kind=request.incident_kind,
@@ -2401,6 +2405,7 @@ def api_incident_claim(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    repository.create_claim_notification(claim_id)
     return {"claim_id": claim_id}
 
 
@@ -2436,6 +2441,7 @@ def api_specification_claim(
             detail=str(exc),
         ) from exc
 
+    repository.create_claim_notification(claim_id)
     return {
         "claim_id": claim_id,
     }
@@ -2637,6 +2643,10 @@ def api_former_owner_claim(
             detail=str(exc),
         ) from exc
 
+    if result.get("claim_ids"):
+        repository.create_claim_notification(
+            int(result["claim_ids"][0])
+        )
     user, guitars = repository.get_user(request.user_id)
     return {
         **result,
@@ -2747,6 +2757,11 @@ def api_claim_response(
             detail="Claim or User not found",
         )
 
+    repository.create_verification_notification(
+        claim_id,
+        request.responder_user_id,
+        request.stance,
+    )
     return {"ok": True}
 
 
