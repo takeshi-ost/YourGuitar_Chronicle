@@ -961,11 +961,18 @@ class Repository:
                     c.claim_type,
                     c.value_text,
                     c.ownership_kind,
+                    c.ownership_source,
+                    c.verification_status,
                     c.occurred_at,
                     c.created_at
                 FROM claims c
                 WHERE c.individual_id = ?
                   AND c.status = 'active'
+                  AND (
+                        c.claim_type <> 'ownership'
+                        OR COALESCE(c.ownership_source, '') <> 'former_owner'
+                        OR COALESCE(c.verification_status, 'positive') = 'positive'
+                  )
                   AND c.claim_type IN (
                         'listing',
                         'ownership',
@@ -3279,6 +3286,7 @@ class Repository:
             else None
         )
         now = utcnow()
+        ownership_pair_id = str(uuid.uuid4())
 
         with self.connect() as con:
             user = con.execute(
@@ -3512,16 +3520,20 @@ class Repository:
                         field_name,
                         value_text,
                         ownership_kind,
+                        ownership_source,
+                        ownership_pair_id,
                         body,
                         occurred_at,
                         status,
+                        verification_status,
                         created_at,
                         updated_at
                     )
                     VALUES (
                         ?, ?, ?, 'ownership',
-                        'owner_user_id', ?, ?, ?, ?,
-                        'active', ?, ?
+                        'owner_user_id', ?, ?,
+                        'former_owner', ?, ?, ?,
+                        'active', 'unverified', ?, ?
                     )
                     """,
                     (
@@ -3530,6 +3542,7 @@ class Repository:
                         user_id,
                         "unknown" if ending else str(user_id),
                         kind,
+                        ownership_pair_id,
                         body,
                         event_date,
                         now,
@@ -5265,7 +5278,12 @@ class Repository:
         with self.connect() as con:
             claim = con.execute(
                 """
-                SELECT individual_id, author_user_id, claim_type
+                SELECT
+                    individual_id,
+                    author_user_id,
+                    claim_type,
+                    ownership_source,
+                    ownership_pair_id
                 FROM claims
                 WHERE id = ?
                   AND status = 'active'
@@ -5280,12 +5298,19 @@ class Repository:
                     "Owner Verification is only for another user's Claim"
                 )
 
-            if claim["claim_type"] in (
-                "ownership",
-                "owner_change",
-                "release",
-                "listing",
-                "identity_correction",
+            is_former_owner_claim = (
+                claim["claim_type"] == "ownership"
+                and str(claim["ownership_source"] or "") == "former_owner"
+            )
+            if (
+                claim["claim_type"] in (
+                    "ownership",
+                    "owner_change",
+                    "release",
+                    "listing",
+                    "identity_correction",
+                )
+                and not is_former_owner_claim
             ):
                 raise ValueError(
                     "This Claim type does not use Owner Verification"
@@ -5309,19 +5334,36 @@ class Repository:
                     "Only the current owner can verify another user's Claim"
                 )
 
-            con.execute(
-                """
-                UPDATE claims
-                SET verification_status = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    normalized,
-                    now,
-                    claim_id,
-                ),
-            )
+            if is_former_owner_claim and claim["ownership_pair_id"]:
+                con.execute(
+                    """
+                    UPDATE claims
+                    SET verification_status = ?,
+                        updated_at = ?
+                    WHERE ownership_pair_id = ?
+                      AND ownership_source = 'former_owner'
+                      AND status = 'active'
+                    """,
+                    (
+                        normalized,
+                        now,
+                        claim["ownership_pair_id"],
+                    ),
+                )
+            else:
+                con.execute(
+                    """
+                    UPDATE claims
+                    SET verification_status = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        normalized,
+                        now,
+                        claim_id,
+                    ),
+                )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
