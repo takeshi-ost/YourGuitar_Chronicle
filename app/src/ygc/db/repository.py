@@ -1069,7 +1069,7 @@ class Repository:
                 user = (
                     con.execute(
                         """
-                        SELECT display_name
+                        SELECT display_name, account_type
                         FROM users
                         WHERE id = ?
                         """,
@@ -1084,7 +1084,7 @@ class Repository:
                     else None
                 )
                 state["current_owner_type"] = (
-                    "user"
+                    str(user["account_type"])
                     if user
                     else None
                 )
