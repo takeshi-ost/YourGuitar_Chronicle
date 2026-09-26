@@ -3342,13 +3342,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, NULL, ?, 'incident',
                     'incident_kind', ?, ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
