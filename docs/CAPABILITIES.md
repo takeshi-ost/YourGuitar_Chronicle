@@ -114,3 +114,8 @@ Individual Snapshot再構築
 
 
 - UI表記では `Individuals` を `Product List`、`Individual Detail` を `Product Detail` とする。内部データ名・API・実装名は従来どおり `individual` / `individuals` を使用する。
+
+
+- Add to Your Chronicle creates an Ownership Claim with Tag fixed to Acquire
+- Product Detailの Add Claim では Ownership を選択し、Release は Ownership 内のTagとして扱う
+- Chronicle上のOwnership Claimバッジは Ownership / Acquire のようにType名を重ねず、Acquire / Release等のTag名だけを表示する
