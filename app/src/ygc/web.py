@@ -3966,7 +3966,7 @@ function profileUserId(){const m=location.pathname.match(/\/users\/(\d+)$/);retu
 function guitarCard(g){
   const title=[g.manufacturer,g.model].filter(Boolean).join(' ')||('Individual #'+g.individual_id);
   const meta=[g.year,g.finish,g.serial_number&&('S/N '+g.serial_number)].filter(Boolean).join(' · ');
-  return '<a class="guitar-card" href="/user-view#individual-'+Number(g.individual_id)+'">'+
+  return '<a class="guitar-card" href="/user-view?individual_id='+Number(g.individual_id)+'">'+
     '<div class="guitar-title">'+esc(title)+'</div>'+
     '<div class="guitar-meta">'+esc(meta||'No additional details')+'</div>'+
   '</a>';
@@ -4516,8 +4516,14 @@ async function loadActiveUser(){
 async function loadIndividuals(){
   individuals=await jfetch('/api/individuals');
   if(individuals.length){
-    const randomIndex=Math.floor(Math.random()*individuals.length);
-    selectedIndividualId=Number(individuals[randomIndex].id);
+    const requested=Number(new URLSearchParams(window.location.search).get('individual_id')||0);
+    const requestedExists=requested&&individuals.some(x=>Number(x.id)===requested);
+    if(requestedExists){
+      selectedIndividualId=requested;
+    }else{
+      const randomIndex=Math.floor(Math.random()*individuals.length);
+      selectedIndividualId=Number(individuals[randomIndex].id);
+    }
   }else{
     selectedIndividualId=null;
   }
@@ -4582,6 +4588,7 @@ function currentSnapshotOwnerHtml(i){
   const type=String(i.current_owner_type||'').trim();
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
+  if(i.current_owner_user_id)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
@@ -4811,7 +4818,7 @@ function claimCardFull(c){
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
+    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By <a href="/users/'+Number(c.author_user_id)+'">'+esc(c.author_name||('User #'+c.author_user_id))+'</a></div></div>'+
     '</div>';
 }
 function compactClaimType(c){
@@ -6190,6 +6197,7 @@ function currentSnapshotOwnerHtml(i){
   const type=String(i.current_owner_type||'').trim();
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
+  if(i.current_owner_user_id)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
@@ -6423,7 +6431,7 @@ function claimCardFull(c){
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
+    '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By <a href="/users/'+Number(c.author_user_id)+'">'+esc(c.author_name||('User #'+c.author_user_id))+'</a></div></div>'+
     '</div>';
 }
 function compactClaimType(c){
