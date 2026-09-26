@@ -178,3 +178,14 @@ Individual Snapshot再構築
   - Unverified: Claimタグだけを表示し、クリックでClaim全文をポップアップ表示
   - Negative: ◉だけを表示し、クリックでClaim全文をポップアップ表示
 - ポップアップ内には通常カードと同じ内容を表示し、現在OwnerはそこでPositive / Negative / Unverifiedを変更できる
+
+
+- 非OwnerのAdd Claimには Former Owner を表示する
+- Former OwnerはAcquisition Date / Release Dateを必須、Detailを任意とする
+- Acquisition DateはRelease Dateより前でなければならない
+- Current Ownerが存在する場合、Former OwnerのRelease DateはCurrent Ownerを成立させた最新のOwner設定Claimの日付より前でなければならない
+- Former Owner登録はAcquire / Releaseの2件のOwnership Claimを1トランザクションで作成する
+- AcquireのDetailに入力Detailを保存し、Releaseは通常主文のみとする
+- Claimのauthorは入力Userとなるため、主文の名前も入力Userになる
+- 登録Userのuser_guitarsはformer_ownerとして追加・更新し、Formerly Owned Guitarsに表示する
+- Former Owner ClaimはOwnership系のためOwner Verification対象外
