@@ -3946,6 +3946,11 @@ button.secondary{background:#2a3036;color:var(--text)}
 .account-hub-summary{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#14171a}
 .account-hub-stat{min-width:82px;padding:8px 12px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
 .account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
+.notification-panel{display:none;margin:-8px 0 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.notification-panel.open{display:block}
+.notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.notification-panel-title{font-size:13px;font-weight:800}.notification-panel-actions{display:flex;gap:6px}.notification-panel-actions button{padding:5px 8px;font-size:10px;background:#252a2f;color:var(--text)}
+.notification-list{max-height:300px;overflow-y:auto}.notification-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:#171a1e;color:var(--text);padding:11px 14px}.notification-item:last-child{border-bottom:0}.notification-item:hover{background:#20252a}.notification-item.unread{background:#1d211e}.notification-item-title{font-size:11px;font-weight:800}.notification-item-body{font-size:11px;color:var(--muted);margin-top:3px}.notification-item-time{font-size:9px;color:#737d86;margin-top:4px}.notification-empty{padding:18px 14px;color:var(--muted);font-size:11px;text-align:center}
 @media(max-width:1050px){.account-hub{grid-template-columns:minmax(230px,1fr) auto}.account-hub-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(max-width:650px){.account-hub{grid-template-columns:1fr}.account-hub-summary{width:100%}.account-hub-stat{flex:1;min-width:0}.account-hub-actions{grid-column:auto}}
 .table-wrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
@@ -4028,6 +4033,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <main>
 <div class="account-hub" id="accountHub">
   <div class="account-hub-empty">User情報を読み込み中...</div>
+</div>
+<div class="notification-panel" id="notificationPanel">
+  <div class="notification-panel-head">
+    <span class="notification-panel-title">Notifications</span>
+    <div class="notification-panel-actions">
+      <button type="button" onclick="markAllNotificationsRead()">Mark all read</button>
+    </div>
+  </div>
+  <div class="notification-list" id="notificationList"></div>
 </div>
 
 <div class="grid">
@@ -4260,6 +4274,7 @@ let productGalleryIndex=0;
 let currentObservations=[];
 let currentClaims=[];
 let chronicleSort='event';
+let notificationData={unread_count:0,notifications:[]};
 let pendingOwnershipClaimIndividualId=null;
 let ownershipClaimMode='acquire';
 let individualSortKey='id';
@@ -4302,18 +4317,78 @@ function renderAccountHub(){
       '<div class="account-hub-stat"><span class="account-hub-stat-value">'+claims+'</span><span class="account-hub-stat-label">Claims</span></div>'+
     '</div>'+
     '<div class="account-hub-actions">'+
-      '<button class="account-hub-action" type="button">Notifications <span class="account-hub-count">0</span></button>'+
+      '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
       '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
       '<button class="account-hub-action" type="button">View Profile</button>'+
       '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button>'+
     '</div>';
 }
 
+function renderNotificationPanel(){
+  const list=document.getElementById('notificationList');
+  if(!list)return;
+  const items=notificationData.notifications||[];
+  list.innerHTML=items.length
+    ? items.map(n=>
+        '<button type="button" class="notification-item'+(Number(n.is_read)?'':' unread')+'" onclick="openNotification('+n.id+','+(n.individual_id===null?'null':Number(n.individual_id))+')">'+
+          '<div class="notification-item-title">'+esc(n.title||'Notification')+'</div>'+
+          '<div class="notification-item-body">'+esc(n.body||'')+'</div>'+
+          '<div class="notification-item-time">'+esc(displayInputDate(n.created_at))+'</div>'+
+        '</button>'
+      ).join('')
+    : '<div class="notification-empty">通知はありません。</div>';
+  const count=document.getElementById('notificationCount');
+  if(count)count.textContent=String(Number(notificationData.unread_count||0));
+}
+async function loadNotifications(){
+  if(!activeUser||!activeUser.user){
+    notificationData={unread_count:0,notifications:[]};
+    renderNotificationPanel();
+    return;
+  }
+  try{
+    notificationData=await jfetch('/api/users/'+activeUser.user.id+'/notifications');
+  }catch(e){
+    notificationData={unread_count:0,notifications:[]};
+  }
+  renderNotificationPanel();
+}
+async function toggleNotifications(){
+  const panel=document.getElementById('notificationPanel');
+  if(!panel)return;
+  if(!panel.classList.contains('open'))await loadNotifications();
+  panel.classList.toggle('open');
+}
+async function openNotification(notificationId,individualId){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    await jfetch('/api/users/'+activeUser.user.id+'/notifications/'+notificationId+'/read',{method:'POST'});
+  }catch(e){}
+  const item=(notificationData.notifications||[]).find(n=>Number(n.id)===Number(notificationId));
+  if(item)item.is_read=1;
+  notificationData.unread_count=Math.max(0,Number(notificationData.unread_count||0)-(item&&Number(item.is_read)===0?1:0));
+  await loadNotifications();
+  const panel=document.getElementById('notificationPanel');
+  if(panel)panel.classList.remove('open');
+  if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId));
+}
+async function markAllNotificationsRead(){
+  if(!activeUser||!activeUser.user)return;
+  try{
+    await jfetch('/api/users/'+activeUser.user.id+'/notifications/read-all',{method:'POST'});
+    await loadNotifications();
+  }catch(e){
+    alert('通知の既読化に失敗しました。\n'+e.message);
+  }
+}
+
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
+    notificationData={unread_count:0,notifications:[]};
     renderAccountHub();
+    renderNotificationPanel();
     return;
   }
   try{
@@ -4322,7 +4397,9 @@ async function loadActiveUser(){
     activeUser=null;
     localStorage.removeItem(ACTIVE_USER_KEY);
   }
+  await loadNotifications();
   renderAccountHub();
+  renderNotificationPanel();
 }
 
 async function loadIndividuals(){
