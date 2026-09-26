@@ -1878,6 +1878,31 @@ def api_individual(individual_id: int) -> dict[str, Any]:
         else None
     )
 
+    gallery_images = []
+    for row in repo().list_media_assets(individual_id):
+        item = _row_dict(row)
+        media_id = int(item["id"])
+        claim_type = str(item.get("claim_type") or "")
+        gallery_images.append({
+            "id": media_id,
+            "url": f"/api/media/{media_id}",
+            "label": (
+                "Representative Image"
+                if representative_media_id and media_id == int(representative_media_id)
+                else ("Media Claim" if claim_type == "media" else "Uploaded Image")
+            ),
+            "caption": item.get("claim_caption") or "",
+            "occurred_at": item.get("claim_occurred_at") or item.get("captured_at") or "",
+            "is_representative": bool(
+                representative_media_id and media_id == int(representative_media_id)
+            ),
+        })
+    gallery_images.sort(key=lambda item: (
+        0 if item["is_representative"] else 1,
+        str(item["occurred_at"]),
+        int(item["id"]),
+    ))
+
     listing_claims = [
         _row_dict(row)
         for row
@@ -1897,6 +1922,7 @@ def api_individual(individual_id: int) -> dict[str, Any]:
         "individual": individual_data,
         "observations": [_row_dict(row) for row in observations],
         "current_listing": current_listing,
+        "gallery_images": gallery_images,
     }
 
 
@@ -3151,7 +3177,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-#detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+#detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-gallery{display:flex;align-items:center;gap:8px;width:75%;margin:0 0 6px}.detail-gallery .detail-image{width:100%;flex:1;min-width:0}.detail-gallery-nav{width:32px;min-width:32px;height:42px;padding:0;background:#2a3036;color:var(--text);font-size:18px}.detail-gallery-nav:disabled{opacity:.25}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
 .claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}
@@ -3246,6 +3272,8 @@ let individualSortDirection=1;
 let users=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let productGallery=[];
+let productGalleryIndex=0;
 const TOKEN_KEY='ygc_reverb_api_token';
 const ACTIVE_USER_KEY='ygc_active_user_id';
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -3499,6 +3527,32 @@ function renderIndividuals(){const q=document.getElementById('individualFilter')
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
 function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';return esc(label)}
 function currentLocationHtml(i){const parts=[i&&i.location_country,i&&i.location_region].filter(Boolean);return parts.length?esc(parts.join(' / ')):'—'}
+function productGalleryHtml(images,model){
+  productGallery=(images||[]).slice();
+  productGalleryIndex=0;
+  if(!productGallery.length)return '';
+  const item=productGallery[0];
+  const disabled=productGallery.length<2?' disabled':'';
+  const caption=String(item.caption||'').trim();
+  const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
+  return '<div class="detail-gallery">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
+    '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
+    '</div><span class="detail-source" id="productGallerySource">'+esc(source)+'</span>';
+}
+function stepProductGallery(delta){
+  if(productGallery.length<2)return;
+  productGalleryIndex=(productGalleryIndex+delta+productGallery.length)%productGallery.length;
+  const item=productGallery[productGalleryIndex];
+  const image=document.getElementById('productGalleryImage');
+  const source=document.getElementById('productGallerySource');
+  if(image)image.src=item.url;
+  if(source){
+    const caption=String(item.caption||'').trim();
+    source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
+  }
+}
 function specificationFieldLabel(value){const labels={body:'Body',bridge:'Bridge',fingerboard:'Fingerboard',frets:'Frets',neck:'Neck',nut:'Nut',pickups:'Pickups',pickguard:'Pickguard',potentiometers:'Potentiometers',tuners:'Tuners',wiring:'Wiring',weight:'Weight',finish:'Finish'};const key=String(value||'').trim();return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
 function identityFieldLabel(value){const labels={manufacturer:'Maker',model:'Model',year:'Year',serial_number:'Serial'};return labels[String(value||'')]||String(value||'').replace(/_/g,' ')}
 function claimTypeLabel(value){return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ')}
@@ -3554,7 +3608,7 @@ function claimCard(c){
     body=items.map(item=>'<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>').join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -3600,8 +3654,11 @@ async function showIndividual(id){
   const observations=d.observations||[];
   const listing=d.current_listing||null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const galleryImages=d.gallery_images||[];
   let out='';
-  if(i.representative_image_url){
+  if(galleryImages.length){
+    out+=productGalleryHtml(galleryImages,i.model||'Guitar');
+  }else if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(listing&&listing.image_url){
     const listingUrl=String(listing.source_url||'');
@@ -3833,6 +3890,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 let individuals=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let productGallery=[];
+let productGalleryIndex=0;
 let currentObservations=[];
 let currentClaims=[];
 let chronicleSort='event';
@@ -3972,6 +4031,32 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
 
+function productGalleryHtml(images,model){
+  productGallery=(images||[]).slice();
+  productGalleryIndex=0;
+  if(!productGallery.length)return '';
+  const item=productGallery[0];
+  const disabled=productGallery.length<2?' disabled':'';
+  const caption=String(item.caption||'').trim();
+  const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
+  return '<div class="detail-gallery">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
+    '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
+    '</div><span class="detail-source" id="productGallerySource">'+esc(source)+'</span>';
+}
+function stepProductGallery(delta){
+  if(productGallery.length<2)return;
+  productGalleryIndex=(productGalleryIndex+delta+productGallery.length)%productGallery.length;
+  const item=productGallery[productGalleryIndex];
+  const image=document.getElementById('productGalleryImage');
+  const source=document.getElementById('productGallerySource');
+  if(image)image.src=item.url;
+  if(source){
+    const caption=String(item.caption||'').trim();
+    source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
+  }
+}
 function specificationFieldLabel(value){
   const labels={
     nut:'Nut',
@@ -4079,7 +4164,7 @@ function claimCard(c){
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -4194,8 +4279,11 @@ async function showIndividual(id){
   const latest=observations.length?observations[observations.length-1]:null;
   const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const galleryImages=d.gallery_images||[];
   let out='';
-  if(i.representative_image_url){
+  if(galleryImages.length){
+    out+=productGalleryHtml(galleryImages,i.model||'Guitar');
+  }else if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(imageListing){
     const imageUrl=String(imageListing.source_url||'');
@@ -4723,6 +4811,8 @@ let individuals=[];
 let users=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let productGallery=[];
+let productGalleryIndex=0;
 let currentObservations=[];
 let currentClaims=[];
 let currentIndividual=null;
@@ -5119,6 +5209,32 @@ function ownershipControlsHtml(individualId){
   return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnershipClaim('+individualId+',\'acquire\')">Add to Your Chronicle</button></div>';
 }
 
+function productGalleryHtml(images,model){
+  productGallery=(images||[]).slice();
+  productGalleryIndex=0;
+  if(!productGallery.length)return '';
+  const item=productGallery[0];
+  const disabled=productGallery.length<2?' disabled':'';
+  const caption=String(item.caption||'').trim();
+  const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
+  return '<div class="detail-gallery">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
+    '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
+    '</div><span class="detail-source" id="productGallerySource">'+esc(source)+'</span>';
+}
+function stepProductGallery(delta){
+  if(productGallery.length<2)return;
+  productGalleryIndex=(productGalleryIndex+delta+productGallery.length)%productGallery.length;
+  const item=productGallery[productGalleryIndex];
+  const image=document.getElementById('productGalleryImage');
+  const source=document.getElementById('productGallerySource');
+  if(image)image.src=item.url;
+  if(source){
+    const caption=String(item.caption||'').trim();
+    source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
+  }
+}
 function specificationFieldLabel(value){
   const labels={
     nut:'Nut',
@@ -5237,7 +5353,7 @@ function claimCard(c){
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -5372,8 +5488,11 @@ async function showIndividual(id){
   const latest=observations.length?observations[observations.length-1]:null;
   const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
   const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const galleryImages=d.gallery_images||[];
   let out='';
-  if(i.representative_image_url){
+  if(galleryImages.length){
+    out+=productGalleryHtml(galleryImages,i.model||'Guitar');
+  }else if(i.representative_image_url){
     out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(imageListing){
     const imageUrl=String(imageListing.source_url||'');
