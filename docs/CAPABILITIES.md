@@ -198,3 +198,7 @@ Individual Snapshot再構築
 - Former Owner OwnershipはPositiveの場合だけOwnership Snapshot再生に参加する
 - Current Owner不在時はFormer Owner ClaimをVerificationできるUserがいないため、第三者申告だけでは最後のOwner情報を書き換えられない
 - 既存DBで旧Former Ownerフローから作成済みのAcquire / Releaseペアは、former_ownerのuser_guitars日付と一致する場合にUnverifiedペアへ移行する
+
+
+- Listing Claimは常に verification_status='positive' とし、Owner Verification対象外
+- 既存DBのListing Claimも起動時マイグレーションでPositiveへ補正する
