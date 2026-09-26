@@ -146,3 +146,43 @@ def test_ownership_kind_is_validated(tmp_path: Path):
         assert "ownership_kind" in str(exc)
     else:
         raise AssertionError("Invalid ownership_kind was accepted")
+
+
+def test_backdated_release_keeps_effective_owner_in_owned_guitars(tmp_path: Path):
+    repository = Repository(tmp_path / "chronicle-backdated-release.db")
+    repository.init_db()
+
+    user_id = repository.create_user("Owner")
+    individual_id, _, _, _ = repository.create_initial_listing_claim(
+        user_id,
+        manufacturer="Fender",
+        model="Stratocaster",
+        serial_number="OWN-BACKDATED-001",
+        media_storage_path="test/ownership-backdated.jpg",
+        occurred_at="2026-01-01",
+    )
+
+    repository.create_ownership_claim(
+        user_id,
+        individual_id,
+        ownership_kind="acquire",
+        occurred_at="2026-03-01",
+    )
+    repository.create_ownership_claim(
+        user_id,
+        individual_id,
+        ownership_kind="release",
+        occurred_at="2026-02-01",
+    )
+
+    individual, _ = repository.get_individual(individual_id)
+    assert individual is not None
+    assert int(individual["current_owner_user_id"]) == user_id
+
+    _user, guitars = repository.get_user(user_id)
+    guitar = next(
+        row
+        for row in guitars
+        if int(row["individual_id"]) == individual_id
+    )
+    assert guitar["ownership_status"] == "current_owner"
