@@ -208,3 +208,15 @@ Individual Snapshot再構築
 - 実データ表示: Avatar / Display Name / You / Location / Owned / Formerly Owned / Claims
 - Notifications / Messages / View Profile は将来機能へのダミー入口として表示し、現時点では無反応
 - Edit Your Chronicle は既存の /user-view/edit への実動入口
+
+
+## In-app Notifications
+- User ViewのNotificationsはYGC内部通知として実装する
+- Owned Guitarに他UserがClaimを追加した場合、Current Ownerへ claim_added 通知を作成する
+- Former OwnerのAcquire/Releaseペアは1件の通知として扱う
+- Owner VerificationでClaimの状態が変更された場合、Claim authorへ claim_verified 通知を作成する
+- 自分自身がOwned Guitarへ追加したClaimでは通知を作成しない
+- Current OwnerがYGC Userでない場合はアプリ内通知のrecipientが存在しないため通知を作成しない
+- User Viewでは未読件数、通知一覧、個別既読、全件既読を提供する
+- 通知クリックで対象IndividualのProduct Detailへ移動する
+- Push通知は未実装。将来の外部Push配信層とは分離する
