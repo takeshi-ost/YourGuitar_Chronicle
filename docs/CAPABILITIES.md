@@ -220,3 +220,14 @@ Individual Snapshot再構築
 - User Viewでは未読件数、通知一覧、個別既読、全件既読を提供する
 - 通知クリックで対象IndividualのProduct Detailへ移動する
 - Push通知は未実装。将来の外部Push配信層とは分離する
+
+
+## User Profile Page
+- /users/{user_id} で本人・他User共通のプロフィールページを表示する
+- 実データ: Avatar / Display Name / Account Type / Location / Member Since / Owned / Formerly Owned / Claims / Owned Guitars / Formerly Owned Guitars
+- Followers / Following は現時点では 0 のダミー表示
+- Bio / Recent Activity は将来機能のプレースホルダー
+- 他User閲覧時の Follow / Message は現時点では無反応のダミー
+- 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
+- User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
+- User Profileのギターカードから対象IndividualをUser Viewで直接開ける
