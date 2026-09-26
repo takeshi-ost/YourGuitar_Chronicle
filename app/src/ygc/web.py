@@ -426,6 +426,26 @@ class SpecificationClaimRequest(BaseModel):
     )
 
 
+class OwnershipClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    ownership_kind: str = Field(
+        default="acquire",
+        max_length=20,
+    )
+    occurred_at: str | None = Field(
+        default=None,
+        max_length=40,
+    )
+    previous_owner_text: str | None = Field(
+        default=None,
+        max_length=160,
+    )
+    body: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 class ReleaseClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     reason: str | None = Field(
@@ -2306,6 +2326,37 @@ def api_current_specifications(
     ]
 
 
+@app.post("/api/individuals/{individual_id}/ownership-claim")
+def api_ownership_claim(
+    individual_id: int,
+    request: OwnershipClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+
+    try:
+        observation_id, claim_id = repository.create_ownership_claim(
+            request.user_id,
+            individual_id,
+            ownership_kind=request.ownership_kind,
+            occurred_at=request.occurred_at,
+            previous_owner_text=request.previous_owner_text,
+            body=request.body,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    user, guitars = repository.get_user(request.user_id)
+    return {
+        "observation_id": observation_id,
+        "claim_id": claim_id,
+        "user": _row_dict(user),
+        "guitars": [_row_dict(row) for row in guitars],
+    }
+
+
 @app.post("/api/individuals/{individual_id}/release-claim")
 def api_release_claim(
     individual_id: int,
@@ -3308,7 +3359,15 @@ function claimCard(c){
   const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
-  if(c.claim_type==='owner_change'){
+  if(c.claim_type==='ownership'){
+    const kind=String(c.ownership_kind||'acquire');
+    if(kind==='release'){
+      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    }else{
+      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+    }
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='release'){
@@ -3552,10 +3611,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <div class="modal-backdrop" id="ownerClaimModal" onclick="closeOwnerClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Add to Your Chronicle</h2>
+    <h2>Ownership</h2>
     <div class="sub" id="ownerClaimGuitar" style="margin-bottom:14px"></div>
     <div class="form-row">
-      <label class="form-label" for="ownerClaimDate">取得日 / Owner Change Date</label>
+      <label class="form-label" for="ownerClaimKind">Tag</label>
+      <select id="ownerClaimKind">
+        <option value="acquire">Acquire</option>
+        <option value="transfer">Transfer</option>
+        <option value="inherit">Inherit</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="ownerClaimDate">Date</label>
       <input id="ownerClaimDate" type="date">
     </div>
     <div class="form-row">
@@ -3566,7 +3633,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <label class="form-label" for="ownerClaimBody">Claimメモ（任意）</label>
       <textarea id="ownerClaimBody" placeholder="この個体を所有することになった経緯など"></textarea>
     </div>
-    <div class="sub">登録すると Owner Change Observation と ownership Claim が作成され、このギターがあなたのChronicleに追加されます。</div>
+    <div class="sub">Ownership Claimを作成し、このギターをあなたのChronicleに追加します。</div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeOwnerClaim()">キャンセル</button>
       <button id="ownerClaimSubmit" onclick="submitOwnerClaim()">Add to Your Chronicle</button>
@@ -3770,10 +3837,18 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
+    : (c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
-  if(c.claim_type==='owner_change'){
+  if(c.claim_type==='ownership'){
+    const kind=String(c.ownership_kind||'acquire');
+    if(kind==='release'){
+      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    }else{
+      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+    }
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='release'){
@@ -3971,6 +4046,7 @@ function openOwnerClaim(individualId){
   document.getElementById('ownerClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
+  document.getElementById('ownerClaimKind').value='acquire';
   document.getElementById('ownerClaimDate').value='';
   document.getElementById('ownerClaimPrevious').value='';
   document.getElementById('ownerClaimBody').value='';
@@ -3988,12 +4064,13 @@ async function submitOwnerClaim(){
   try{
     const body={
       user_id:Number(activeUser.user.id),
-      acquired_at:document.getElementById('ownerClaimDate').value||null,
+      ownership_kind:document.getElementById('ownerClaimKind').value,
+      occurred_at:document.getElementById('ownerClaimDate').value||null,
       previous_owner_text:document.getElementById('ownerClaimPrevious').value.trim()||null,
       body:document.getElementById('ownerClaimBody').value.trim()||null
     };
     const individualId=pendingOwnerClaimIndividualId;
-    const d=await jfetch('/api/individuals/'+individualId+'/owner-change-claim',{
+    const d=await jfetch('/api/individuals/'+individualId+'/ownership-claim',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)
@@ -4743,10 +4820,18 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type));
+    : (c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
-  if(c.claim_type==='owner_change'){
+  if(c.claim_type==='ownership'){
+    const kind=String(c.ownership_kind||'acquire');
+    if(kind==='release'){
+      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+    }else{
+      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+    }
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }else if(c.claim_type==='owner_change'){
     body='<div><strong>'+esc(c.author_name||'User')+' has become the owner.</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='release'){
@@ -5025,12 +5110,14 @@ async function submitReleaseClaim(){
   const button=document.getElementById('releaseClaimSubmit');
   button.disabled=true;
   try{
-    const d=await jfetch('/api/individuals/'+selectedIndividualId+'/release-claim',{
+    const d=await jfetch('/api/individuals/'+selectedIndividualId+'/ownership-claim',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         user_id:Number(activeUser.user.id),
-        reason:document.getElementById('releaseClaimReason').value.trim()||null
+        ownership_kind:'release',
+        occurred_at:null,
+        body:document.getElementById('releaseClaimReason').value.trim()||null
       })
     });
     activeUser={user:d.user,guitars:d.guitars};
