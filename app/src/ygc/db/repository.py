@@ -2388,6 +2388,45 @@ class Repository:
                 guitars,
             )
 
+    def get_user_summary(
+        self,
+        user_id: int,
+    ) -> dict[str, int]:
+        with self.connect() as con:
+            row = con.execute(
+                """
+                SELECT
+                    (
+                        SELECT COUNT(*)
+                        FROM user_guitars
+                        WHERE user_id = ?
+                          AND ownership_status = 'current_owner'
+                    ) AS owned_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM user_guitars
+                        WHERE user_id = ?
+                          AND ownership_status = 'former_owner'
+                    ) AS former_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM claims
+                        WHERE author_user_id = ?
+                          AND status = 'active'
+                    ) AS claim_count
+                """,
+                (
+                    user_id,
+                    user_id,
+                    user_id,
+                ),
+            ).fetchone()
+            return {
+                "owned_count": int(row["owned_count"] or 0),
+                "former_count": int(row["former_count"] or 0),
+                "claim_count": int(row["claim_count"] or 0),
+            }
+
     def update_user(
         self,
         user_id: int,
