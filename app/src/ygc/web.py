@@ -3882,9 +3882,16 @@ input,button{font:inherit}
 input{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}
 button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}
 button.secondary{background:#2a3036;color:var(--text)}
-.edit-chronicle{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;padding:14px 16px;margin-bottom:18px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
-.edit-chronicle:hover{background:#20252a}
-.edit-chronicle-title{font-weight:700}.edit-chronicle-sub{font-size:12px;color:var(--muted);font-weight:400}
+.account-hub{width:100%;display:grid;grid-template-columns:minmax(240px,1.15fr) auto minmax(300px,1fr);gap:18px;align-items:center;padding:14px 16px;margin-bottom:18px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
+.account-hub-user{display:flex;align-items:center;gap:12px;min-width:0}
+.account-hub-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
+.account-hub-user-copy{min-width:0}.account-hub-name-row{display:flex;align-items:center;gap:7px;min-width:0}.account-hub-name{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:2px 6px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.account-hub-location{font-size:11px;color:var(--muted);margin-top:3px}
+.account-hub-summary{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#14171a}
+.account-hub-stat{min-width:82px;padding:8px 12px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
+.account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
+@media(max-width:1050px){.account-hub{grid-template-columns:minmax(230px,1fr) auto}.account-hub-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:650px){.account-hub{grid-template-columns:1fr}.account-hub-summary{width:100%}.account-hub-stat{flex:1;min-width:0}.account-hub-actions{grid-column:auto}}
 .table-wrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{text-align:left;border-bottom:1px solid var(--line);padding:8px 7px;vertical-align:top}
@@ -3963,13 +3970,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <h1>Your Guitar Chronicle <span class="sub">User View</span></h1>
 </header>
 <main>
-<button class="edit-chronicle" onclick="window.location.href='/user-view/edit'">
-  <span>
-    <span class="edit-chronicle-title">Edit Your Chronicle</span><br>
-    <span class="edit-chronicle-sub" id="editChronicleSub">プロフィールや所有ギターを編集</span>
-  </span>
-  <span>›</span>
-</button>
+<div class="account-hub" id="accountHub">
+  <div class="account-hub-empty">User情報を読み込み中...</div>
+</div>
 
 <div class="grid">
 <section>
@@ -4214,21 +4217,56 @@ async function jfetch(url,opt={}){
   if(!r.ok)throw new Error(d.detail||r.statusText);
   return d;
 }
+function renderAccountHub(){
+  const hub=document.getElementById('accountHub');
+  if(!hub)return;
+  if(!activeUser||!activeUser.user){
+    hub.innerHTML='<div class="account-hub-empty">Userが選択されていません。Edit Your ChronicleからUserを選択してください。</div>'+
+      '<div></div><div class="account-hub-actions"><button class="account-hub-action primary" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button></div>';
+    return;
+  }
+  const u=activeUser.user;
+  const summary=activeUser.summary||{};
+  const guitars=activeUser.guitars||[];
+  const owned=summary.owned_count??guitars.filter(g=>g.ownership_status==='current_owner').length;
+  const former=summary.former_count??guitars.filter(g=>g.ownership_status==='former_owner').length;
+  const claims=summary.claim_count??0;
+  const location=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
+  hub.innerHTML=
+    '<div class="account-hub-user">'+
+      '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<div class="account-hub-user-copy">'+
+        '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span><span class="account-hub-you">You</span></div>'+
+        '<div class="account-hub-location">'+esc(location)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="account-hub-summary">'+
+      '<div class="account-hub-stat"><span class="account-hub-stat-value">'+owned+'</span><span class="account-hub-stat-label">Owned</span></div>'+
+      '<div class="account-hub-stat"><span class="account-hub-stat-value">'+former+'</span><span class="account-hub-stat-label">Formerly Owned</span></div>'+
+      '<div class="account-hub-stat"><span class="account-hub-stat-value">'+claims+'</span><span class="account-hub-stat-label">Claims</span></div>'+
+    '</div>'+
+    '<div class="account-hub-actions">'+
+      '<button class="account-hub-action" type="button">Notifications <span class="account-hub-count">0</span></button>'+
+      '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
+      '<button class="account-hub-action" type="button">View Profile</button>'+
+      '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button>'+
+    '</div>';
+}
+
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
-    document.getElementById('editChronicleSub').textContent='プロフィールや所有ギターを編集';
+    renderAccountHub();
     return;
   }
   try{
     activeUser=await jfetch('/api/users/'+id);
-    const u=activeUser.user;
-    document.getElementById('editChronicleSub').textContent=(u&&u.display_name?u.display_name+' — ':'')+'プロフィールや所有ギターを編集';
   }catch(e){
     activeUser=null;
     localStorage.removeItem(ACTIVE_USER_KEY);
   }
+  renderAccountHub();
 }
 
 async function loadIndividuals(){
