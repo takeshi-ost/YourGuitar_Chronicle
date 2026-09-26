@@ -4415,7 +4415,11 @@ function claimHeaderHtml(c,type,eventDate){
   const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
   const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
   const verifiableTypes=new Set(['specification','incident','event','media']);
-  if(isOtherUser&&verifiableTypes.has(String(c.claim_type||''))){
+  const isFormerOwnerOwnership=(
+    c.claim_type==='ownership'
+    && String(c.ownership_source||'')==='former_owner'
+  );
+  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership)){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
@@ -5982,7 +5986,11 @@ function claimHeaderHtml(c,type,eventDate){
   const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
   const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
   const verifiableTypes=new Set(['specification','incident','event','media']);
-  if(isOtherUser&&verifiableTypes.has(String(c.claim_type||''))){
+  const isFormerOwnerOwnership=(
+    c.claim_type==='ownership'
+    && String(c.ownership_source||'')==='former_owner'
+  );
+  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership)){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
