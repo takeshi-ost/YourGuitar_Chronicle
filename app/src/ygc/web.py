@@ -2792,6 +2792,47 @@ def api_claim_vote(
     return {"ok": True}
 
 
+@app.get("/api/users/{user_id}/notifications")
+def api_user_notifications(
+    user_id: int,
+) -> dict[str, Any]:
+    repository = repo()
+    user, _guitars = repository.get_user(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+    return {
+        "unread_count": repository.unread_notification_count(user_id),
+        "notifications": [
+            _row_dict(row)
+            for row in repository.list_notifications(user_id)
+        ],
+    }
+
+
+@app.post("/api/users/{user_id}/notifications/{notification_id}/read")
+def api_read_notification(
+    user_id: int,
+    notification_id: int,
+) -> dict[str, bool]:
+    if not repo().mark_notification_read(notification_id, user_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Notification not found",
+        )
+    return {"ok": True}
+
+
+@app.post("/api/users/{user_id}/notifications/read-all")
+def api_read_all_notifications(
+    user_id: int,
+) -> dict[str, int]:
+    count = repo().mark_all_notifications_read(user_id)
+    return {"updated": count}
+
+
 @app.get("/api/users")
 def api_users() -> list[dict[str, Any]]:
     return [
