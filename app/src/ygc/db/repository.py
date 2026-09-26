@@ -2340,7 +2340,10 @@ class Repository:
                         WHERE c.status = 'active'
                           AND (
                                 (
-                                    c.claim_type = 'owner_change'
+                                    c.claim_type IN (
+                                        'owner_change',
+                                        'ownership'
+                                    )
                                     AND c.value_text = ?
                                 )
                                 OR EXISTS (
