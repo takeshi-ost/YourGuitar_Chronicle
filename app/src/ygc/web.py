@@ -5395,12 +5395,13 @@ function claimHeaderHtml(c,type,eventDate){
   let response='';
   const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
   const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
-  if(isOtherUser){
-    const current=c.viewer_stance||'neutral';
+  const verifiableTypes=new Set(['specification','incident','event','media']);
+  if(isOtherUser&&verifiableTypes.has(String(c.claim_type||''))){
+    const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
-      '<option value="endorse"'+(current==='endorse'?' selected':'')+'>positive</option>'+
-      '<option value="dispute"'+(current==='dispute'?' selected':'')+'>negative</option>'+
-      '<option value="neutral"'+(current==='neutral'?' selected':'')+'>Unverified</option>'+
+      '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
+      '<option value="negative"'+(current==='negative'?' selected':'')+'>Negative</option>'+
+      '<option value="unverified"'+(current==='unverified'?' selected':'')+'>Unverified</option>'+
       '</select>';
   }
   return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
@@ -5564,7 +5565,7 @@ async function setClaimResponse(claimId,stance){
     });
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }catch(e){
-    alert('Claim評価の更新に失敗しました。\n'+e.message);
+    alert('Owner Verificationの更新に失敗しました。\n'+e.message);
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }
 }
