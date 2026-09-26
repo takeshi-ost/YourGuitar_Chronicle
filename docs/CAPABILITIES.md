@@ -140,7 +140,8 @@ Individual Snapshot再構築
 
 - Media ClaimはProduct Detailの Add Claim → Media から作成する
 - 初期版は画像のみ対応し、JPEG / PNG / WebP / GIF、最大12MBとする
-- Media ClaimはImage / Date / Captionを記録し、画像はChronicleカード内で主コンテンツとして表示する
+- Media Claimは1 Claimにつき画像を最大10枚まで追加でき、Date / Captionを共通情報として記録する
+- 画像選択欄は1枚選択すると次の欄が表示される方式とし、Chronicleカード内では全画像を小さなサムネイル列として表示する
 - Media Claimは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
 - Media Claimカードは暗いアンバー系、Tagバッジは同系統の明るい色で表示する
 - 将来の動画・音声対応を見据え、media_assetsのmedia_typeを利用して拡張可能な構造を維持する
@@ -149,3 +150,5 @@ Individual Snapshot再構築
 - Product Detail上部ではアップロード済み画像をギャラリー表示し、代表画像を先頭に左右の三角ボタンで循環閲覧できる
 - ギャラリー対象はYGC内に保存された画像（初期登録の代表画像およびMedia Claim画像）で、外部Listing画像は含めない
 - Media Claimカード内の画像は履歴確認用の小さなサムネイル表示とする
+
+- Product Detail上部の代表画像ギャラリーは、画像の左右に小さく控えめな三角ボタンを固定配置して切り替える
