@@ -2185,6 +2185,94 @@ def api_media(
     )
 
 
+@app.post("/api/individuals/{individual_id}/media-claim")
+async def api_media_claim(
+    individual_id: int,
+    user_id: int = Form(...),
+    image: UploadFile = File(...),
+    occurred_at: str | None = Form(None),
+    caption: str | None = Form(None),
+) -> dict[str, Any]:
+    repository = repo()
+
+    content_type = (
+        image.content_type
+        or ""
+    ).lower()
+    extension = ALLOWED_IMAGE_TYPES.get(
+        content_type
+    )
+    if not extension:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Media image must be JPEG, PNG, WebP, or GIF"
+            ),
+        )
+
+    image_bytes = await image.read(
+        MAX_IMAGE_BYTES + 1
+    )
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="Media image is empty",
+        )
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Media image must be 12 MB or smaller",
+        )
+
+    MEDIA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    stored_name = uuid.uuid4().hex + extension
+    stored_path = MEDIA_DIR / stored_name
+    relative_storage_path = (
+        Path("media")
+        / stored_name
+    ).as_posix()
+
+    try:
+        stored_path.write_bytes(
+            image_bytes
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save Media image",
+        ) from exc
+
+    try:
+        claim_id, media_asset_id = (
+            repository.create_media_claim(
+                user_id,
+                individual_id,
+                storage_path=relative_storage_path,
+                original_filename=image.filename,
+                mime_type=content_type,
+                occurred_at=occurred_at,
+                caption=caption,
+            )
+        )
+    except ValueError as exc:
+        _safe_unlink(stored_path)
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+    except Exception:
+        _safe_unlink(stored_path)
+        raise
+
+    return {
+        "claim_id": claim_id,
+        "media_asset_id": media_asset_id,
+    }
+
+
 @app.post("/api/individuals/{individual_id}/event-claim")
 def api_event_claim(
     individual_id: int,
@@ -3070,12 +3158,14 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .claim-card.claim-type-specification{background:#101820;border-color:#29465d}
 .claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
 .claim-card.claim-type-event{background:#1b1422;border-color:#4d3560}
+.claim-card.claim-type-media{background:#21190d;border-color:#5b4724}
 .claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
 .claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
 .claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}
-.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
+.claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
-.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
@@ -3420,6 +3510,7 @@ function claimVisualTypeClass(c){
   if(c.claim_type==='specification')return ' claim-type-specification';
   if(c.claim_type==='incident')return ' claim-type-incident';
   if(c.claim_type==='event')return ' claim-type-event';
+  if(c.claim_type==='media')return ' claim-type-media';
   return '';
 }
 function claimCard(c){
@@ -3462,6 +3553,9 @@ function claimCard(c){
     const items=c.identity_items||[];
     body=items.map(item=>'<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>').join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
+  }else if(c.claim_type==='media'){
+    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
@@ -3481,7 +3575,7 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.evidence_media_id)body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+  if(c.evidence_media_id&&c.claim_type!=='media')body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span><button class="claim-vote bad" onclick="deleteClaim('+c.id+')">Delete</button></div>';
@@ -3635,15 +3729,17 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-card.claim-type-specification{background:#101820;border-color:#29465d}
 .claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
 .claim-card.claim-type-event{background:#1b1422;border-color:#4d3560}
+.claim-card.claim-type-media{background:#21190d;border-color:#5b4724}
 .claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
 .claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
 .claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}
-.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
+.claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
-.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
@@ -3932,6 +4028,7 @@ function claimVisualTypeClass(c){
   if(c.claim_type==='specification')return ' claim-type-specification';
   if(c.claim_type==='incident')return ' claim-type-incident';
   if(c.claim_type==='event')return ' claim-type-event';
+  if(c.claim_type==='media')return ' claim-type-media';
   return '';
 }
 function claimCard(c){
@@ -3981,6 +4078,9 @@ function claimCard(c){
       esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>'
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
+  }else if(c.claim_type==='media'){
+    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
@@ -4005,7 +4105,7 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.evidence_media_id){
+  if(c.evidence_media_id&&c.claim_type!=='media'){
     body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
@@ -4298,15 +4398,17 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-card.claim-type-specification{background:#101820;border-color:#29465d}
 .claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}
 .claim-card.claim-type-event{background:#1b1422;border-color:#4d3560}
+.claim-card.claim-type-media{background:#21190d;border-color:#5b4724}
 .claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}
 .claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}
 .claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}
-.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}.identity-correction-card{margin-left:42px;border-style:dashed}
+.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
+.claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
-.claim-memo{margin-top:8px;white-space:pre-wrap}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
@@ -4443,6 +4545,31 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeClaimEdit()">キャンセル</button>
       <button id="claimEditSubmit" onclick="submitClaimEdit()">更新</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Media Claim</h2>
+    <div class="sub" id="mediaClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row full">
+        <label class="form-label" for="mediaClaimImage">Image</label>
+        <input id="mediaClaimImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="mediaClaimDate">Date</label>
+        <input id="mediaClaimDate" type="date">
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="mediaClaimCaption">Caption</label>
+        <textarea id="mediaClaimCaption" maxlength="2000" placeholder="Caption or detail"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeMediaClaim()">キャンセル</button>
+      <button id="mediaClaimSubmit" onclick="submitMediaClaim()">Claimを追加</button>
     </div>
   </div>
 </div>
@@ -5059,6 +5186,7 @@ function claimVisualTypeClass(c){
   if(c.claim_type==='specification')return ' claim-type-specification';
   if(c.claim_type==='incident')return ' claim-type-incident';
   if(c.claim_type==='event')return ' claim-type-event';
+  if(c.claim_type==='media')return ' claim-type-media';
   return '';
 }
 function claimCard(c){
@@ -5108,6 +5236,9 @@ function claimCard(c){
       esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>'
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
+  }else if(c.claim_type==='media'){
+    if(c.evidence_media_id)body+='<img class="claim-media-image" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
     body='<div><strong>'+esc(title)+'</strong></div>';
@@ -5132,7 +5263,7 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.evidence_media_id){
+  if(c.evidence_media_id&&c.claim_type!=='media'){
     body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
@@ -5292,7 +5423,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -5337,8 +5468,68 @@ function chooseClaimType(type){
     openIncidentClaim(selectedIndividualId);
   }else if(type==='event'){
     openEventClaim(selectedIndividualId);
+  }else if(type==='media'){
+    openMediaClaim(selectedIndividualId);
   }else if(type==='ownership'){
     openOwnershipClaim(selectedIndividualId,'add_claim');
+  }
+}
+
+function openMediaClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('mediaClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('mediaClaimImage').value='';
+  document.getElementById('mediaClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('mediaClaimCaption').value='';
+  document.getElementById('mediaClaimModal').classList.add('open');
+}
+function closeMediaClaim(event){
+  if(event&&event.target&&event.target.id!=='mediaClaimModal')return;
+  document.getElementById('mediaClaimModal').classList.remove('open');
+}
+async function submitMediaClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const input=document.getElementById('mediaClaimImage');
+  const image=input.files&&input.files[0];
+  if(!image){
+    alert('画像ファイルを選択してください。');
+    return;
+  }
+  if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){
+    alert('JPEG / PNG / WebP / GIF画像を選択してください。');
+    return;
+  }
+  if(image.size>12*1024*1024){
+    alert('画像は12MB以下にしてください。');
+    return;
+  }
+  const form=new FormData();
+  form.append('user_id',String(activeUser.user.id));
+  form.append('image',image);
+  form.append('occurred_at',document.getElementById('mediaClaimDate').value||'');
+  form.append('caption',document.getElementById('mediaClaimCaption').value.trim());
+  const button=document.getElementById('mediaClaimSubmit');
+  button.disabled=true;
+  try{
+    const r=await fetch('/api/individuals/'+selectedIndividualId+'/media-claim',{
+      method:'POST',
+      body:form
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||r.statusText);
+    closeMediaClaim();
+    await showIndividual(selectedIndividualId);
+  }catch(e){
+    alert('Media Claimの登録に失敗しました。\\n'+e.message);
+  }finally{
+    button.disabled=false;
   }
 }
 
