@@ -171,3 +171,10 @@ Individual Snapshot再構築
 - Third-party MediaはPositiveのときだけProduct Detail上部の画像ギャラリーへ反映する
 - Negative / Unverified ClaimもChronicle上の記録としては表示する
 - Listing / Ownership / Identity CorrectionはこのOwner Verificationフローの対象外とする
+
+
+- Owner VerificationによるChronicle表示:
+  - Positive: 通常のClaimカードを表示
+  - Unverified: Claimタグだけを表示し、クリックでClaim全文をポップアップ表示
+  - Negative: ◉だけを表示し、クリックでClaim全文をポップアップ表示
+- ポップアップ内には通常カードと同じ内容を表示し、現在OwnerはそこでPositive / Negative / Unverifiedを変更できる
