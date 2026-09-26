@@ -144,3 +144,8 @@ Individual Snapshot再構築
 - Media Claimは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
 - Media Claimカードは暗いアンバー系、Tagバッジは同系統の明るい色で表示する
 - 将来の動画・音声対応を見据え、media_assetsのmedia_typeを利用して拡張可能な構造を維持する
+
+
+- Product Detail上部ではアップロード済み画像をギャラリー表示し、代表画像を先頭に左右の三角ボタンで循環閲覧できる
+- ギャラリー対象はYGC内に保存された画像（初期登録の代表画像およびMedia Claim画像）で、外部Listing画像は含めない
+- Media Claimカード内の画像は履歴確認用の小さなサムネイル表示とする
