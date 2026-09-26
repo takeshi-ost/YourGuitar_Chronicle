@@ -1071,7 +1071,11 @@ class Repository:
                 user = (
                     con.execute(
                         """
-                        SELECT display_name, account_type
+                        SELECT
+                            display_name,
+                            account_type,
+                            location_country,
+                            location_region
                         FROM users
                         WHERE id = ?
                         """,
@@ -1096,6 +1100,20 @@ class Repository:
                     else None
                 )
                 state["current_owner_source_url"] = None
+                state["location_country"] = (
+                    str(user["location_country"]).strip()
+                    if user
+                    and user["location_country"]
+                    and str(user["location_country"]).strip()
+                    else None
+                )
+                state["location_region"] = (
+                    str(user["location_region"]).strip()
+                    if user
+                    and user["location_region"]
+                    and str(user["location_region"]).strip()
+                    else None
+                )
             elif claim_type == "release":
                 state["current_owner_name"] = "Unknown"
                 state["current_owner_type"] = "unknown"
