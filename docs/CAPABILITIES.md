@@ -123,3 +123,9 @@ Individual Snapshot再構築
 - Chronicle上のOwnership Claimバッジは Ownership / Acquire のようにType名を重ねず、Acquire / Release等のTag名だけを表示する
 
 - Ownership Claimカードの主文はTag別に表示する: Acquire=`A became the owner of this product.` / Release=`A released this product.` / Transfer=`B acquired this product from A.` / Inherit=`B inherited this product from A.`。AはClaim作成者、BはOwnership入力の関係者。
+
+
+- Incident ClaimはProduct Detailの Add Claim → Incident から作成する
+- Incident Tagは Damage / Lost / Theft。DateとDetailを記録する
+- Incidentは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
+- Chronicle上のIncident ClaimバッジはIncidentというType名ではなくDamage / Lost / TheftのTag名を表示する
