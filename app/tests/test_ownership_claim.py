@@ -56,6 +56,8 @@ def test_transfer_release_and_inherit_end_ownership(tmp_path: Path):
         ended = repository.rebuild_individual_snapshot(individual_id)
         assert ended["current_owner_name"] == "Unknown"
         assert ended["current_owner_user_id"] is None
+        assert ended["location_country"] is None
+        assert ended["location_region"] is None
 
         claims = [
             dict(row)
