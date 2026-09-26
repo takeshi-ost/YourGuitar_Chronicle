@@ -202,3 +202,9 @@ Individual Snapshot再構築
 
 - Listing Claimは常に verification_status='positive' とし、Owner Verification対象外
 - 既存DBのListing Claimも起動時マイグレーションでPositiveへ補正する
+
+
+- User View上部のアカウントハブは本人向けのホームヘッダーとして表示する
+- 実データ表示: Avatar / Display Name / You / Location / Owned / Formerly Owned / Claims
+- Notifications / Messages / View Profile は将来機能へのダミー入口として表示し、現時点では無反応
+- Edit Your Chronicle は既存の /user-view/edit への実動入口
