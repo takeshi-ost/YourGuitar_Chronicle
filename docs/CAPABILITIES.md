@@ -159,3 +159,15 @@ Individual Snapshot再構築
 - DeactivateされたClaimは通常のChronicle、Snapshot計算、Product ListのClaims件数から除外する
 - Media ClaimをDeactivateした場合、そのClaimに紐づく画像はProduct Detail上部の画像ギャラリーからも除外する
 - Listing / Identity Correctionは従来通り通常Edit対象外のため、このDelete Claim操作の対象外とする
+
+
+- Add Claimは現在Owner / 非Ownerのどちらにも表示し、非Ownerは Specification/Repair / Incident / Event / Media を追加できる
+- Ownership Claimは現在Ownerのみ追加できる
+- Specification/Repair / Incident / Event / Media には Owner Verification を適用する
+- 現在Owner本人が作成したClaimは作成時から verification_status='positive' とし、Owner Verification UIは表示しない
+- 非Ownerが作成したClaimは必ず verification_status='unverified' で開始する
+- 現在Ownerだけが第三者Claimを Positive / Negative / Unverified に変更できる
+- Third-party Specification/RepairはPositiveのときだけSnapshot / Current Specificationへ反映する
+- Third-party MediaはPositiveのときだけProduct Detail上部の画像ギャラリーへ反映する
+- Negative / Unverified ClaimもChronicle上の記録としては表示する
+- Listing / Ownership / Identity CorrectionはこのOwner Verificationフローの対象外とする
