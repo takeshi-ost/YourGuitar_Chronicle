@@ -111,3 +111,6 @@ Individual Snapshot再構築
 - **Observation**: Reverb等の取得元・証拠・provenance
 
 このため、入力元が増えても同じClaim-centeredパイプラインへ接続できます。
+
+
+- UI表記では `Individuals` を `Product List`、`Individual Detail` を `Product Detail` とする。内部データ名・API・実装名は従来どおり `individual` / `individuals` を使用する。
