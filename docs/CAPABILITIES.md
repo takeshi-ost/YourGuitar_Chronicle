@@ -1,0 +1,108 @@
+# YGC Capabilities
+
+Your Guitar Chronicle で現在できることを、**一般ユーザー**と**管理者（Browser Console）**に分けて簡潔にまとめます。
+
+> **更新ルール**
+> このドキュメントは現行機能の一覧です。機能の追加・削除・仕様変更を行う場合は、同じ変更セットでこの文書も更新します。
+
+## ユーザーとしてできること
+
+### アカウント
+- User / Shop アカウントを作成する
+- Display Name、Account Type、Country、Regionを編集する
+- アバター画像を登録する
+- 自分に紐づくギターを確認する
+
+### ギターを探す・見る
+- 登録済みIndividualを一覧・検索する
+- Maker / Model / Finish / Year / Serialなどの現在値を見る
+- Current Owner / Locationを見る
+- 現在のSpecificationを見る
+- ChronicleとしてClaim履歴を見る
+- Chronicleを出来事順 / 入力順で切り替える
+
+### 自分のギターを登録する
+- 新しいギターを登録する
+  - Maker / Model / Finish / Year / Serial
+  - 代表画像
+  - Claim memo
+- 最初のListing Claimを作成し、自分を初期Ownerとして登録する
+- 同一Maker / Model / SerialのIndividualが既に存在する場合は重複作成を防止する
+
+### 既存Individualを自分のChronicleへ追加する
+- 「Add to Your Chronicle」からOwner Changeを作成する
+- 取得日、以前の所有者・入手元、メモを記録する
+
+### Claimを追加・編集する
+- Specification Claimを追加する
+- Repair Claimを追加する
+- 自分が現在OwnerのギターをReleaseする
+- 自分が作成した編集可能なClaimを編集する
+- Listing Claimを直接編集せず、Identity Correctionとして訂正する
+- Identity Correction時はMaker / Model / Serialの重複を再チェックする
+
+### Claimへの参加
+- ClaimへVoteする
+- ClaimのEvidenceや出典を確認する
+
+## 管理者としてできること
+
+管理者操作はローカルの **Phase 0 Browser Console** を前提とします。
+
+### Reverb収集
+- Reverb API Tokenを設定する
+- 複数クエリをBatch Crawlする
+- Year Min / Year Max / Limit / Workersを指定する
+- 取得済みListing IDをスキップする
+- Detail判定済みの対象外Listingを期限付きキャッシュして再取得を抑制する
+- Crawl進行状況・query別結果を確認する
+
+### Individual / Claim確認
+- 全Individualを一覧・検索・ソートする
+- Current Snapshot、Specification、Chronicleを確認する
+- Reverb由来・ユーザー由来を同じClaim-centered構造で確認する
+
+### 管理用削除
+- Claimをハード削除する
+  - 削除後はIndividual Snapshotを再構築する
+  - 最後のactive Listing Claim単体は削除不可
+- Individualをハード削除する
+  - 関連Claim、Observation、User link、Media DB recordなども削除する
+  - 実験データのSerial重複を解消できる
+
+### DB管理
+- SQLite DBをバックアップする
+- バックアップからDBを復元する
+- DBを初期化する
+- Claim Migration / Snapshot Rebuildを実行する
+- 既存Reverb Listing Claimの不足項目をBackfillする
+- Claim-centered構造のreadinessを確認する
+
+### ユーザー管理
+- アカウントを作成・選択する
+- User Account情報を確認・編集する
+- 所有ギターとの紐づきを確認する
+
+## 共通のデータ構造
+
+Reverbからの自動登録とユーザーによる手動登録は、入口だけが異なり、どちらも基本的に同じ流れを通ります。
+
+```text
+入力
+  ↓
+Listing Claim用データへ正規化
+  ↓
+Individual照合 / 作成
+  ↓
+Claim保存
+  ↓
+必要なProvenance保存
+  ↓
+Individual Snapshot再構築
+```
+
+- **Claim**: 履歴・意味情報のSource of Truth
+- **Individual**: active Claimから作られる現在状態のSnapshot
+- **Observation**: Reverb等の取得元・証拠・provenance
+
+このため、入力元が増えても同じClaim-centeredパイプラインへ接続できます。
