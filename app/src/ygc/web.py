@@ -3055,7 +3055,7 @@ Gibson ES-335</textarea>
 <div class="grid">
 <section>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderProduct List()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadProduct List()">更新</button></div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('observation_count')">Obs<span class="sort-indicator" id="sort-observation_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 <div class="panel">
@@ -3128,7 +3128,7 @@ async function importDatabaseFile(input){
     document.getElementById('jobMessage').textContent='バックアップを復元しました';
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
-    await loadProduct List();
+    await loadIndividuals();
     await loadUsers();
     const imported=d.imported_counts||{};
     const media=d.legacy_database?'旧DB形式（Mediaなし）':('Media: '+(d.imported_media_count??0));
@@ -3153,7 +3153,7 @@ async function runClaimMigration(){
     const m=d.migration||{};
     const a=d.after||{};
     await refreshStatus();
-    await loadProduct List();
+    await loadIndividuals();
     const r=d.rebuild||{};
     alert('Claim Migration / Snapshot Rebuild完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nReverb Listing ClaimのLocation等が不足しています。続けて「既存DBバックフィル（今回のみ）」を実行してください。':''));
   }catch(e){
@@ -3184,14 +3184,14 @@ async function resetDatabase(){
     localStorage.removeItem(ACTIVE_USER_KEY);
     activeUser=null;
     await refreshStatus();
-    await loadProduct List();
+    await loadIndividuals();
     await loadUsers();
     alert('DBを初期化しました。');
   }catch(e){
     alert(e.message);
   }
 }
-async function loadProduct List(){individuals=await jfetch('/api/individuals');renderProduct List()}
+async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
 function countList(title,rows){
   if(!rows||!rows.length)return '<div><strong>'+esc(title)+'</strong><div class="sub">—</div></div>';
   return '<div><strong>'+esc(title)+'</strong>'+rows.map(x=>'<div class="sub">'+esc(x.label)+' : '+esc(x.count)+'</div>').join('')+'</div>';
@@ -3343,9 +3343,9 @@ async function unlinkOwnedGuitar(individualId){
   }
 }
 function normalizeSortValue(value,key){if(key==='id'||key==='observation_count')return Number(value||0);return String(value??'').toLowerCase()}
-function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderProduct List()}
+function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
-function renderProduct List(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
+function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.observation_count+'</td></tr>').join('')}
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
 function currentSnapshotOwnerHtml(i){if(!i)return '—';const name=String(i.current_owner_name||'').trim();if(!name)return '—';const type=String(i.current_owner_type||'').trim();const listingUrl=String(i.current_owner_source_url||'').trim();const label=type==='shop'?name+' (Shop)':name;if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';return esc(label)}
 function currentLocationHtml(i){const parts=[i&&i.location_country,i&&i.location_region].filter(Boolean);return parts.length?esc(parts.join(' / ')):'—'}
@@ -3466,7 +3466,7 @@ async function deleteClaim(claimId){
   try{
     const d=await jfetch('/api/claims/'+claimId,{method:'DELETE'});
     if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
-    await loadProduct List();
+    await loadIndividuals();
   }catch(e){
     alert('Claim削除に失敗しました。\n'+e.message);
   }
@@ -3481,7 +3481,7 @@ async function deleteIndividual(individualId){
     await jfetch('/api/individuals/'+individualId,{method:'DELETE'});
     if(selectedIndividualId===Number(individualId))selectedIndividualId=null;
     document.getElementById('detail').textContent='Individualを削除しました。';
-    await loadProduct List();
+    await loadIndividuals();
     await loadStatistics();
     if(activeUser&&activeUser.user)await loadActiveUser();
   }catch(e){
@@ -3490,8 +3490,8 @@ async function deleteIndividual(individualId){
 }
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadProduct List();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-(async()=>{await refreshStatus();await loadProduct List();await loadStatistics();await loadUsers()})()
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
 </script>
 </body></html>"""
 
@@ -3580,8 +3580,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <div class="panel">
     <div class="toolbar">
       <h2>Product List</h2>
-      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderProduct List()">
-      <button class="secondary" onclick="loadProduct List()">更新</button>
+      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
+      <button class="secondary" onclick="loadIndividuals()">更新</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -3677,7 +3677,7 @@ async function loadActiveUser(){
   }
 }
 
-async function loadProduct List(){
+async function loadIndividuals(){
   individuals=await jfetch('/api/individuals');
   if(individuals.length){
     const randomIndex=Math.floor(Math.random()*individuals.length);
@@ -3685,7 +3685,7 @@ async function loadProduct List(){
   }else{
     selectedIndividualId=null;
   }
-  renderProduct List();
+  renderIndividuals();
   if(selectedIndividualId!==null){
     await showIndividual(selectedIndividualId);
   }else{
@@ -3699,7 +3699,7 @@ function normalizeSortValue(value,key){
 function setIndividualSort(key){
   if(individualSortKey===key)individualSortDirection*=-1;
   else{individualSortKey=key;individualSortDirection=1}
-  renderProduct List();
+  renderIndividuals();
 }
 function updateSortIndicators(){
   for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){
@@ -3707,7 +3707,7 @@ function updateSortIndicators(){
     if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
   }
 }
-function renderProduct List(){
+function renderIndividuals(){
   const q=document.getElementById('individualFilter').value.toLowerCase();
   const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{
     const av=normalizeSortValue(a[individualSortKey],individualSortKey);
@@ -3967,7 +3967,7 @@ async function voteClaim(claimId,vote){
 
 async function showIndividual(id){
   selectedIndividualId=Number(id);
-  if(typeof renderProduct List==='function')renderProduct List();
+  if(typeof renderIndividuals==='function')renderIndividuals();
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
@@ -4087,7 +4087,7 @@ async function submitOwnerClaim(){
 
 (async()=>{
   await loadActiveUser();
-  await loadProduct List();
+  await loadIndividuals();
 })()
 </script>
 </body>
@@ -4650,9 +4650,9 @@ async function saveUser(){
   }
 }
 
-async function loadProduct List(){
+async function loadIndividuals(){
   individuals=await jfetch('/api/individuals');
-  renderProduct List();
+  renderIndividuals();
 }
 
 function normalizeSortValue(value,key){
@@ -4662,7 +4662,7 @@ function normalizeSortValue(value,key){
 function setIndividualSort(key){
   if(individualSortKey===key)individualSortDirection*=-1;
   else{individualSortKey=key;individualSortDirection=1}
-  renderProduct List();
+  renderIndividuals();
 }
 function updateSortIndicators(){
   for(const key of ['id','manufacturer','model','finish','year','serial_number','observation_count']){
@@ -4670,7 +4670,7 @@ function updateSortIndicators(){
     if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
   }
 }
-function renderProduct List(){
+function renderIndividuals(){
   const q=document.getElementById('individualFilter').value.toLowerCase();
   const rows=individuals
     .filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q))
