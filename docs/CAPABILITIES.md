@@ -189,3 +189,12 @@ Individual Snapshot再構築
 - Claimのauthorは入力Userとなるため、主文の名前も入力Userになる
 - 登録Userのuser_guitarsはformer_ownerとして追加・更新し、Formerly Owned Guitarsに表示する
 - Former Owner ClaimはOwnership系のためOwner Verification対象外
+
+
+- Former Owner由来のOwnership Claimは通常Ownershipと明示的に区別し、ownership_source='former_owner' と共通 ownership_pair_id を持つ
+- Former OwnerのAcquire / Releaseペアは作成時に verification_status='unverified' とする
+- Current Owner本人が作成する通常Ownership Claimは従来どおりPositive扱いで、Owner Verification UIを表示しない
+- Current OwnerだけがFormer Ownerペアを Positive / Negative / Unverified に変更でき、片方を変更すると同一ownership_pair_idの2 Claimを同時更新する
+- Former Owner OwnershipはPositiveの場合だけOwnership Snapshot再生に参加する
+- Current Owner不在時はFormer Owner ClaimをVerificationできるUserがいないため、第三者申告だけでは最後のOwner情報を書き換えられない
+- 既存DBで旧Former Ownerフローから作成済みのAcquire / Releaseペアは、former_ownerのuser_guitars日付と一致する場合にUnverifiedペアへ移行する
