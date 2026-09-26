@@ -1200,6 +1200,105 @@ def api_statistics() -> dict[str, Any]:
     return repo().statistics()
 
 
+@app.get("/api/top-page-charts")
+def api_top_page_charts() -> dict[str, Any]:
+    repository = repo()
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=29)
+
+    with repository.connect() as con:
+        model_rows = con.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(TRIM(model), ''), 'Unknown') AS label,
+                COUNT(*) AS count
+            FROM individuals
+            GROUP BY COALESCE(NULLIF(TRIM(model), ''), 'Unknown')
+            ORDER BY count DESC, label ASC
+            """
+        ).fetchall()
+
+        year_rows = con.execute(
+            """
+            SELECT
+                CAST(year AS TEXT) AS label,
+                COUNT(*) AS count
+            FROM individuals
+            WHERE year IS NOT NULL
+              AND TRIM(CAST(year AS TEXT)) <> ''
+            GROUP BY CAST(year AS TEXT)
+            ORDER BY CAST(year AS INTEGER) ASC, label ASC
+            """
+        ).fetchall()
+
+        listing_rows = con.execute(
+            """
+            SELECT
+                SUBSTR(created_at, 1, 10) AS day,
+                COUNT(*) AS count
+            FROM claims
+            WHERE status = 'active'
+              AND claim_type = 'listing'
+              AND SUBSTR(created_at, 1, 10) >= ?
+              AND SUBSTR(created_at, 1, 10) <= ?
+            GROUP BY SUBSTR(created_at, 1, 10)
+            ORDER BY day ASC
+            """,
+            (
+                start_date.isoformat(),
+                today.isoformat(),
+            ),
+        ).fetchall()
+
+    models = [
+        {
+            "label": str(row["label"]),
+            "count": int(row["count"] or 0),
+        }
+        for row in model_rows
+    ]
+    if len(models) > 10:
+        other_count = sum(
+            item["count"]
+            for item in models[10:]
+        )
+        models = models[:10] + [
+            {
+                "label": "Other",
+                "count": other_count,
+            }
+        ]
+
+    years = [
+        {
+            "label": str(row["label"]),
+            "count": int(row["count"] or 0),
+        }
+        for row in year_rows
+    ]
+
+    listing_map = {
+        str(row["day"]): int(row["count"] or 0)
+        for row in listing_rows
+    }
+    listings_30d = []
+    for offset in range(30):
+        day = start_date + timedelta(days=offset)
+        key = day.isoformat()
+        listings_30d.append(
+            {
+                "date": key,
+                "count": listing_map.get(key, 0),
+            }
+        )
+
+    return {
+        "models": models,
+        "years": years,
+        "listings_30d": listings_30d,
+    }
+
+
 @app.get("/api/export-db")
 def api_export_db() -> FileResponse:
     repository = repo()
@@ -4106,6 +4205,7 @@ USER_VIEW_HTML = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Your Guitar Chronicle — Top Page</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--bad:#e07171}
@@ -4122,8 +4222,12 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .section-stack{margin-top:16px}
 .content-frame{width:960px;max-width:100%;margin-left:auto;margin-right:auto}
 .dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.dashboard-card{min-height:250px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-.dashboard-placeholder{height:190px;border:1px dashed #3b4249;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:#14171a}
+.dashboard-card{height:280px;min-height:280px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column}
+.dashboard-card.wide{grid-column:1/-1;height:300px;min-height:300px}
+.dashboard-card h2{flex:0 0 auto;margin-bottom:8px}
+.chart-wrap{position:relative;flex:1;min-height:0}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+.chart-error{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:11px}
 .world-map-panel{height:390px;min-height:390px;max-height:390px}
 .world-map-placeholder{height:320px;border:1px dashed #3b4249;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:#14171a}
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
@@ -4337,20 +4441,16 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <div class="toolbar"><h2>Statistics</h2></div>
   <div class="dashboard-grid">
     <div class="dashboard-card">
-      <h2>Maker Distribution</h2>
-      <div class="dashboard-placeholder">Chart placeholder</div>
+      <h2>Model Distribution</h2>
+      <div class="chart-wrap"><canvas id="modelChart"></canvas></div>
     </div>
     <div class="dashboard-card">
-      <h2>Decade Distribution</h2>
-      <div class="dashboard-placeholder">Chart placeholder</div>
+      <h2>Year Distribution</h2>
+      <div class="chart-wrap"><canvas id="yearChart"></canvas></div>
     </div>
-    <div class="dashboard-card">
-      <h2>Top Models</h2>
-      <div class="dashboard-placeholder">Chart placeholder</div>
-    </div>
-    <div class="dashboard-card">
-      <h2>Claim Activity</h2>
-      <div class="dashboard-placeholder">Chart placeholder</div>
+    <div class="dashboard-card wide">
+      <h2>Listings — Last 30 Days</h2>
+      <div class="chart-wrap"><canvas id="listingChart"></canvas></div>
     </div>
   </div>
 </section>
@@ -5675,10 +5775,161 @@ async function submitOwnershipClaim(){
   }
 }
 
+let topPageCharts=[];
+
+function destroyTopPageCharts(){
+  topPageCharts.forEach(chart=>{try{chart.destroy()}catch(e){}});
+  topPageCharts=[];
+}
+function chartTextColor(){
+  return getComputedStyle(document.documentElement).getPropertyValue('--text').trim()||'#edf0f3';
+}
+function chartMutedColor(){
+  return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#9ba6b0';
+}
+function chartLineColor(){
+  return getComputedStyle(document.documentElement).getPropertyValue('--line').trim()||'#2a2f35';
+}
+function chartPalette(count){
+  const base=[
+    '#d0a45d','#66c58a','#6fa8dc','#c27ba0','#e07171',
+    '#8e7cc3','#76a5af','#f6b26b','#93c47d','#a4c2f4','#999999'
+  ];
+  return Array.from({length:count},(_,i)=>base[i%base.length]);
+}
+function chartFallback(canvasId,message){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas)return;
+  const wrap=canvas.parentElement;
+  if(wrap)wrap.innerHTML='<div class="chart-error">'+esc(message)+'</div>';
+}
+async function loadTopPageCharts(){
+  let data;
+  try{
+    data=await jfetch('/api/top-page-charts');
+  }catch(e){
+    ['modelChart','yearChart','listingChart'].forEach(id=>chartFallback(id,'Statistics could not be loaded.'));
+    return;
+  }
+  if(typeof Chart==='undefined'){
+    ['modelChart','yearChart','listingChart'].forEach(id=>chartFallback(id,'Chart library could not be loaded.'));
+    return;
+  }
+
+  destroyTopPageCharts();
+  const text=chartTextColor();
+  const muted=chartMutedColor();
+  const line=chartLineColor();
+  Chart.defaults.color=muted;
+  Chart.defaults.borderColor=line;
+  Chart.defaults.font.family='"Noto Sans JP", sans-serif';
+
+  const models=data.models||[];
+  const modelCanvas=document.getElementById('modelChart');
+  if(modelCanvas&&models.length){
+    topPageCharts.push(new Chart(modelCanvas,{
+      type:'pie',
+      data:{
+        labels:models.map(x=>x.label),
+        datasets:[{
+          data:models.map(x=>Number(x.count||0)),
+          backgroundColor:chartPalette(models.length),
+          borderColor:'#181b1f',
+          borderWidth:2
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{
+          legend:{position:'right',labels:{boxWidth:10,boxHeight:10,color:text,font:{size:10}}},
+          tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+ctx.parsed}}
+        }
+      }
+    }));
+  }else{
+    chartFallback('modelChart','No model data.');
+  }
+
+  const years=data.years||[];
+  const yearCanvas=document.getElementById('yearChart');
+  if(yearCanvas&&years.length){
+    topPageCharts.push(new Chart(yearCanvas,{
+      type:'bar',
+      data:{
+        labels:years.map(x=>x.label),
+        datasets:[{
+          label:'Products',
+          data:years.map(x=>Number(x.count||0)),
+          backgroundColor:'#6fa8dc',
+          borderWidth:0
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{
+            grid:{display:false},
+            ticks:{color:muted,maxRotation:60,minRotation:0,font:{size:9},autoSkip:true,maxTicksLimit:16}
+          },
+          y:{
+            beginAtZero:true,
+            ticks:{precision:0,color:muted,font:{size:9}},
+            grid:{color:line}
+          }
+        }
+      }
+    }));
+  }else{
+    chartFallback('yearChart','No year data.');
+  }
+
+  const listings=data.listings_30d||[];
+  const listingCanvas=document.getElementById('listingChart');
+  if(listingCanvas&&listings.length){
+    topPageCharts.push(new Chart(listingCanvas,{
+      type:'bar',
+      data:{
+        labels:listings.map(x=>{
+          const parts=String(x.date||'').split('-');
+          return parts.length===3?Number(parts[1])+'/'+Number(parts[2]):x.date;
+        }),
+        datasets:[{
+          label:'Listings',
+          data:listings.map(x=>Number(x.count||0)),
+          backgroundColor:'#d0a45d',
+          borderWidth:0
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{
+            grid:{display:false},
+            ticks:{color:muted,maxRotation:0,minRotation:0,font:{size:9},autoSkip:true,maxTicksLimit:15}
+          },
+          y:{
+            beginAtZero:true,
+            ticks:{precision:0,color:muted,font:{size:9}},
+            grid:{color:line}
+          }
+        }
+      }
+    }));
+  }else{
+    chartFallback('listingChart','No listing data.');
+  }
+}
+
 (async()=>{
   await loadActiveUser();
   await loadNewDiscoveries();
   await loadIndividuals();
+  await loadTopPageCharts();
 
   const requested=Number(new URLSearchParams(window.location.search).get('individual_id')||0);
   const requestedExists=requested&&individuals.some(x=>Number(x.id)===requested);
