@@ -180,6 +180,26 @@ CREATE TABLE IF NOT EXISTS claim_evidence (
  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id) ON DELETE CASCADE,
  UNIQUE(claim_id, media_asset_id)
 );
+CREATE TABLE IF NOT EXISTS notifications (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ recipient_user_id INTEGER NOT NULL,
+ actor_user_id INTEGER,
+ notification_type TEXT NOT NULL,
+ individual_id INTEGER,
+ claim_id INTEGER,
+ title TEXT NOT NULL,
+ body TEXT,
+ is_read INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL,
+ read_at TEXT,
+ FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
+ FOREIGN KEY(claim_id) REFERENCES claims(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_read_created
+ON notifications(recipient_user_id, is_read, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS crawl_listing_cache (
  source_site TEXT NOT NULL,
  source_listing_id TEXT NOT NULL,
