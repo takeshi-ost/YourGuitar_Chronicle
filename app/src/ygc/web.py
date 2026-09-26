@@ -4095,7 +4095,12 @@ async function loadProfile(){
   }
 }
 loadProfile();
-</scrUSER_VIEW_HTML = r"""<!doctype html>
+</script>
+</body>
+</html>"""
+
+
+USER_VIEW_HTML = r"""<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
