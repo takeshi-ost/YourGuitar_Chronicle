@@ -2825,6 +2825,7 @@ def api_user(
             for row
             in guitars
         ],
+        "summary": repo().get_user_summary(user_id),
     }
 
 
