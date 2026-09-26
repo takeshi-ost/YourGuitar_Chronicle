@@ -3183,11 +3183,6 @@ class Repository:
                     kind,
                     note,
                     event_date,
-                    self._claim_verification_status(
-                        con,
-                        user_id,
-                        individual_id,
-                    ),
                     now,
                     now,
                 ),
@@ -3683,6 +3678,11 @@ class Repository:
                     kind,
                     note,
                     event_date,
+                    self._claim_verification_status(
+                        con,
+                        user_id,
+                        individual_id,
+                    ),
                     now,
                     now,
                 ),
