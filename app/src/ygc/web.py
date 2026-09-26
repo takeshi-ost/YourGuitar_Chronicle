@@ -3915,7 +3915,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
 .claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
 .claim-negative-dot:hover{color:#a0a7ae!important}
-.claim-popup-modal{width:min(620px,calc(100vw - 32px))}
+.claim-popup-modal{width:min(620px,calc(100vw - 32px));background:transparent;border:0;padding:0;box-shadow:none}
 .claim-popup-modal .claim-card{margin:0}.claim-popup-modal .claim-card::after{display:none}
 </style>
 </head>
@@ -4122,11 +4122,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
-  <div class="modal claim-popup-modal" onclick="event.stopPropagation()">
+  <div class="claim-popup-modal" onclick="event.stopPropagation()">
     <div id="claimPopupContent"></div>
-    <div class="modal-actions">
-      <button class="secondary" onclick="closeClaimPopup()">閉じる</button>
-    </div>
   </div>
 </div>
 
@@ -5045,7 +5042,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
 .claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
 .claim-negative-dot:hover{color:#a0a7ae!important}
-.claim-popup-modal{width:min(620px,calc(100vw - 32px))}
+.claim-popup-modal{width:min(620px,calc(100vw - 32px));background:transparent;border:0;padding:0;box-shadow:none}
 .claim-popup-modal .claim-card{margin:0}.claim-popup-modal .claim-card::after{display:none}
 </style>
 </head>
@@ -5345,11 +5342,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
-  <div class="modal claim-popup-modal" onclick="event.stopPropagation()">
+  <div class="claim-popup-modal" onclick="event.stopPropagation()">
     <div id="claimPopupContent"></div>
-    <div class="modal-actions">
-      <button class="secondary" onclick="closeClaimPopup()">閉じる</button>
-    </div>
   </div>
 </div>
 
