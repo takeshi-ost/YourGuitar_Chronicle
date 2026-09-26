@@ -79,6 +79,7 @@ Your Guitar Chronicle で現在できることを、**一般ユーザー**と**�
 - Claim Migration / Snapshot Rebuildを実行する
 - 既存Reverb Listing Claimの不足項目をBackfillする
 - Claim-centered構造のreadinessを確認する
+- StatisticsはClaim-centered基準で集計し、Serial Listingsはactive Listing ClaimのSerialを数える
 
 ### ユーザー管理
 - アカウントを作成・選択する
