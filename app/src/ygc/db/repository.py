@@ -3692,22 +3692,45 @@ class Repository:
                         ),
                     )
 
-            if claim["claim_type"] == "owner_change":
-                con.execute(
-                    """
-                    UPDATE user_guitars
-                    SET acquired_at = ?,
-                        updated_at = ?
-                    WHERE user_id = ?
-                      AND individual_id = ?
-                    """,
-                    (
-                        event_date,
-                        now,
-                        user_id,
-                        claim["individual_id"],
-                    ),
+            if claim["claim_type"] in ("ownership", "owner_change"):
+                ownership_kind = (
+                    str(claim["ownership_kind"] or "acquire").strip().lower()
+                    if claim["claim_type"] == "ownership"
+                    else "acquire"
                 )
+                if ownership_kind == "release":
+                    con.execute(
+                        """
+                        UPDATE user_guitars
+                        SET released_at = ?,
+                            updated_at = ?
+                        WHERE user_id = ?
+                          AND individual_id = ?
+                          AND ownership_status = 'former_owner'
+                        """,
+                        (
+                            event_date,
+                            now,
+                            user_id,
+                            claim["individual_id"],
+                        ),
+                    )
+                else:
+                    con.execute(
+                        """
+                        UPDATE user_guitars
+                        SET acquired_at = ?,
+                            updated_at = ?
+                        WHERE user_id = ?
+                          AND individual_id = ?
+                        """,
+                        (
+                            event_date,
+                            now,
+                            user_id,
+                            claim["individual_id"],
+                        ),
+                    )
             elif claim["claim_type"] == "release":
                 con.execute(
                     """
