@@ -3356,7 +3356,7 @@ function displayEventDate(value){if(!value)return '日付不明';const text=Stri
 function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
 function claimCard(c){
-  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -3611,16 +3611,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <div class="modal-backdrop" id="ownerClaimModal" onclick="closeOwnerClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Ownership</h2>
+    <h2>Acquire</h2>
     <div class="sub" id="ownerClaimGuitar" style="margin-bottom:14px"></div>
-    <div class="form-row">
-      <label class="form-label" for="ownerClaimKind">Tag</label>
-      <select id="ownerClaimKind">
-        <option value="acquire">Acquire</option>
-        <option value="transfer">Transfer</option>
-        <option value="inherit">Inherit</option>
-      </select>
-    </div>
     <div class="form-row">
       <label class="form-label" for="ownerClaimDate">Date</label>
       <input id="ownerClaimDate" type="date">
@@ -3837,7 +3829,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -4046,7 +4038,6 @@ function openOwnerClaim(individualId){
   document.getElementById('ownerClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  document.getElementById('ownerClaimKind').value='acquire';
   document.getElementById('ownerClaimDate').value='';
   document.getElementById('ownerClaimPrevious').value='';
   document.getElementById('ownerClaimBody').value='';
@@ -4064,7 +4055,7 @@ async function submitOwnerClaim(){
   try{
     const body={
       user_id:Number(activeUser.user.id),
-      ownership_kind:document.getElementById('ownerClaimKind').value,
+      ownership_kind:'acquire',
       occurred_at:document.getElementById('ownerClaimDate').value||null,
       previous_owner_text:document.getElementById('ownerClaimPrevious').value.trim()||null,
       body:document.getElementById('ownerClaimBody').value.trim()||null
@@ -4204,8 +4195,12 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <div class="modal-backdrop" id="releaseClaimModal" onclick="closeReleaseClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Release</h2>
+    <h2>Ownership</h2>
     <div class="sub" id="releaseClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label">Tag</label>
+      <div><strong>Release</strong></div>
+    </div>
     <div class="form-row">
       <label class="form-label" for="releaseClaimReason">Reason for release（任意）</label>
       <textarea id="releaseClaimReason" maxlength="2000" placeholder="Sold / Gifted / Traded / Other ..."></textarea>
@@ -4820,7 +4815,7 @@ function claimHeaderHtml(c,type,eventDate){
 function claimCard(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?'Ownership / '+claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -5033,7 +5028,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'release\')">Release</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -5072,7 +5067,7 @@ function chooseClaimType(type){
   if(menu)menu.classList.remove('open');
   if(type==='specification_repair'){
     openSpecificationClaim(selectedIndividualId);
-  }else if(type==='release'){
+  }else if(type==='ownership'){
     openReleaseClaim(selectedIndividualId);
   }
 }
