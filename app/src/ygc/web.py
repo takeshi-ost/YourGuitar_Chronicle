@@ -1979,6 +1979,26 @@ def api_individual_claims(
             item
         )
 
+    media_images_by_claim: dict[
+        int,
+        list[dict[str, Any]],
+    ] = {}
+    for row in repository.list_claim_media_assets(
+        individual_id
+    ):
+        item = _row_dict(row)
+        claim_id = int(item["claim_id"])
+        media_images_by_claim.setdefault(
+            claim_id,
+            [],
+        ).append(
+            {
+                "id": int(item["id"]),
+                "url": f"/api/media/{int(item['id'])}",
+                "original_filename": item.get("original_filename"),
+            }
+        )
+
     for claim in claims:
         claim["spec_items"] = (
             items_by_claim.get(
@@ -1993,6 +2013,12 @@ def api_individual_claims(
                 int(
                     claim["id"]
                 ),
+                [],
+            )
+        )
+        claim["media_images"] = (
+            media_images_by_claim.get(
+                int(claim["id"]),
                 [],
             )
         )
@@ -3219,7 +3245,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
 .claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
-.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
+.claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
@@ -3636,7 +3662,12 @@ function claimCard(c){
     body=items.map(item=>'<div><strong>'+esc(identityFieldLabel(item.field_name))+':</strong> '+esc(item.old_value||'—')+' → '+esc(item.new_value||'—')+'</div>').join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    const mediaImages=(c.media_images&&c.media_images.length)
+      ? c.media_images
+      : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
+    if(mediaImages.length){
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+    }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -3824,7 +3855,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
-.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
+.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
@@ -4192,7 +4223,12 @@ function claimCard(c){
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    const mediaImages=(c.media_images&&c.media_images.length)
+      ? c.media_images
+      : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
+    if(mediaImages.length){
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+    }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
@@ -5381,7 +5417,12 @@ function claimCard(c){
     ).join('');
     if(c.body)body+='<div class="claim-memo">Reason: '+esc(c.body)+'</div>';
   }else if(c.claim_type==='media'){
-    if(c.evidence_media_id)body+='<img class="claim-evidence-image" width="48" height="48" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
+    const mediaImages=(c.media_images&&c.media_images.length)
+      ? c.media_images
+      : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
+    if(mediaImages.length){
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+    }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
     const title=c.listing_title||c.body||'Listing observed';
