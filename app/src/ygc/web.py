@@ -1889,6 +1889,7 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                 i.manufacturer,
                 i.model,
                 i.year,
+                i.finish,
                 i.serial_number,
                 (
                     SELECT MAX(c.created_at)
@@ -4094,12 +4095,7 @@ async function loadProfile(){
   }
 }
 loadProfile();
-</script>
-</body>
-</html>"""
-
-
-USER_VIEW_HTML = r"""<!doctype html>
+</scrUSER_VIEW_HTML = r"""<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -4128,13 +4124,15 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
 main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
 .grid{display:block}
-.left-column{display:grid;grid-template-rows:146px minmax(0,1fr);gap:12px;min-height:0}
+.left-column{display:grid;grid-template-rows:150px minmax(0,1fr);gap:12px;min-height:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
 .discovery-panel{min-height:0;overflow:hidden}
-.discovery-list{height:72px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
-.discovery-item{display:grid;grid-template-columns:minmax(90px,1.1fr) minmax(110px,1.6fr) minmax(54px,.55fr) minmax(100px,1fr) minmax(96px,.9fr) minmax(120px,1.2fr);gap:0;border-bottom:1px solid var(--line);cursor:pointer;min-height:27px;align-items:center}
-.discovery-item:last-child{border-bottom:0}.discovery-item:hover{background:#20252a}
-.discovery-cell{min-width:0;padding:5px 8px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid #242a30}.discovery-cell:last-child{border-right:0}.discovery-maker,.discovery-model{font-size:11px}.discovery-maker{font-weight:700}.discovery-muted{color:var(--muted)}
+.discovery-list{height:98px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
+.discovery-item{display:flex;align-items:center;gap:10px;padding:6px 10px;cursor:pointer;min-height:30px;white-space:nowrap;overflow:hidden}
+.discovery-item:hover{background:#20252a}
+.discovery-time{flex:0 0 auto;color:var(--muted);font-size:10px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.discovery-story{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.discovery-story strong{color:var(--text);font-weight:800}
 .product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
 .detail-shell{position:fixed;top:108px;right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
 .detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}
@@ -4297,14 +4295,6 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <section class="left-column content-frame">
   <div class="panel discovery-panel page-section" id="discovery">
     <div class="toolbar"><h2>New discovery</h2></div>
-    <div class="discovery-item" style="cursor:default;background:#181b1f;font-weight:600">
-      <div class="discovery-cell discovery-muted">Maker</div>
-      <div class="discovery-cell discovery-muted">Model</div>
-      <div class="discovery-cell discovery-muted">Year</div>
-      <div class="discovery-cell discovery-muted">Serial</div>
-      <div class="discovery-cell discovery-muted">Activity</div>
-      <div class="discovery-cell discovery-muted">Updated</div>
-    </div>
     <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">最近の更新を読み込み中...</div></div>
   </div>
   <div class="panel product-list-panel page-section" id="products">
@@ -4725,11 +4715,16 @@ async function loadNewDiscoveries(){
   }
   renderNewDiscoveries();
 }
-function discoveryLabel(item){
-  if(item.activity_type==='claim'){
-    return (item.claim_type?claimTypeLabel(item.claim_type):'Claim')+' updated';
-  }
-  return 'Newly discovered';
+function discoveryMessage(item){
+  return item.activity_type==='claim'
+    ? 'has secured a new claim!'
+    : 'has been newly added to the list!';
+}
+function discoveryProductName(item){
+  const base=[item.manufacturer,item.model].filter(Boolean).join(' ').trim()||('Product #'+item.id);
+  const year=item.year?' ('+item.year+')':'';
+  const finish=item.finish?' '+item.finish:'';
+  return base+year+finish;
 }
 function renderNewDiscoveries(){
   const root=document.getElementById('newDiscoveryList');
@@ -4739,38 +4734,19 @@ function renderNewDiscoveries(){
     return;
   }
   root.innerHTML=newDiscoveries.map(item=>{
-    const when=displayInputDate(item.activity_at||'');
-    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')">'+
-      '<div class="discovery-cell discovery-maker" title="'+esc(item.manufacturer||'')+'">'+esc(item.manufacturer||'—')+'</div>'+
-      '<div class="discovery-cell discovery-model" title="'+esc(item.model||'')+'">'+esc(item.model||'—')+'</div>'+
-      '<div class="discovery-cell" title="'+esc(item.year||'')+'">'+esc(item.year||'—')+'</div>'+
-      '<div class="discovery-cell discovery-muted" title="'+esc(item.serial_number||'')+'">'+esc(item.serial_number||'—')+'</div>'+
-      '<div class="discovery-cell discovery-muted" title="'+esc(discoveryLabel(item))+'">'+esc(discoveryLabel(item))+'</div>'+
-      '<div class="discovery-cell discovery-muted" title="'+esc(when)+'">'+esc(when)+'</div>'+
+    const when=displayDiscoveryDateTime(item.activity_at||'');
+    const product=discoveryProductName(item);
+    const message=discoveryMessage(item);
+    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')" title="'+esc(when+' '+product+' '+message)+'">'+
+      '<span class="discovery-time">'+esc(when)+'</span>'+
+      '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
     '</div>';
   }).join('');
 }
 
 async function loadIndividuals(){
   individuals=await jfetch('/api/individuals');
-  if(individuals.length){
-    const requested=Number(new URLSearchParams(window.location.search).get('individual_id')||0);
-    const requestedExists=requested&&individuals.some(x=>Number(x.id)===requested);
-    if(requestedExists){
-      selectedIndividualId=requested;
-    }else{
-      const randomIndex=Math.floor(Math.random()*individuals.length);
-      selectedIndividualId=Number(individuals[randomIndex].id);
-    }
-  }else{
-    selectedIndividualId=null;
-  }
   renderIndividuals();
-  if(selectedIndividualId!==null){
-    await showIndividual(selectedIndividualId);
-  }else{
-    document.getElementById('detail').textContent='表示できるIndividualがありません。';
-  }
 }
 function normalizeSortValue(value,key){
   if(key==='id'||key==='claim_count')return Number(value||0);
@@ -4949,6 +4925,16 @@ function displayInputDate(value){
   if(!value)return '入力日時不明';
   const d=new Date(String(value));
   return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
+}
+function displayDiscoveryDateTime(value){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  const d=new Date(raw);
+  if(Number.isNaN(d.getTime()))return raw;
+  return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+' '+
+    String(d.getHours()).padStart(2,'0')+':'+
+    String(d.getMinutes()).padStart(2,'0')+':'+
+    String(d.getSeconds()).padStart(2,'0');
 }
 function claimHeaderHtml(c,type,eventDate){
   let response='';
@@ -5678,9 +5664,39 @@ async function submitOwnershipClaim(){
 
 (async()=>{
   await loadActiveUser();
-  await Promise.all([loadIndividuals(),loadNewDiscoveries()]);
+  await loadNewDiscoveries();
+  await loadIndividuals();
+
+  const requested=Number(new URLSearchParams(window.location.search).get('individual_id')||0);
+  const requestedExists=requested&&individuals.some(x=>Number(x.id)===requested);
+  if(requestedExists){
+    selectedIndividualId=requested;
+  }else if(newDiscoveries.length){
+    const candidates=newDiscoveries
+      .map(item=>Number(item.id))
+      .filter(id=>individuals.some(x=>Number(x.id)===id));
+    if(candidates.length){
+      selectedIndividualId=candidates[Math.floor(Math.random()*candidates.length)];
+    }
+  }else if(individuals.length){
+    selectedIndividualId=Number(individuals[0].id);
+  }else{
+    selectedIndividualId=null;
+  }
+
+  renderIndividuals();
+  if(selectedIndividualId!==null){
+    await showIndividual(selectedIndividualId);
+  }else{
+    document.getElementById('detail').textContent='表示できるIndividualがありません。';
+  }
 })()
 </script>
+</body>
+</html>"""
+
+
+ipt>
 </body>
 </html>"""
 
