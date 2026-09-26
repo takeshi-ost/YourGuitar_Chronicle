@@ -3666,7 +3666,7 @@ function claimCard(c){
       ? c.media_images
       : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
     if(mediaImages.length){
-      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img class="claim-evidence-image" width="48" height="48" style="width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover" src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
@@ -3824,6 +3824,11 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}
 .detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
 .detail-image-link{display:block;margin:0 0 6px}
+.detail-gallery{display:grid;grid-template-columns:20px minmax(0,1fr) 20px;align-items:center;gap:5px;width:75%;margin:0 0 6px}
+.detail-gallery .detail-image{width:100%;min-width:0}
+.detail-gallery-nav{width:20px;min-width:20px;height:28px;padding:0;border-radius:5px;background:#20252a;color:#777f87;font-size:11px;font-weight:600;line-height:1}
+.detail-gallery-nav:hover{background:#272d32;color:#a8b0b7}
+.detail-gallery-nav:disabled{opacity:.18;cursor:default}
 .detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}
 .detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}
 .detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -4227,7 +4232,7 @@ function claimCard(c){
       ? c.media_images
       : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
     if(mediaImages.length){
-      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img class="claim-evidence-image" width="48" height="48" style="width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover" src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
@@ -4529,6 +4534,11 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}
 .detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}
 .detail-image-link{display:block;margin:0 0 6px}
+.detail-gallery{display:grid;grid-template-columns:20px minmax(0,1fr) 20px;align-items:center;gap:5px;width:75%;margin:0 0 6px}
+.detail-gallery .detail-image{width:100%;min-width:0}
+.detail-gallery-nav{width:20px;min-width:20px;height:28px;padding:0;border-radius:5px;background:#20252a;color:#777f87;font-size:11px;font-weight:600;line-height:1}
+.detail-gallery-nav:hover{background:#272d32;color:#a8b0b7}
+.detail-gallery-nav:disabled{opacity:.18;cursor:default}
 .detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}
 .detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}
 .detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -5421,7 +5431,7 @@ function claimCard(c){
       ? c.media_images
       : (c.evidence_media_id?[{id:c.evidence_media_id,url:'/api/media/'+encodeURIComponent(c.evidence_media_id)}]:[]);
     if(mediaImages.length){
-      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
+      body+='<div class="claim-media-thumbs">'+mediaImages.map(m=>'<img class="claim-evidence-image" width="48" height="48" style="width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover" src="'+esc(m.url)+'" alt="Media Claim image" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">').join('')+'</div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='listing'){
