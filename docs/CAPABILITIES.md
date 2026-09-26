@@ -119,5 +119,5 @@ Individual Snapshot再構築
 - Ownership ClaimはWebUIでも単一の共通モーダルと単一のsubmit処理を使用し、Tag (`acquire` / `transfer` / `inherit` / `release`) をバックエンドの `/ownership-claim` に渡す
 - Add to Your Chronicle は共通Ownership UIをAcquire固定で開く
 - Product Detailの Add Claim → Ownership では Transfer / Release / Inherit をTagとして選択できる
-- 現時点ではTransfer / Release / Inheritの処理差は最小限で、将来は譲渡先等の必須入力やTag別バリデーションを追加する
+- 現時点ではAcquireだけが所有開始、Transfer / Release / Inheritはすべて所有終了として共通処理する。将来は譲渡先等の必須入力やTag別バリデーションを追加する
 - Chronicle上のOwnership Claimバッジは Ownership / Acquire のようにType名を重ねず、Acquire / Release等のTag名だけを表示する
