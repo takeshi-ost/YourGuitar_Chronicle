@@ -144,6 +144,78 @@ class Repository:
             """
         )
 
+        # Backfill Former Owner pairs created before ownership_source existed.
+        former_links = list(
+            con.execute(
+                """
+                SELECT
+                    user_id,
+                    individual_id,
+                    acquired_at,
+                    released_at
+                FROM user_guitars
+                WHERE ownership_status = 'former_owner'
+                  AND acquired_at IS NOT NULL
+                  AND released_at IS NOT NULL
+                """
+            )
+        )
+        for link in former_links:
+            acquire = con.execute(
+                """
+                SELECT id
+                FROM claims
+                WHERE individual_id = ?
+                  AND author_user_id = ?
+                  AND claim_type = 'ownership'
+                  AND COALESCE(ownership_kind, 'acquire') = 'acquire'
+                  AND substr(COALESCE(occurred_at, ''), 1, 10) = substr(?, 1, 10)
+                  AND COALESCE(ownership_source, '') = ''
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    link["individual_id"],
+                    link["user_id"],
+                    link["acquired_at"],
+                ),
+            ).fetchone()
+            release = con.execute(
+                """
+                SELECT id
+                FROM claims
+                WHERE individual_id = ?
+                  AND author_user_id = ?
+                  AND claim_type = 'ownership'
+                  AND ownership_kind = 'release'
+                  AND substr(COALESCE(occurred_at, ''), 1, 10) = substr(?, 1, 10)
+                  AND COALESCE(ownership_source, '') = ''
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    link["individual_id"],
+                    link["user_id"],
+                    link["released_at"],
+                ),
+            ).fetchone()
+            if acquire and release:
+                pair_id = str(uuid.uuid4())
+                con.execute(
+                    """
+                    UPDATE claims
+                    SET ownership_source = 'former_owner',
+                        ownership_pair_id = ?,
+                        verification_status = 'unverified'
+                    WHERE id IN (?, ?)
+                    """,
+                    (
+                        pair_id,
+                        acquire["id"],
+                        release["id"],
+                    ),
+                )
+
         con.execute(
             """
             UPDATE observations
