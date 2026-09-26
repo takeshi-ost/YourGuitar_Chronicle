@@ -1183,6 +1183,31 @@ class Repository:
             ),
         )
 
+        # Keep the user's Owned / Formerly Owned classification derived
+        # from the same Claim-ordered snapshot as Current Owner.  This avoids
+        # action-order bugs when an Ownership Claim is entered with a
+        # backdated occurred_at value.
+        effective_owner_user_id = state["current_owner_user_id"]
+        con.execute(
+            """
+            UPDATE user_guitars
+            SET ownership_status = CASE
+                    WHEN ? IS NOT NULL
+                     AND CAST(user_id AS TEXT) = CAST(? AS TEXT)
+                    THEN 'current_owner'
+                    ELSE 'former_owner'
+                END,
+                updated_at = ?
+            WHERE individual_id = ?
+            """,
+            (
+                effective_owner_user_id,
+                effective_owner_user_id,
+                now,
+                individual_id,
+            ),
+        )
+
         return {
             "id": individual_id,
             **state,
@@ -3166,12 +3191,10 @@ class Repository:
                 con.execute(
                     """
                     UPDATE user_guitars
-                    SET ownership_status = 'former_owner',
-                        released_at = ?,
+                    SET released_at = ?,
                         updated_at = ?
                     WHERE user_id = ?
                       AND individual_id = ?
-                      AND ownership_status = 'current_owner'
                     """,
                     (event_date, now, user_id, individual_id),
                 )
@@ -3200,12 +3223,10 @@ class Repository:
                     VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
                     ON CONFLICT(user_id, individual_id)
                     DO UPDATE SET
-                        ownership_status = 'current_owner',
                         acquired_at = COALESCE(
                             excluded.acquired_at,
                             user_guitars.acquired_at
                         ),
-                        released_at = NULL,
                         updated_at = excluded.updated_at
                     """,
                     (
