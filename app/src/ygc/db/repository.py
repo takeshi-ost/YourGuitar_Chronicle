@@ -2388,6 +2388,261 @@ class Repository:
                 guitars,
             )
 
+    def create_claim_notification(
+        self,
+        claim_id: int,
+    ) -> int | None:
+        now = utcnow()
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT
+                    c.id,
+                    c.individual_id,
+                    c.author_user_id,
+                    c.claim_type,
+                    c.specification_kind,
+                    c.ownership_source,
+                    u.display_name AS author_name,
+                    i.manufacturer,
+                    i.model,
+                    i.serial_number,
+                    i.current_owner_user_id
+                FROM claims c
+                INNER JOIN users u
+                  ON u.id = c.author_user_id
+                INNER JOIN individuals i
+                  ON i.id = c.individual_id
+                WHERE c.id = ?
+                  AND c.status = 'active'
+                """,
+                (claim_id,),
+            ).fetchone()
+            if not claim:
+                return None
+
+            recipient = claim["current_owner_user_id"]
+            if recipient is None:
+                return None
+            if int(recipient) == int(claim["author_user_id"]):
+                return None
+
+            claim_type = str(claim["claim_type"] or "claim")
+            if claim_type == "specification":
+                label = (
+                    "Repair"
+                    if str(claim["specification_kind"] or "") == "repair"
+                    else "Specification"
+                )
+            elif (
+                claim_type == "ownership"
+                and str(claim["ownership_source"] or "") == "former_owner"
+            ):
+                label = "Former Owner"
+            else:
+                label = claim_type.replace("_", " ").title()
+
+            guitar = " ".join(
+                part
+                for part in (
+                    str(claim["manufacturer"] or "").strip(),
+                    str(claim["model"] or "").strip(),
+                )
+                if part
+            ) or f"Individual #{claim['individual_id']}"
+
+            cur = con.execute(
+                """
+                INSERT INTO notifications (
+                    recipient_user_id,
+                    actor_user_id,
+                    notification_type,
+                    individual_id,
+                    claim_id,
+                    title,
+                    body,
+                    is_read,
+                    created_at
+                )
+                VALUES (?, ?, 'claim_added', ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    int(recipient),
+                    int(claim["author_user_id"]),
+                    int(claim["individual_id"]),
+                    int(claim["id"]),
+                    f"New {label} Claim",
+                    f"{claim['author_name']} added a {label} Claim to {guitar}.",
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def create_verification_notification(
+        self,
+        claim_id: int,
+        verifier_user_id: int,
+        stance: str,
+    ) -> int | None:
+        now = utcnow()
+        with self.connect() as con:
+            claim = con.execute(
+                """
+                SELECT
+                    c.id,
+                    c.individual_id,
+                    c.author_user_id,
+                    c.claim_type,
+                    c.ownership_source,
+                    i.manufacturer,
+                    i.model,
+                    v.display_name AS verifier_name
+                FROM claims c
+                INNER JOIN individuals i
+                  ON i.id = c.individual_id
+                INNER JOIN users v
+                  ON v.id = ?
+                WHERE c.id = ?
+                """,
+                (
+                    verifier_user_id,
+                    claim_id,
+                ),
+            ).fetchone()
+            if not claim:
+                return None
+            if int(claim["author_user_id"]) == int(verifier_user_id):
+                return None
+
+            guitar = " ".join(
+                part
+                for part in (
+                    str(claim["manufacturer"] or "").strip(),
+                    str(claim["model"] or "").strip(),
+                )
+                if part
+            ) or f"Individual #{claim['individual_id']}"
+
+            cur = con.execute(
+                """
+                INSERT INTO notifications (
+                    recipient_user_id,
+                    actor_user_id,
+                    notification_type,
+                    individual_id,
+                    claim_id,
+                    title,
+                    body,
+                    is_read,
+                    created_at
+                )
+                VALUES (?, ?, 'claim_verified', ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    int(claim["author_user_id"]),
+                    int(verifier_user_id),
+                    int(claim["individual_id"]),
+                    int(claim["id"]),
+                    f"Claim Verification: {stance.title()}",
+                    f"{claim['verifier_name']} set your Claim on {guitar} to {stance.title()}.",
+                    now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def list_notifications(
+        self,
+        user_id: int,
+        *,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        n.*,
+                        actor.display_name AS actor_name,
+                        i.manufacturer,
+                        i.model,
+                        i.serial_number
+                    FROM notifications n
+                    LEFT JOIN users actor
+                      ON actor.id = n.actor_user_id
+                    LEFT JOIN individuals i
+                      ON i.id = n.individual_id
+                    WHERE n.recipient_user_id = ?
+                    ORDER BY n.created_at DESC, n.id DESC
+                    LIMIT ?
+                    """,
+                    (
+                        user_id,
+                        max(1, min(int(limit), 100)),
+                    ),
+                )
+            )
+
+    def unread_notification_count(
+        self,
+        user_id: int,
+    ) -> int:
+        with self.connect() as con:
+            return int(
+                con.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM notifications
+                    WHERE recipient_user_id = ?
+                      AND is_read = 0
+                    """,
+                    (user_id,),
+                ).fetchone()[0]
+            )
+
+    def mark_notification_read(
+        self,
+        notification_id: int,
+        user_id: int,
+    ) -> bool:
+        now = utcnow()
+        with self.connect() as con:
+            cur = con.execute(
+                """
+                UPDATE notifications
+                SET is_read = 1,
+                    read_at = COALESCE(read_at, ?)
+                WHERE id = ?
+                  AND recipient_user_id = ?
+                """,
+                (
+                    now,
+                    notification_id,
+                    user_id,
+                ),
+            )
+            return cur.rowcount > 0
+
+    def mark_all_notifications_read(
+        self,
+        user_id: int,
+    ) -> int:
+        now = utcnow()
+        with self.connect() as con:
+            cur = con.execute(
+                """
+                UPDATE notifications
+                SET is_read = 1,
+                    read_at = COALESCE(read_at, ?)
+                WHERE recipient_user_id = ?
+                  AND is_read = 0
+                """,
+                (
+                    now,
+                    user_id,
+                ),
+            )
+            return int(cur.rowcount)
+
     def get_user_summary(
         self,
         user_id: int,
