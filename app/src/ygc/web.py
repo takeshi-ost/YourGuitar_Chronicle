@@ -3975,12 +3975,21 @@ async function loadProfile(){
   const id=profileUserId();
   if(!id)return;
   const root=document.getElementById('profile');
+  const viewerId=Number(localStorage.getItem(ACTIVE_USER_KEY)||0);
+  if(!viewerId){
+    root.innerHTML=
+      '<section class="profile-hero">'+
+        '<div></div>'+
+        '<div><div class="name">Members only</div><div class="meta">User ProfileはYGCメンバーのみ閲覧できます。</div></div>'+
+        '<div class="hero-actions"><button onclick="window.location.href=\'/user-view/edit\'">Sign In</button><button class="primary" onclick="window.location.href=\'/user-view/edit\'">Create Account</button></div>'+
+      '</section>';
+    return;
+  }
   try{
     const d=await jfetch('/api/users/'+id);
     const u=d.user||{};
     const guitars=d.guitars||[];
     const summary=d.summary||{};
-    const viewerId=Number(localStorage.getItem(ACTIVE_USER_KEY)||0);
     const own=viewerId===Number(id);
     const owned=guitars.filter(g=>g.ownership_status==='current_owner');
     const former=guitars.filter(g=>g.ownership_status==='former_owner');
@@ -4030,7 +4039,7 @@ USER_VIEW_HTML = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your Guitar Chronicle — User View</title>
+<title>Your Guitar Chronicle — Top Page</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--bad:#e07171}
@@ -4053,6 +4062,7 @@ button.secondary{background:#2a3036;color:var(--text)}
 .account-hub-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
 .account-hub-user-copy{min-width:0}.account-hub-name-row{display:flex;align-items:center;gap:7px;min-width:0}.account-hub-name{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:2px 6px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
 .account-hub-location{font-size:11px;color:var(--muted);margin-top:3px}
+.account-hub-guest-title{font-size:16px;font-weight:800}.account-hub-guest-copy{font-size:11px;color:var(--muted);margin-top:4px;max-width:620px}.account-hub-guest-mark{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#24201a;border:1px solid #4b402e;color:var(--accent);font-size:20px;font-weight:800;flex:0 0 auto}
 .account-hub-summary{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#14171a}
 .account-hub-stat{min-width:82px;padding:8px 12px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
 .account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
@@ -4139,7 +4149,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </head>
 <body>
 <header>
-  <h1>Your Guitar Chronicle <span class="sub">User View</span></h1>
+  <h1>Your Guitar Chronicle <span class="sub">Top Page</span></h1>
 </header>
 <main>
 <div class="account-hub" id="accountHub">
@@ -4403,8 +4413,19 @@ function renderAccountHub(){
   const hub=document.getElementById('accountHub');
   if(!hub)return;
   if(!activeUser||!activeUser.user){
-    hub.innerHTML='<div class="account-hub-empty">Userが選択されていません。Edit Your ChronicleからUserを選択してください。</div>'+
-      '<div></div><div class="account-hub-actions"><button class="account-hub-action primary" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button></div>';
+    hub.innerHTML=
+      '<div class="account-hub-user">'+
+        '<div class="account-hub-guest-mark">YGC</div>'+
+        '<div class="account-hub-user-copy">'+
+          '<div class="account-hub-guest-title">Explore guitar histories. Add yours when you are ready.</div>'+
+          '<div class="account-hub-guest-copy">Product ListとChronicleはGuestでも閲覧できます。自分に関係するギターを見つけたら、アカウントを作成してその履歴に参加できます。</div>'+
+        '</div>'+
+      '</div>'+
+      '<div></div>'+
+      '<div class="account-hub-actions">'+
+        '<button class="account-hub-action" type="button" onclick="window.location.href=\'/user-view/edit\'">Sign In</button>'+
+        '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Create Account</button>'+
+      '</div>';
     return;
   }
   const u=activeUser.user;
@@ -4588,7 +4609,7 @@ function currentSnapshotOwnerHtml(i){
   const type=String(i.current_owner_type||'').trim();
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
-  if(i.current_owner_user_id)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
+  if(i.current_owner_user_id&&activeUser&&activeUser.user)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
@@ -4619,9 +4640,15 @@ function observationCard(o,isLatest){
 function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
+function requireAccount(){
+  window.location.href='/user-view/edit';
+}
 function ownershipControlsHtml(individualId){
   if(activeUser&&activeUser.user&&activeUserOwns(individualId)){
     return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
+  }
+  if(!activeUser||!activeUser.user){
+    return '<div class="toolbar" style="margin-top:10px"><button onclick="requireAccount()">Add to Your Chronicle</button></div>';
   }
   return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
@@ -4818,7 +4845,7 @@ function claimCardFull(c){
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By <a href="/users/'+Number(c.author_user_id)+'">'+esc(c.author_name||('User #'+c.author_user_id))+'</a></div></div>'+
+    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+((activeUser&&activeUser.user)?'<a href="/users/'+Number(c.author_user_id)+'">'+esc(c.author_name||('User #'+c.author_user_id))+'</a>':esc(c.author_name||('User #'+c.author_user_id)))+'</div></div>'+
     '</div>';
 }
 function compactClaimType(c){
@@ -4954,7 +4981,7 @@ async function setClaimResponse(claimId,stance){
 
 async function voteClaim(claimId,vote){
   if(!activeUser||!activeUser.user){
-    window.location.href='/user-view/edit';
+    requireAccount();
     return;
   }
   try{
@@ -5057,7 +5084,7 @@ let editingSpecificationClaimId=null;
 function toggleAddClaimMenu(event,individualId){
   event.stopPropagation();
   if(!activeUser||!activeUser.user){
-    alert('先にUserを選択してください。');
+    requireAccount();
     return;
   }
   selectedIndividualId=Number(individualId);
