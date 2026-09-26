@@ -1055,11 +1055,13 @@ class Repository:
                     if "ownership_kind" in claim.keys()
                     else "acquire"
                 )
-                if ownership_kind == "release":
+                if ownership_kind in ("transfer", "release", "inherit"):
                     state["current_owner_name"] = "Unknown"
                     state["current_owner_type"] = "unknown"
                     state["current_owner_user_id"] = None
                     state["current_owner_source_url"] = None
+                    state["location_country"] = None
+                    state["location_region"] = None
                     continue
                 owner_user_id = (
                     str(claim["value_text"]).strip()
@@ -1099,6 +1101,8 @@ class Repository:
                 state["current_owner_type"] = "unknown"
                 state["current_owner_user_id"] = None
                 state["current_owner_source_url"] = None
+                state["location_country"] = None
+                state["location_region"] = None
 
         normalized_maker = normalize_manufacturer(
             state["manufacturer"]
