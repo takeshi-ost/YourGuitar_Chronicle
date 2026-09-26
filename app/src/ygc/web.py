@@ -3628,8 +3628,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <input id="ownershipClaimDate" type="date">
     </div>
     <div class="form-row" id="ownershipClaimPreviousRow">
-      <label class="form-label" for="ownershipClaimPrevious">以前の所有者・入手元（任意）</label>
-      <input id="ownershipClaimPrevious" placeholder="Former owner / Shop / Family ...">
+      <label class="form-label" for="ownershipClaimPrevious">相手先・関係者（任意）</label>
+      <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
     </div>
     <div class="form-row">
       <label class="form-label" for="ownershipClaimBody">Memo（任意）</label>
@@ -4050,11 +4050,11 @@ function configureOwnershipClaim(mode){
     fixed.innerHTML='<strong>Acquire</strong>';
     previousRow.style.display='';
   }else{
-    kind.value='release';
-    kind.style.display='none';
-    fixed.style.display='block';
-    fixed.innerHTML='<strong>Release</strong>';
-    previousRow.style.display='none';
+    kind.innerHTML='<option value="transfer">Transfer</option><option value="release">Release</option><option value="inherit">Inherit</option>';
+    kind.value='transfer';
+    kind.style.display='block';
+    fixed.style.display='none';
+    previousRow.style.display='';
   }
 }
 function openOwnershipClaim(individualId,mode='acquire'){
@@ -4102,7 +4102,7 @@ async function submitOwnershipClaim(){
       user_id:Number(activeUser.user.id),
       ownership_kind:kind,
       occurred_at:document.getElementById('ownershipClaimDate').value||null,
-      previous_owner_text:kind==='release'?null:(document.getElementById('ownershipClaimPrevious').value.trim()||null),
+      previous_owner_text:document.getElementById('ownershipClaimPrevious').value.trim()||null,
       body:document.getElementById('ownershipClaimBody').value.trim()||null
     };
     const individualId=pendingOwnershipClaimIndividualId;
