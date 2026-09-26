@@ -231,3 +231,14 @@ Individual Snapshot再構築
 - 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
 - User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
 - User Profileのギターカードから対象IndividualをUser Viewで直接開ける
+
+
+## Top Page / Guest Mode
+- 従来の /user-view は公開Top Pageとして扱う
+- Guestでも Product List / Product Detail / Chronicle Claim を閲覧できる
+- Guest時のアカウント欄は Sign In / Create Account の導線に差し替える
+- Guestが Add to Your Chronicle / Add Claim / Good / Bad など参加操作を行うとアカウント導線へ移動する
+- Guestには User Profileへのリンクを表示せず、Current Owner / Claim authorは名前のみ表示する
+- User ProfileはYGCメンバーのみ閲覧可能とし、Guestが直接URLへアクセスした場合はMembers only表示にする
+- Logged-in Userでは従来どおりNotifications / Messages / View Profile / Edit Your Chronicle等を表示する
+- 開発中の互換性のためURLは当面 /user-view のまま維持する
