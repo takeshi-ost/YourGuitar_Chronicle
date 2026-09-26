@@ -4022,8 +4022,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
 .claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
 .claim-negative-dot:hover{color:#a0a7ae!important}
-.claim-popup-modal{width:min(620px,calc(100vw - 32px));background:transparent;border:0;padding:0;box-shadow:none}
+.claim-popup-modal{position:fixed;width:auto;background:transparent;border:0;padding:0;box-shadow:none;z-index:1001}
 .claim-popup-modal .claim-card{margin:0}.claim-popup-modal .claim-card::after{display:none}
+#claimPopupModal{background:transparent;align-items:initial;justify-content:initial;padding:0}
 </style>
 </head>
 <body>
@@ -4715,19 +4716,56 @@ function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
   if(verification==='positive')return claimCardFull(c);
   if(verification==='unverified'){
-    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+')">'+esc(compactClaimType(c))+'</button></div>';
+    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }
   if(verification==='negative'){
-    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+')">◉</button></div>';
+    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+',this)">◉</button></div>';
   }
   return claimCardFull(c);
 }
-function openClaimPopup(claimId){
+function positionClaimPopup(trigger){
+  const backdrop=document.getElementById('claimPopupModal');
+  const popup=backdrop?backdrop.querySelector('.claim-popup-modal'):null;
+  const chronicle=document.getElementById('chronicleEntries');
+  if(!backdrop||!popup||!chronicle||!trigger)return;
+
+  const triggerRect=trigger.getBoundingClientRect();
+  const chronicleRect=chronicle.getBoundingClientRect();
+  const marginLeft=22;
+  const edge=10;
+  const width=Math.max(220,chronicleRect.width-marginLeft);
+  const left=Math.min(
+    Math.max(edge,chronicleRect.left+marginLeft),
+    Math.max(edge,window.innerWidth-width-edge)
+  );
+
+  popup.style.width=width+'px';
+  popup.style.left=left+'px';
+  popup.style.top=Math.min(
+    window.innerHeight-edge,
+    triggerRect.bottom+6
+  )+'px';
+
+  requestAnimationFrame(()=>{
+    const popupRect=popup.getBoundingClientRect();
+    let top=triggerRect.bottom+6;
+    if(top+popupRect.height>window.innerHeight-edge){
+      top=triggerRect.top-popupRect.height-6;
+    }
+    if(top<edge)top=edge;
+    popup.style.top=top+'px';
+  });
+}
+function openClaimPopup(claimId,trigger){
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
   if(!claim)return;
   const content=document.getElementById('claimPopupContent');
   if(content)content.innerHTML=claimCardFull(claim);
-  document.getElementById('claimPopupModal').classList.add('open');
+  const modal=document.getElementById('claimPopupModal');
+  if(modal){
+    modal.classList.add('open');
+    positionClaimPopup(trigger);
+  }
 }
 function closeClaimPopup(event){
   if(event&&event.target&&event.target.id!=='claimPopupModal')return;
@@ -5345,8 +5383,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
 .claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
 .claim-negative-dot:hover{color:#a0a7ae!important}
-.claim-popup-modal{width:min(620px,calc(100vw - 32px));background:transparent;border:0;padding:0;box-shadow:none}
+.claim-popup-modal{position:fixed;width:auto;background:transparent;border:0;padding:0;box-shadow:none;z-index:1001}
 .claim-popup-modal .claim-card{margin:0}.claim-popup-modal .claim-card::after{display:none}
+#claimPopupModal{background:transparent;align-items:initial;justify-content:initial;padding:0}
 </style>
 </head>
 <body>
@@ -6288,19 +6327,56 @@ function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
   if(verification==='positive')return claimCardFull(c);
   if(verification==='unverified'){
-    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+')">'+esc(compactClaimType(c))+'</button></div>';
+    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }
   if(verification==='negative'){
-    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+')">◉</button></div>';
+    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+',this)">◉</button></div>';
   }
   return claimCardFull(c);
 }
-function openClaimPopup(claimId){
+function positionClaimPopup(trigger){
+  const backdrop=document.getElementById('claimPopupModal');
+  const popup=backdrop?backdrop.querySelector('.claim-popup-modal'):null;
+  const chronicle=document.getElementById('chronicleEntries');
+  if(!backdrop||!popup||!chronicle||!trigger)return;
+
+  const triggerRect=trigger.getBoundingClientRect();
+  const chronicleRect=chronicle.getBoundingClientRect();
+  const marginLeft=22;
+  const edge=10;
+  const width=Math.max(220,chronicleRect.width-marginLeft);
+  const left=Math.min(
+    Math.max(edge,chronicleRect.left+marginLeft),
+    Math.max(edge,window.innerWidth-width-edge)
+  );
+
+  popup.style.width=width+'px';
+  popup.style.left=left+'px';
+  popup.style.top=Math.min(
+    window.innerHeight-edge,
+    triggerRect.bottom+6
+  )+'px';
+
+  requestAnimationFrame(()=>{
+    const popupRect=popup.getBoundingClientRect();
+    let top=triggerRect.bottom+6;
+    if(top+popupRect.height>window.innerHeight-edge){
+      top=triggerRect.top-popupRect.height-6;
+    }
+    if(top<edge)top=edge;
+    popup.style.top=top+'px';
+  });
+}
+function openClaimPopup(claimId,trigger){
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
   if(!claim)return;
   const content=document.getElementById('claimPopupContent');
   if(content)content.innerHTML=claimCardFull(claim);
-  document.getElementById('claimPopupModal').classList.add('open');
+  const modal=document.getElementById('claimPopupModal');
+  if(modal){
+    modal.classList.add('open');
+    positionClaimPopup(trigger);
+  }
 }
 function closeClaimPopup(event){
   if(event&&event.target&&event.target.id!=='claimPopupModal')return;
