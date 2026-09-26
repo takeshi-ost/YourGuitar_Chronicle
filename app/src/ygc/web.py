@@ -4920,6 +4920,10 @@ function positionClaimPopup(trigger){
   });
 }
 function openClaimPopup(claimId,trigger){
+  if(!activeUser||!activeUser.user){
+    requireAccount();
+    return;
+  }
   const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
   if(!claim)return;
   const content=document.getElementById('claimPopupContent');
