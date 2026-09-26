@@ -3312,7 +3312,13 @@ class Repository:
                 if individual["current_owner_user_id"] is not None
                 else ""
             )
+            current_owner_name = (
+                str(individual["current_owner_name"]).strip()
+                if individual["current_owner_name"] is not None
+                else ""
+            )
 
+            current_owner_start = None
             if current_owner_user_id:
                 current_owner_start = con.execute(
                     """
@@ -3370,12 +3376,53 @@ class Repository:
                         current_owner_user_id,
                     ),
                 ).fetchone()
+            elif current_owner_name and current_owner_name.lower() != "unknown":
+                current_owner_start = con.execute(
+                    """
+                    SELECT
+                        COALESCE(
+                            c.occurred_at,
+                            c.created_at
+                        ) AS effective_at
+                    FROM claims c
+                    INNER JOIN claim_listing_items li
+                      ON li.claim_id = c.id
+                     AND li.field_name = 'owner_name'
+                    WHERE c.individual_id = ?
+                      AND c.status = 'active'
+                      AND c.claim_type = 'listing'
+                      AND LOWER(TRIM(COALESCE(li.value_text, '')))
+                          = LOWER(?)
+                    ORDER BY
+                        COALESCE(
+                            c.occurred_at,
+                            c.created_at
+                        ) DESC,
+                        c.created_at DESC,
+                        c.id DESC
+                    LIMIT 1
+                    """,
+                    (
+                        individual_id,
+                        current_owner_name,
+                    ),
+                ).fetchone()
 
-                if not current_owner_start:
-                    raise ValueError(
-                        "Current owner acquisition date could not be determined"
+            if (
+                (
+                    current_owner_user_id
+                    or (
+                        current_owner_name
+                        and current_owner_name.lower() != "unknown"
                     )
+                )
+                and not current_owner_start
+            ):
+                raise ValueError(
+                    "Current owner acquisition date could not be determined"
+                )
 
+            if current_owner_start:
                 current_owner_date = str(
                     current_owner_start["effective_at"]
                 )[:10]
