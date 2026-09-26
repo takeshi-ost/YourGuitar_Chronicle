@@ -3609,26 +3609,35 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
-<div class="modal-backdrop" id="ownerClaimModal" onclick="closeOwnerClaim(event)">
+<div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Acquire</h2>
-    <div class="sub" id="ownerClaimGuitar" style="margin-bottom:14px"></div>
+    <h2>Ownership</h2>
+    <div class="sub" id="ownershipClaimGuitar" style="margin-bottom:14px"></div>
     <div class="form-row">
-      <label class="form-label" for="ownerClaimDate">Date</label>
-      <input id="ownerClaimDate" type="date">
+      <label class="form-label">Tag</label>
+      <div id="ownershipClaimFixedTag"><strong>Acquire</strong></div>
+      <select id="ownershipClaimKind" style="display:none">
+        <option value="acquire">Acquire</option>
+        <option value="transfer">Transfer</option>
+        <option value="inherit">Inherit</option>
+        <option value="release">Release</option>
+      </select>
     </div>
     <div class="form-row">
-      <label class="form-label" for="ownerClaimPrevious">以前の所有者・入手元（任意）</label>
-      <input id="ownerClaimPrevious" placeholder="Former owner / Shop / Family ...">
+      <label class="form-label" for="ownershipClaimDate">Date</label>
+      <input id="ownershipClaimDate" type="date">
+    </div>
+    <div class="form-row" id="ownershipClaimPreviousRow">
+      <label class="form-label" for="ownershipClaimPrevious">以前の所有者・入手元（任意）</label>
+      <input id="ownershipClaimPrevious" placeholder="Former owner / Shop / Family ...">
     </div>
     <div class="form-row">
-      <label class="form-label" for="ownerClaimBody">Claimメモ（任意）</label>
-      <textarea id="ownerClaimBody" placeholder="この個体を所有することになった経緯など"></textarea>
+      <label class="form-label" for="ownershipClaimBody">Memo（任意）</label>
+      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Ownershipに関する補足"></textarea>
     </div>
-    <div class="sub">Ownership Claimを作成し、このギターをあなたのChronicleに追加します。</div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeOwnerClaim()">キャンセル</button>
-      <button id="ownerClaimSubmit" onclick="submitOwnerClaim()">Add to Your Chronicle</button>
+      <button class="secondary" onclick="closeOwnershipClaim()">キャンセル</button>
+      <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Claimを追加</button>
     </div>
   </div>
 </div>
@@ -3640,7 +3649,8 @@ let selectedIndividualId=null;
 let currentObservations=[];
 let currentClaims=[];
 let chronicleSort='event';
-let pendingOwnerClaimIndividualId=null;
+let pendingOwnershipClaimIndividualId=null;
+let ownershipClaimMode='acquire';
 let individualSortKey='id';
 let individualSortDirection=1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
@@ -4028,49 +4038,85 @@ async function showIndividual(id){
   renderChronicle();
 }
 
-function openOwnerClaim(individualId){
+function configureOwnershipClaim(mode){
+  ownershipClaimMode=mode==='add_claim'?'add_claim':'acquire';
+  const kind=document.getElementById('ownershipClaimKind');
+  const fixed=document.getElementById('ownershipClaimFixedTag');
+  const previousRow=document.getElementById('ownershipClaimPreviousRow');
+  if(ownershipClaimMode==='acquire'){
+    kind.value='acquire';
+    kind.style.display='none';
+    fixed.style.display='block';
+    fixed.innerHTML='<strong>Acquire</strong>';
+    previousRow.style.display='';
+  }else{
+    kind.value='release';
+    kind.style.display='none';
+    fixed.style.display='block';
+    fixed.innerHTML='<strong>Release</strong>';
+    previousRow.style.display='none';
+  }
+}
+function openOwnershipClaim(individualId,mode='acquire'){
   if(!activeUser||!activeUser.user){
     window.location.href='/user-view/edit';
     return;
   }
-  pendingOwnerClaimIndividualId=Number(individualId);
+  if(mode==='add_claim'&&!activeUserOwns(individualId)){
+    alert('現在のUserが所有中のギターだけOwnership Claimを追加できます。');
+    return;
+  }
+  pendingOwnershipClaimIndividualId=Number(individualId);
+  selectedIndividualId=Number(individualId);
   const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
-  document.getElementById('ownerClaimGuitar').textContent=guitar
+  document.getElementById('ownershipClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  document.getElementById('ownerClaimDate').value='';
-  document.getElementById('ownerClaimPrevious').value='';
-  document.getElementById('ownerClaimBody').value='';
-  document.getElementById('ownerClaimModal').classList.add('open');
+  configureOwnershipClaim(mode);
+  document.getElementById('ownershipClaimDate').value='';
+  document.getElementById('ownershipClaimPrevious').value='';
+  document.getElementById('ownershipClaimBody').value='';
+  document.getElementById('ownershipClaimSubmit').textContent=mode==='acquire'?'Add to Your Chronicle':'Claimを追加';
+  document.getElementById('ownershipClaimModal').classList.add('open');
 }
-function closeOwnerClaim(event){
-  if(event&&event.target&&event.target.id!=='ownerClaimModal')return;
-  document.getElementById('ownerClaimModal').classList.remove('open');
-  pendingOwnerClaimIndividualId=null;
+function openOwnerClaim(individualId){
+  openOwnershipClaim(individualId,'acquire');
 }
-async function submitOwnerClaim(){
-  if(!activeUser||!activeUser.user||pendingOwnerClaimIndividualId===null)return;
-  const button=document.getElementById('ownerClaimSubmit');
+function closeOwnershipClaim(event){
+  if(event&&event.target&&event.target.id!=='ownershipClaimModal')return;
+  document.getElementById('ownershipClaimModal').classList.remove('open');
+  pendingOwnershipClaimIndividualId=null;
+}
+async function submitOwnershipClaim(){
+  if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
+  const button=document.getElementById('ownershipClaimSubmit');
+  const kind=document.getElementById('ownershipClaimKind').value;
+  if(kind==='release'){
+    const guitar=individuals.find(x=>Number(x.id)===Number(pendingOwnershipClaimIndividualId));
+    const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'このギター';
+    if(!confirm(label+' の所有紐づけを解除し、Current OwnerをUnknownに変更します。\n\nこの内容でReleaseしますか？'))return;
+  }
   button.disabled=true;
   try{
     const body={
       user_id:Number(activeUser.user.id),
-      ownership_kind:'acquire',
-      occurred_at:document.getElementById('ownerClaimDate').value||null,
-      previous_owner_text:document.getElementById('ownerClaimPrevious').value.trim()||null,
-      body:document.getElementById('ownerClaimBody').value.trim()||null
+      ownership_kind:kind,
+      occurred_at:document.getElementById('ownershipClaimDate').value||null,
+      previous_owner_text:kind==='release'?null:(document.getElementById('ownershipClaimPrevious').value.trim()||null),
+      body:document.getElementById('ownershipClaimBody').value.trim()||null
     };
-    const individualId=pendingOwnerClaimIndividualId;
+    const individualId=pendingOwnershipClaimIndividualId;
     const d=await jfetch('/api/individuals/'+individualId+'/ownership-claim',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)
     });
     activeUser={user:d.user,guitars:d.guitars};
-    closeOwnerClaim();
+    closeOwnershipClaim();
+    if(typeof renderAccount==='function')renderAccount();
     await showIndividual(individualId);
   }catch(e){
-    alert('Claimの登録に失敗しました。\\n'+e.message);
+    alert('Ownership Claimの登録に失敗しました.\n'+e.message);
   }finally{
     button.disabled=false;
   }
@@ -4192,25 +4238,6 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <button class="secondary" onclick="window.location.href='/user-view'">Close</button>
 </div>
 </main>
-
-<div class="modal-backdrop" id="releaseClaimModal" onclick="closeReleaseClaim(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>Ownership</h2>
-    <div class="sub" id="releaseClaimGuitar" style="margin-bottom:14px"></div>
-    <div class="form-row">
-      <label class="form-label">Tag</label>
-      <div><strong>Release</strong></div>
-    </div>
-    <div class="form-row">
-      <label class="form-label" for="releaseClaimReason">Reason for release（任意）</label>
-      <textarea id="releaseClaimReason" maxlength="2000" placeholder="Sold / Gifted / Traded / Other ..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="secondary" onclick="closeReleaseClaim()">キャンセル</button>
-      <button class="bad" id="releaseClaimSubmit" onclick="submitReleaseClaim()">Release</button>
-    </div>
-  </div>
-</div>
 
 <div class="modal-backdrop" id="identityCorrectionModal" onclick="closeIdentityCorrection(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -5068,61 +5095,7 @@ function chooseClaimType(type){
   if(type==='specification_repair'){
     openSpecificationClaim(selectedIndividualId);
   }else if(type==='ownership'){
-    openReleaseClaim(selectedIndividualId);
-  }
-}
-function openReleaseClaim(individualId){
-  if(!activeUser||!activeUser.user){
-    alert('先にUserを選択してください。');
-    return;
-  }
-  if(!activeUserOwns(individualId)){
-    alert('現在のUserが所有中のギターだけReleaseできます。');
-    return;
-  }
-  selectedIndividualId=Number(individualId);
-  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
-  document.getElementById('releaseClaimGuitar').textContent=guitar
-    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
-    : 'Individual #'+individualId;
-  document.getElementById('releaseClaimReason').value='';
-  document.getElementById('releaseClaimModal').classList.add('open');
-  document.getElementById('releaseClaimReason').focus();
-}
-function closeReleaseClaim(event){
-  if(event&&event.target&&event.target.id!=='releaseClaimModal')return;
-  document.getElementById('releaseClaimModal').classList.remove('open');
-}
-async function submitReleaseClaim(){
-  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
-  const guitar=individuals.find(x=>Number(x.id)===Number(selectedIndividualId));
-  const label=guitar
-    ? guitar.manufacturer+' '+(guitar.model||'')
-    : 'このギター';
-  if(!confirm(label+' の所有紐づけを解除し、Current OwnerをUnknownに変更します。\n\nこの内容でReleaseしますか？')){
-    return;
-  }
-  const button=document.getElementById('releaseClaimSubmit');
-  button.disabled=true;
-  try{
-    const d=await jfetch('/api/individuals/'+selectedIndividualId+'/ownership-claim',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        user_id:Number(activeUser.user.id),
-        ownership_kind:'release',
-        occurred_at:null,
-        body:document.getElementById('releaseClaimReason').value.trim()||null
-      })
-    });
-    activeUser={user:d.user,guitars:d.guitars};
-    closeReleaseClaim();
-    renderAccount();
-    await showIndividual(selectedIndividualId);
-  }catch(e){
-    alert('Releaseの登録に失敗しました。\n'+e.message);
-  }finally{
-    button.disabled=false;
+    openOwnershipClaim(selectedIndividualId,'add_claim');
   }
 }
 
