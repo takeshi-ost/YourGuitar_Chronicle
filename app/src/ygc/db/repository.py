@@ -93,6 +93,7 @@ class Repository:
                 "specification_kind": "TEXT",
                 "ownership_kind": "TEXT",
                 "target_claim_id": "INTEGER",
+                "verification_status": "TEXT NOT NULL DEFAULT 'positive'",
             },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
@@ -923,6 +924,7 @@ class Repository:
                 WHERE c.individual_id = ?
                   AND c.claim_type = 'specification'
                   AND c.status = 'active'
+                  AND COALESCE(c.verification_status, 'positive') = 'positive'
                 ORDER BY
                     COALESCE(
                         c.occurred_at,
@@ -3355,6 +3357,11 @@ class Repository:
                     kind,
                     note,
                     event_date,
+                    self._claim_verification_status(
+                        con,
+                        user_id,
+                        individual_id,
+                    ),
                     now,
                     now,
                 ),
@@ -3367,6 +3374,25 @@ class Repository:
             )
             return claim_id
 
+
+    @staticmethod
+    def _claim_verification_status(
+        con: sqlite3.Connection,
+        user_id: int,
+        individual_id: int,
+    ) -> str:
+        owner = con.execute(
+            """
+            SELECT 1
+            FROM user_guitars
+            WHERE user_id = ?
+              AND individual_id = ?
+              AND ownership_status = 'current_owner'
+            LIMIT 1
+            """,
+            (user_id, individual_id),
+        ).fetchone()
+        return "positive" if owner else "unverified"
 
     def create_media_claim(
         self,
@@ -3480,13 +3506,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, NULL, ?, 'media',
                     'media_type', 'image', ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
@@ -3494,6 +3521,11 @@ class Repository:
                     user_id,
                     note,
                     event_date,
+                    self._claim_verification_status(
+                        con,
+                        user_id,
+                        individual_id,
+                    ),
                     now,
                     now,
                 ),
@@ -3629,13 +3661,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, NULL, ?, 'event',
                     'event_kind', ?, ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
@@ -3798,13 +3831,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, NULL, ?, 'specification',
                     NULL, NULL, ?, ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
@@ -3813,6 +3847,11 @@ class Repository:
                     kind,
                     note,
                     event_date,
+                    self._claim_verification_status(
+                        con,
+                        user_id,
+                        individual_id,
+                    ),
                     now,
                     now,
                 ),
@@ -4487,6 +4526,7 @@ class Repository:
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
+                          AND COALESCE(c.verification_status, 'positive') = 'positive'
                           AND c.field_name IS NOT NULL
                           AND TRIM(c.field_name) <> ''
 
@@ -4513,6 +4553,7 @@ class Repository:
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
+                          AND COALESCE(c.verification_status, 'positive') = 'positive'
                     ),
                     ranked AS (
                         SELECT
@@ -4773,6 +4814,7 @@ class Repository:
                     INNER JOIN claims c
                       ON c.id = ce.claim_id
                      AND c.status = 'active'
+                     AND COALESCE(c.verification_status, 'positive') = 'positive'
                     WHERE ma.individual_id = ?
                       AND ma.media_type = 'image'
                     ORDER BY
@@ -4833,32 +4875,42 @@ class Repository:
     ) -> bool:
         normalized = stance.strip().lower()
         if normalized not in (
-            "endorse",
-            "dispute",
-            "neutral",
+            "positive",
+            "negative",
+            "unverified",
         ):
             raise ValueError(
-                "stance must be endorse, dispute, or neutral"
+                "stance must be positive, negative, or unverified"
             )
 
         now = utcnow()
         with self.connect() as con:
             claim = con.execute(
                 """
-                SELECT individual_id, author_user_id
+                SELECT individual_id, author_user_id, claim_type
                 FROM claims
                 WHERE id = ?
+                  AND status = 'active'
                 """,
                 (claim_id,),
             ).fetchone()
             if not claim:
                 return False
 
-            if int(claim["author_user_id"]) == int(
-                responder_user_id
+            if int(claim["author_user_id"]) == int(responder_user_id):
+                raise ValueError(
+                    "Owner Verification is only for another user's Claim"
+                )
+
+            if claim["claim_type"] in (
+                "ownership",
+                "owner_change",
+                "release",
+                "listing",
+                "identity_correction",
             ):
                 raise ValueError(
-                    "Owner response is only for another user's Claim"
+                    "This Claim type does not use Owner Verification"
                 )
 
             owner = con.execute(
@@ -4876,34 +4928,26 @@ class Repository:
             ).fetchone()
             if not owner:
                 raise ValueError(
-                    "Only the current owner can respond to another user's Claim"
+                    "Only the current owner can verify another user's Claim"
                 )
 
             con.execute(
                 """
-                INSERT INTO claim_responses (
-                    claim_id,
-                    responder_user_id,
-                    stance,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(
-                    claim_id,
-                    responder_user_id
-                )
-                DO UPDATE SET
-                    stance = excluded.stance,
-                    updated_at = excluded.updated_at
+                UPDATE claims
+                SET verification_status = ?,
+                    updated_at = ?
+                WHERE id = ?
                 """,
                 (
-                    claim_id,
-                    responder_user_id,
                     normalized,
                     now,
-                    now,
+                    claim_id,
                 ),
+            )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                int(claim["individual_id"]),
             )
             return True
 
