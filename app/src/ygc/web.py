@@ -5113,7 +5113,8 @@ async function showIndividual(id){
     });
   out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div></div>';
+    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
+    ownershipControlsHtml(i.id)+'</div>';
   out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
