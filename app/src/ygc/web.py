@@ -4126,6 +4126,32 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </div>
 
+<div class="modal-backdrop" id="formerOwnerClaimModal" onclick="closeFormerOwnerClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='TEXTAREA'){event.preventDefault();submitFormerOwnerClaim()}">
+    <h2>Former Owner</h2>
+    <div class="sub" id="formerOwnerClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="formerOwnerAcquisitionDate">Acquisition Date *</label>
+        <input id="formerOwnerAcquisitionDate" type="date" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="formerOwnerReleaseDate">Release Date *</label>
+        <input id="formerOwnerReleaseDate" type="date" required>
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="formerOwnerDetail">Detail（任意）</label>
+        <textarea id="formerOwnerDetail" maxlength="2000" placeholder="Ownership history detail"></textarea>
+      </div>
+    </div>
+    <div class="sub">Acquire / Release Claimを2件作成し、このUserのFormerly Owned Guitarsへ追加します。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeFormerOwnerClaim()">キャンセル</button>
+      <button id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Ownership</h2>
@@ -4680,7 +4706,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -4713,6 +4739,7 @@ function chooseClaimType(type){
   else if(type==='incident')openIncidentClaim(selectedIndividualId);
   else if(type==='event')openEventClaim(selectedIndividualId);
   else if(type==='media')openMediaClaim(selectedIndividualId);
+  else if(type==='former_owner')openFormerOwnerClaim(selectedIndividualId);
   else if(type==='ownership')openOwnershipClaim(selectedIndividualId,'add_claim');
 }
 
@@ -4890,6 +4917,68 @@ document.addEventListener('click',()=>{
   const claimMenu=document.getElementById('addClaimMenu');if(claimMenu)claimMenu.classList.remove('open');
   const specMenu=document.getElementById('specItemMenu');if(specMenu)specMenu.classList.remove('open');
 });
+
+function openFormerOwnerClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  if(activeUserOwns(individualId)){
+    alert('現在OwnerはFormer Owner Claimを追加できません。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('formerOwnerClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('formerOwnerAcquisitionDate').value='';
+  document.getElementById('formerOwnerReleaseDate').value='';
+  document.getElementById('formerOwnerDetail').value='';
+  document.getElementById('formerOwnerClaimModal').classList.add('open');
+  setTimeout(()=>document.getElementById('formerOwnerAcquisitionDate').focus(),0);
+}
+function closeFormerOwnerClaim(event){
+  if(event&&event.target&&event.target.id!=='formerOwnerClaimModal')return;
+  const modal=document.getElementById('formerOwnerClaimModal');
+  if(modal)modal.classList.remove('open');
+}
+async function submitFormerOwnerClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const acquisitionDate=document.getElementById('formerOwnerAcquisitionDate').value;
+  const releaseDate=document.getElementById('formerOwnerReleaseDate').value;
+  if(!acquisitionDate||!releaseDate){
+    alert('Acquisition DateとRelease Dateは必須です。');
+    return;
+  }
+  if(acquisitionDate>=releaseDate){
+    alert('Acquisition DateはRelease Dateより前の日付にしてください。');
+    return;
+  }
+  const button=document.getElementById('formerOwnerClaimSubmit');
+  button.disabled=true;
+  try{
+    const individualId=selectedIndividualId;
+    const d=await jfetch('/api/individuals/'+individualId+'/former-owner-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        acquisition_date:acquisitionDate,
+        release_date:releaseDate,
+        detail:document.getElementById('formerOwnerDetail').value.trim()||null
+      })
+    });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeFormerOwnerClaim();
+    if(typeof renderAccount==='function')renderAccount();
+    await showIndividual(individualId);
+  }catch(e){
+    alert('Former Owner Claimの登録に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
 
 function configureOwnershipClaim(mode){
   ownershipClaimMode=mode==='add_claim'?'add_claim':'acquire';
@@ -5121,6 +5210,32 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <button class="secondary" onclick="window.location.href='/user-view'">Close</button>
 </div>
 </main>
+
+<div class="modal-backdrop" id="formerOwnerClaimModal" onclick="closeFormerOwnerClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='TEXTAREA'){event.preventDefault();submitFormerOwnerClaim()}">
+    <h2>Former Owner</h2>
+    <div class="sub" id="formerOwnerClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="modal-grid">
+      <div class="form-row">
+        <label class="form-label" for="formerOwnerAcquisitionDate">Acquisition Date *</label>
+        <input id="formerOwnerAcquisitionDate" type="date" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="formerOwnerReleaseDate">Release Date *</label>
+        <input id="formerOwnerReleaseDate" type="date" required>
+      </div>
+      <div class="form-row full">
+        <label class="form-label" for="formerOwnerDetail">Detail（任意）</label>
+        <textarea id="formerOwnerDetail" maxlength="2000" placeholder="Ownership history detail"></textarea>
+      </div>
+    </div>
+    <div class="sub">Acquire / Release Claimを2件作成し、このUserのFormerly Owned Guitarsへ追加します。</div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeFormerOwnerClaim()">キャンセル</button>
+      <button id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -6160,7 +6275,7 @@ async function showIndividual(id){
     fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
     dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
     '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
@@ -6207,6 +6322,8 @@ function chooseClaimType(type){
     openEventClaim(selectedIndividualId);
   }else if(type==='media'){
     openMediaClaim(selectedIndividualId);
+  }else if(type==='former_owner'){
+    openFormerOwnerClaim(selectedIndividualId);
   }else if(type==='ownership'){
     openOwnershipClaim(selectedIndividualId,'add_claim');
   }
@@ -6394,6 +6511,68 @@ async function submitIncidentClaim(){
     await showIndividual(selectedIndividualId);
   }catch(e){
     alert('Incident Claimの登録に失敗しました.\\n'+e.message);
+  }finally{
+    button.disabled=false;
+  }
+}
+
+function openFormerOwnerClaim(individualId){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  if(activeUserOwns(individualId)){
+    alert('現在OwnerはFormer Owner Claimを追加できません。');
+    return;
+  }
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('formerOwnerClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  document.getElementById('formerOwnerAcquisitionDate').value='';
+  document.getElementById('formerOwnerReleaseDate').value='';
+  document.getElementById('formerOwnerDetail').value='';
+  document.getElementById('formerOwnerClaimModal').classList.add('open');
+  setTimeout(()=>document.getElementById('formerOwnerAcquisitionDate').focus(),0);
+}
+function closeFormerOwnerClaim(event){
+  if(event&&event.target&&event.target.id!=='formerOwnerClaimModal')return;
+  const modal=document.getElementById('formerOwnerClaimModal');
+  if(modal)modal.classList.remove('open');
+}
+async function submitFormerOwnerClaim(){
+  if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
+  const acquisitionDate=document.getElementById('formerOwnerAcquisitionDate').value;
+  const releaseDate=document.getElementById('formerOwnerReleaseDate').value;
+  if(!acquisitionDate||!releaseDate){
+    alert('Acquisition DateとRelease Dateは必須です。');
+    return;
+  }
+  if(acquisitionDate>=releaseDate){
+    alert('Acquisition DateはRelease Dateより前の日付にしてください。');
+    return;
+  }
+  const button=document.getElementById('formerOwnerClaimSubmit');
+  button.disabled=true;
+  try{
+    const individualId=selectedIndividualId;
+    const d=await jfetch('/api/individuals/'+individualId+'/former-owner-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        acquisition_date:acquisitionDate,
+        release_date:releaseDate,
+        detail:document.getElementById('formerOwnerDetail').value.trim()||null
+      })
+    });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeFormerOwnerClaim();
+    if(typeof renderAccount==='function')renderAccount();
+    await showIndividual(individualId);
+  }catch(e){
+    alert('Former Owner Claimの登録に失敗しました。\n'+e.message);
   }finally{
     button.disabled=false;
   }
