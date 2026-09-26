@@ -4550,6 +4550,7 @@ async function setClaimResponse(claimId,stance){
         stance
       })
     });
+    closeClaimPopup();
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }catch(e){
     alert('Owner Verificationの更新に失敗しました。\n'+e.message);
@@ -6031,6 +6032,7 @@ async function setClaimResponse(claimId,stance){
         stance
       })
     });
+    closeClaimPopup();
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }catch(e){
     alert('Owner Verificationの更新に失敗しました。\n'+e.message);
