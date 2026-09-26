@@ -5701,11 +5701,6 @@ async function submitOwnershipClaim(){
 </html>"""
 
 
-ipt>
-</body>
-</html>"""
-
-
 USER_EDIT_HTML = r"""<!doctype html>
 <html lang="ja">
 <head>
