@@ -3024,19 +3024,20 @@ class Repository:
                 (user_id, individual_id),
             ).fetchone()
 
-            if kind == "release" and not ownership:
+            ending_kinds = ("transfer", "release", "inherit")
+            if kind in ending_kinds and not ownership:
                 raise ValueError(
                     "User is not the current owner of this Individual"
                 )
 
             owner_name = (
                 "Unknown"
-                if kind == "release"
+                if kind in ending_kinds
                 else user["display_name"]
             )
             owner_type = (
                 "unknown"
-                if kind == "release"
+                if kind in ending_kinds
                 else "user"
             )
             event_title = f"Ownership / {kind.capitalize()}"
@@ -3124,7 +3125,7 @@ class Repository:
                     user_id,
                     (
                         "unknown"
-                        if kind == "release"
+                        if kind in ending_kinds
                         else str(user_id)
                     ),
                     kind,
@@ -3136,7 +3137,7 @@ class Repository:
             )
             claim_id = int(cur.lastrowid)
 
-            if kind == "release":
+            if kind in ending_kinds:
                 con.execute(
                     """
                     UPDATE user_guitars
