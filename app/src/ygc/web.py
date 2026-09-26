@@ -3389,7 +3389,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 1 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 1 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -3588,8 +3588,8 @@ async function loadUsers(){
   users=await jfetch('/api/users');
   const select=document.getElementById('activeUserSelect');
   const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
-  select.innerHTML='<option value="">User未選択</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
-  const target=users.some(u=>String(u.id)===String(saved))?saved:(users[0]?String(users[0].id):'');
+  select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
+  const target=users.some(u=>String(u.id)===String(saved))?saved:'';
   select.value=target;
   if(target){
     localStorage.setItem(ACTIVE_USER_KEY,target);
