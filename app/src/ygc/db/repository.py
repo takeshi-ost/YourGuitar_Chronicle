@@ -4783,6 +4783,33 @@ class Repository:
                 )
             )
 
+    def list_claim_media_assets(
+        self,
+        individual_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(
+                con.execute(
+                    """
+                    SELECT
+                        ce.claim_id,
+                        ma.*
+                    FROM claim_evidence ce
+                    INNER JOIN claims c
+                      ON c.id = ce.claim_id
+                    INNER JOIN media_assets ma
+                      ON ma.id = ce.media_asset_id
+                    WHERE c.individual_id = ?
+                      AND c.status = 'active'
+                      AND ma.media_type = 'image'
+                    ORDER BY
+                        ce.claim_id,
+                        ce.id
+                    """,
+                    (individual_id,),
+                )
+            )
+
     def get_media_asset(
         self,
         media_asset_id: int,
