@@ -1299,6 +1299,34 @@ def api_top_page_charts() -> dict[str, Any]:
     }
 
 
+@app.get("/api/world-map")
+def api_world_map() -> dict[str, Any]:
+    repository = repo()
+    with repository.connect() as con:
+        rows = con.execute(
+            """
+            SELECT
+                TRIM(location_country) AS country,
+                COUNT(*) AS count
+            FROM individuals
+            WHERE location_country IS NOT NULL
+              AND TRIM(location_country) <> ''
+            GROUP BY TRIM(location_country)
+            ORDER BY count DESC, country ASC
+            """
+        ).fetchall()
+
+    return {
+        "countries": [
+            {
+                "country": str(row["country"]),
+                "count": int(row["count"] or 0),
+            }
+            for row in rows
+        ]
+    }
+
+
 @app.get("/api/export-db")
 def api_export_db() -> FileResponse:
     repository = repo()
@@ -4228,8 +4256,14 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .chart-wrap{position:relative;flex:1;min-height:0}
 .chart-wrap canvas{width:100%!important;height:100%!important}
 .chart-error{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:11px}
-.world-map-panel{height:390px;min-height:390px;max-height:390px}
-.world-map-placeholder{height:320px;border:1px dashed #3b4249;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:#14171a}
+.world-map-panel{height:390px;min-height:390px;max-height:390px;display:flex;flex-direction:column}
+.world-map-wrap{position:relative;flex:1;min-height:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#101418}
+.world-map-svg{display:block;width:100%;height:100%}
+.world-country{stroke:#30363d;stroke-width:.45;vector-effect:non-scaling-stroke;transition:fill .12s,stroke .12s}
+.world-country:hover{stroke:#edf0f3;stroke-width:1}
+.world-map-tooltip{position:absolute;display:none;pointer-events:none;z-index:5;padding:6px 8px;border-radius:7px;background:#0d0f11;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:10px;color:var(--text);white-space:nowrap}
+.world-map-legend{position:absolute;right:10px;bottom:9px;display:flex;align-items:center;gap:5px;padding:5px 7px;border-radius:7px;background:rgba(13,15,17,.86);font-size:9px;color:var(--muted)}
+.world-map-swatch{width:18px;height:7px;border-radius:2px}
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
 main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
 .grid{display:block}
@@ -4457,8 +4491,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <section class="section-stack page-section content-frame" id="world-map">
   <div class="panel world-map-panel">
-    <h2>World Map</h2>
-    <div class="world-map-placeholder">World heat map placeholder</div>
+    <h2>Current Product Locations</h2>
+    <div class="world-map-wrap" id="worldMapWrap">
+      <svg class="world-map-svg" id="worldMapSvg" viewBox="0 0 1000 500" aria-label="World map showing current product locations"></svg>
+      <div class="world-map-tooltip" id="worldMapTooltip"></div>
+      <div class="world-map-legend">
+        <span>0</span>
+        <span class="world-map-swatch" style="background:#20262a"></span>
+        <span class="world-map-swatch" style="background:#6d5834"></span>
+        <span class="world-map-swatch" style="background:#d0a45d"></span>
+        <span>More products</span>
+      </div>
+    </div>
   </div>
 </section>
 <div class="page-bottom-space" aria-hidden="true"></div>
@@ -5775,6 +5819,120 @@ async function submitOwnershipClaim(){
   }
 }
 
+const WORLD_GEOJSON_URL='https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
+
+function normalizeCountryName(value){
+  const v=String(value||'').trim().toLowerCase()
+    .replace(/\./g,'')
+    .replace(/&/g,'and')
+    .replace(/\s+/g,' ');
+  const aliases={
+    'usa':'united states of america',
+    'us':'united states of america',
+    'united states':'united states of america',
+    'u.s.a':'united states of america',
+    'uk':'united kingdom',
+    'great britain':'united kingdom',
+    'russia':'russian federation',
+    'south korea':'republic of korea',
+    'korea, south':'republic of korea',
+    'north korea':'democratic peoples republic of korea',
+    'czech republic':'czechia',
+    'viet nam':'vietnam',
+    'taiwan':'taiwan',
+    'hong kong':'hong kong s.a.r.',
+    'macau':'macao s.a.r'
+  };
+  return aliases[v]||v;
+}
+function geoCountryName(feature){
+  const p=feature&&feature.properties||{};
+  return p.ADMIN||p.NAME||p.NAME_EN||p.SOVEREIGNT||'';
+}
+function mapProjection(coord){
+  const lon=Number(coord[0]||0);
+  const lat=Math.max(-85,Math.min(85,Number(coord[1]||0)));
+  return [
+    (lon+180)/360*1000,
+    (90-lat)/180*500
+  ];
+}
+function ringPath(ring){
+  if(!Array.isArray(ring)||!ring.length)return '';
+  return ring.map((coord,index)=>{
+    const p=mapProjection(coord);
+    return (index?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2);
+  }).join(' ')+' Z';
+}
+function geometryPath(geometry){
+  if(!geometry)return '';
+  if(geometry.type==='Polygon'){
+    return (geometry.coordinates||[]).map(ringPath).join(' ');
+  }
+  if(geometry.type==='MultiPolygon'){
+    return (geometry.coordinates||[]).flatMap(poly=>poly.map(ringPath)).join(' ');
+  }
+  return '';
+}
+function mapFill(count,maxCount){
+  if(!count)return '#20262a';
+  const t=maxCount>1?Math.log(count+1)/Math.log(maxCount+1):1;
+  const a=[65,55,39];
+  const b=[208,164,93];
+  const rgb=a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  return 'rgb('+rgb.join(',')+')';
+}
+async function loadWorldMap(){
+  const svg=document.getElementById('worldMapSvg');
+  const wrap=document.getElementById('worldMapWrap');
+  const tooltip=document.getElementById('worldMapTooltip');
+  if(!svg||!wrap||!tooltip)return;
+
+  let geo,data;
+  try{
+    [geo,data]=await Promise.all([
+      fetch(WORLD_GEOJSON_URL).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.json()}),
+      jfetch('/api/world-map')
+    ]);
+  }catch(e){
+    svg.innerHTML='<text x="500" y="250" text-anchor="middle" fill="#9ba6b0" font-size="14">World map could not be loaded.</text>';
+    return;
+  }
+
+  const counts=new Map();
+  for(const item of (data.countries||[])){
+    counts.set(normalizeCountryName(item.country),Number(item.count||0));
+  }
+  const maxCount=Math.max(0,...Array.from(counts.values()));
+  const ns='http://www.w3.org/2000/svg';
+  svg.innerHTML='';
+
+  for(const feature of (geo.features||[])){
+    const name=geoCountryName(feature);
+    const key=normalizeCountryName(name);
+    const count=counts.get(key)||0;
+    const d=geometryPath(feature.geometry);
+    if(!d)continue;
+    const path=document.createElementNS(ns,'path');
+    path.setAttribute('d',d);
+    path.setAttribute('class','world-country');
+    path.setAttribute('fill',mapFill(count,maxCount));
+    path.dataset.country=name;
+    path.dataset.count=String(count);
+    path.addEventListener('mouseenter',event=>{
+      tooltip.textContent=name+' — '+count+' Product'+(count===1?'':'s');
+      tooltip.style.display='block';
+    });
+    path.addEventListener('mousemove',event=>{
+      const rect=wrap.getBoundingClientRect();
+      tooltip.style.left=Math.min(rect.width-150,event.clientX-rect.left+12)+'px';
+      tooltip.style.top=Math.max(6,event.clientY-rect.top-26)+'px';
+    });
+    path.addEventListener('mouseleave',()=>{tooltip.style.display='none'});
+    svg.appendChild(path);
+  }
+}
+
 let topPageCharts=[];
 
 function destroyTopPageCharts(){
@@ -5929,7 +6087,7 @@ async function loadTopPageCharts(){
   await loadActiveUser();
   await loadNewDiscoveries();
   await loadIndividuals();
-  await loadTopPageCharts();
+  await Promise.all([loadTopPageCharts(),loadWorldMap()]);
 
   const requested=Number(new URLSearchParams(window.location.search).get('individual_id')||0);
   const requestedExists=requested&&individuals.some(x=>Number(x.id)===requested);
