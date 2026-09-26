@@ -3904,6 +3904,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}
 .modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}
 .spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-scroll-modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}.media-image-inputs{display:flex;flex-direction:column;gap:7px;max-height:220px;overflow-y:auto;padding-right:4px}.media-image-slot{display:none}.media-image-slot.visible{display:block}.media-image-slot input{font-size:11px;padding:7px 8px}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
+
+.claim-compact-row{display:flex;justify-content:center;align-items:center;min-height:34px;margin:0 0 12px}
+.claim-compact-tag{border:0;border-radius:999px;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;background:#3a3f45;color:var(--text)}
+.claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}
+.claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}
+.claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}
+.claim-compact-tag.claim-type-event{background:#9360b8;color:#120917}
+.claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
+.claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
+.claim-negative-dot:hover{color:#a0a7ae!important}
+.claim-popup-modal{width:min(620px,calc(100vw - 32px))}
+.claim-popup-modal .claim-card{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -4104,6 +4116,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeOwnershipClaim()">キャンセル</button>
       <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
+  <div class="modal claim-popup-modal" onclick="event.stopPropagation()">
+    <div id="claimPopupContent"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeClaimPopup()">閉じる</button>
     </div>
   </div>
 </div>
@@ -4350,7 +4371,7 @@ function claimVisualTypeClass(c){
   if(c.claim_type==='media')return ' claim-type-media';
   return '';
 }
-function claimCard(c){
+function claimCardFull(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
     : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)))));
@@ -4444,6 +4465,38 @@ function claimCard(c){
     '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
     '</div>';
 }
+function compactClaimType(c){
+  return c.claim_type==='specification'
+    ? (c.specification_kind==='repair'?'Repair':'Specification')
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire')
+      :(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident')
+      :(c.claim_type==='event'?claimTypeLabel(c.value_text||'event')
+      :(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)))));
+}
+function claimCard(c){
+  const verification=String(c.verification_status||'positive').toLowerCase();
+  if(verification==='positive')return claimCardFull(c);
+  if(verification==='unverified'){
+    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+')">'+esc(compactClaimType(c))+'</button></div>';
+  }
+  if(verification==='negative'){
+    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+')">◉</button></div>';
+  }
+  return claimCardFull(c);
+}
+function openClaimPopup(claimId){
+  const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
+  if(!claim)return;
+  const content=document.getElementById('claimPopupContent');
+  if(content)content.innerHTML=claimCardFull(claim);
+  document.getElementById('claimPopupModal').classList.add('open');
+}
+function closeClaimPopup(event){
+  if(event&&event.target&&event.target.id!=='claimPopupModal')return;
+  const modal=document.getElementById('claimPopupModal');
+  if(modal)modal.classList.remove('open');
+}
+
 function chronologyValue(c,mode){
   if(mode==='input')return String(c.created_at||'');
   return String(c.occurred_at||c.created_at||'');
@@ -4979,6 +5032,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .owned-head{color:var(--muted);font-size:10px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 @media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
+
+.claim-compact-row{display:flex;justify-content:center;align-items:center;min-height:34px;margin:0 0 12px}
+.claim-compact-tag{border:0;border-radius:999px;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;background:#3a3f45;color:var(--text)}
+.claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}
+.claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}
+.claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}
+.claim-compact-tag.claim-type-event{background:#9360b8;color:#120917}
+.claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
+.claim-negative-dot{border:0;background:transparent!important;color:#737a81!important;padding:0 4px;font-size:20px;line-height:1;cursor:pointer}
+.claim-negative-dot:hover{color:#a0a7ae!important}
+.claim-popup-modal{width:min(620px,calc(100vw - 32px))}
+.claim-popup-modal .claim-card{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -5272,6 +5337,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="modal-actions">
       <button class="secondary" onclick="closeNewGuitar()">キャンセル</button>
       <button id="newGuitarSubmit" onclick="submitNewGuitar()">Listing Claimを作成</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
+  <div class="modal claim-popup-modal" onclick="event.stopPropagation()">
+    <div id="claimPopupContent"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeClaimPopup()">閉じる</button>
     </div>
   </div>
 </div>
@@ -5776,7 +5850,7 @@ function claimVisualTypeClass(c){
   if(c.claim_type==='media')return ' claim-type-media';
   return '';
 }
-function claimCard(c){
+function claimCardFull(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
     : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)))));
@@ -5872,6 +5946,38 @@ function claimCard(c){
     '<div class="claim-footer"><div style="display:flex;gap:6px;align-items:center">'+votes+editButton+'</div><div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div>'+
     '</div>';
 }
+function compactClaimType(c){
+  return c.claim_type==='specification'
+    ? (c.specification_kind==='repair'?'Repair':'Specification')
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire')
+      :(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident')
+      :(c.claim_type==='event'?claimTypeLabel(c.value_text||'event')
+      :(c.claim_type==='release'?'Release':claimTypeLabel(c.claim_type)))));
+}
+function claimCard(c){
+  const verification=String(c.verification_status||'positive').toLowerCase();
+  if(verification==='positive')return claimCardFull(c);
+  if(verification==='unverified'){
+    return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+')">'+esc(compactClaimType(c))+'</button></div>';
+  }
+  if(verification==='negative'){
+    return '<div class="claim-compact-row"><button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openClaimPopup('+c.id+')">◉</button></div>';
+  }
+  return claimCardFull(c);
+}
+function openClaimPopup(claimId){
+  const claim=currentClaims.find(c=>Number(c.id)===Number(claimId));
+  if(!claim)return;
+  const content=document.getElementById('claimPopupContent');
+  if(content)content.innerHTML=claimCardFull(claim);
+  document.getElementById('claimPopupModal').classList.add('open');
+}
+function closeClaimPopup(event){
+  if(event&&event.target&&event.target.id!=='claimPopupModal')return;
+  const modal=document.getElementById('claimPopupModal');
+  if(modal)modal.classList.remove('open');
+}
+
 function chronologyValue(c,mode){
   if(mode==='input')return String(c.created_at||'');
   return String(c.occurred_at||c.created_at||'');
