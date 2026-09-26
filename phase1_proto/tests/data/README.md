@@ -5,7 +5,7 @@
 The live development database remains:
 
 ```text
-phase0_proto/data/chronicle.db
+phase1_proto/data/chronicle.db
 ```
 
 and stays excluded from Git.
