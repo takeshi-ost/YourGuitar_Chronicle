@@ -4119,11 +4119,13 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .page-nav a:hover{background:#23282d;color:var(--text)}
 .page-section{scroll-margin-top:108px}
 .section-stack{margin-top:16px}
+.content-frame{width:960px;max-width:100%;margin-left:auto;margin-right:auto}
 .dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .dashboard-card{min-height:250px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
 .dashboard-placeholder{height:190px;border:1px dashed #3b4249;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:#14171a}
-.world-map-panel{min-height:390px}
+.world-map-panel{height:390px;min-height:390px;max-height:390px}
 .world-map-placeholder{height:320px;border:1px dashed #3b4249;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;background:#14171a}
+.page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
 main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
 .grid{display:block}
 .left-column{display:grid;grid-template-rows:146px minmax(0,1fr);gap:12px;min-height:0}
@@ -4133,7 +4135,7 @@ main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 
 .discovery-item{display:grid;grid-template-columns:minmax(90px,1.1fr) minmax(110px,1.6fr) minmax(54px,.55fr) minmax(100px,1fr) minmax(96px,.9fr) minmax(120px,1.2fr);gap:0;border-bottom:1px solid var(--line);cursor:pointer;min-height:27px;align-items:center}
 .discovery-item:last-child{border-bottom:0}.discovery-item:hover{background:#20252a}
 .discovery-cell{min-width:0;padding:5px 8px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid #242a30}.discovery-cell:last-child{border-right:0}.discovery-maker,.discovery-model{font-size:11px}.discovery-maker{font-weight:700}.discovery-muted{color:var(--muted)}
-.product-list-panel{height:620px;min-height:0;display:flex;flex-direction:column}
+.product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
 .detail-shell{position:fixed;top:108px;right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
 .detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}
 .product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
@@ -4258,7 +4260,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .product-list-panel{height:520px}
   .detail-shell{position:static;width:auto;height:520px;margin-top:14px}
   .detail-panel{height:100%}
+  .content-frame{width:100%;max-width:none}
   .dashboard-grid{grid-template-columns:1fr}
+  .page-bottom-space{height:24px}
   .page-section{scroll-margin-top:12px}
 }
 </style>
@@ -4289,8 +4293,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   <div class="notification-list" id="notificationList"></div>
 </div>
 
-<div class="grid page-section" id="products">
-<section class="left-column">
+<div class="grid">
+<section class="left-column content-frame">
   <div class="panel discovery-panel page-section" id="discovery">
     <div class="toolbar"><h2>New discovery</h2></div>
     <div class="discovery-item" style="cursor:default;background:#181b1f;font-weight:600">
@@ -4303,7 +4307,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     </div>
     <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">最近の更新を読み込み中...</div></div>
   </div>
-  <div class="panel product-list-panel">
+  <div class="panel product-list-panel page-section" id="products">
     <div class="toolbar">
       <h2>Product List</h2>
       <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
@@ -4334,7 +4338,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </aside>
 
-<section class="section-stack page-section" id="statistics">
+<section class="section-stack page-section content-frame" id="statistics">
   <div class="toolbar"><h2>Statistics</h2></div>
   <div class="dashboard-grid">
     <div class="dashboard-card">
@@ -4356,12 +4360,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </section>
 
-<section class="section-stack page-section" id="world-map">
+<section class="section-stack page-section content-frame" id="world-map">
   <div class="panel world-map-panel">
     <h2>World Map</h2>
     <div class="world-map-placeholder">World heat map placeholder</div>
   </div>
 </section>
+<div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 
 <div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
@@ -5224,7 +5229,13 @@ async function voteClaim(claimId,vote){
 }
 
 async function showIndividual(id){
-  selectedIndividualId=Number(id);
+  const nextIndividualId=Number(id);
+  const changedIndividual=Number(selectedIndividualId)!==nextIndividualId;
+  selectedIndividualId=nextIndividualId;
+  if(changedIndividual){
+    const detail=document.getElementById('detail');
+    if(detail)detail.scrollTop=0;
+  }
   if(typeof renderIndividuals==='function')renderIndividuals();
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
@@ -5306,6 +5317,10 @@ async function showIndividual(id){
     '<div class="accordion-body"><div id="chronicleEntries"></div></div></section>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
+  if(changedIndividual){
+    const detail=document.getElementById('detail');
+    if(detail)detail.scrollTop=0;
+  }
 }
 
 
