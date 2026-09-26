@@ -4803,10 +4803,14 @@ class Repository:
 
             serial = con.execute(
                 """
-                SELECT COUNT(*)
-                FROM observations
-                WHERE serial_number
-                    IS NOT NULL
+                SELECT COUNT(DISTINCT c.id)
+                FROM claims c
+                INNER JOIN claim_listing_items li
+                  ON li.claim_id = c.id
+                 AND li.field_name = 'serial_number'
+                WHERE c.claim_type = 'listing'
+                  AND c.status = 'active'
+                  AND NULLIF(TRIM(li.value_text), '') IS NOT NULL
                 """
             ).fetchone()[0]
 
@@ -4821,12 +4825,12 @@ class Repository:
                 """
                 SELECT COUNT(*)
                 FROM (
-                    SELECT individual_id
-                    FROM observations
-                    WHERE individual_id
-                        IS NOT NULL
-                    GROUP BY individual_id
-                    HAVING COUNT(*)>=2
+                    SELECT c.individual_id
+                    FROM claims c
+                    WHERE c.claim_type = 'listing'
+                      AND c.status = 'active'
+                    GROUP BY c.individual_id
+                    HAVING COUNT(*) >= 2
                 )
                 """
             ).fetchone()[0]
