@@ -4239,6 +4239,39 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 </main>
 
+<div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Ownership</h2>
+    <div class="sub" id="ownershipClaimGuitar" style="margin-bottom:14px"></div>
+    <div class="form-row">
+      <label class="form-label">Tag</label>
+      <div id="ownershipClaimFixedTag"><strong>Acquire</strong></div>
+      <select id="ownershipClaimKind" style="display:none">
+        <option value="acquire">Acquire</option>
+        <option value="transfer">Transfer</option>
+        <option value="release">Release</option>
+        <option value="inherit">Inherit</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="ownershipClaimDate">Date</label>
+      <input id="ownershipClaimDate" type="date">
+    </div>
+    <div class="form-row" id="ownershipClaimPreviousRow">
+      <label class="form-label" for="ownershipClaimPrevious">相手先・関係者（任意）</label>
+      <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="ownershipClaimBody">Memo（任意）</label>
+      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Ownershipに関する補足"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeOwnershipClaim()">キャンセル</button>
+      <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Claimを追加</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="identityCorrectionModal" onclick="closeIdentityCorrection(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Identity Correction</h2>
