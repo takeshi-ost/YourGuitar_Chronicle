@@ -231,7 +231,7 @@ def test_later_valid_serial_beats_earlier_prose():
     )
 
 
-def test_real_phase1_serial_hash_format():
+def test_real_serial_hash_format():
     candidate = select_serial(
         "YEAR: 1966 "
         "SERIAL #: 145635 "

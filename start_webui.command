@@ -13,7 +13,7 @@ git pull --ff-only
 
 echo
 echo "[2/4] Preparing Python environment..."
-cd phase1_proto
+cd app
 
 if [ ! -d ".venv" ]; then
   echo "Creating .venv with python3.12..."

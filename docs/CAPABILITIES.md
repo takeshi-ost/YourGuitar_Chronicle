@@ -3,6 +3,7 @@
 Your Guitar Chronicle で現在できることを、**一般ユーザー**と**管理者（Browser Console）**に分けて簡潔にまとめます。
 
 > **更新ルール**
+> Project paths and identifiers are phase-neutral. Phase labels are used only in UI text, documentation prose, and comments.
 > このドキュメントは現行機能の一覧です。機能の追加・削除・仕様変更を行う場合は、同じ変更セットでこの文書も更新します。
 
 ## ユーザーとしてできること

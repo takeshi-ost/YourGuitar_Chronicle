@@ -7,7 +7,7 @@ CLIで行っていた繰り返し作業を、ローカルブラウザから操�
 既存の仮想環境を有効にして、依存関係を更新します。
 
 ```powershell
-cd phase1_proto
+cd app
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ```
@@ -127,7 +127,7 @@ Gibson ES-335
 GUIはCLIと同じSQLite DBを使用します。
 
 ```text
-phase1_proto/data/chronicle.db
+app/data/chronicle.db
 ```
 
 CLIで収集したデータはGUIからそのまま見えます。逆にGUIで収集したデータもCLIの `ygc stats`, `ygc individuals`, `ygc serial-audit` から確認できます。
@@ -227,7 +227,7 @@ start_webui.bat
 
 をダブルクリックします。
 
-どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`phase1_proto/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
+どちらのスクリプトも、現在チェックアウト中のブランチに対して `git pull --ff-only` を実行し、`app/.venv` がなければ作成、依存関係を更新してから `ygc-web` を起動します。
 
 ブランチ切り替えは自動では行いません。検証したいブランチへ一度 `git switch <branch>` した後は、そのままランチャーを繰り返し利用できます。
 

@@ -68,7 +68,7 @@ class ReverbAPICollector:
                 "Accept-Version": "3.0",
                 "User-Agent": (
                     "YourGuitarChronicle-"
-                    "Phase1/0.2"
+                    "YGC/0.2"
                 ),
             },
             limits=httpx.Limits(

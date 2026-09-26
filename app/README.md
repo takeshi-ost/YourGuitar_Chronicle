@@ -31,7 +31,7 @@ TokenはChatやGitHubへ貼らないでください。
 
 ## セットアップ
 ```bash
-cd your-guitar-chronicle-phase1
+cd your-guitar-chronicle
 python3.12 -m venv .venv
 source .venv/bin/activate     # macOS/Linux
 # .venv\Scripts\Activate.ps1  # Windows PowerShell

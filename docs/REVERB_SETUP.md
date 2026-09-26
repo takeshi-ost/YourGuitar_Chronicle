@@ -48,7 +48,7 @@ Python ファイル、README、設定ファイルなどに実際の Token 文字
 
 ```powershell
 git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd YourGuitar_Chronicle\phase1_proto
+cd YourGuitar_Chronicle\app
 ```
 
 すでに clone 済みなら対象ディレクトリへ移動します。
@@ -366,7 +366,7 @@ echo "$REVERB_API_TOKEN"
 ## 20. 最短セットアップ手順
 
 ```powershell
-cd YourGuitar_Chronicle\phase1_proto
+cd YourGuitar_Chronicle\app
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
