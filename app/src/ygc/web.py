@@ -2812,6 +2812,14 @@ def api_user_notifications(
     }
 
 
+@app.post("/api/users/{user_id}/notifications/read-all")
+def api_read_all_notifications(
+    user_id: int,
+) -> dict[str, int]:
+    count = repo().mark_all_notifications_read(user_id)
+    return {"updated": count}
+
+
 @app.post("/api/users/{user_id}/notifications/{notification_id}/read")
 def api_read_notification(
     user_id: int,
@@ -2823,14 +2831,6 @@ def api_read_notification(
             detail="Notification not found",
         )
     return {"ok": True}
-
-
-@app.post("/api/users/{user_id}/notifications/read-all")
-def api_read_all_notifications(
-    user_id: int,
-) -> dict[str, int]:
-    count = repo().mark_all_notifications_read(user_id)
-    return {"updated": count}
 
 
 @app.get("/api/users")
