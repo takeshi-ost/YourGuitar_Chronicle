@@ -5111,6 +5111,8 @@ const SPEC_FIELDS=[
 let specificationKind='specification';
 let specificationItems=[];
 let editingSpecificationClaimId=null;
+let pendingOwnershipClaimIndividualId=null;
+let ownershipClaimMode='add_claim';
 
 function toggleAddClaimMenu(event,individualId){
   event.stopPropagation();
@@ -5129,6 +5131,86 @@ function chooseClaimType(type){
     openSpecificationClaim(selectedIndividualId);
   }else if(type==='ownership'){
     openOwnershipClaim(selectedIndividualId,'add_claim');
+  }
+}
+
+function configureOwnershipClaim(mode){
+  ownershipClaimMode=mode==='add_claim'?'add_claim':'acquire';
+  const kind=document.getElementById('ownershipClaimKind');
+  const fixed=document.getElementById('ownershipClaimFixedTag');
+  const previousRow=document.getElementById('ownershipClaimPreviousRow');
+  if(ownershipClaimMode==='acquire'){
+    kind.value='acquire';
+    kind.style.display='none';
+    fixed.style.display='block';
+    fixed.innerHTML='<strong>Acquire</strong>';
+    previousRow.style.display='';
+  }else{
+    kind.innerHTML='<option value="transfer">Transfer</option><option value="release">Release</option><option value="inherit">Inherit</option>';
+    kind.value='transfer';
+    kind.style.display='block';
+    fixed.style.display='none';
+    previousRow.style.display='';
+  }
+}
+function openOwnershipClaim(individualId,mode='add_claim'){
+  if(!activeUser||!activeUser.user){
+    alert('先にUserを選択してください。');
+    return;
+  }
+  if(mode==='add_claim'&&!activeUserOwns(individualId)){
+    alert('現在のUserが所有中のギターだけOwnership Claimを追加できます。');
+    return;
+  }
+  pendingOwnershipClaimIndividualId=Number(individualId);
+  selectedIndividualId=Number(individualId);
+  const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
+  document.getElementById('ownershipClaimGuitar').textContent=guitar
+    ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
+    : 'Individual #'+individualId;
+  configureOwnershipClaim(mode);
+  document.getElementById('ownershipClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('ownershipClaimPrevious').value='';
+  document.getElementById('ownershipClaimBody').value='';
+  document.getElementById('ownershipClaimSubmit').textContent='Claimを追加';
+  document.getElementById('ownershipClaimModal').classList.add('open');
+}
+function closeOwnershipClaim(event){
+  if(event&&event.target&&event.target.id!=='ownershipClaimModal')return;
+  document.getElementById('ownershipClaimModal').classList.remove('open');
+  pendingOwnershipClaimIndividualId=null;
+}
+async function submitOwnershipClaim(){
+  if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
+  const button=document.getElementById('ownershipClaimSubmit');
+  const kind=document.getElementById('ownershipClaimKind').value;
+  if(['transfer','release','inherit'].includes(kind)){
+    const guitar=individuals.find(x=>Number(x.id)===Number(pendingOwnershipClaimIndividualId));
+    const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'このギター';
+    if(!confirm(label+' の所有状態を終了し、Current OwnerをUnknownに変更します。\n\nこの内容で'+claimTypeLabel(kind)+'を登録しますか？'))return;
+  }
+  button.disabled=true;
+  try{
+    const individualId=pendingOwnershipClaimIndividualId;
+    const d=await jfetch('/api/individuals/'+individualId+'/ownership-claim',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        user_id:Number(activeUser.user.id),
+        ownership_kind:kind,
+        occurred_at:document.getElementById('ownershipClaimDate').value||null,
+        previous_owner_text:document.getElementById('ownershipClaimPrevious').value.trim()||null,
+        body:document.getElementById('ownershipClaimBody').value.trim()||null
+      })
+    });
+    activeUser={user:d.user,guitars:d.guitars};
+    closeOwnershipClaim();
+    renderAccount();
+    await showIndividual(individualId);
+  }catch(e){
+    alert('Ownership Claimの登録に失敗しました。\n'+e.message);
+  }finally{
+    button.disabled=false;
   }
 }
 
