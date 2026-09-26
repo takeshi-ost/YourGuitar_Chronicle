@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS claims (
  field_name TEXT,
  value_text TEXT,
  specification_kind TEXT,
+ ownership_kind TEXT,
  body TEXT,
  target_claim_id INTEGER,
  occurred_at TEXT,
