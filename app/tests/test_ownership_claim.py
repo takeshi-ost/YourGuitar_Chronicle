@@ -30,7 +30,8 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
         ownership_kind="acquire",
         occurred_at="2026-02-01",
     )
-    acquired = repository.rebuild_individual_snapshot(individual_id)
+    acquired, _ = repository.get_individual(individual_id)
+    assert acquired is not None
 
     assert acquired["current_owner_name"] == "Owner"
     assert int(acquired["current_owner_user_id"]) == user_id
@@ -44,7 +45,8 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
         location_country="Japan",
         location_region="Osaka",
     )
-    refreshed = repository.rebuild_individual_snapshot(individual_id)
+    refreshed, _ = repository.get_individual(individual_id)
+    assert refreshed is not None
     assert refreshed["location_country"] == "Japan"
     assert refreshed["location_region"] == "Osaka"
 
@@ -73,7 +75,8 @@ def test_transfer_release_and_inherit_end_ownership(tmp_path: Path):
             body=f"{kind} ownership",
         )
 
-        ended = repository.rebuild_individual_snapshot(individual_id)
+        ended, _ = repository.get_individual(individual_id)
+        assert ended is not None
         assert ended["current_owner_name"] == "Unknown"
         assert ended["current_owner_user_id"] is None
         assert ended["location_country"] is None
