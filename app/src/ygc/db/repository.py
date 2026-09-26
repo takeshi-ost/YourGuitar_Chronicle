@@ -4972,14 +4972,15 @@ class Repository:
                     """
                     SELECT
                         i.*,
-                        COUNT(o.id)
-                            observation_count
+                        COUNT(c.id)
+                            claim_count
                     FROM individuals i
-                    LEFT JOIN observations o
-                      ON o.individual_id=i.id
+                    LEFT JOIN claims c
+                      ON c.individual_id=i.id
+                     AND c.status='active'
                     GROUP BY i.id
                     ORDER BY
-                        observation_count DESC,
+                        claim_count DESC,
                         i.id
                     """
                 )
