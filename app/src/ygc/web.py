@@ -1878,6 +1878,71 @@ def api_individuals() -> list[dict[str, Any]]:
     return [_row_dict(row) for row in repo().list_individuals()]
 
 
+@app.get("/api/new-discoveries")
+def api_new_discoveries() -> list[dict[str, Any]]:
+    repository = repo()
+    with repository.connect() as con:
+        rows = con.execute(
+            """
+            SELECT
+                i.id,
+                i.manufacturer,
+                i.model,
+                i.year,
+                i.serial_number,
+                (
+                    SELECT MAX(c.created_at)
+                    FROM claims c
+                    WHERE c.individual_id = i.id
+                      AND c.status = 'active'
+                ) AS latest_claim_at,
+                (
+                    SELECT c2.claim_type
+                    FROM claims c2
+                    WHERE c2.individual_id = i.id
+                      AND c2.status = 'active'
+                    ORDER BY c2.created_at DESC, c2.id DESC
+                    LIMIT 1
+                ) AS latest_claim_type,
+                (
+                    SELECT MAX(o.observed_at)
+                    FROM observations o
+                    WHERE o.individual_id = i.id
+                ) AS latest_observation_at
+            FROM individuals i
+            """
+        ).fetchall()
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        item = _row_dict(row)
+        claim_at = str(item.get("latest_claim_at") or "")
+        observation_at = str(item.get("latest_observation_at") or "")
+        if claim_at >= observation_at and claim_at:
+            activity_at = claim_at
+            activity_type = "claim"
+            claim_type = item.get("latest_claim_type")
+        else:
+            activity_at = observation_at
+            activity_type = "discovery"
+            claim_type = None
+        if not activity_at:
+            continue
+        item["activity_at"] = activity_at
+        item["activity_type"] = activity_type
+        item["claim_type"] = claim_type
+        result.append(item)
+
+    result.sort(
+        key=lambda item: (
+            str(item.get("activity_at") or ""),
+            int(item.get("id") or 0),
+        ),
+        reverse=True,
+    )
+    return result[:24]
+
+
 @app.get("/api/individuals/{individual_id}")
 def api_individual(individual_id: int) -> dict[str, Any]:
     individual, observations = repo().get_individual(individual_id)
@@ -4045,11 +4110,21 @@ USER_VIEW_HTML = r"""<!doctype html>
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--bad:#e07171}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Noto Sans JP",sans-serif}
-header{padding:22px 26px;border-bottom:1px solid var(--line)}
-h1{font-size:21px;margin:0}.sub{color:var(--muted);font-size:12px}
-main{max-width:1500px;margin:auto;padding:22px}
-.grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(380px,.85fr);gap:18px;align-items:start}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+.sticky-header{position:sticky;top:0;z-index:900;background:var(--bg);box-shadow:0 8px 24px rgba(0,0,0,.22)}
+header{padding:13px 22px;border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0}.sub{color:var(--muted);font-size:12px}
+main{max-width:1500px;margin:auto;padding:14px 22px 22px}
+.grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(380px,.85fr);gap:18px;align-items:stretch}
+.left-column{display:grid;grid-template-rows:150px minmax(0,1fr);gap:12px;min-height:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
+.discovery-panel{min-height:0;overflow:hidden}
+.discovery-list{height:96px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
+.discovery-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.discovery-item:last-child{border-bottom:0}.discovery-item:hover{background:#20252a}
+.discovery-main{min-width:0}.discovery-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.discovery-meta{font-size:10px;color:var(--muted);margin-top:2px}.discovery-time{font-size:10px;color:var(--muted);white-space:nowrap}
+.product-list-panel,.detail-panel{height:620px;min-height:0;display:flex;flex-direction:column}
+.product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
+.detail-panel #detail{flex:1;min-height:0;overflow-y:auto;padding-right:4px}
 h2{font-size:17px;margin:0 0 14px}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .toolbar h2{margin:0;flex:1}
@@ -4057,15 +4132,15 @@ input,button{font:inherit}
 input{width:100%;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px}
 button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);color:#18130c;font-weight:700;cursor:pointer}
 button.secondary{background:#2a3036;color:var(--text)}
-.account-hub{width:100%;display:grid;grid-template-columns:minmax(240px,1.15fr) auto minmax(300px,1fr);gap:18px;align-items:center;padding:14px 16px;margin-bottom:18px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
+.account-hub{width:100%;display:grid;grid-template-columns:minmax(220px,1.05fr) auto minmax(280px,1fr);gap:12px;align-items:center;padding:8px 22px;background:#15181b;color:var(--text);border-bottom:1px solid var(--line)}
 .account-hub-user{display:flex;align-items:center;gap:12px;min-width:0}
-.account-hub-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
+.account-hub-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
 .account-hub-user-copy{min-width:0}.account-hub-name-row{display:flex;align-items:center;gap:7px;min-width:0}.account-hub-name{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:2px 6px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
 .account-hub-location{font-size:11px;color:var(--muted);margin-top:3px}
-.account-hub-guest-title{font-size:16px;font-weight:800}.account-hub-guest-copy{font-size:11px;color:var(--muted);margin-top:4px;max-width:620px}.account-hub-guest-mark{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#24201a;border:1px solid #4b402e;color:var(--accent);font-size:20px;font-weight:800;flex:0 0 auto}
+.account-hub-guest-title{font-size:14px;font-weight:800}.account-hub-guest-copy{font-size:10px;color:var(--muted);margin-top:2px;max-width:620px}.account-hub-guest-mark{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#24201a;border:1px solid #4b402e;color:var(--accent);font-size:20px;font-weight:800;flex:0 0 auto}
 .account-hub-summary{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#14171a}
-.account-hub-stat{min-width:82px;padding:8px 12px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
-.account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
+.account-hub-stat{min-width:74px;padding:5px 10px;text-align:center;border-right:1px solid var(--line)}.account-hub-stat:last-child{border-right:0}.account-hub-stat-value{display:block;font-size:16px;font-weight:800;line-height:1.15}.account-hub-stat-label{display:block;margin-top:3px;color:var(--muted);font-size:9px;white-space:nowrap}
+.account-hub-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.account-hub-action{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:8px;background:#252a2f;color:var(--text);font-size:11px;font-weight:700}.account-hub-action:hover{background:#30363c}.account-hub-action.primary{background:var(--accent);color:#18130c}.account-hub-count{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3b4147;color:var(--text);font-size:9px;line-height:17px;text-align:center}.account-hub-empty{color:var(--muted);font-size:12px}
 .notification-panel{display:none;margin:-8px 0 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .notification-panel.open{display:block}
 .notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
@@ -4145,16 +4220,25 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-popup-modal{position:fixed;width:auto;background:transparent;border:0;padding:0;box-shadow:none;z-index:1001}
 .claim-popup-modal .claim-card{margin:0}.claim-popup-modal .claim-card::after{display:none}
 #claimPopupModal{background:transparent;align-items:initial;justify-content:initial;padding:0}
+@media(max-width:900px){
+  .sticky-header{position:static}
+  .account-hub{grid-template-columns:1fr;gap:8px}
+  .grid{grid-template-columns:1fr}
+  .left-column{grid-template-rows:150px 520px}
+  .product-list-panel,.detail-panel{height:520px}
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>Your Guitar Chronicle <span class="sub">Top Page</span></h1>
-</header>
-<main>
-<div class="account-hub" id="accountHub">
-  <div class="account-hub-empty">User情報を読み込み中...</div>
+<div class="sticky-header">
+  <header>
+    <h1>Your Guitar Chronicle <span class="sub">Top Page</span></h1>
+  </header>
+  <div class="account-hub" id="accountHub">
+    <div class="account-hub-empty">User情報を読み込み中...</div>
+  </div>
 </div>
+<main>
 <div class="notification-panel" id="notificationPanel">
   <div class="notification-panel-head">
     <span class="notification-panel-title">Notifications</span>
@@ -4166,12 +4250,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </div>
 
 <div class="grid">
-<section>
-  <div class="panel">
+<section class="left-column">
+  <div class="panel discovery-panel">
+    <div class="toolbar"><h2>New discovery</h2></div>
+    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:10px">最近の更新を読み込み中...</div></div>
+  </div>
+  <div class="panel product-list-panel">
     <div class="toolbar">
       <h2>Product List</h2>
       <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
-      <button class="secondary" onclick="loadIndividuals()">更新</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -4191,7 +4278,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </section>
 
 <section>
-  <div class="panel">
+  <div class="panel detail-panel">
     <h2>Product Detail</h2>
     <div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div>
   </div>
@@ -4400,6 +4487,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 <script>
 let individuals=[];
+let newDiscoveries=[];
 let activeUser=null;
 let selectedIndividualId=null;
 let productGallery=[];
@@ -4544,6 +4632,38 @@ async function loadActiveUser(){
   await loadNotifications();
   renderAccountHub();
   renderNotificationPanel();
+}
+
+async function loadNewDiscoveries(){
+  try{
+    newDiscoveries=await jfetch('/api/new-discoveries');
+  }catch(e){
+    newDiscoveries=[];
+  }
+  renderNewDiscoveries();
+}
+function discoveryLabel(item){
+  if(item.activity_type==='claim'){
+    return (item.claim_type?claimTypeLabel(item.claim_type):'Claim')+' updated';
+  }
+  return 'Newly discovered';
+}
+function renderNewDiscoveries(){
+  const root=document.getElementById('newDiscoveryList');
+  if(!root)return;
+  if(!newDiscoveries.length){
+    root.innerHTML='<div class="sub" style="padding:10px">最近の更新はありません。</div>';
+    return;
+  }
+  root.innerHTML=newDiscoveries.map(item=>{
+    const title=[item.manufacturer,item.model,item.year].filter(Boolean).join(' ');
+    const serial=item.serial_number?(' / '+item.serial_number):'';
+    const when=displayInputDate(item.activity_at||'');
+    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')">'+
+      '<div class="discovery-main"><div class="discovery-title">'+esc(title||('Product #'+item.id))+'</div>'+
+      '<div class="discovery-meta">'+esc(discoveryLabel(item))+esc(serial)+'</div></div>'+
+      '<div class="discovery-time">'+esc(when)+'</div></div>';
+  }).join('');
 }
 
 async function loadIndividuals(){
@@ -5447,7 +5567,7 @@ async function submitOwnershipClaim(){
 
 (async()=>{
   await loadActiveUser();
-  await loadIndividuals();
+  await Promise.all([loadIndividuals(),loadNewDiscoveries()]);
 })()
 </script>
 </body>
