@@ -3379,6 +3379,62 @@ class Repository:
         occurred_at: str | None = None,
         caption: str | None = None,
     ) -> tuple[int, int]:
+        claim_id, media_asset_ids = self.create_media_claim_group(
+            user_id,
+            individual_id,
+            media_items=[
+                {
+                    "storage_path": storage_path,
+                    "original_filename": original_filename,
+                    "mime_type": mime_type,
+                }
+            ],
+            occurred_at=occurred_at,
+            caption=caption,
+        )
+        return claim_id, media_asset_ids[0]
+
+    def create_media_claim_group(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        media_items: list[dict[str, str | None]],
+        occurred_at: str | None = None,
+        caption: str | None = None,
+    ) -> tuple[int, list[int]]:
+        if not media_items:
+            raise ValueError("At least one image is required")
+        if len(media_items) > 10:
+            raise ValueError("A Media Claim can contain up to 10 images")
+
+        normalized_items: list[
+            tuple[str, str | None, str | None]
+        ] = []
+        for item in media_items:
+            storage_path = str(
+                item.get("storage_path") or ""
+            ).strip()
+            if not storage_path:
+                raise ValueError("storage_path is required")
+            original_filename = (
+                str(item.get("original_filename")).strip()
+                if item.get("original_filename")
+                else None
+            )
+            mime_type = (
+                str(item.get("mime_type")).strip()
+                if item.get("mime_type")
+                else None
+            )
+            normalized_items.append(
+                (
+                    storage_path,
+                    original_filename,
+                    mime_type,
+                )
+            )
+
         note = (
             caption.strip()
             if caption and caption.strip()
@@ -3443,66 +3499,65 @@ class Repository:
                 ),
             )
             claim_id = int(cur.lastrowid)
+            media_asset_ids: list[int] = []
 
-            cur = con.execute(
-                """
-                INSERT INTO media_assets (
-                    individual_id,
-                    uploader_user_id,
-                    media_type,
-                    storage_path,
-                    original_filename,
-                    mime_type,
-                    captured_at,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    ?, ?, 'image', ?, ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    user_id,
-                    storage_path,
+            for (
+                storage_path,
+                original_filename,
+                mime_type,
+            ) in normalized_items:
+                cur = con.execute(
+                    """
+                    INSERT INTO media_assets (
+                        individual_id,
+                        uploader_user_id,
+                        media_type,
+                        storage_path,
+                        original_filename,
+                        mime_type,
+                        captured_at,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        ?, ?, 'image', ?, ?, ?, ?, ?, ?
+                    )
+                    """,
                     (
-                        original_filename.strip()
-                        if original_filename
-                        else None
+                        individual_id,
+                        user_id,
+                        storage_path,
+                        original_filename,
+                        mime_type,
+                        event_date,
+                        now,
+                        now,
                     ),
-                    (
-                        mime_type.strip()
-                        if mime_type
-                        else None
-                    ),
-                    event_date,
-                    now,
-                    now,
-                ),
-            )
-            media_asset_id = int(cur.lastrowid)
+                )
+                media_asset_id = int(cur.lastrowid)
+                media_asset_ids.append(media_asset_id)
 
-            con.execute(
-                """
-                INSERT INTO claim_evidence (
-                    claim_id,
-                    media_asset_id,
-                    created_at
+                con.execute(
+                    """
+                    INSERT INTO claim_evidence (
+                        claim_id,
+                        media_asset_id,
+                        created_at
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        claim_id,
+                        media_asset_id,
+                        now,
+                    ),
                 )
-                VALUES (?, ?, ?)
-                """,
-                (
-                    claim_id,
-                    media_asset_id,
-                    now,
-                ),
-            )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
                 individual_id,
             )
-            return claim_id, media_asset_id
+            return claim_id, media_asset_ids
 
 
     def create_event_claim(
