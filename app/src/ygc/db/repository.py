@@ -91,6 +91,7 @@ class Repository:
             },
             "claims": {
                 "specification_kind": "TEXT",
+                "ownership_kind": "TEXT",
                 "target_claim_id": "INTEGER",
             },
             "observations": {
@@ -1046,7 +1047,18 @@ class Repository:
                     items.get("source_url")
                     or None
                 )
-            elif claim_type == "owner_change":
+            elif claim_type in ("ownership", "owner_change"):
+                ownership_kind = (
+                    str(claim["ownership_kind"] or "acquire").strip().lower()
+                    if "ownership_kind" in claim.keys()
+                    else "acquire"
+                )
+                if ownership_kind == "release":
+                    state["current_owner_name"] = "Unknown"
+                    state["current_owner_type"] = "unknown"
+                    state["current_owner_user_id"] = None
+                    state["current_owner_source_url"] = None
+                    continue
                 owner_user_id = (
                     str(claim["value_text"]).strip()
                     if claim["value_text"] is not None
@@ -2958,206 +2970,29 @@ class Repository:
             )
 
 
-    def create_owner_change_claim(
+    def create_ownership_claim(
         self,
         user_id: int,
         individual_id: int,
         *,
-        acquired_at: str | None = None,
+        ownership_kind: str,
+        occurred_at: str | None = None,
         previous_owner_text: str | None = None,
         body: str | None = None,
     ) -> tuple[int, int]:
+        kind = ownership_kind.strip().lower()
+        if kind not in ("acquire", "transfer", "release", "inherit"):
+            raise ValueError(
+                "ownership_kind must be acquire, transfer, release, or inherit"
+            )
+
         now = utcnow()
-
-        with self.connect() as con:
-            user = con.execute(
-                "SELECT * FROM users WHERE id = ?",
-                (user_id,),
-            ).fetchone()
-            individual = con.execute(
-                "SELECT * FROM individuals WHERE id = ?",
-                (individual_id,),
-            ).fetchone()
-
-            if not user or not individual:
-                raise ValueError(
-                    "User or Individual not found"
-                )
-
-            event_title = "Owner Change"
-            details = []
-            if previous_owner_text:
-                details.append(
-                    f"Previous owner: {previous_owner_text.strip()}"
-                )
-            if body:
-                details.append(body.strip())
-            raw_text = "\n".join(
-                value
-                for value in details
-                if value
-            ) or None
-
-            cur = con.execute(
-                """
-                INSERT INTO observations (
-                    individual_id,
-                    manufacturer,
-                    model,
-                    finish,
-                    year,
-                    serial_number,
-                    owner_name,
-                    owner_type,
-                    event_type,
-                    actor_user_id,
-                    occurred_at,
-                    source_site,
-                    source_url,
-                    observed_at,
-                    title,
-                    raw_text,
-                    created_at
-                )
-                VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, 'user',
-                    'owner_change', ?, ?,
-                    'user', ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    individual["manufacturer"],
-                    individual["model"],
-                    individual["finish"],
-                    individual["year"],
-                    individual["serial_number"],
-                    user["display_name"],
-                    user_id,
-                    acquired_at,
-                    f"user://{user_id}",
-                    now,
-                    event_title,
-                    raw_text,
-                    now,
-                ),
-            )
-            observation_id = int(
-                cur.lastrowid
-            )
-
-            cur = con.execute(
-                """
-                INSERT INTO claims (
-                    individual_id,
-                    observation_id,
-                    author_user_id,
-                    claim_type,
-                    field_name,
-                    value_text,
-                    body,
-                    occurred_at,
-                    status,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    ?, ?, ?, 'owner_change',
-                    'owner_user_id', ?, ?, ?,
-                    'active', ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    observation_id,
-                    user_id,
-                    str(user_id),
-                    (
-                        body.strip()
-                        if body
-                        else None
-                    ),
-                    acquired_at,
-                    now,
-                    now,
-                ),
-            )
-            claim_id = int(
-                cur.lastrowid
-            )
-
-            next_order = int(
-                con.execute(
-                    """
-                    SELECT COALESCE(
-                        MAX(display_order),
-                        -1
-                    ) + 1
-                    FROM user_guitars
-                    WHERE user_id = ?
-                    """,
-                    (user_id,),
-                ).fetchone()[0]
-            )
-
-            con.execute(
-                """
-                INSERT INTO user_guitars (
-                    user_id,
-                    individual_id,
-                    ownership_status,
-                    display_order,
-                    acquired_at,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
-                ON CONFLICT(
-                    user_id,
-                    individual_id
-                )
-                DO UPDATE SET
-                    ownership_status = 'current_owner',
-                    acquired_at = COALESCE(
-                        excluded.acquired_at,
-                        user_guitars.acquired_at
-                    ),
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    user_id,
-                    individual_id,
-                    next_order,
-                    acquired_at,
-                    now,
-                    now,
-                ),
-            )
-
-            self._rebuild_individual_snapshot_in_connection(
-                con,
-                individual_id,
-            )
-
-            return (
-                observation_id,
-                claim_id,
-            )
-
-    def create_release_claim(
-        self,
-        user_id: int,
-        individual_id: int,
-        *,
-        reason: str | None = None,
-    ) -> tuple[int, int]:
-        now = utcnow()
-        event_date = now[:10]
-        note = (
-            reason.strip()
-            if reason and reason.strip()
-            else None
+        event_date = (
+            occurred_at.strip()
+            if occurred_at and occurred_at.strip()
+            else now[:10]
         )
+        note = body.strip() if body and body.strip() else None
 
         with self.connect() as con:
             user = con.execute(
@@ -3170,13 +3005,12 @@ class Repository:
                 (user_id,),
             ).fetchone()
             individual = con.execute(
-                """
-                SELECT *
-                FROM individuals
-                WHERE id = ?
-                """,
+                "SELECT * FROM individuals WHERE id = ?",
                 (individual_id,),
             ).fetchone()
+            if not user or not individual:
+                raise ValueError("User or Individual not found")
+
             ownership = con.execute(
                 """
                 SELECT *
@@ -3185,20 +3019,33 @@ class Repository:
                   AND individual_id = ?
                   AND ownership_status = 'current_owner'
                 """,
-                (
-                    user_id,
-                    individual_id,
-                ),
+                (user_id, individual_id),
             ).fetchone()
 
-            if not user or not individual:
-                raise ValueError(
-                    "User or Individual not found"
-                )
-            if not ownership:
+            if kind == "release" and not ownership:
                 raise ValueError(
                     "User is not the current owner of this Individual"
                 )
+
+            owner_name = (
+                "Unknown"
+                if kind == "release"
+                else user["display_name"]
+            )
+            owner_type = (
+                "unknown"
+                if kind == "release"
+                else "user"
+            )
+            event_title = f"Ownership / {kind.capitalize()}"
+            details: list[str] = []
+            if previous_owner_text:
+                details.append(
+                    f"Previous owner: {previous_owner_text.strip()}"
+                )
+            if note:
+                details.append(note)
+            raw_text = "\n".join(details) or None
 
             cur = con.execute(
                 """
@@ -3222,11 +3069,9 @@ class Repository:
                     created_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?,
-                    'Unknown', 'unknown',
-                    'release', ?, ?,
-                    'user', ?, ?, 'Release',
-                    ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    'ownership', ?, ?,
+                    'user', ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -3236,17 +3081,18 @@ class Repository:
                     individual["finish"],
                     individual["year"],
                     individual["serial_number"],
+                    owner_name,
+                    owner_type,
                     user_id,
                     event_date,
                     f"user://{user_id}",
                     now,
-                    note,
+                    event_title,
+                    raw_text,
                     now,
                 ),
             )
-            observation_id = int(
-                cur.lastrowid
-            )
+            observation_id = int(cur.lastrowid)
 
             cur = con.execute(
                 """
@@ -3257,6 +3103,7 @@ class Repository:
                     claim_type,
                     field_name,
                     value_text,
+                    ownership_kind,
                     body,
                     occurred_at,
                     status,
@@ -3264,52 +3111,122 @@ class Repository:
                     updated_at
                 )
                 VALUES (
-                    ?, ?, ?, 'release',
-                    'owner_user_id', 'unknown',
-                    ?, ?, 'active', ?, ?
+                    ?, ?, ?, 'ownership',
+                    'owner_user_id', ?, ?, ?, ?,
+                    'active', ?, ?
                 )
                 """,
                 (
                     individual_id,
                     observation_id,
                     user_id,
+                    (
+                        "unknown"
+                        if kind == "release"
+                        else str(user_id)
+                    ),
+                    kind,
                     note,
                     event_date,
                     now,
                     now,
                 ),
             )
-            claim_id = int(
-                cur.lastrowid
-            )
+            claim_id = int(cur.lastrowid)
 
-            con.execute(
-                """
-                UPDATE user_guitars
-                SET ownership_status = 'former_owner',
-                    released_at = ?,
-                    updated_at = ?
-                WHERE user_id = ?
-                  AND individual_id = ?
-                  AND ownership_status = 'current_owner'
-                """,
-                (
-                    event_date,
-                    now,
-                    user_id,
-                    individual_id,
-                ),
-            )
+            if kind == "release":
+                con.execute(
+                    """
+                    UPDATE user_guitars
+                    SET ownership_status = 'former_owner',
+                        released_at = ?,
+                        updated_at = ?
+                    WHERE user_id = ?
+                      AND individual_id = ?
+                      AND ownership_status = 'current_owner'
+                    """,
+                    (event_date, now, user_id, individual_id),
+                )
+            else:
+                next_order = int(
+                    con.execute(
+                        """
+                        SELECT COALESCE(MAX(display_order), -1) + 1
+                        FROM user_guitars
+                        WHERE user_id = ?
+                        """,
+                        (user_id,),
+                    ).fetchone()[0]
+                )
+                con.execute(
+                    """
+                    INSERT INTO user_guitars (
+                        user_id,
+                        individual_id,
+                        ownership_status,
+                        display_order,
+                        acquired_at,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
+                    ON CONFLICT(user_id, individual_id)
+                    DO UPDATE SET
+                        ownership_status = 'current_owner',
+                        acquired_at = COALESCE(
+                            excluded.acquired_at,
+                            user_guitars.acquired_at
+                        ),
+                        released_at = NULL,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        user_id,
+                        individual_id,
+                        next_order,
+                        event_date,
+                        now,
+                        now,
+                    ),
+                )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
                 individual_id,
             )
+            return observation_id, claim_id
 
-            return (
-                observation_id,
-                claim_id,
-            )
+    def create_owner_change_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        acquired_at: str | None = None,
+        previous_owner_text: str | None = None,
+        body: str | None = None,
+    ) -> tuple[int, int]:
+        return self.create_ownership_claim(
+            user_id,
+            individual_id,
+            ownership_kind="acquire",
+            occurred_at=acquired_at,
+            previous_owner_text=previous_owner_text,
+            body=body,
+        )
+
+    def create_release_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        reason: str | None = None,
+    ) -> tuple[int, int]:
+        return self.create_ownership_claim(
+            user_id,
+            individual_id,
+            ownership_kind="release",
+            body=reason,
+        )
 
     def create_specification_claim(
         self,
