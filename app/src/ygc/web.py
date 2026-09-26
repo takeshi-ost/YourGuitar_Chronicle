@@ -3361,10 +3361,20 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
+    const owner=String(c.author_name||'User').trim()||'User';
+    const raw=String(c.observation_raw_text||'');
+    const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
+    const party=firstLine.startsWith('Previous owner:')
+      ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
+      : 'Unknown';
     if(kind==='release'){
-      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'){
+      body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
+    }else if(kind==='inherit'){
+      body='<div><strong>'+esc(party)+' inherited this product from '+esc(owner)+'.</strong></div>';
     }else{
-      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+      body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='owner_change'){
@@ -3844,10 +3854,20 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
+    const owner=String(c.author_name||'User').trim()||'User';
+    const raw=String(c.observation_raw_text||'');
+    const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
+    const party=firstLine.startsWith('Previous owner:')
+      ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
+      : 'Unknown';
     if(kind==='release'){
-      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'){
+      body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
+    }else if(kind==='inherit'){
+      body='<div><strong>'+esc(party)+' inherited this product from '+esc(owner)+'.</strong></div>';
     }else{
-      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+      body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='owner_change'){
@@ -4880,10 +4900,20 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
+    const owner=String(c.author_name||'User').trim()||'User';
+    const raw=String(c.observation_raw_text||'');
+    const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
+    const party=firstLine.startsWith('Previous owner:')
+      ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
+      : 'Unknown';
     if(kind==='release'){
-      body='<div><strong>Ownership released. Current owner is Unknown.</strong></div>';
+      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'){
+      body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
+    }else if(kind==='inherit'){
+      body='<div><strong>'+esc(party)+' inherited this product from '+esc(owner)+'.</strong></div>';
     }else{
-      body='<div><strong>'+esc(c.author_name||'User')+' — '+esc(claimTypeLabel(kind))+'.</strong></div>';
+      body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='owner_change'){
