@@ -3368,6 +3368,143 @@ class Repository:
             return claim_id
 
 
+    def create_media_claim(
+        self,
+        user_id: int,
+        individual_id: int,
+        *,
+        storage_path: str,
+        original_filename: str | None = None,
+        mime_type: str | None = None,
+        occurred_at: str | None = None,
+        caption: str | None = None,
+    ) -> tuple[int, int]:
+        note = (
+            caption.strip()
+            if caption and caption.strip()
+            else None
+        )
+        now = utcnow()
+        event_date = (
+            occurred_at.strip()
+            if occurred_at and occurred_at.strip()
+            else now[:10]
+        )
+
+        with self.connect() as con:
+            user = con.execute(
+                """
+                SELECT id
+                FROM users
+                WHERE id = ?
+                  AND account_type <> 'source'
+                """,
+                (user_id,),
+            ).fetchone()
+            individual = con.execute(
+                """
+                SELECT id
+                FROM individuals
+                WHERE id = ?
+                """,
+                (individual_id,),
+            ).fetchone()
+            if not user or not individual:
+                raise ValueError("User or Individual not found")
+
+            cur = con.execute(
+                """
+                INSERT INTO claims (
+                    individual_id,
+                    observation_id,
+                    author_user_id,
+                    claim_type,
+                    field_name,
+                    value_text,
+                    body,
+                    occurred_at,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, NULL, ?, 'media',
+                    'media_type', 'image', ?, ?,
+                    'active', ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    user_id,
+                    note,
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+            claim_id = int(cur.lastrowid)
+
+            cur = con.execute(
+                """
+                INSERT INTO media_assets (
+                    individual_id,
+                    uploader_user_id,
+                    media_type,
+                    storage_path,
+                    original_filename,
+                    mime_type,
+                    captured_at,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, 'image', ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    individual_id,
+                    user_id,
+                    storage_path,
+                    (
+                        original_filename.strip()
+                        if original_filename
+                        else None
+                    ),
+                    (
+                        mime_type.strip()
+                        if mime_type
+                        else None
+                    ),
+                    event_date,
+                    now,
+                    now,
+                ),
+            )
+            media_asset_id = int(cur.lastrowid)
+
+            con.execute(
+                """
+                INSERT INTO claim_evidence (
+                    claim_id,
+                    media_asset_id,
+                    created_at
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    claim_id,
+                    media_asset_id,
+                    now,
+                ),
+            )
+
+            self._rebuild_individual_snapshot_in_connection(
+                con,
+                individual_id,
+            )
+            return claim_id, media_asset_id
+
+
     def create_event_claim(
         self,
         user_id: int,
