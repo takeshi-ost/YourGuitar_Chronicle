@@ -4721,9 +4721,17 @@ async function loadNewDiscoveries(){
   renderNewDiscoveries();
 }
 function discoveryMessage(item){
-  return item.activity_type==='claim'
-    ? 'has secured a new claim!'
-    : 'has been newly added to the list!';
+  const type=String(item.claim_type||'').toLowerCase();
+  if(item.activity_type!=='claim')return 'has been newly added to the list!';
+  if(type==='listing')return 'has been newly added to the list!';
+  if(type==='specification')return 'has new specifications on record!';
+  if(type==='incident')return 'has a new incident report!';
+  if(type==='event')return 'has a new event in its history!';
+  if(type==='media')return 'has new media added!';
+  if(type==='ownership'||type==='owner_change')return 'has a new ownership update!';
+  if(type==='release')return 'has an ownership release on record!';
+  if(type==='identity_correction')return 'has received an identity correction!';
+  return 'has secured a new claim!';
 }
 function discoveryProductName(item){
   const base=[item.manufacturer,item.model].filter(Boolean).join(' ').trim()||('Product #'+item.id);
