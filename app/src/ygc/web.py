@@ -2215,87 +2215,115 @@ def api_media(
 async def api_media_claim(
     individual_id: int,
     user_id: int = Form(...),
-    image: UploadFile = File(...),
+    images: list[UploadFile] = File(...),
     occurred_at: str | None = Form(None),
     caption: str | None = Form(None),
 ) -> dict[str, Any]:
     repository = repo()
 
-    content_type = (
-        image.content_type
-        or ""
-    ).lower()
-    extension = ALLOWED_IMAGE_TYPES.get(
-        content_type
-    )
-    if not extension:
+    if not images:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Media image must be JPEG, PNG, WebP, or GIF"
-            ),
+            detail="At least one Media image is required",
         )
-
-    image_bytes = await image.read(
-        MAX_IMAGE_BYTES + 1
-    )
-    if not image_bytes:
+    if len(images) > 10:
         raise HTTPException(
             status_code=400,
-            detail="Media image is empty",
-        )
-    if len(image_bytes) > MAX_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail="Media image must be 12 MB or smaller",
+            detail="A Media Claim can contain up to 10 images",
         )
 
     MEDIA_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
-    stored_name = uuid.uuid4().hex + extension
-    stored_path = MEDIA_DIR / stored_name
-    relative_storage_path = (
-        Path("media")
-        / stored_name
-    ).as_posix()
+    stored_paths: list[Path] = []
+    media_items: list[dict[str, str | None]] = []
 
     try:
-        stored_path.write_bytes(
-            image_bytes
-        )
-    except OSError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="Could not save Media image",
-        ) from exc
+        for image in images:
+            content_type = (
+                image.content_type
+                or ""
+            ).lower()
+            extension = ALLOWED_IMAGE_TYPES.get(
+                content_type
+            )
+            if not extension:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Media images must be JPEG, PNG, WebP, or GIF"
+                    ),
+                )
 
-    try:
-        claim_id, media_asset_id = (
-            repository.create_media_claim(
+            image_bytes = await image.read(
+                MAX_IMAGE_BYTES + 1
+            )
+            if not image_bytes:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Media image is empty",
+                )
+            if len(image_bytes) > MAX_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Each Media image must be 12 MB or smaller",
+                )
+
+            stored_name = uuid.uuid4().hex + extension
+            stored_path = MEDIA_DIR / stored_name
+            relative_storage_path = (
+                Path("media")
+                / stored_name
+            ).as_posix()
+
+            try:
+                stored_path.write_bytes(
+                    image_bytes
+                )
+            except OSError as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not save Media image",
+                ) from exc
+
+            stored_paths.append(stored_path)
+            media_items.append(
+                {
+                    "storage_path": relative_storage_path,
+                    "original_filename": image.filename,
+                    "mime_type": content_type,
+                }
+            )
+
+        claim_id, media_asset_ids = (
+            repository.create_media_claim_group(
                 user_id,
                 individual_id,
-                storage_path=relative_storage_path,
-                original_filename=image.filename,
-                mime_type=content_type,
+                media_items=media_items,
                 occurred_at=occurred_at,
                 caption=caption,
             )
         )
     except ValueError as exc:
-        _safe_unlink(stored_path)
+        for path in stored_paths:
+            _safe_unlink(path)
         raise HTTPException(
             status_code=400,
             detail=str(exc),
         ) from exc
+    except HTTPException:
+        for path in stored_paths:
+            _safe_unlink(path)
+        raise
     except Exception:
-        _safe_unlink(stored_path)
+        for path in stored_paths:
+            _safe_unlink(path)
         raise
 
     return {
         "claim_id": claim_id,
-        "media_asset_id": media_asset_id,
+        "media_asset_ids": media_asset_ids,
     }
 
 
@@ -3177,7 +3205,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}.status{display:inline-block;padding:3px 7px;border-radius:999px;font-size:11px;background:#2b3035}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .progress{height:8px;background:#252b31;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;background:var(--accent);width:0;transition:width .25s}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.toolbar input{max-width:300px}.clickable{cursor:pointer}.clickable:hover{background:#20252a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-#detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-gallery{display:flex;align-items:center;gap:8px;width:75%;margin:0 0 6px}.detail-gallery .detail-image{width:100%;flex:1;min-width:0}.detail-gallery-nav{width:32px;min-width:32px;height:42px;padding:0;background:#2a3036;color:var(--text);font-size:18px}.detail-gallery-nav:disabled{opacity:.25}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
+#detail{white-space:normal}.detail-image{display:block;width:75%;max-height:270px;object-fit:contain;background:#111418;border:1px solid var(--line);border-radius:8px}.detail-image-link{display:block;margin:0 0 6px}.detail-gallery{display:grid;grid-template-columns:20px minmax(0,1fr) 20px;align-items:center;gap:5px;width:75%;margin:0 0 6px}.detail-gallery .detail-image{width:100%;min-width:0}.detail-gallery-nav{width:20px;min-width:20px;height:28px;padding:0;border-radius:5px;background:#20252a;color:#777f87;font-size:11px;font-weight:600;line-height:1}.detail-gallery-nav:hover{background:#272d32;color:#a8b0b7}.detail-gallery-nav:disabled{opacity:.18;cursor:default}.detail-source{display:block;margin:0 0 14px;color:var(--muted);font-size:11px}.detail-source a{color:var(--muted)}.detail-header{margin:0 0 16px}.detail-header-title{font-size:16px;font-weight:700;margin-bottom:6px}.current-owner-line{font-size:13px;margin-bottom:10px}.catalog-spec{font-size:13px;line-height:1.7}.catalog-spec-row{overflow-wrap:anywhere}.catalog-spec-label{font-weight:700}.catalog-spec-empty{color:var(--muted)}.detail-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-meta-item{background:#14171a;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}.detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}.detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}.latest-observation-scroll{max-height:340px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px}.latest-observation-scroll .observation-card{margin-bottom:0}.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}.observation-card.latest{border-color:#5c513d;background:#181713}.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}.pill{display:inline-block;padding:2px 6px;border:1px solid var(--line);border-radius:10px;margin-right:5px;color:var(--muted)}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .claim-card{border:1px solid #4a4337;border-radius:10px;background:#171612;padding:12px 13px;margin:8px 0 12px 22px}
 .claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}
@@ -4501,7 +4529,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
 .claim-card{position:relative}
 .claim-card:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:12px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
-.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}.spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-scroll-modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-row{margin-bottom:12px}.form-row.full{grid-column:1/-1}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal textarea{width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}.claim-menu-wrap{position:relative;display:inline-block}.claim-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:#1c2024;border:1px solid var(--line);border-radius:9px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.38)}.claim-menu.open{display:block}.claim-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);padding:8px 10px}.claim-menu button:hover{background:#2a3036}.spec-kind{display:flex;gap:6px;margin-bottom:14px}.spec-kind button{background:#2a3036;color:var(--text)}.spec-kind button.active{background:var(--accent);color:#18130c}.spec-add-wrap{position:relative;display:inline-block}.spec-add-button{font-size:18px;line-height:1;padding:7px 11px}.spec-item-menu{left:0;right:auto;min-width:220px;max-height:270px;overflow:auto}.spec-items{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.spec-scroll-modal{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}.spec-item-row{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.5fr) 34px;gap:8px;align-items:center}.spec-item-label{font-size:12px;color:var(--muted)}.spec-item-remove{padding:7px;background:#3a2626;color:#f0b3b3}.media-image-inputs{display:flex;flex-direction:column;gap:7px;max-height:220px;overflow-y:auto;padding-right:4px}.media-image-slot{display:none}.media-image-slot.visible{display:block}.media-image-slot input{font-size:11px;padding:7px 8px}@media(max-width:560px){.modal-grid{grid-template-columns:1fr}.form-row.full{grid-column:auto}}
 .user-profile-row{display:flex;align-items:center;gap:14px;margin:2px 0 14px}.user-avatar{width:84px;height:84px;object-fit:cover;border:1px solid var(--line);border-radius:14px;background:#111418}.user-avatar-controls{flex:1;min-width:0}.user-avatar-controls input{margin-top:5px}
 .owned-list{display:flex;flex-direction:column;gap:6px}
 .owned-row{display:grid;grid-template-columns:28px minmax(120px,1.4fr) 70px minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.2fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:#14171a;padding:7px 8px}.owned-row[data-individual-id]{cursor:pointer}.owned-row[data-individual-id]:hover{background:#20252a}
@@ -4643,8 +4671,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="sub" id="mediaClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row full">
-        <label class="form-label" for="mediaClaimImage">Image</label>
-        <input id="mediaClaimImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        <label class="form-label">Images <span class="sub">最大10枚</span></label>
+        <div class="media-image-inputs" id="mediaClaimImages"><div class="media-image-slot visible" id="mediaImageSlot0"><input class="media-image-input" data-index="0" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot1"><input class="media-image-input" data-index="1" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot2"><input class="media-image-input" data-index="2" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot3"><input class="media-image-input" data-index="3" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot4"><input class="media-image-input" data-index="4" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot5"><input class="media-image-input" data-index="5" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot6"><input class="media-image-input" data-index="6" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot7"><input class="media-image-input" data-index="7" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot8"><input class="media-image-input" data-index="8" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot9"><input class="media-image-input" data-index="9" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div></div>
       </div>
       <div class="form-row">
         <label class="form-label" for="mediaClaimDate">Date</label>
@@ -5594,6 +5622,32 @@ function chooseClaimType(type){
   }
 }
 
+function mediaImageInputs(){
+  return Array.from(document.querySelectorAll('#mediaClaimImages .media-image-input'));
+}
+function resetMediaImageInputs(){
+  const inputs=mediaImageInputs();
+  inputs.forEach((input,index)=>{
+    input.value='';
+    const slot=document.getElementById('mediaImageSlot'+index);
+    if(slot)slot.classList.toggle('visible',index===0);
+  });
+}
+function updateMediaImageSlots(){
+  const inputs=mediaImageInputs();
+  let lastSelected=-1;
+  inputs.forEach((input,index)=>{
+    if(input.files&&input.files.length)lastSelected=index;
+  });
+  const next=Math.min(lastSelected+1,inputs.length-1);
+  inputs.forEach((input,index)=>{
+    const slot=document.getElementById('mediaImageSlot'+index);
+    if(slot)slot.classList.toggle(
+      'visible',
+      index===0||index<=next||(input.files&&input.files.length>0)
+    );
+  });
+}
 function openMediaClaim(individualId){
   if(!activeUser||!activeUser.user){
     alert('先にUserを選択してください。');
@@ -5604,7 +5658,7 @@ function openMediaClaim(individualId){
   document.getElementById('mediaClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  document.getElementById('mediaClaimImage').value='';
+  resetMediaImageInputs();
   document.getElementById('mediaClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('mediaClaimCaption').value='';
   document.getElementById('mediaClaimModal').classList.add('open');
@@ -5615,23 +5669,30 @@ function closeMediaClaim(event){
 }
 async function submitMediaClaim(){
   if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
-  const input=document.getElementById('mediaClaimImage');
-  const image=input.files&&input.files[0];
-  if(!image){
-    alert('画像ファイルを選択してください。');
+  const images=mediaImageInputs()
+    .map(input=>input.files&&input.files[0])
+    .filter(Boolean);
+  if(!images.length){
+    alert('画像ファイルを1枚以上選択してください。');
     return;
   }
-  if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){
-    alert('JPEG / PNG / WebP / GIF画像を選択してください。');
+  if(images.length>10){
+    alert('画像は最大10枚です。');
     return;
   }
-  if(image.size>12*1024*1024){
-    alert('画像は12MB以下にしてください。');
-    return;
+  for(const image of images){
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){
+      alert('JPEG / PNG / WebP / GIF画像を選択してください。');
+      return;
+    }
+    if(image.size>12*1024*1024){
+      alert('画像は1枚12MB以下にしてください。');
+      return;
+    }
   }
   const form=new FormData();
   form.append('user_id',String(activeUser.user.id));
-  form.append('image',image);
+  images.forEach(image=>form.append('images',image));
   form.append('occurred_at',document.getElementById('mediaClaimDate').value||'');
   form.append('caption',document.getElementById('mediaClaimCaption').value.trim());
   const button=document.getElementById('mediaClaimSubmit');
