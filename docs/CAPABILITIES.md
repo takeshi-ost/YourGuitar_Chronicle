@@ -129,3 +129,10 @@ Individual Snapshot再構築
 - Incident Tagは Damage / Lost / Theft。DateとDetailを記録する
 - Incidentは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
 - Chronicle上のIncident ClaimバッジはIncidentというType名ではなくDamage / Lost / TheftのTag名を表示する
+
+
+- Event ClaimはProduct Detailの Add Claim → Event から作成する
+- Event Tagは Exhibition / Performance / Recording / Auction / Other。DateとDetailを記録する
+- Eventは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
+- Chronicle上のEvent ClaimバッジはEventというType名ではなく各Tag名を表示する
+- Event Claimカードは暗い紫、Tagバッジは同系統の明るい紫で表示する
