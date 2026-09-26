@@ -5774,6 +5774,37 @@ class Repository:
             ).fetchone():
                 return False
 
+            existing = con.execute(
+                """
+                SELECT vote
+                FROM claim_votes
+                WHERE claim_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    claim_id,
+                    user_id,
+                ),
+            ).fetchone()
+
+            if (
+                existing
+                and str(existing["vote"]).lower()
+                == normalized
+            ):
+                con.execute(
+                    """
+                    DELETE FROM claim_votes
+                    WHERE claim_id = ?
+                      AND user_id = ?
+                    """,
+                    (
+                        claim_id,
+                        user_id,
+                    ),
+                )
+                return True
+
             con.execute(
                 """
                 INSERT INTO claim_votes (
