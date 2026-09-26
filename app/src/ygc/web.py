@@ -4380,6 +4380,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </div>
 
+<div class="modal-backdrop" id="accountRequiredModal" onclick="closeAccountRequired(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Join Your Guitar Chronicle</h2>
+    <div class="sub" style="margin-bottom:14px">この操作にはアカウントが必要です。既存アカウントでログインするか、新しいアカウントを作成してください。</div>
+    <div class="modal-actions">
+      <button class="secondary" type="button" onclick="closeAccountRequired()">キャンセル</button>
+      <button class="secondary" type="button" onclick="window.location.href='/user-view/edit'">Sign In</button>
+      <button type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
   <div class="claim-popup-modal" onclick="event.stopPropagation()">
     <div id="claimPopupContent"></div>
@@ -4641,7 +4653,13 @@ function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
 function requireAccount(){
-  window.location.href='/user-view/edit';
+  const modal=document.getElementById('accountRequiredModal');
+  if(modal)modal.classList.add('open');
+}
+function closeAccountRequired(event){
+  if(event&&event.target&&event.target.id!=='accountRequiredModal')return;
+  const modal=document.getElementById('accountRequiredModal');
+  if(modal)modal.classList.remove('open');
 }
 function ownershipControlsHtml(individualId){
   if(activeUser&&activeUser.user&&activeUserOwns(individualId)){
@@ -5360,7 +5378,7 @@ function configureOwnershipClaim(mode){
 }
 function openOwnershipClaim(individualId,mode='acquire'){
   if(!activeUser||!activeUser.user){
-    window.location.href='/user-view/edit';
+    requireAccount();
     return;
   }
   if(mode==='add_claim'&&!activeUserOwns(individualId)){
