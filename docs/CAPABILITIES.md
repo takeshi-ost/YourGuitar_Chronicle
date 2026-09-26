@@ -152,3 +152,10 @@ Individual Snapshot再構築
 - Media Claimカード内の画像は履歴確認用の小さなサムネイル表示とする
 
 - Product Detail上部の代表画像ギャラリーは、画像の左右に小さく控えめな三角ボタンを固定配置して切り替える
+
+
+- UserがEdit可能なClaimの編集画面には Delete Claim を表示する
+- Delete Claimは物理削除ではなくDeactivateであり、claims.statusをinactiveに変更する
+- DeactivateされたClaimは通常のChronicle、Snapshot計算、Product ListのClaims件数から除外する
+- Media ClaimをDeactivateした場合、そのClaimに紐づく画像はProduct Detail上部の画像ギャラリーからも除外する
+- Listing / Identity Correctionは従来通り通常Edit対象外のため、このDelete Claim操作の対象外とする
