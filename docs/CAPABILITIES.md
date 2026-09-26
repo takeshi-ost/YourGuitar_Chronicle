@@ -136,3 +136,11 @@ Individual Snapshot再構築
 - Eventは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
 - Chronicle上のEvent ClaimバッジはEventというType名ではなく各Tag名を表示する
 - Event Claimカードは暗い紫、Tagバッジは同系統の明るい紫で表示する
+
+
+- Media ClaimはProduct Detailの Add Claim → Media から作成する
+- 初期版は画像のみ対応し、JPEG / PNG / WebP / GIF、最大12MBとする
+- Media ClaimはImage / Date / Captionを記録し、画像はChronicleカード内で主コンテンツとして表示する
+- Media Claimは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
+- Media Claimカードは暗いアンバー系、Tagバッジは同系統の明るい色で表示する
+- 将来の動画・音声対応を見据え、media_assetsのmedia_typeを利用して拡張可能な構造を維持する
