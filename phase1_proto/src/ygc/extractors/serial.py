@@ -288,7 +288,7 @@ def _looks_like_serial(
     value: str,
 ) -> bool:
     """
-    Phase 0用の保守的なSerial妥当性チェック。
+    Phase 1用の保守的なSerial妥当性チェック。
 
     v3では抽出率よりPrecisionを優先する。
     """

@@ -32,7 +32,7 @@ from ygc.reverb_adapter import (
 )
 
 
-app = FastAPI(title="Your Guitar Chronicle Phase 0")
+app = FastAPI(title="Your Guitar Chronicle Phase 1")
 
 _jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
@@ -2946,7 +2946,7 @@ INDEX_HTML = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your Guitar Chronicle — Phase 0</title>
+<title>Your Guitar Chronicle — Phase 1</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--warn:#e0b65f;--bad:#e07171}
@@ -2974,7 +2974,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 0 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 1 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">User未選択</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
 <main>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -3239,7 +3239,7 @@ function renderAccount(){
     '<div class="detail-meta-item"><span class="detail-meta-label">Country</span><input id="accountCountry" placeholder="JP / US / NL ..." value="'+esc(u.location_country||'')+'"></div>'+
     '<div class="detail-meta-item"><span class="detail-meta-label">Region</span><input id="accountRegion" placeholder="Kyoto / CA / NH ..." value="'+esc(u.location_region||'')+'"></div>'+
     '</div>'+
-    '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">認証なしのPhase 0アカウント / ID '+esc(u.id)+'</span></div>'+
+    '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">認証なしのPhase 1アカウント / ID '+esc(u.id)+'</span></div>'+
     '<div class="detail-section">Owned Guitars</div>'+
     (guitars.length?guitars.map(g=>'<div class="observation-card"><div class="observation-card-head"><div class="observation-date">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div><div class="observation-source">'+esc(g.ownership_status||'')+'</div></div><div class="sub">'+esc(g.year||'')+(g.finish?' / '+esc(g.finish):'')+(g.serial_number?' / '+esc(g.serial_number):'')+'</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button><button class="secondary bad" onclick="unlinkOwnedGuitar('+g.individual_id+')">紐づけ解除</button></div></div>').join(''):'<div class="sub">まだ所有ギターは登録されていません。</div>');
 }
@@ -5358,7 +5358,7 @@ async function unlinkOwnedGuitar(individualId){
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Your Guitar Chronicle Phase 0 browser GUI")
+    parser = argparse.ArgumentParser(description="Your Guitar Chronicle Phase 1 browser GUI")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")

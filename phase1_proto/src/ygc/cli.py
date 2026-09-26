@@ -27,7 +27,7 @@ from ygc.reverb_adapter import (
 app = typer.Typer(
     help=(
         "Your Guitar Chronicle "
-        "- Phase 0"
+        "- Phase 1"
     )
 )
 
