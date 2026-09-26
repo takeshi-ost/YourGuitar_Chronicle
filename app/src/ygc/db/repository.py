@@ -218,6 +218,15 @@ class Repository:
 
         con.execute(
             """
+            UPDATE claims
+            SET verification_status = 'positive'
+            WHERE claim_type = 'listing'
+              AND COALESCE(verification_status, '') <> 'positive'
+            """
+        )
+
+        con.execute(
+            """
             UPDATE observations
             SET owner_name = COALESCE(
                     NULLIF(owner_name, ''),
