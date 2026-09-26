@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS claims (
  target_claim_id INTEGER,
  occurred_at TEXT,
  status TEXT NOT NULL DEFAULT 'active',
+ verification_status TEXT NOT NULL DEFAULT 'positive',
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
