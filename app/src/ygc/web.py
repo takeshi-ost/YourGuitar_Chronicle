@@ -4216,7 +4216,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-body{font-size:12px;line-height:1.5}
 .claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}.claim-response-select{width:auto;min-width:108px;padding:4px 7px;font-size:11px}
-#chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
+#chronicleEntries{padding-right:6px}
+.accordion-section{margin-top:10px}
+.accordion-header{display:flex;align-items:center;gap:8px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.accordion-toggle{width:24px;height:24px;min-width:24px;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}
+.accordion-title{font-weight:700;cursor:pointer}
+.accordion-header .toolbar{margin:0 0 0 auto}
+.accordion-body{display:block}
+.accordion-section.collapsed .accordion-body{display:none}
+.accordion-section.collapsed .accordion-toggle{transform:rotate(-90deg)}
 .claim-card{position:relative}
 .claim-card:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:12px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;z-index:1000;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal textarea{width:100%;min-height:110px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:8px;padding:9px 10px;font:inherit;resize:vertical}.form-row{margin-bottom:12px}.form-label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
@@ -5132,6 +5140,11 @@ function closeClaimPopup(event){
   if(modal)modal.classList.remove('open');
 }
 
+function toggleDetailAccordion(id){
+  const section=document.getElementById(id);
+  if(section)section.classList.toggle('collapsed');
+}
+
 function chronologyValue(c,mode){
   if(mode==='input')return String(c.created_at||'');
   return String(c.occurred_at||c.created_at||'');
@@ -5275,11 +5288,22 @@ async function showIndividual(id){
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
     ownershipControlsHtml(i.id)+'</div>';
-  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
-    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
-    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
-    '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong><div class="toolbar" style="margin:0"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div></div><div id="chronicleEntries"></div>';
+  out+='<section class="accordion-section" id="specificationAccordion">'+
+    '<div class="accordion-header">'+
+      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button>'+
+      '<span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span>'+
+    '</div>'+
+    '<div class="accordion-body"><div class="catalog-spec">'+
+      fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
+      dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
+    '</div></div></section>';
+  out+='<section class="accordion-section" id="chronicleAccordion">'+
+    '<div class="accordion-header">'+
+      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button>'+
+      '<span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span>'+
+      '<div class="toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>'+
+    '</div>'+
+    '<div class="accordion-body"><div id="chronicleEntries"></div></div></section>';
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
 }
