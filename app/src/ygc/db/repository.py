@@ -4132,6 +4132,12 @@ class Repository:
                         u.display_name
                             AS author_name,
                         (
+                            SELECT o.raw_text
+                            FROM observations o
+                            WHERE o.id = c.observation_id
+                            LIMIT 1
+                        ) AS observation_raw_text,
+                        (
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
