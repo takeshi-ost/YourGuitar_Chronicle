@@ -4823,11 +4823,11 @@ function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
 function ownershipControlsHtml(individualId){
-  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">所有ギターに紐づけるにはUserを選択してください。</div>';
+  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">Chronicleに追加するにはUserを選択してください。</div>';
   if(activeUserOwns(individualId)){
-    return '<div class="toolbar" style="margin-top:10px"><span class="status good">現在のUserが所有中</span><button class="bad" onclick="unlinkOwnedGuitar('+individualId+')">紐づけ解除</button></div>';
+    return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
   }
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnershipClaim('+individualId+',\'acquire\')">Add to Your Chronicle</button></div>';
 }
 
 function specificationFieldLabel(value){
