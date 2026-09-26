@@ -4122,7 +4122,8 @@ main{max-width:1500px;margin:auto;padding:14px 22px 22px}
 .discovery-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
 .discovery-item:last-child{border-bottom:0}.discovery-item:hover{background:#20252a}
 .discovery-main{min-width:0}.discovery-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.discovery-meta{font-size:10px;color:var(--muted);margin-top:2px}.discovery-time{font-size:10px;color:var(--muted);white-space:nowrap}
-.product-list-panel,.detail-panel{height:620px;min-height:0;display:flex;flex-direction:column}
+.product-list-panel{height:620px;min-height:0;display:flex;flex-direction:column}
+.detail-panel{height:782px;min-height:0;display:flex;flex-direction:column}
 .product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
 .detail-panel #detail{flex:1;min-height:0;overflow-y:auto;padding-right:4px}
 h2{font-size:17px;margin:0 0 14px}
@@ -4225,7 +4226,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .account-hub{grid-template-columns:1fr;gap:8px}
   .grid{grid-template-columns:1fr}
   .left-column{grid-template-rows:150px 520px}
-  .product-list-panel,.detail-panel{height:520px}
+  .product-list-panel{height:520px}.detail-panel{height:520px}
 }
 </style>
 </head>
