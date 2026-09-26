@@ -4734,8 +4734,9 @@ function positionClaimPopup(trigger){
   const marginLeft=22;
   const edge=10;
   const width=Math.max(220,chronicleRect.width-marginLeft);
+  const preferredLeft=chronicleRect.left+marginLeft-(width*0.5);
   const left=Math.min(
-    Math.max(edge,chronicleRect.left+marginLeft),
+    Math.max(edge,preferredLeft),
     Math.max(edge,window.innerWidth-width-edge)
   );
 
@@ -6345,8 +6346,9 @@ function positionClaimPopup(trigger){
   const marginLeft=22;
   const edge=10;
   const width=Math.max(220,chronicleRect.width-marginLeft);
+  const preferredLeft=chronicleRect.left+marginLeft-(width*0.5);
   const left=Math.min(
-    Math.max(edge,chronicleRect.left+marginLeft),
+    Math.max(edge,preferredLeft),
     Math.max(edge,window.innerWidth-width-edge)
   );
 
