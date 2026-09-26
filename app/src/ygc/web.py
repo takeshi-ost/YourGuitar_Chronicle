@@ -460,6 +460,16 @@ class OwnershipClaimRequest(BaseModel):
     )
 
 
+class FormerOwnerClaimRequest(BaseModel):
+    user_id: int = Field(ge=1)
+    acquisition_date: str = Field(min_length=10, max_length=10)
+    release_date: str = Field(min_length=10, max_length=10)
+    detail: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
 class ReleaseClaimRequest(BaseModel):
     user_id: int = Field(ge=1)
     reason: str | None = Field(
@@ -2602,6 +2612,34 @@ def api_ownership_claim(
     return {
         "observation_id": observation_id,
         "claim_id": claim_id,
+        "user": _row_dict(user),
+        "guitars": [_row_dict(row) for row in guitars],
+    }
+
+
+@app.post("/api/individuals/{individual_id}/former-owner-claim")
+def api_former_owner_claim(
+    individual_id: int,
+    request: FormerOwnerClaimRequest,
+) -> dict[str, Any]:
+    repository = repo()
+    try:
+        result = repository.create_former_owner_claims(
+            request.user_id,
+            individual_id,
+            acquisition_date=request.acquisition_date,
+            release_date=request.release_date,
+            detail=request.detail,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    user, guitars = repository.get_user(request.user_id)
+    return {
+        **result,
         "user": _row_dict(user),
         "guitars": [_row_dict(row) for row in guitars],
     }
