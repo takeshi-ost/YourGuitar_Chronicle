@@ -251,11 +251,12 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .claim-footer-meta a{color:inherit}
 @media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}#detail .accordion-header .toolbar{width:100%;justify-content:flex-start;margin:3px 0 0 32px}}
 </style>
+<style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 </head>
 <body>
 <div class="sticky-header">
   <header>
-    <h1>Your Guitar Chronicle <span class="sub">Top Page</span></h1>
+    <h1><a class="brand-link" href="/user-view">Your Guitar Chronicle</a> <span class="sub">Top Page</span></h1>
     <nav class="page-nav" aria-label="Top Page sections">
       <a href="#discovery">New Discovery</a>
       <a href="#products">Products</a>
@@ -764,6 +765,7 @@ function setIndividualSort(key){
   if(individualSortKey===key)individualSortDirection*=-1;
   else{individualSortKey=key;individualSortDirection=1}
   renderIndividuals();
+  document.getElementById('individualBody').closest('.table-wrap').scrollTop=0;
 }
 function updateSortIndicators(){
   for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
@@ -1185,6 +1187,8 @@ function renderChronicle(){
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
   renderChronicle();
+  const list=document.getElementById('chronicleEntries');
+  if(list)list.scrollTop=0;
 }
 
 async function setClaimResponse(claimId,stance){
@@ -1981,6 +1985,7 @@ function setProfileSort(section,key){
   if(state.key===key)state.direction*=-1;
   else{state.key=key;state.direction=1}
   renderProfileGuitars(section);
+  document.getElementById('profileRows-'+section).closest('.table-wrap').scrollTop=0;
 }
 function renderProfileGuitars(section){
   const root=document.getElementById('profileRows-'+section);

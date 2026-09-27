@@ -25,10 +25,11 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 @media(max-width:680px){header{flex-wrap:wrap;gap:4px}.page-nav{margin-left:0}.account-hub{flex-wrap:wrap}.settings-row{grid-template-columns:1fr;gap:6px}.settings-actions{flex-wrap:wrap}}
 @media(max-width:520px){.modal-grid{grid-template-columns:1fr}.modal-grid label.full{grid-column:auto}}
 </style>
+<style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 </head>
 <body>
 <div class="sticky-header">
-<header><h1>Your Guitar Chronicle <span class="sub">User Settings</span></h1><nav class="page-nav" aria-label="Page navigation"><a href="/user-view">Top Page</a><a id="profileLink" href="/user-view">User Profile</a></nav></header>
+<header><h1><a class="brand-link" href="/user-view">Your Guitar Chronicle</a> <span class="sub">User Settings</span></h1><nav class="page-nav" aria-label="Page navigation"><a href="/user-view">Top Page</a><a id="profileLink" href="/user-view">User Profile</a></nav></header>
 <div class="account-hub" id="accountHub"><span class="sub">Loading account...</span></div>
 </div>
 <main><section class="panel content-frame" aria-labelledby="profileHeading">
