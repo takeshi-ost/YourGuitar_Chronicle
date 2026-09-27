@@ -32,7 +32,7 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
             logo = client.get(f'/assets/logos/{variant}.svg')
             assert logo.status_code == 200
             assert logo.headers['content-type'].startswith('image/svg+xml')
-            assert b'viewBox="0 0 260 56"' in logo.content
+            assert b'viewBox="0 0 650 78"' in logo.content
         assert client.get('/assets/logos/secret.svg').status_code == 404
         for page in ('/user-view', '/user-view/edit', '/'):
             html = client.get(page).text

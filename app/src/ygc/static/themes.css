@@ -177,7 +177,7 @@
 
 /* All brand variants use the same canvas; the page's active theme picks one. */
 .sticky-header .brand-link{display:inline-flex;vertical-align:middle;align-items:center;line-height:0}
-.sticky-header .brand-logo{display:none;width:210px;height:46px;object-fit:contain}
+.sticky-header .brand-logo{display:none;width:min(380px,65vw);height:46px;object-fit:contain}
 .sticky-header .brand-logo-script{display:block}
 :root[data-theme="dark_default"] .brand-logo-script,
 :root[data-theme="black_pearl"] .brand-logo-script,

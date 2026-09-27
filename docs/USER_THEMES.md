@@ -20,4 +20,4 @@ User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は�
 
 定義は `ygc.theme_catalog.THEMES`、見た目は `app/src/ygc/static/themes.css`、画像は同じ `static` ディレクトリにある。旧DBの `users.theme` には3種類のみを許可する CHECK 制約が残るため、追加テーマの選択は nullable な `users.theme_override` に保存し、読み取りでは優先して適用する。将来 PostgreSQL へ移行する際には1列に統合できる。
 
-ヘッダーのロゴは同一寸法の3種類（筆記体・斜体ブロック・装飾バッジ）。Dark Default／Black & Pearl／Goldtop & Cream／Cherry Red & Black は斜体ブロック、Butterscotch & Black／Vintage White & Gold／Lake Blue & Pearl は装飾バッジ、その他のテーマは筆記体を表示する。文字と図案は YGC 独自のデザインで、ヘッダーの共通背景色に合わせている。
+ヘッダーのロゴは同一寸法の3種類（流れる筆記体・太い連続筆記体・前傾した角張った文字）。Dark Default／Black & Pearl／Goldtop & Cream／Cherry Red & Black は太い連続筆記体、Butterscotch & Black／Vintage White & Gold／Lake Blue & Pearl は前傾した角張った文字、その他のテーマは筆記体を表示する。文字と図案は YGC 独自のデザインで、ヘッダーの共通背景色に合わせている。
