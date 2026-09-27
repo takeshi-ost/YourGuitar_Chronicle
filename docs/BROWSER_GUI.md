@@ -14,7 +14,7 @@ pip install -e ".[dev]"
 
 Reverb Token は2通りの方法で設定できます。
 
-1. WebUI右上の **Token設定** から入力して保存
+1. Web Crawl領域の **Token設定** から入力して保存
 2. 従来どおり環境変数 `REVERB_API_TOKEN` を設定
 
 WebUIで保存したTokenを優先し、未設定の場合は環境変数を使用します。
@@ -54,6 +54,8 @@ ygc-web --no-browser
 ```
 
 ## GUIでできること
+
+Browser ConsoleはWeb Crawl、Guitar DB Management、User DB Managementの3領域で構成します。Product Detailの画像は固定の表示枠内で縦横比を維持して縮小・拡大します。User DB ManagementではID・表示名・種別・居住地でユーザーを検索し、選択したユーザーの登録内容、Claim数、所有ギターを確認できます。
 
 - Token設定
   - Reverb Personal Access TokenをWebUIへ貼り付けて保存

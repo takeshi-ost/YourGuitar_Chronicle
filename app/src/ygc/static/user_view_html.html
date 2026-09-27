@@ -222,8 +222,10 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 /* Product Detail: consistent alignment and control heights across its rows. */
 .detail-panel #detail{min-width:0}
 #detail .detail-image,#detail .detail-gallery,#detail .detail-image-link{margin-left:auto;margin-right:auto}
+#detail .detail-image{height:240px;max-height:none;object-fit:contain}
 #detail .detail-image-link{width:75%}#detail .detail-image-link .detail-image{width:100%}
 #detail .detail-gallery{grid-template-columns:28px minmax(0,1fr) 28px}
+#detail .detail-gallery .detail-image{height:240px}
 #detail .detail-gallery-nav{width:28px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center}
 #detail .detail-source{text-align:center;overflow-wrap:anywhere}
 #detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}

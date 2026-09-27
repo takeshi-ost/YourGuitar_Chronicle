@@ -50,7 +50,7 @@ Your Guitar Chronicle で現在できることを、**一般ユーザー**と**�
 
 ## 管理者としてできること
 
-管理者操作はローカルの **Phase 1 Browser Console** を前提とします。
+管理者操作はローカルの **Browser Console** を前提とします。Web Crawl / Guitar DB Management / User DB Managementの3領域で収集、ギターDB、ユーザーDBを確認します。ユーザー一覧はID・表示名・種別・居住地で検索でき、選択後に登録内容と所有ギターを表示します。
 
 ### Reverb収集
 - Reverb API Tokenを設定する

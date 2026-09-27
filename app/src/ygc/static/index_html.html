@@ -40,11 +40,19 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .claim-card:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:12px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}@media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
+.console-domain{margin-bottom:28px}.domain-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}.domain-heading h2{margin:0;font-size:19px}.domain-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(340px,.85fr);gap:18px;align-items:start}.domain-grid .panel{min-width:0}.domain-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.domain-actions .sub{margin-right:auto}.user-results{max-height:400px}.user-results td{vertical-align:middle}.user-results tr.selected{background:#323025}.user-results .mono{white-space:nowrap}.user-detail-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.user-detail-list .detail-meta-item{min-width:0}.user-guitar-list{max-height:260px;overflow:auto}.user-guitar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}.user-guitar-row a{color:var(--text)}.user-guitar-row .sub{white-space:nowrap}
+.user-detail-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.user-detail-header img{width:58px;height:58px;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:#111418}.user-detail-header strong{overflow-wrap:anywhere}
+.console-domain .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+#detail .detail-image{height:240px;max-height:none;object-fit:contain;margin-left:auto;margin-right:auto}#detail .detail-image-link{width:75%;margin-left:auto;margin-right:auto}#detail .detail-image-link .detail-image{width:100%}#detail .detail-gallery{margin-left:auto;margin-right:auto}#detail .detail-gallery .detail-image{height:240px}#detail .detail-source{text-align:center}
+@media(max-width:900px){.domain-grid{grid-template-columns:1fr}.console-domain .cards{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.user-detail-list{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 1 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<header><div><h1>Your Guitar Chronicle <span class="sub">Browser Console</span></h1><div class="sub">収集とデータベースを管理</div></div><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">Top Page</button></header>
 <main>
+<section class="console-domain" aria-labelledby="crawlHeading">
+<div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb収集と実行状況</span></div>
+<div class="domain-actions panel"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button></div>
 <div class="cards" id="cards"></div>
 <div class="panel">
 <h2>Batch Crawl</h2>
@@ -69,8 +77,12 @@ Gibson ES-335</textarea>
 <div id="jobMessage" class="sub">待機中</div>
 <div id="jobResults" style="margin-top:12px"></div>
 </div>
+</section>
 
-<div class="grid">
+<section class="console-domain" aria-labelledby="guitarHeading">
+<div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product / Claim / DBメンテナンス</span></div>
+<div class="domain-actions panel"><span class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</span><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div>
+<div class="domain-grid">
 <section>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
@@ -79,10 +91,6 @@ Gibson ES-335</textarea>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
 <div id="statistics" class="sub">集計中...</div>
-</div>
-<div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">User Account</h2><button class="secondary" onclick="loadActiveUser()">更新</button></div>
-<div id="accountPanel" class="sub">上部の「新規アカウント」からアカウントを作成してください。</div>
 </div>
 </section>
 
@@ -93,6 +101,15 @@ Gibson ES-335</textarea>
 </div>
 </section>
 </div>
+</section>
+<section class="console-domain" aria-labelledby="userHeading">
+<div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">ユーザーを検索して登録内容を確認</span></div>
+<div class="domain-actions panel"><span class="sub">操作用ユーザー</span><select id="activeUserSelect" style="width:auto;min-width:170px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
+<div class="domain-grid">
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">User Detail</h2></div><div id="accountPanel" class="sub">左のUsersから対象を選択してください。</div></div>
+</div>
+</section>
 </main>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <div class="modal-backdrop" id="tokenModal" onclick="closeTokenSettings(event)">
@@ -123,7 +140,7 @@ function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function statCard(label,value){return '<div class="card"><div class="num">'+esc(value)+'</div><div class="label">'+esc(label)+'</div></div>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Observations',s.observations),statCard('Serial Listings',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Product List',s.individuals),statCard('Repeated',s.repeated_individuals)
+statCard('Observations',s.observations),statCard('Serial Listings',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Repeated',s.repeated_individuals)
 ].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>'}
 function openTokenSettings(){document.getElementById('tokenInput').value=storedToken();document.getElementById('tokenModal').classList.add('open');setTimeout(()=>document.getElementById('tokenInput').focus(),0)}
 function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='tokenModal')return;document.getElementById('tokenModal').classList.remove('open');document.getElementById('tokenInput').value=''}
@@ -238,100 +255,69 @@ async function loadStatistics(){
     document.getElementById('statistics').textContent='Statistics error: '+e.message;
   }
 }
+let selectedUserId=null;
 async function loadUsers(){
   users=await jfetch('/api/users');
   const select=document.getElementById('activeUserSelect');
   const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
-  select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
-  const target=users.some(u=>String(u.id)===String(saved))?saved:'';
+  select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
+  const target=users.some(u=>String(u.id)===saved)?saved:'';
   select.value=target;
-  if(target){
-    localStorage.setItem(ACTIVE_USER_KEY,target);
-    await loadActiveUser();
-  }else{
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    renderAccount();
-  }
+  if(target)await loadActiveUser();
+  else{activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY)}
+  renderUserList();
+  if(selectedUserId&&users.some(u=>Number(u.id)===selectedUserId))await showUserRecord(selectedUserId);
+  else if(target)await showUserRecord(Number(target));
+  else{selectedUserId=null;document.getElementById('accountPanel').textContent='左のUsersから対象を選択してください。'}
+}
+function renderUserList(){
+  const filter=document.getElementById('userFilter').value.trim().toLowerCase();
+  const matches=users.filter(u=>[u.id,u.display_name,u.account_type,u.location_country,u.location_region].some(x=>String(x??'').toLowerCase().includes(filter)));
+  document.getElementById('userBody').innerHTML=matches.map(u=>'<tr class="clickable'+(selectedUserId===Number(u.id)?' selected':'')+'" onclick="showUserRecord('+Number(u.id)+')"><td class="mono">'+Number(u.id)+'</td><td>'+esc(u.display_name)+'</td><td>'+esc(u.account_type)+'</td><td>'+esc([u.location_country,u.location_region].filter(Boolean).join(' / ')||'—')+'</td><td>'+Number(u.current_guitar_count||0)+'</td></tr>').join('')||'<tr><td colspan="5" class="sub">該当するユーザーはいません。</td></tr>';
+  document.getElementById('userCount').textContent=matches.length+' / '+users.length+' users';
+}
+async function showUserRecord(id){
+  selectedUserId=Number(id);
+  renderUserList();
+  const panel=document.getElementById('accountPanel');
+  panel.textContent='Loading...';
+  try{
+    const data=await jfetch('/api/users/'+selectedUserId);
+    if(selectedUserId!==Number(id))return;
+    const u=data.user,summary=data.summary||{};
+    const meta=[['User ID',u.id],['Display Name',u.display_name],['Account Type',u.account_type],['Residence',[u.location_country,u.location_region].filter(Boolean).join(' / ')||'—'],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0],['Bio',u.bio||'—'],['Residence Visibility',u.residence_visibility||'Private'],['Bio Visibility',u.bio_visibility||'Public'],['Avatar Visibility',u.avatar_visibility||'Public'],['Signature Guitar ID',u.signature_individual_id||'—']];
+    const guitars=data.guitars||[];
+    panel.className='';
+    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><strong>'+esc(u.display_name)+'</strong></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
+      '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'" target="_blank" rel="noopener">User Profile</a>'+(activeUser&&Number(activeUser.user.id)===Number(u.id)?'<a href="/user-view/edit" target="_blank" rel="noopener">User Settings</a>':'')+'</div>'+
+      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitarHeading" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
+  }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
 }
 async function createUser(){
   try{
-    const d=await jfetch('/api/users',{method:'POST'});
-    const id=String(d.user.id);
+    const data=await jfetch('/api/users',{method:'POST'});
+    const id=String(data.user.id);
     localStorage.setItem(ACTIVE_USER_KEY,id);
+    selectedUserId=Number(id);
     await loadUsers();
-    document.getElementById('activeUserSelect').value=id;
-    await loadActiveUser();
-  }catch(e){
-    alert('アカウント作成に失敗しました。\n'+e.message);
-  }
+  }catch(e){alert('アカウント作成に失敗しました。\n'+e.message)}
 }
 async function setActiveUser(value){
-  if(!value){
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    renderAccount();
-    if(selectedIndividualId)await showIndividual(selectedIndividualId);
-    return;
-  }
-  localStorage.setItem(ACTIVE_USER_KEY,String(value));
+  if(value)localStorage.setItem(ACTIVE_USER_KEY,String(value));
+  else localStorage.removeItem(ACTIVE_USER_KEY);
   await loadActiveUser();
+  if(value)await showUserRecord(Number(value));
+  else if(selectedUserId)await showUserRecord(selectedUserId);
   if(selectedIndividualId)await showIndividual(selectedIndividualId);
 }
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
-  if(!id){
-    activeUser=null;
-    renderAccount();
-    return;
-  }
-  try{
-    activeUser=await jfetch('/api/users/'+id);
-    renderAccount();
-  }catch(e){
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    await loadUsers();
-  }
+  if(!id){activeUser=null;return}
+  try{activeUser=await jfetch('/api/users/'+encodeURIComponent(id))}
+  catch(e){activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY);document.getElementById('activeUserSelect').value=''}
+  if(selectedUserId)await showUserRecord(selectedUserId);
 }
-function renderAccount(){
-  const el=document.getElementById('accountPanel');
-  if(!activeUser||!activeUser.user){
-    el.className='sub';
-    el.textContent='上部の「新規アカウント」からアカウントを作成してください。';
-    return;
-  }
-  const u=activeUser.user;
-  const guitars=activeUser.guitars||[];
-  el.className='';
-  el.innerHTML='<div class="detail-meta-grid">'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Display Name</span><input id="accountName" value="'+esc(u.display_name||'')+'"></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Account Type</span><select id="accountType"><option value="user"'+(u.account_type==='user'?' selected':'')+'>User</option><option value="shop"'+(u.account_type==='shop'?' selected':'')+'>Shop</option></select></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Country</span><input id="accountCountry" placeholder="JP / US / NL ..." value="'+esc(u.location_country||'')+'"></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Region</span><input id="accountRegion" placeholder="Kyoto / CA / NH ..." value="'+esc(u.location_region||'')+'"></div>'+
-    '</div>'+
-    '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">認証なしのPhase 1アカウント / ID '+esc(u.id)+'</span></div>'+
-    '<div class="detail-section">Owned Guitars</div>'+
-    (guitars.length?guitars.map(g=>'<div class="observation-card"><div class="observation-card-head"><div class="observation-date">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div><div class="observation-source">'+esc(g.ownership_status||'')+'</div></div><div class="sub">'+esc(g.year||'')+(g.finish?' / '+esc(g.finish):'')+(g.serial_number?' / '+esc(g.serial_number):'')+'</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button><button class="secondary bad" onclick="unlinkOwnedGuitar('+g.individual_id+')">紐づけ解除</button></div></div>').join(''):'<div class="sub">まだ所有ギターは登録されていません。</div>');
-}
-async function saveUser(){
-  if(!activeUser||!activeUser.user)return;
-  const id=activeUser.user.id;
-  const body={
-    display_name:document.getElementById('accountName').value.trim(),
-    account_type:document.getElementById('accountType').value,
-    location_country:document.getElementById('accountCountry').value.trim()||null,
-    location_region:document.getElementById('accountRegion').value.trim()||null
-  };
-  try{
-    activeUser=await jfetch('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    await loadUsers();
-    document.getElementById('activeUserSelect').value=String(id);
-    await loadActiveUser();
-  }catch(e){
-    alert('アカウント保存に失敗しました。\n'+e.message);
-  }
-}
+function renderAccount(){if(selectedUserId)showUserRecord(selectedUserId)}
 function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
@@ -346,7 +332,7 @@ async function linkOwnedGuitar(individualId){
   if(!activeUser||!activeUser.user)return;
   try{
     activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ownership_status:'current_owner'})});
-    renderAccount();
+    await loadUsers();
     await showIndividual(individualId);
   }catch(e){
     alert('所有ギターの紐づけに失敗しました。\n'+e.message);
@@ -356,7 +342,7 @@ async function unlinkOwnedGuitar(individualId){
   if(!activeUser||!activeUser.user)return;
   try{
     activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'DELETE'});
-    renderAccount();
+    await loadUsers();
     if(selectedIndividualId===Number(individualId))await showIndividual(individualId);
   }catch(e){
     alert('所有ギターの紐づけ解除に失敗しました。\n'+e.message);
