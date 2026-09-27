@@ -1041,6 +1041,11 @@ def theme_stylesheet() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css")
 
 
+@app.get("/assets/sunburst-wood.webp")
+def sunburst_background() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "sunburst-wood.webp", media_type="image/webp")
+
+
 @app.get("/user-view/edit", response_class=HTMLResponse)
 def user_edit() -> HTMLResponse:
     return HTMLResponse(USER_EDIT_HTML)

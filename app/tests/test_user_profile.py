@@ -16,6 +16,11 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         stylesheet = client.get("/assets/themes.css")
         assert stylesheet.status_code == 200
         assert 'sunburst_3ply' in stylesheet.text
+        assert '/assets/sunburst-wood.webp' in stylesheet.text
+        background = client.get("/assets/sunburst-wood.webp")
+        assert background.status_code == 200
+        assert background.headers['content-type'] == 'image/webp'
+        assert background.content.startswith(b'RIFF')
         settings = client.get("/user-view/edit").text
         assert 'id="theme"' in settings
         updated = client.patch(f"/api/users/{owner}", json={

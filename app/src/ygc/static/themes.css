@@ -15,7 +15,7 @@
 :root[data-theme="sunburst_3ply"] {
   color-scheme: light;
   --bg: #130e0b;
-  --page-image: linear-gradient(90deg, #28150e 0%, #673015 9%, #a55220 19%, #b9682c 25%, #b9682c 75%, #a55220 81%, #673015 91%, #28150e 100%);
+  --page-image: url('/assets/sunburst-wood.webp'), linear-gradient(90deg, #28150e 0%, #673015 9%, #a55220 19%, #b9682c 25%, #b9682c 75%, #a55220 81%, #673015 91%, #28150e 100%);
   --panel: #fffaf0;
   --surface: #f4ead5;
   --input: #fffcf5;
@@ -28,7 +28,12 @@
 }
 :root[data-theme="light_default"] body,
 :root[data-theme="sunburst_3ply"] body {
-  background: var(--page-image, var(--bg)) fixed;
+  background-color: var(--bg);
+  background-image: var(--page-image, none);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--text);
 }
 :root[data-theme="light_default"] :is(.panel,.dashboard-card,.modal,.notification-panel),
