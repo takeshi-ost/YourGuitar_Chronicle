@@ -75,6 +75,19 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb収集と実行状況</span></div>
 <div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Tokenを入力"><button onclick="saveToken()">保存</button><button class="secondary" onclick="clearToken()">削除</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
 <div class="panel">
+<h2>Incremental Crawl</h2>
+<div class="sub">製造年と分野で検索。1クリックで一覧最大1ページ・候補最大5件・既存Listingの公開確認最大2件を処理します。カテゴリ検索は検索語と取得結果のカテゴリ確認による試作です。</div>
+<div class="crawl-controls" style="margin-top:10px">
+<div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="electric">Electric Guitars</option><option value="acoustic">Acoustic Guitars</option></select></div>
+<div><div class="sub">Year Min</div><input id="programYearMin" type="number" value="1950" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
+<div><div class="sub">Year Max</div><input id="programYearMax" type="number" value="1980" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
+<div><button id="programBtn" onclick="advanceCrawlProgram()">Advance</button></div>
+<div><button class="secondary" onclick="restartCrawlProgram()">Restart Scan</button></div>
+</div>
+<div id="programState" class="sub" style="margin-top:8px">状態を確認中</div>
+<div id="programResult" class="sub"></div>
+</div>
+<div class="panel">
 <h2>Batch Crawl</h2>
 <div class="crawl-query">
 <div class="sub">1行につき1クエリ</div>
@@ -416,7 +429,9 @@ function claimCard(c){
       ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
       : 'Unknown';
     if(kind==='release'){
-      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+      body=c.ownership_source==='automation'
+        ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
+        : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -561,9 +576,14 @@ async function deleteIndividual(individualId){
 }
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+function programRequest(){return {category:document.getElementById('programCategory').value,year_min:Number(document.getElementById('programYearMin').value),year_max:Number(document.getElementById('programYearMax').value)}}
+async function loadCrawlProgram(){const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max){document.getElementById('programState').textContent='製造年の範囲を確認してください';return}try{const d=await jfetch('/api/crawl/program?'+new URLSearchParams(q));document.getElementById('programState').textContent='処理済み '+d.processed+' 件 / 新規Observation '+d.observations_created+' 件 / '+(d.finished?'この範囲のページ末尾に到達':'続きから実行可能')+(d.updated_at?' / 最終 '+d.updated_at:'')}catch(e){document.getElementById('programState').textContent=e.message}}
+async function advanceCrawlProgram(){const q=programRequest();const btn=document.getElementById('programBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});pollCrawlProgram(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function restartCrawlProgram(){try{await jfetch('/api/crawl/program/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});document.getElementById('programResult').textContent='先頭から再走査できます。既存ObservationとClaimは保持されます。';await loadCrawlProgram()}catch(e){alert(e.message)}}
+async function pollCrawlProgram(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programState').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCrawlProgram(id),1000);return}document.getElementById('programBtn').disabled=false;if(d.status==='error'){alert(d.error||'crawl error');await loadCrawlProgram();return}const s=d.aggregate||{};document.getElementById('programResult').textContent='今回: 一覧 '+s.summaries_processed+' 件 / 詳細 '+s.details_fetched+' 件 / 新規 '+s.new_observations+' 件 / 公開確認 '+s.rechecked+' 件 / 非公開確認 '+s.confirmed_missing+' 件 / Claim '+s.unavailable_claims+' 件 / Owner Unknown '+s.owners_unknown+' 件';await loadCrawlProgram();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('programBtn').disabled=false;alert(e.message)}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 const header=document.querySelector('.sticky-header');
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
-(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram()})()
 </script>
 </body></html>

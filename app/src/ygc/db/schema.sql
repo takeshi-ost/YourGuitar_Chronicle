@@ -228,6 +228,29 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
  status TEXT NOT NULL,
  error_message TEXT
 );
+CREATE TABLE IF NOT EXISTS crawl_programs (
+ source_site TEXT NOT NULL,
+ category TEXT NOT NULL,
+ year_min INTEGER NOT NULL,
+ year_max INTEGER NOT NULL,
+ page_url TEXT,
+ pending_json TEXT,
+ next_url TEXT,
+ processed INTEGER NOT NULL DEFAULT 0,
+ observations_created INTEGER NOT NULL DEFAULT 0,
+ finished INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, category, year_min, year_max)
+);
+CREATE TABLE IF NOT EXISTS crawl_listing_checks (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ api_url TEXT,
+ checked_at TEXT,
+ missing_since TEXT,
+ status TEXT NOT NULL DEFAULT 'unknown',
+ PRIMARY KEY(source_site, source_listing_id)
+);
 CREATE INDEX IF NOT EXISTS idx_observations_individual_id ON observations(individual_id);
 CREATE INDEX IF NOT EXISTS idx_observations_source_url ON observations(source_url);
 

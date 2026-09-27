@@ -1144,6 +1144,14 @@ class Repository:
                 )
             elif claim_type == "ownership":
                 if claim["ownership_source"] == "automation":
+                    if claim["ownership_kind"] == "release":
+                        state["current_owner_name"] = "Unknown"
+                        state["current_owner_type"] = "unknown"
+                        state["current_owner_user_id"] = None
+                        state["current_owner_source_url"] = None
+                        state["location_country"] = None
+                        state["location_region"] = None
+                        continue
                     observation = con.execute(
                         "SELECT owner_name, owner_type, location_country, "
                         "location_region, source_url FROM observations WHERE id = ?",
@@ -1841,6 +1849,59 @@ class Repository:
                 "claim_id": claim_id,
                 "individual_id": individual_id,
             }
+
+    def record_reverb_unavailable(self, listing_id: str) -> dict[str, Any]:
+        """Record a confirmed absence as a Claim, preserving independent owners."""
+        with self.connect() as con:
+            observation = con.execute(
+                "SELECT id, individual_id, source_url FROM observations "
+                "WHERE source_site = 'reverb' AND source_listing_id = ?",
+                (listing_id,),
+            ).fetchone()
+            if not observation or observation["individual_id"] is None:
+                return {"created": False, "reason": "no_individual"}
+            individual_id = int(observation["individual_id"])
+            individual = con.execute(
+                "SELECT current_owner_user_id, current_owner_source_url "
+                "FROM individuals WHERE id = ?", (individual_id,),
+            ).fetchone()
+            reverb_only = bool(
+                individual and individual["current_owner_user_id"] is None
+                and individual["current_owner_source_url"]
+                and individual["current_owner_source_url"] == observation["source_url"]
+            )
+            if con.execute(
+                "SELECT 1 FROM claims WHERE observation_id = ? AND "
+                "status = 'active' AND "
+                + ("ownership_source = 'automation' AND ownership_kind = 'release'"
+                   if reverb_only else
+                   "claim_type = 'event' AND value_text = 'reverb_unavailable'"),
+                (observation["id"],),
+            ).fetchone():
+                return {"created": False, "reason": "already_recorded"}
+            author_id = self._source_user_id(con, "Automation")
+            now = utcnow()
+            cur = con.execute(
+                """INSERT INTO claims (
+                    individual_id, observation_id, author_user_id,
+                    claim_type, field_name, value_text, ownership_kind,
+                    ownership_source, body, occurred_at, status,
+                    verification_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
+                          'positive', ?, ?)""",
+                (individual_id, observation["id"], author_id,
+                 "ownership" if reverb_only else "event",
+                 "owner" if reverb_only else "event",
+                 "unknown" if reverb_only else "reverb_unavailable",
+                 "release" if reverb_only else None,
+                 "automation" if reverb_only else None,
+                 "Reverb listing no longer publicly available (confirmed twice).",
+                 now, now, now),
+            )
+            if reverb_only:
+                self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            return {"created": True, "claim_id": int(cur.lastrowid),
+                    "owner_released": reverb_only, "individual_id": individual_id}
 
     def upsert_observation(
         self,

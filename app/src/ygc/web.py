@@ -25,6 +25,7 @@ from starlette.background import BackgroundTask
 from ygc import config
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.crawl_service import crawl_query
+from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
 from ygc.extractors.serial import extract_serial_candidates
 from ygc.reverb_adapter import (
@@ -290,6 +291,12 @@ class CrawlRequest(BaseModel):
     workers: int = Field(default=6, ge=1, le=12)
     year_min: int | None = Field(default=None, ge=1800, le=2100)
     year_max: int | None = Field(default=1980, ge=1800, le=2100)
+
+
+class CrawlAdvanceRequest(BaseModel):
+    category: str
+    year_min: int = Field(ge=1800, le=2100)
+    year_max: int = Field(ge=1800, le=2100)
 
 
 class VintageAuditRequest(BaseModel):
@@ -3177,6 +3184,71 @@ def api_migrate_claims() -> dict[str, Any]:
         "rebuild": rebuild,
         "after": after,
     }
+
+
+def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> None:
+    global _active_job_id
+    try:
+        with ReverbAPICollector(
+            token=token, api_base=config.REVERB_API_BASE,
+            timeout=config.REQUEST_TIMEOUT, delay=1.0,
+            max_workers=1,
+        ) as collector:
+            result = advance_program(
+                repo(), collector, request.category, request.year_min,
+                request.year_max,
+            )
+        _set_job(job_id, status="done", message="1回分の処理が完了しました",
+                 progress=1.0, aggregate=result, finished_at=time.time())
+    except Exception as exc:
+        _set_job(job_id, status="error", message=str(exc), error=str(exc),
+                 finished_at=time.time())
+    finally:
+        with _jobs_lock:
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+
+@app.get("/api/crawl/program")
+def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
+    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    return program_status(repo(), category, year_min, year_max)
+
+
+@app.post("/api/crawl/program/restart")
+def api_crawl_program_restart(request: CrawlAdvanceRequest) -> dict:
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        try:
+            return restart_program(repo(), request.category,
+                                   request.year_min, request.year_max)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/crawl/advance")
+def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> dict:
+    global _active_job_id
+    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    token, _source = _request_token(http_request)
+    if not token:
+        raise HTTPException(status_code=400, detail="Reverb API Token is not configured")
+    if not repo().claim_architecture_status()["ready"]:
+        raise HTTPException(status_code=409, detail="Run Claim migration before crawling")
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {"id": job_id, "status": "running",
+                         "message": "少量クロールを実行中", "progress": 0.0,
+                         "query_results": [], "started_at": time.time()}
+        _active_job_id = job_id
+    threading.Thread(target=_run_incremental,
+                     args=(job_id, request, token), daemon=True).start()
+    return {"job_id": job_id}
 
 
 @app.post("/api/crawl")

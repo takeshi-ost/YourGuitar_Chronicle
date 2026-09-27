@@ -991,7 +991,9 @@ function claimCardFull(c){
       ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
       : 'Unknown';
     if(kind==='release'){
-      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+      body=c.ownership_source==='automation'
+        ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
+        : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){

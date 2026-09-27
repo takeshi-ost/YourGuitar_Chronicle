@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from urllib.parse import urljoin, urlparse, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable
 
@@ -178,6 +179,12 @@ class ReverbAPICollector:
             except httpx.HTTPError as exc:
                 last_error = exc
 
+                if isinstance(exc, httpx.HTTPStatusError) and (
+                    400 <= exc.response.status_code < 500
+                    and exc.response.status_code != 429
+                ):
+                    raise
+
                 if attempt >= self.max_retries:
                     raise
 
@@ -201,6 +208,35 @@ class ReverbAPICollector:
         raise RuntimeError(
             "Unexpected Reverb API failure"
         )
+
+    def safe_api_url(self, href: str) -> str:
+        """Accept only links on the configured Reverb API host/path."""
+        base = self.api_base + "/"
+        url = urljoin(base, href)
+        parsed, origin = urlparse(url), urlparse(base)
+        hosts = {origin.hostname}
+        if origin.hostname in {"api.reverb.com", "reverb.com"}:
+            hosts.update({"api.reverb.com", "reverb.com"})
+        if (parsed.scheme != origin.scheme or parsed.hostname not in hosts
+                or parsed.port != origin.port
+                or not parsed.path.startswith(origin.path)
+                or parsed.username or parsed.password):
+            raise ValueError("Unexpected Reverb API link")
+        return url
+
+    def public_listing_status(self, listing_id: str, api_url: str | None = None) -> str:
+        """A definite 404/410 is a candidate for a later second check."""
+        url = self.safe_api_url(
+            api_url or f"{self.api_base}/listings/{quote(listing_id, safe='')}"
+        )
+        response = self.client.get(url)
+        if response.status_code in (404, 410):
+            return "missing"
+        if response.status_code in (429, 500, 502, 503, 504):
+            self._get_json(url)  # Respect Retry-After/backoff; never mark missing.
+            return "public"
+        response.raise_for_status()
+        return "public"
 
     @staticmethod
     def _next_href(
