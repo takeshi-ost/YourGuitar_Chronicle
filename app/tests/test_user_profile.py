@@ -1,7 +1,10 @@
 from fastapi.testclient import TestClient
+import sqlite3
+from pathlib import Path
 
 from ygc import config
 from ygc.db.repository import Repository
+from ygc.theme_catalog import THEMES
 from ygc.web import app
 
 
@@ -21,6 +24,15 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         assert background.status_code == 200
         assert background.headers['content-type'] == 'image/webp'
         assert background.content.startswith(b'RIFF')
+        choices = client.get('/api/themes').json()
+        assert [item['id'] for item in choices] == [key for key, _ in THEMES]
+        assert len(choices) == 13
+        for key, _ in THEMES[1:]:
+            assert f':root[data-theme="{key}"]' in stylesheet.text
+        for filename in ('butterscotch-wood.webp', 'cherry-wood.webp', 'white-pearl.webp'):
+            asset = client.get('/assets/theme-textures/' + filename)
+            assert asset.status_code == 200 and asset.headers['content-type'] == 'image/webp'
+        assert client.get('/assets/theme-textures/private.db').status_code == 404
         settings = client.get("/user-view/edit").text
         assert 'id="theme"' in settings
         updated = client.patch(f"/api/users/{owner}", json={
@@ -36,6 +48,27 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         assert invalid.status_code == 400
     repo.init_db()
     assert repo.get_user(owner)[0]["theme"] == "sunburst_3ply"
+
+
+def test_new_theme_choices_work_with_existing_three_theme_check(tmp_path):
+    path = tmp_path / 'legacy.db'
+    schema = (Path(__file__).parents[1] / 'src/ygc/db/schema.sql').read_text()
+    schema = schema.replace("theme TEXT NOT NULL DEFAULT 'dark_default',",
+                            "theme TEXT NOT NULL DEFAULT 'dark_default' CHECK (theme IN ('dark_default','light_default','sunburst_3ply')),")
+    schema = schema.replace(' theme_override TEXT,\n', '')
+    with sqlite3.connect(path) as con:
+        con.executescript(schema)
+    repo = Repository(path)
+    repo.init_db()
+    user = repo.create_user('Collector')
+    for theme, _ in THEMES:
+        assert repo.update_user(user,display_name='Collector',account_type='user',
+                                location_country=None,location_region=None,theme=theme)
+        assert repo.get_user(user)[0]['theme'] == theme
+    repo.init_db()
+    assert repo.get_user(user)[0]['theme'] == THEMES[-1][0]
+    with repo.connect() as con:
+        assert con.execute('SELECT theme FROM users WHERE id=?',(user,)).fetchone()[0] == 'dark_default'
 
 
 def test_favorites_toggle_and_profile_excludes_owned_guitars(tmp_path, monkeypatch):

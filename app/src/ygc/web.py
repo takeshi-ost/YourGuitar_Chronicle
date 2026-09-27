@@ -51,6 +51,7 @@ from ygc.crawl_service import crawl_query
 from ygc.crawl_detail_cache import reprocess_details
 from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
+from ygc.theme_catalog import THEMES
 from ygc.platform_boundaries import (CrawlStep, LocalCrawlRunner, PrototypeIdentity,
                                      local_repository, require_local_platform,
                                      PlatformAdapterRequired)
@@ -1044,6 +1045,18 @@ def theme_stylesheet() -> FileResponse:
 @app.get("/assets/sunburst-wood.webp")
 def sunburst_background() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "sunburst-wood.webp", media_type="image/webp")
+
+
+@app.get("/assets/theme-textures/{filename}")
+def theme_texture(filename: str) -> FileResponse:
+    if filename not in {"butterscotch-wood.webp", "cherry-wood.webp", "white-pearl.webp"}:
+        raise HTTPException(status_code=404, detail="Theme asset not found")
+    return FileResponse(Path(__file__).with_name("static") / filename, media_type="image/webp")
+
+
+@app.get("/api/themes")
+def api_themes() -> list[dict[str, str]]:
+    return [{"id": key, "label": label} for key, label in THEMES]
 
 
 @app.get("/user-view/edit", response_class=HTMLResponse)

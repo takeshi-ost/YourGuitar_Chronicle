@@ -11,6 +11,7 @@ from ygc.extractors.normalization import (
     normalize_model,
     normalize_serial,
 )
+from ygc.theme_catalog import THEME_IDS
 
 
 def utcnow() -> str:
@@ -95,6 +96,9 @@ class Repository:
                 "avatar_visibility": "TEXT NOT NULL DEFAULT 'Public'",
                 "signature_individual_id": "INTEGER",
                 "theme": "TEXT NOT NULL DEFAULT 'dark_default'",
+                # Older databases restrict users.theme to the first three choices.
+                # Store curated additions here without rebuilding the referenced users table.
+                "theme_override": "TEXT",
             },
             "user_guitars": {
                 "display_order": "INTEGER",
@@ -2439,6 +2443,7 @@ class Repository:
                 con.execute(
                     """
                     SELECT
+                        COALESCE(u.theme_override,u.theme) AS theme,
                         u.*,
                         COUNT(
                             CASE
@@ -2467,7 +2472,7 @@ class Repository:
         with self.connect() as con:
             user = con.execute(
                 """
-                SELECT *
+                SELECT COALESCE(theme_override,theme) AS theme, *
                 FROM users
                 WHERE id = ?
                 """,
@@ -2988,14 +2993,14 @@ class Repository:
         if status not in ("normal", "silent_ban", "ban"):
             raise ValueError("Invalid BAN status")
         theme = fields.get("theme")
-        if theme is not None and theme not in ("dark_default", "light_default", "sunburst_3ply"):
+        if theme is not None and theme not in THEME_IDS:
             raise ValueError("Invalid theme")
         for key in ("birth_visibility", "residence_visibility", "bio_visibility", "avatar_visibility"):
             if fields[key] not in ("Public", "Members", "Followers", "Private"):
                 raise ValueError("Invalid visibility: " + key)
         signature = fields["signature_individual_id"]
         with self.connect() as con:
-            user = con.execute("SELECT * FROM users WHERE id=? AND account_type<>'source'", (user_id,)).fetchone()
+            user = con.execute("SELECT COALESCE(theme_override,theme) AS theme, * FROM users WHERE id=? AND account_type<>'source'", (user_id,)).fetchone()
             if not user:
                 return False
             theme = theme or user["theme"]
@@ -3009,7 +3014,7 @@ class Repository:
                  "avatar_visibility", "signature_individual_id")) or theme != user["theme"]
             con.execute("""UPDATE users SET display_name=?,account_type=?,location_country=?,
                 location_region=?,bio=?,birth_visibility=?,residence_visibility=?,
-                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,theme=?,ban_status=?,updated_at=?
+                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,theme_override=?,ban_status=?,updated_at=?
                 WHERE id=?""", (name, account, fields["location_country"], fields["location_region"],
                 fields["bio"], fields["birth_visibility"], fields["residence_visibility"],
                 fields["bio_visibility"], fields["avatar_visibility"], signature, theme, status,
@@ -3059,7 +3064,7 @@ class Repository:
         if any(value not in ("Public", "Members", "Followers", "Private")
                for value in visibility.values()):
             raise ValueError("Invalid profile visibility")
-        if theme is not None and theme not in ("dark_default", "light_default", "sunburst_3ply"):
+        if theme is not None and theme not in THEME_IDS:
             raise ValueError("Invalid theme")
 
         with self.connect() as con:
@@ -3083,7 +3088,7 @@ class Repository:
                     residence_visibility = COALESCE(?, residence_visibility),
                     bio_visibility = COALESCE(?, bio_visibility),
                     avatar_visibility = COALESCE(?, avatar_visibility),
-                    theme = COALESCE(?, theme),
+                    theme_override = COALESCE(?, theme_override),
                     signature_individual_id = CASE WHEN ? THEN ? ELSE signature_individual_id END,
                     updated_at = ?
                 WHERE id = ?

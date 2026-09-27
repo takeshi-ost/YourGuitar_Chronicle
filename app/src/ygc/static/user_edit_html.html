@@ -47,7 +47,7 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 <div class="settings-row"><div><div class="field-name">Bio</div><div class="field-note">Optional · 自己紹介</div></div><div class="field-value"><textarea id="bio" maxlength="2000" aria-label="Bio"></textarea></div><select class="visibility" data-field="bio" aria-label="Bio visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Avatar</div><div class="field-note">Optional · プロフィール画像</div></div><div class="field-value avatar-input"><img id="avatarPreview" alt="Current avatar"><input id="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Avatar"><span class="sub">12 MB 以下</span></div><select class="visibility" data-field="avatar" aria-label="Avatar visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Your signature guitar</div><div class="field-note">Optional · Profileで最初に表示するギター</div></div><div class="field-value"><select id="signatureGuitar" aria-label="Your signature guitar"><option value="">Select an owned guitar</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">画面の配色 · ヘッダーは共通</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"><option value="dark_default">Dark Default</option><option value="light_default">Light Default</option><option value="sunburst_3ply">Sunburst&amp;3ply</option></select><span class="sub">選択中のテーマをプレビューします。Saveで保存されます。</span></div><div class="visibility-fixed">Public · Fixed</div></div>
+<div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">画面の配色 · ヘッダーは共通</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"></select><span class="sub">選択中のテーマをプレビューします。Saveで保存されます。</span></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Preferred Language</div><div class="field-note">Required · UI 言語</div></div><div class="field-value"><select id="language" disabled aria-label="Preferred Language"><option value="en">English</option><option value="ja">Japanese</option></select><span class="sub">UI 多言語対応時に利用できます。</span></div><div class="visibility-fixed">Private · Fixed</div></div>
 <div class="settings-actions"><button id="saveButton" onclick="saveSettings()">Save</button><button type="button" class="secondary" onclick="openNewGuitar()">Add Guitar</button><span class="sub" id="status" role="status"></span></div>
 </div><div id="emptyState" class="sub">Select a user to edit settings.</div>
@@ -68,7 +68,7 @@ const defaults={birth:'Private',residence:'Private',bio:'Public',avatar:'Public'
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const field=id=>document.getElementById(id);
 let activeUser=null;
-function previewTheme(value){document.documentElement.dataset.theme=['light_default','sunburst_3ply'].includes(value)?value:'dark_default'}
+function previewTheme(value){document.documentElement.dataset.theme=value||'dark_default'}
 async function request(url,options={}){const response=await fetch(url,options);let data;try{data=await response.json()}catch{data={}}if(!response.ok)throw Error(data.detail||response.statusText);return data}
 function setStatus(message,error=false){field('status').textContent=message;field('status').dataset.error=String(error)}
 function syncHeader(){
@@ -91,6 +91,8 @@ async function loadUser(){
  try{
   activeUser=await request('/api/users/'+encodeURIComponent(id));
   const u=activeUser.user;
+  const themes=await request('/api/themes');
+  field('theme').innerHTML=themes.map(theme=>'<option value="'+esc(theme.id)+'">'+esc(theme.label)+'</option>').join('');
   field('theme').value=u.theme||'dark_default';previewTheme(u.theme);
   field('displayName').value=u.display_name||'';field('userId').value=String(u.id);field('accountType').value=u.account_type||'user';
   field('country').value=u.location_country||'';field('city').value=u.location_region||'';field('bio').value=u.bio||'';

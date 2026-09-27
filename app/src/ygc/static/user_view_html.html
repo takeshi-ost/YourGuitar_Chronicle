@@ -585,7 +585,7 @@ let profileGuitars=[];
 let profileFavorites=[];
 let favoriteIds=new Set();
 const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1},favorites:{key:'id',direction:1}};
-function applyTheme(theme){document.documentElement.dataset.theme=['light_default','sunburst_3ply'].includes(theme)?theme:'dark_default'}
+function applyTheme(theme){document.documentElement.dataset.theme=theme||'dark_default'}
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
