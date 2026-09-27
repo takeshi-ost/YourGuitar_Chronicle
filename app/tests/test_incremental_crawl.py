@@ -439,3 +439,44 @@ def test_older_listing_absence_keeps_newer_listing_owner(tmp_path):
             (guitar_id,),
         ).fetchone()
         assert tuple(row) == ("Current Shop", "NY")
+
+
+def test_run_log_tracks_each_stage_and_survives_restart(tmp_path):
+    repo = Repository(tmp_path / 'ygc.db')
+    repo.init_db()
+    stages = []
+    collector = Collector([{'listings': [_summary(1),
+        {**_summary(2), 'year': '2020'}]}])
+    result = advance_program(repo, collector, 'electric', 1970, 1979,
+                             progress_callback=lambda c: stages.append(c))
+    assert result['summaries_processed'] == 2
+    assert result['details_fetched'] == 1
+    assert result['detail_scope_matched'] == 1
+    assert result['serial_candidates'] == 1
+    assert result['new_individuals'] == 1
+    assert {'listing', 'matching', 'availability', 'done'} <= {s['phase'] for s in stages}
+    repo.init_db()
+    log = repo.crawl_run_log('electric', 1970, 1979)
+    assert len(log) == 1
+    assert log[0]['status'] == 'ok'
+    assert log[0]['counts']['new_individuals'] == 1
+    assert log[0]['counts']['skipped_year'] == 1
+    assert repo.crawl_run_log('acoustic', 1970, 1979) == []
+
+
+def test_failed_run_keeps_partial_counts_in_log(tmp_path):
+    repo = Repository(tmp_path / 'ygc.db')
+    repo.init_db()
+    class Broken(Collector):
+        def _get_json(self, url, params=None):
+            if url.endswith('/listings/2'):
+                raise RuntimeError('detail unavailable')
+            return super()._get_json(url, params)
+    with pytest.raises(RuntimeError):
+        advance_program(repo, Broken([{'listings': [_summary(1), _summary(2)]}]),
+                        'electric', 1970, 1979)
+    run = repo.crawl_run_log('electric', 1970, 1979)[0]
+    assert run['status'] == 'error'
+    assert run['phase'] == 'error'
+    assert run['counts']['summaries_processed'] == 1
+    assert run['counts']['details_fetched'] == 1

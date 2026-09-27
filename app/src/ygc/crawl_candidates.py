@@ -47,7 +47,7 @@ def candidate_ids(repository: Repository, ids: list[str]) -> set[str]:
     return found
 
 
-def reconcile_candidates(repository: Repository) -> dict[str, int]:
+def reconcile_candidates(repository: Repository, progress_callback=None) -> dict[str, int]:
     """Read identity keys in bulk, then process durable candidates idempotently."""
     counts = {"new_individuals": 0, "existing_individuals_extended": 0,
               "ambiguous_matches": 0, "new_observations": 0}
@@ -75,7 +75,7 @@ def reconcile_candidates(repository: Repository) -> dict[str, int]:
                 key = (individual["normalized_manufacturer"], individual["normalized_serial"])
                 identities.setdefault(key, set()).add(individual["normalized_model"])
                 identity_counts[key] = identity_counts.get(key, 0) + 1
-    for row in rows:
+    for index, row in enumerate(rows, 1):
         claim = json.loads(row["claim_json"])
         provenance = json.loads(row["provenance_json"])
         key = (normalize_manufacturer(claim.get("manufacturer")),
@@ -90,6 +90,8 @@ def reconcile_candidates(repository: Repository) -> dict[str, int]:
                 con.execute("UPDATE crawl_candidates SET status='review', reason='identity_conflict', "
                             "updated_at=? WHERE source_site='reverb' AND source_listing_id=?",
                             (utcnow(), row["source_listing_id"]))
+            if progress_callback and index % 10 == 0:
+                progress_callback(index, len(rows), dict(counts))
             continue
         # persist_reverb_listing_claim performs a final duplicate check and writes
         # the Observation and Claim atomically. A crash before status update is safe.
@@ -116,6 +118,10 @@ def reconcile_candidates(repository: Repository) -> dict[str, int]:
                 counts["new_individuals"] += 1
                 identities.setdefault(key, set()).add(model)
                 identity_counts[key] = 1
+        if progress_callback and index % 10 == 0:
+            progress_callback(index, len(rows), dict(counts))
+    if progress_callback:
+        progress_callback(len(rows), len(rows), dict(counts))
     return counts
 
 

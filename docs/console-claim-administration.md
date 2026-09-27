@@ -33,3 +33,15 @@ signature selections. It does not merge history and requires a destructive-opera
 confirmation in the modal. Stored media files follow the existing deletion policy.
 Both operations are atomic, logged, require the local admin capability, and reject
 stale or mismatched group membership. Main and unrelated Individuals are unaffected.
+
+### Incremental Crawl progress and run history
+
+Browser Console displays the per-run stages: summary screening, detail fetching,
+manufacturer and serial extraction, identity reconciliation, and Claim-backed DB
+registration. Each incremental click saves stage counters to `crawl_runs` while
+running and when it finishes or fails. The log shows the latest 20 runs for the
+selected category and manufacturing-year range; older rows remain in SQLite.
+A restarted search resets the scan cursor but preserves its run history.
+The matching stage may also process previously staged pending candidates after an
+interrupted run; the log's `candidate_total` is the actual reconciliation queue.
+Historical runs predating these fields have no stage counters.

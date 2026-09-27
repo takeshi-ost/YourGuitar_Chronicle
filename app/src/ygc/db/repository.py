@@ -104,6 +104,14 @@ class Repository:
                 "verification_status": "TEXT NOT NULL DEFAULT 'positive'",
                 "admin_verification": "INTEGER NOT NULL DEFAULT 0",
             },
+            "crawl_runs": {
+                "category": "TEXT",
+                "year_min": "INTEGER",
+                "year_max": "INTEGER",
+                "phase": "TEXT",
+                "counts_json": "TEXT",
+                "updated_at": "TEXT",
+            },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
                 "actor_user_id": "INTEGER",
@@ -6302,6 +6310,27 @@ class Repository:
             return int(
                 cur.lastrowid
             )
+
+    def update_crawl_run(self, run_id: int, phase: str, counts: dict,
+                         category: str, year_min: int, year_max: int) -> None:
+        import json
+        with self.connect() as con:
+            con.execute("UPDATE crawl_runs SET phase=?, counts_json=?, category=?, "
+                        "year_min=?, year_max=?, updated_at=? WHERE id=?",
+                        (phase, json.dumps(counts), category, year_min, year_max,
+                         utcnow(), run_id))
+
+    def crawl_run_log(self, category: str, year_min: int, year_max: int,
+                      limit: int = 20) -> list[dict]:
+        import json
+        with self.connect() as con:
+            rows = con.execute("SELECT id,started_at,finished_at,status,phase,counts_json, "
+                               "error_message FROM crawl_runs WHERE source_site='reverb' "
+                               "AND category=? AND year_min=? AND year_max=? "
+                               "ORDER BY id DESC LIMIT ?",
+                               (category, year_min, year_max, limit)).fetchall()
+        return [{**dict(row), "counts": json.loads(row["counts_json"] or "{}")}
+                for row in rows]
 
     def finish_run(
         self,

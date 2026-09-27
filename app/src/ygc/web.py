@@ -3276,9 +3276,13 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
                 request.year_max,
                 progress_callback=lambda counts: _set_job(
                     job_id,
-                    message=(f"一覧 {counts['summaries_processed']}/2000・"
-                             f"詳細 {counts['details_fetched']}"),
+                    message={"listing": "一覧判定・詳細取得中",
+                             "matching": "候補照合・DB登録中",
+                             "availability": "既存掲載の公開確認中",
+                             "done": "処理完了", "error": "処理失敗"}.get(
+                                 counts["phase"], counts["phase"]),
                     progress=min(0.95, counts["summaries_processed"] / 2000),
+                    stage_counts=counts,
                 ),
             )
         _set_job(job_id, status="done", message="1回分の処理が完了しました",
@@ -3297,6 +3301,13 @@ def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
     if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return program_status(repo(), category, year_min, year_max)
+
+
+@app.get("/api/crawl/program/runs")
+def api_crawl_program_runs(category: str, year_min: int, year_max: int) -> list[dict]:
+    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    return repo().crawl_run_log(category, year_min, year_max)
 
 
 @app.get("/api/crawl/candidates/review")

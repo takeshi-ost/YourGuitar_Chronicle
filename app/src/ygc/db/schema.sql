@@ -247,7 +247,13 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
  pages_fetched INTEGER DEFAULT 0,
  observations_created INTEGER DEFAULT 0,
  status TEXT NOT NULL,
- error_message TEXT
+ error_message TEXT,
+ category TEXT,
+ year_min INTEGER,
+ year_max INTEGER,
+ phase TEXT,
+ counts_json TEXT,
+ updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS crawl_programs (
  source_site TEXT NOT NULL,

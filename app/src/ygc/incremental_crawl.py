@@ -240,10 +240,23 @@ def advance_program(repository: Repository, collector: Any, category: str,
               "skipped_category_or_year": 0,
               "skipped_year": 0, "skipped_category": 0,
               "missing_year": 0, "missing_category": 0,
-              "detail_unavailable": 0}
+              "detail_unavailable": 0, "detail_scope_matched": 0,
+              "missing_detail_url": 0, "candidate_checked": 0,
+              "new_individuals": 0, "existing_individuals_extended": 0,
+              "ambiguous_matches": 0, "rechecked": 0,
+              "confirmed_missing": 0, "unavailable_claims": 0,
+              "owners_unknown": 0}
     rejected_samples: list[dict[str, str | None]] = []
     run_id = repository.start_run("reverb")
     last_request = 0.0
+    phase = "listing"
+    def checkpoint(current_phase: str) -> None:
+        nonlocal phase
+        phase = current_phase
+        repository.update_crawl_run(run_id, phase, counts, category, year_min, year_max)
+        if progress_callback:
+            progress_callback({**counts, "phase": phase, "run_id": run_id})
+    checkpoint(phase)
     try:
         if not program["finished"]:
             pending = json.loads(program["pending_json"]) if program["pending_json"] else []
@@ -295,6 +308,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                     else:
                         detail_href = collector._self_href(summary)
                         if not detail_href:
+                            counts["missing_detail_url"] += 1
                             counts["skipped_category_or_year"] += 1
                         else:
                             last_request = _pause(last_request)
@@ -310,6 +324,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                 save_detail(repository, str(listing_id), detail)
                             if detail and (_category_matches(detail, category)
                                     and _year_matches(detail, year_min, year_max)):
+                                counts["detail_scope_matched"] += 1
                                 claim_data = to_listing_claim_data(detail, config.SERIAL_CONFIDENCE_THRESHOLD)
                                 provenance = to_provenance_observation(detail, config.SERIAL_CONFIDENCE_THRESHOLD)
                                 if stage_candidate(repository, claim_data, provenance):
@@ -353,8 +368,8 @@ def advance_program(repository: Repository, collector: Any, category: str,
                 _save_program(repository, key, pending_json=json.dumps(pending),
                               processed=program["processed"] + counts["summaries_processed"],
                               observations_created=program["observations_created"] + counts["new_observations"])
-                if progress_callback and counts["summaries_processed"] % 10 == 0:
-                    progress_callback(dict(counts))
+                if counts["summaries_processed"] % 10 == 0:
+                    checkpoint("listing")
                 if not pending:
                     following_page = program["next_url"]
                     _save_program(repository, key, pending_json=None,
@@ -363,12 +378,22 @@ def advance_program(repository: Repository, collector: Any, category: str,
                     program["page_url"] = following_page
                     program["next_url"] = None
                     program["finished"] = int(following_page is None)
-        matches = reconcile_candidates(repository)
-        counts["new_observations"] = matches["new_observations"]
+        checkpoint("matching")
+        def matching_progress(checked: int, total: int, result: dict) -> None:
+            counts.update(result)
+            counts["candidate_checked"] = checked
+            counts["candidate_total"] = total
+            checkpoint("matching")
+        matches = reconcile_candidates(repository, progress_callback=matching_progress)
+        counts.update(matches)
+        counts["candidate_checked"] = counts.get("candidate_total", 0)
         _save_program(repository, key, observations_created=(
             program["observations_created"] + matches["new_observations"]
         ))
+        checkpoint("availability")
         rechecks, last_request = _recheck(repository, collector, last_request)
+        counts.update(rechecks)
+        checkpoint("done")
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_processed"],
             pages_fetched=counts["details_fetched"] + rechecks["rechecked"],
@@ -377,6 +402,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
         return {**counts, **matches, **rechecks, "rejected_samples": rejected_samples,
                 **program_status(repository, *key)}
     except Exception as exc:
+        checkpoint("error")
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_processed"],
             pages_fetched=counts["details_fetched"],
