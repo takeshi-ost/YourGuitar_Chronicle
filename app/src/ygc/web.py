@@ -496,11 +496,14 @@ def _run_batch(
         "summaries_fetched": 0,
         "detail_candidates": 0,
         "details_fetched": 0,
-        "skipped_modern": 0,
         "skipped_non_target": 0,
-        "skipped_unknown": 0,
         "skipped_existing": 0,
         "new_observations": 0,
+        "missing_identity": 0,
+        "serial_candidates": 0,
+        "new_individuals": 0,
+        "existing_individuals_extended": 0,
+        "ambiguous_matches": 0,
     }
 
     try:
@@ -3221,6 +3224,20 @@ def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
     if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return program_status(repo(), category, year_min, year_max)
+
+
+@app.get("/api/crawl/candidates/review")
+def api_crawl_candidates_review() -> list[dict]:
+    with repo().connect() as con:
+        rows = con.execute(
+            "SELECT source_listing_id, claim_json, reason FROM crawl_candidates "
+            "WHERE source_site='reverb' AND status='review' ORDER BY updated_at DESC LIMIT 100"
+        ).fetchall()
+    return [{"listing_id": row["source_listing_id"],
+             "manufacturer": json.loads(row["claim_json"]).get("manufacturer"),
+             "model": json.loads(row["claim_json"]).get("model"),
+             "serial_number": json.loads(row["claim_json"]).get("serial_number"),
+             "reason": row["reason"]} for row in rows]
 
 
 @app.post("/api/crawl/program/restart")

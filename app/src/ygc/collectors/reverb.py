@@ -562,6 +562,13 @@ class ReverbAPICollector:
                 detail_url
             )
 
+            # A detail response may omit structured values present in the
+            # search result. Retain those values for the shared scope check.
+            detail = {**item, **detail}
+            for field in ("year", "product_type", "categories", "category"):
+                if not detail.get(field) and item.get(field):
+                    detail[field] = item[field]
+
             try:
                 image_url = (
                     self._fetch_listing_image_url(

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from ygc import config
+from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
 from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provenance_observation
 
@@ -68,6 +69,22 @@ def _merge_listing(summary: dict, fetched: dict) -> dict:
         if not fetched.get(field) and summary.get(field):
             detail[field] = summary[field]
     return detail
+
+
+def _known_listing_ids(repository: Repository, collector: Any, summaries: list[dict]) -> set[str]:
+    ids = [str(value) for item in summaries
+           if (value := collector.listing_id(item))]
+    found = candidate_ids(repository, ids)
+    found.update(repository.active_cached_listing_ids("reverb", ids))
+    with repository.connect() as con:
+        for start in range(0, len(ids), 500):
+            chunk = ids[start:start + 500]
+            if chunk:
+                marks = ",".join("?" for _ in chunk)
+                found.update(str(row[0]) for row in con.execute(
+                    "SELECT source_listing_id FROM observations WHERE source_site='reverb' "
+                    f"AND source_listing_id IN ({marks})", chunk))
+    return found
 
 
 def _pause(last_request: float) -> float:
@@ -199,6 +216,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
     counts = {"listing_pages_fetched": 0, "summaries_processed": 0,
               "details_fetched": 0,
               "new_observations": 0, "skipped_existing": 0,
+              "missing_identity": 0, "serial_candidates": 0,
               "skipped_category_or_year": 0,
               "skipped_year": 0, "skipped_category": 0,
               "missing_year": 0, "missing_category": 0,
@@ -209,6 +227,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
     try:
         if not program["finished"]:
             pending = json.loads(program["pending_json"]) if program["pending_json"] else []
+            known_ids = _known_listing_ids(repository, collector, pending)
             while (counts["summaries_processed"] < MAX_SUMMARIES
                    and counts["details_fetched"] < MAX_DETAILS
                    and not program["finished"]):
@@ -226,6 +245,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                         )
                     counts["listing_pages_fetched"] += 1
                     pending = payload.get("listings") or (payload.get("_embedded") or {}).get("listings") or []
+                    known_ids = _known_listing_ids(repository, collector, pending)
                     next_href = collector._next_href(payload)
                     next_url = collector.safe_api_url(next_href) if next_href else None
                     _save_program(repository, key, pending_json=json.dumps(pending),
@@ -247,12 +267,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                 if not listing_id:
                     counts["skipped_category_or_year"] += 1
                 else:
-                    with repository.connect() as con:
-                        exists = con.execute(
-                            "SELECT 1 FROM observations WHERE source_site = 'reverb' "
-                            "AND source_listing_id = ?", (listing_id,),
-                        ).fetchone()
-                    if exists:
+                    if listing_id in known_ids:
                         counts["skipped_existing"] += 1
                     elif not _category_matches(summary, category, strict=False):
                         counts["skipped_category_or_year"] += 1
@@ -278,14 +293,17 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                     and _year_matches(detail, year_min, year_max)):
                                 claim_data = to_listing_claim_data(detail, config.SERIAL_CONFIDENCE_THRESHOLD)
                                 provenance = to_provenance_observation(detail, config.SERIAL_CONFIDENCE_THRESHOLD)
-                                saved = repository.persist_reverb_listing_claim(claim_data, provenance)
-                                counts["new_observations"] += int(saved["created"])
-                                with repository.connect() as con:
-                                    con.execute(
-                                        "INSERT OR IGNORE INTO crawl_listing_checks "
-                                        "(source_site, source_listing_id, api_url) "
-                                        "VALUES ('reverb', ?, ?)", (listing_id, detail_url),
-                                    )
+                                if stage_candidate(repository, claim_data, provenance):
+                                    counts["serial_candidates"] += 1
+                                    with repository.connect() as con:
+                                        con.execute(
+                                            "INSERT OR IGNORE INTO crawl_listing_checks "
+                                            "(source_site, source_listing_id, api_url) "
+                                            "VALUES ('reverb', ?, ?)", (listing_id, detail_url),
+                                        )
+                                else:
+                                    counts["missing_identity"] += 1
+                                    defer_listing(repository, listing_id, "missing_identity")
                             else:
                                 counts["skipped_category_or_year"] += 1
                                 if not detail:
@@ -326,13 +344,18 @@ def advance_program(repository: Repository, collector: Any, category: str,
                     program["page_url"] = following_page
                     program["next_url"] = None
                     program["finished"] = int(following_page is None)
+        matches = reconcile_candidates(repository)
+        counts["new_observations"] = matches["new_observations"]
+        _save_program(repository, key, observations_created=(
+            program["observations_created"] + matches["new_observations"]
+        ))
         rechecks, last_request = _recheck(repository, collector, last_request)
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_processed"],
             pages_fetched=counts["details_fetched"] + rechecks["rechecked"],
             observations_created=counts["new_observations"], status="ok",
         )
-        return {**counts, **rechecks, "rejected_samples": rejected_samples,
+        return {**counts, **matches, **rechecks, "rejected_samples": rejected_samples,
                 **program_status(repository, *key)}
     except Exception as exc:
         repository.finish_run(

@@ -217,6 +217,19 @@ CREATE TABLE IF NOT EXISTS crawl_listing_cache (
 CREATE INDEX IF NOT EXISTS idx_crawl_listing_cache_recheck_after
 ON crawl_listing_cache(source_site, recheck_after);
 
+CREATE TABLE IF NOT EXISTS crawl_candidates (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ claim_json TEXT NOT NULL,
+ provenance_json TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending',
+ reason TEXT,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, source_listing_id)
+);
+CREATE INDEX IF NOT EXISTS idx_crawl_candidates_status
+ON crawl_candidates(source_site, status);
+
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,

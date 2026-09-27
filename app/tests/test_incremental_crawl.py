@@ -168,7 +168,8 @@ def test_detail_missing_filter_fields_keeps_summary_evidence(tmp_path):
         def _get_json(self, url, params=None):
             if url.endswith("/listings/1"):
                 return {"id": "1", "year": None, "product_type": None,
-                        "make": "Fender", "model": "Stratocaster"}
+                        "make": "Fender", "model": "Stratocaster",
+                        "description": "Serial number 524436"}
             return super()._get_json(url, params)
 
     listing = {**_summary(1), "year": "1960s"}

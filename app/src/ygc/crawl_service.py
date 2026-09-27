@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ygc import config
+from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository
+from ygc.incremental_crawl import _year_matches
 from ygc.reverb_adapter import (
-    classify_vintage_listing,
+    _guitar_category_state,
     to_listing_claim_data,
     to_provenance_observation,
 )
@@ -28,7 +29,15 @@ def existing_listing_ids(repository: Repository, ids: list[str]) -> set[str]:
             )
             found.update(str(row[0]) for row in rows)
     found.update(repository.active_cached_listing_ids("reverb", ids))
+    found.update(candidate_ids(repository, ids))
     return found
+
+
+def _guitar_scope(item: dict) -> bool:
+    product_type = str(item.get("product_type") or "").lower()
+    if any(word in product_type for word in ("amp", "pedal", "parts", "case", "bass")):
+        return False
+    return _guitar_category_state(item) is not False
 
 
 def crawl_query(
@@ -44,8 +53,10 @@ def crawl_query(
     run_id = repository.start_run("reverb")
     counts = dict.fromkeys((
         "summaries_fetched", "detail_candidates", "details_fetched",
-        "skipped_modern", "skipped_non_target", "skipped_unknown",
-        "skipped_existing", "new_observations",
+        "skipped_non_target",
+        "skipped_existing", "new_observations", "missing_identity",
+        "serial_candidates", "new_individuals", "existing_individuals_extended",
+        "ambiguous_matches",
     ), 0)
     try:
         summaries = list(collector.iter_listing_summaries(
@@ -60,11 +71,10 @@ def crawl_query(
             if listing_id and listing_id in existing:
                 counts["skipped_existing"] += 1
                 continue
-            status = classify_vintage_listing(item)["status"]
-            if status in ("vintage", "unknown"):
+            if (_guitar_scope(item) and
+                    (year_min is None or year_max is None or
+                     _year_matches(item, year_min, year_max, strict=False))):
                 candidates.append(item)
-            elif status == "modern":
-                counts["skipped_modern"] += 1
             else:
                 counts["skipped_non_target"] += 1
         counts["detail_candidates"] = len(candidates)
@@ -74,28 +84,25 @@ def crawl_query(
             claim_data = to_listing_claim_data(
                 item, config.SERIAL_CONFIDENCE_THRESHOLD,
             )
-            status = str(claim_data.get("vintage_status", "unknown"))
-            if status != "vintage":
-                key = ("skipped_modern" if status == "modern" else
-                       "skipped_non_target" if status == "non_target" else
-                       "skipped_unknown")
-                counts[key] += 1
+            if (not _guitar_scope(item) or
+                    (year_min is not None and year_max is not None and
+                     not _year_matches(item, year_min, year_max))):
+                counts["skipped_non_target"] += 1
                 listing_id = collector.listing_id(item)
                 if listing_id:
-                    ttl = 1 if status == "unknown" else 30
-                    repository.cache_listing_rejection(
-                        "reverb", str(listing_id), status,
-                        recheck_after=(datetime.now(timezone.utc) +
-                                       timedelta(days=ttl)).isoformat(),
-                    )
+                    defer_listing(repository, str(listing_id), "out_of_scope", 30)
                 continue
             provenance = to_provenance_observation(
                 item, config.SERIAL_CONFIDENCE_THRESHOLD,
             )
-            if repository.persist_reverb_listing_claim(
-                claim_data, provenance,
-            )["created"]:
-                counts["new_observations"] += 1
+            if stage_candidate(repository, claim_data, provenance):
+                counts["serial_candidates"] += 1
+            else:
+                counts["missing_identity"] += 1
+                listing_id = collector.listing_id(item)
+                if listing_id:
+                    defer_listing(repository, str(listing_id), "missing_identity")
+        counts.update(reconcile_candidates(repository))
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_fetched"],
             pages_fetched=counts["details_fetched"],
