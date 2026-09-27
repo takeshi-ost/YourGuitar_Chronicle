@@ -82,6 +82,7 @@ class Repository:
                 "representative_media_asset_id": "INTEGER",
             },
             "users": {
+                "ban_status": "TEXT NOT NULL DEFAULT 'normal'",
                 "bio": "TEXT",
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
@@ -877,11 +878,13 @@ class Repository:
                 SELECT
                     c.id AS claim_id,
                     c.verification_status,
+                    u.ban_status,
                     li.field_name,
                     li.value_text
                 FROM claims c
                 INNER JOIN claim_listing_items li
                   ON li.claim_id = c.id
+                INNER JOIN users u ON u.id = c.author_user_id
                 WHERE c.individual_id = ?
                   AND c.claim_type = 'listing'
                   AND c.status = 'active'
@@ -925,7 +928,7 @@ class Repository:
             ).strip().lower()
             # Retain the founding identity as the stable address of a disputed
             # Individual; rejected Listing assertions must not set other state.
-            if row["verification_status"] != "positive" and field not in identity_fields:
+            if (row["verification_status"] != "positive" or row["ban_status"] != "normal") and field not in identity_fields:
                 continue
             value = (
                 str(row["value_text"]).strip()
@@ -968,11 +971,13 @@ class Repository:
                     ci.field_name,
                     ci.new_value
                 FROM claims c
+                INNER JOIN users u ON u.id = c.author_user_id
                 INNER JOIN claim_identity_items ci
                   ON ci.claim_id = c.id
                 WHERE c.individual_id = ?
                   AND c.claim_type = 'identity_correction'
                   AND c.status = 'active'
+                  AND u.ban_status = 'normal'
                   AND c.verification_status = 'positive'
                 ORDER BY
                     COALESCE(
@@ -1009,11 +1014,13 @@ class Repository:
                     si.field_name,
                     si.value_text
                 FROM claims c
+                INNER JOIN users u ON u.id = c.author_user_id
                 INNER JOIN claim_spec_items si
                   ON si.claim_id = c.id
                 WHERE c.individual_id = ?
                   AND c.claim_type = 'specification'
                   AND c.status = 'active'
+                  AND u.ban_status = 'normal'
                   AND COALESCE(c.verification_status, 'positive') = 'positive'
                 ORDER BY
                     COALESCE(
@@ -1055,6 +1062,7 @@ class Repository:
                     c.occurred_at,
                     c.created_at
                 FROM claims c
+                JOIN users u ON u.id = c.author_user_id AND u.ban_status = 'normal'
                 WHERE c.individual_id = ?
                   AND c.status = 'active'
                   AND COALESCE(c.verification_status, 'positive') = 'positive'
@@ -2506,7 +2514,34 @@ class Repository:
                 guitars,
             )
 
-    def list_user_chronicle(self, user_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    def preview_silent_profile(self, user_id: int, individual_id: int | None = None) -> dict:
+        """Show a silent user's own Claim-derived state without persisting it."""
+        with self.connect() as con:
+            user = con.execute("SELECT ban_status FROM users WHERE id=?", (user_id,)).fetchone()
+            if not user or user["ban_status"] != 'silent_ban':
+                return {}
+            con.execute('SAVEPOINT silent_preview')
+            try:
+                con.execute("UPDATE users SET ban_status='normal' WHERE id=?", (user_id,))
+                ids = {r[0] for r in con.execute(
+                    "SELECT DISTINCT individual_id FROM claims WHERE author_user_id=?", (user_id,))}
+                ids.update(r[0] for r in con.execute(
+                    "SELECT DISTINCT c.individual_id FROM claims c JOIN claim_listing_items li "
+                    "ON li.claim_id=c.id WHERE li.field_name='owner_user_id' AND li.value_text=?",
+                    (str(user_id),)))
+                for iid in (ids if individual_id is None else ids & {individual_id}):
+                    self._rebuild_individual_snapshot_in_connection(con, iid)
+                if individual_id is not None:
+                    row = con.execute("SELECT * FROM individuals WHERE id=?", (individual_id,)).fetchone()
+                    return dict(row) if row else {}
+                rows = con.execute("SELECT individual_id,ownership_status FROM user_guitars WHERE user_id=?",
+                                   (user_id,)).fetchall()
+                return {int(r['individual_id']): r['ownership_status'] for r in rows}
+            finally:
+                con.execute('ROLLBACK TO silent_preview')
+                con.execute('RELEASE silent_preview')
+
+    def list_user_chronicle(self, user_id: int, limit: int = 100, viewer_user_id: int | None = None) -> list[dict[str, Any]]:
         """Visible user milestones and actions, sorted by the time they happened."""
         entries: list[dict[str, Any]] = []
 
@@ -2525,7 +2560,7 @@ class Repository:
 
         with self.connect() as con:
             user = con.execute(
-                "SELECT display_name, created_at, updated_at FROM users WHERE id = ?",
+                "SELECT display_name, created_at, updated_at, ban_status FROM users WHERE id = ?",
                 (user_id,),
             ).fetchone()
             if not user:
@@ -2541,9 +2576,9 @@ class Repository:
                        c.specification_kind, c.value_text, c.created_at,
                        i.manufacturer, i.model
                 FROM claims c {products}
-                WHERE c.author_user_id = ? AND c.status = 'active'
+                WHERE c.author_user_id = ? AND c.status = 'active' AND EXISTS (SELECT 1 FROM users actor WHERE actor.id=c.author_user_id AND (actor.ban_status='normal' OR (actor.ban_status='silent_ban' AND actor.id=?)))
                 ORDER BY c.created_at DESC, c.id DESC LIMIT ?
-            """, (user_id, limit))
+            """, (user_id, viewer_user_id, limit))
             for row in claims:
                 kind = str(row["claim_type"])
                 if kind == "ownership":
@@ -2565,10 +2600,11 @@ class Repository:
                            interaction.{value} AS value, interaction.updated_at
                     FROM {table} interaction
                     JOIN claims c ON c.id = interaction.claim_id AND c.status = 'active'
+                    JOIN users actor ON actor.id=c.author_user_id AND (actor.ban_status='normal' OR (actor.ban_status='silent_ban' AND actor.id=?) )
                     JOIN individuals i ON i.id = c.individual_id
-                    WHERE interaction.{actor} = ?
+                    WHERE interaction.{actor} = ? AND EXISTS (SELECT 1 FROM users participant WHERE participant.id=interaction.{actor} AND participant.ban_status<>'ban')
                     ORDER BY interaction.updated_at DESC, interaction.id DESC LIMIT ?
-                """, (user_id, limit))
+                """, (viewer_user_id, user_id, limit))
                 for row in rows:
                     value_text = str(row["value"] or "").replace("_", " ").title()
                     message = (f"has a Claim with a {value_text} vote from this user."
@@ -2585,6 +2621,8 @@ class Repository:
                 ORDER BY ug.created_at DESC, ug.id DESC LIMIT ?
             """, (user_id, limit))
             for row in links:
+                if user["ban_status"] == 'silent_ban' and viewer_user_id != user_id:
+                    continue
                 add("Product", row["created_at"], product_name(row),
                     "was added to this user's Chronicle.", int(row["individual_id"]))
 
@@ -2626,6 +2664,7 @@ class Repository:
                   ON i.id = c.individual_id
                 WHERE c.id = ?
                   AND c.status = 'active'
+                  AND u.ban_status='normal'
                 """,
                 (claim_id,),
             ).fetchone()
@@ -2783,6 +2822,10 @@ class Repository:
                     LEFT JOIN individuals i
                       ON i.id = n.individual_id
                     WHERE n.recipient_user_id = ?
+                      AND (n.actor_user_id IS NULL OR actor.ban_status='normal')
+                      AND (n.claim_id IS NULL OR EXISTS
+                          (SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id
+                           WHERE c.id=n.claim_id AND c.status='active' AND author.ban_status='normal'))
                     ORDER BY n.created_at DESC, n.id DESC
                     LIMIT ?
                     """,
@@ -2802,9 +2845,14 @@ class Repository:
                 con.execute(
                     """
                     SELECT COUNT(*)
-                    FROM notifications
-                    WHERE recipient_user_id = ?
-                      AND is_read = 0
+                    FROM notifications n
+                    LEFT JOIN users actor ON actor.id=n.actor_user_id
+                    WHERE n.recipient_user_id = ?
+                      AND n.is_read = 0
+                      AND (n.actor_user_id IS NULL OR actor.ban_status='normal')
+                      AND (n.claim_id IS NULL OR EXISTS
+                          (SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id
+                           WHERE c.id=n.claim_id AND c.status='active' AND author.ban_status='normal'))
                     """,
                     (user_id,),
                 ).fetchone()[0]
@@ -2857,6 +2905,7 @@ class Repository:
     def get_user_summary(
         self,
         user_id: int,
+        viewer_user_id: int | None = None,
     ) -> dict[str, int]:
         with self.connect() as con:
             row = con.execute(
@@ -2876,15 +2925,18 @@ class Repository:
                     ) AS former_count,
                     (
                         SELECT COUNT(*)
-                        FROM claims
-                        WHERE author_user_id = ?
-                          AND status = 'active'
+                        FROM claims c JOIN users u ON u.id=c.author_user_id
+                        WHERE c.author_user_id = ?
+                          AND c.status = 'active'
+                          AND (u.ban_status='normal' OR
+                              (u.ban_status='silent_ban' AND u.id=?))
                     ) AS claim_count
                 """,
                 (
                     user_id,
                     user_id,
                     user_id,
+                    viewer_user_id,
                 ),
             ).fetchone()
             return {
@@ -2892,6 +2944,50 @@ class Repository:
                 "former_count": int(row["former_count"] or 0),
                 "claim_count": int(row["claim_count"] or 0),
             }
+
+    def admin_update_user(self, user_id: int, fields: dict) -> bool:
+        """Edit only supported user fields; moderation is audited and snapshots are rebuilt."""
+        name = str(fields["display_name"]).strip()
+        account = str(fields["account_type"]).strip().lower()
+        status = str(fields["ban_status"]).strip().lower()
+        if not name or account not in ("user", "shop", "builder", "repairer", "organization"):
+            raise ValueError("Invalid display name or account type")
+        if status not in ("normal", "silent_ban", "ban"):
+            raise ValueError("Invalid BAN status")
+        for key in ("birth_visibility", "residence_visibility", "bio_visibility", "avatar_visibility"):
+            if fields[key] not in ("Public", "Members", "Followers", "Private"):
+                raise ValueError("Invalid visibility: " + key)
+        signature = fields["signature_individual_id"]
+        with self.connect() as con:
+            user = con.execute("SELECT * FROM users WHERE id=? AND account_type<>'source'", (user_id,)).fetchone()
+            if not user:
+                return False
+            if signature is not None and signature != user["signature_individual_id"] and not con.execute(
+                "SELECT 1 FROM user_guitars WHERE user_id=? AND individual_id=? AND ownership_status='current_owner'",
+                (user_id, signature)).fetchone():
+                raise ValueError("Signature guitar must be currently owned")
+            profile_changed = any(user[key] != fields[key] for key in
+                ("display_name", "account_type", "location_country", "location_region",
+                 "bio", "birth_visibility", "residence_visibility", "bio_visibility",
+                 "avatar_visibility", "signature_individual_id"))
+            con.execute("""UPDATE users SET display_name=?,account_type=?,location_country=?,
+                location_region=?,bio=?,birth_visibility=?,residence_visibility=?,
+                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,ban_status=?,updated_at=?
+                WHERE id=?""", (name, account, fields["location_country"], fields["location_region"],
+                fields["bio"], fields["birth_visibility"], fields["residence_visibility"],
+                fields["bio_visibility"], fields["avatar_visibility"], signature, status,
+                utcnow() if profile_changed else user["updated_at"], user_id))
+            if user["ban_status"] != status:
+                con.execute("INSERT INTO user_admin_actions (user_id,previous_ban_status,ban_status,created_at) "
+                            "VALUES (?,?,?,?)", (user_id,user["ban_status"],status,utcnow()))
+            affected = [r[0] for r in con.execute(
+                "SELECT DISTINCT individual_id FROM claims WHERE author_user_id=?", (user_id,))]
+            affected.extend(r[0] for r in con.execute(
+                "SELECT DISTINCT c.individual_id FROM claims c JOIN claim_listing_items li ON li.claim_id=c.id "
+                "WHERE li.field_name='owner_user_id' AND li.value_text=?", (str(user_id),)))
+            for individual_id in set(affected):
+                self._rebuild_individual_snapshot_in_connection(con, individual_id)
+        return True
 
     def update_user(
         self,
@@ -3092,7 +3188,7 @@ class Repository:
 
         with self.connect() as con:
             if not con.execute(
-                "SELECT 1 FROM users WHERE id = ?",
+                "SELECT 1 FROM users WHERE id = ? AND ban_status <> 'ban'",
                 (
                     user_id,
                 ),
@@ -3335,6 +3431,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -3678,6 +3775,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -3909,6 +4007,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4280,6 +4379,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4445,6 +4545,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4600,6 +4701,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4771,6 +4873,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -5457,7 +5560,7 @@ class Repository:
                                 AS author_name
                         FROM claims c
                         INNER JOIN users u
-                          ON u.id = c.author_user_id
+                          ON u.id = c.author_user_id AND u.ban_status='normal'
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
@@ -5484,7 +5587,7 @@ class Repository:
                         INNER JOIN claims c
                           ON c.id = si.claim_id
                         INNER JOIN users u
-                          ON u.id = c.author_user_id
+                          ON u.id = c.author_user_id AND u.ban_status='normal'
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
@@ -5531,6 +5634,9 @@ class Repository:
                     """
                     SELECT
                         c.*,
+                        CASE WHEN u.ban_status='normal' OR
+                            (u.ban_status='silent_ban' AND u.id=?)
+                            THEN c.status ELSE 'inactive' END AS effective_status,
                         u.display_name
                             AS author_name,
                         (
@@ -5712,7 +5818,8 @@ class Repository:
                                     ELSE 0
                                 END
                             ) AS bad_count
-                        FROM claim_votes
+                        FROM claim_votes cv
+                        JOIN users voter ON voter.id=cv.user_id AND voter.ban_status<>'ban'
                         GROUP BY claim_id
                     ) v
                       ON v.claim_id = c.id
@@ -5725,6 +5832,7 @@ class Repository:
                         c.id
                     """,
                     (
+                        viewer_user_id,
                         viewer_user_id,
                         viewer_user_id,
                         individual_id,
@@ -5751,6 +5859,7 @@ class Repository:
                     INNER JOIN claims c
                       ON c.id = ce.claim_id
                      AND c.status = 'active'
+                     AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                      AND COALESCE(c.verification_status, 'positive') = 'positive'
                     WHERE ma.individual_id = ?
                       AND ma.media_type = 'image'
@@ -5780,6 +5889,7 @@ class Repository:
                       ON ma.id = ce.media_asset_id
                     WHERE c.individual_id = ?
                       AND c.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                       AND ma.media_type = 'image'
                     ORDER BY
                         ce.claim_id,
@@ -5792,15 +5902,25 @@ class Repository:
     def get_media_asset(
         self,
         media_asset_id: int,
+        viewer_user_id: int | None = None,
     ) -> sqlite3.Row | None:
         with self.connect() as con:
             return con.execute(
                 """
-                SELECT *
-                FROM media_assets
-                WHERE id = ?
+                SELECT ma.*
+                FROM media_assets ma JOIN users uploader ON uploader.id=ma.uploader_user_id
+                WHERE ma.id = ? AND (
+                  EXISTS (SELECT 1 FROM claim_evidence ce JOIN claims c ON c.id=ce.claim_id
+                          JOIN users author ON author.id=c.author_user_id
+                          WHERE ce.media_asset_id=ma.id AND c.status='active'
+                            AND c.verification_status='positive'
+                            AND (author.ban_status='normal' OR
+                                (author.ban_status='silent_ban' AND author.id=?)))
+                  OR (uploader.ban_status='normal' AND NOT EXISTS
+                      (SELECT 1 FROM claim_evidence ce WHERE ce.media_asset_id=ma.id))
+                )
                 """,
-                (media_asset_id,),
+                (media_asset_id, viewer_user_id),
             ).fetchone()
 
 
@@ -5883,6 +6003,9 @@ class Repository:
             if claim["admin_verification"]:
                 raise ValueError("This Claim has an administrator verification decision")
 
+            if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
+                               (responder_user_id,)).fetchone():
+                raise ValueError("Account is banned")
             if int(claim["author_user_id"]) == int(responder_user_id):
                 raise ValueError(
                     "Owner Verification is only for another user's Claim"
@@ -5986,7 +6109,7 @@ class Repository:
             ).fetchone():
                 return False
             if not con.execute(
-                "SELECT 1 FROM users WHERE id = ?",
+                "SELECT 1 FROM users WHERE id = ? AND ban_status <> 'ban'",
                 (user_id,),
             ).fetchone():
                 return False
@@ -6394,6 +6517,7 @@ class Repository:
                     LEFT JOIN claims c
                       ON c.individual_id=i.id
                      AND c.status='active'
+                     AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                     GROUP BY i.id
                     ORDER BY
                         claim_count DESC,
@@ -6451,7 +6575,9 @@ class Repository:
     def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
         """Active pending Acquire claims from both users and Automation."""
         where = ("c.claim_type='ownership' AND c.ownership_kind='acquire' "
-                 "AND c.status='active' AND c.verification_status='unverified'")
+                 "AND c.status='active' AND c.verification_status='unverified' "
+                 "AND EXISTS (SELECT 1 FROM users author WHERE author.id=c.author_user_id "
+                 "AND author.ban_status='normal')")
         with self.connect() as con:
             rows = con.execute(
                 "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, c.ownership_pair_id, "
@@ -6600,6 +6726,7 @@ class Repository:
                         WHERE c.observation_id = o.id
                           AND c.individual_id = o.individual_id
                           AND c.status = 'active'
+                          AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                           AND (c.claim_type = 'listing' OR
                                (c.claim_type = 'ownership' AND c.ownership_kind = 'acquire'))
                       )

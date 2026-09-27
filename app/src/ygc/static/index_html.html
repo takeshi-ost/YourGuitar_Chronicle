@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Your Guitar Chronicle — Phase 1</title>
 <style>
+.admin-user-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.admin-user-form label{display:grid;gap:4px;font-size:11px;color:var(--muted);min-width:0}.admin-user-form textarea{min-height:90px}.admin-user-form label:has(textarea),.admin-user-form label:has(input[type=file]),.admin-user-form .toolbar{grid-column:1/-1}@media(max-width:600px){.admin-user-form{grid-template-columns:1fr}}
+
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--warn:#e0b65f;--bad:#e07171}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Noto Sans JP",sans-serif}
@@ -170,7 +172,7 @@ const TOKEN_KEY='ygc_reverb_api_token';
 const ACTIVE_USER_KEY='ygc_active_user_id';
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
-async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
 statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登録とクロール登録の両方を含みます。'),statCard('Serial Listings',s.serial_observations,'シリアルのある個体に紐付く外部Listing数。同じサイト・Listing IDは重複除外。Acquireによる再出品と所有者確認待ちも含みます。'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'メーカーとシリアルが一致する複数のDB個体の組数。クリックして確認・統合・削除。')+'</button>'
@@ -334,8 +336,8 @@ async function loadUsers(){
   users=await jfetch('/api/users');
   const select=document.getElementById('activeUserSelect');
   const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
-  select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
-  const target=users.some(u=>String(u.id)===saved)?saved:'';
+  select.innerHTML='<option value="">Guest</option>'+users.filter(u=>u.ban_status!=='ban').map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
+  const target=users.some(u=>u.ban_status!=='ban'&&String(u.id)===saved)?saved:'';
   select.value=target;
   updateOpenTopButton();
   if(target)await loadActiveUser();
@@ -347,7 +349,7 @@ async function loadUsers(){
 }
 function renderUserList(){
   const filter=document.getElementById('userFilter').value.trim().toLowerCase();
-  const matches=users.filter(u=>[u.id,u.display_name,u.account_type,u.location_country,u.location_region].some(x=>String(x??'').toLowerCase().includes(filter)));
+  const matches=users.filter(u=>[u.id,u.display_name,u.account_type,u.ban_status,u.location_country,u.location_region].some(x=>String(x??'').toLowerCase().includes(filter)));
   document.getElementById('userBody').innerHTML=matches.map(u=>'<tr class="clickable'+(selectedUserId===Number(u.id)?' selected':'')+'" onclick="showUserRecord('+Number(u.id)+')"><td class="mono">'+Number(u.id)+'</td><td>'+esc(u.display_name)+'</td><td>'+esc(u.account_type)+'</td><td>'+esc([u.location_country,u.location_region].filter(Boolean).join(' / ')||'—')+'</td><td>'+Number(u.current_guitar_count||0)+'</td></tr>').join('')||'<tr><td colspan="5" class="sub">該当するユーザーはいません。</td></tr>';
   document.getElementById('userCount').textContent=matches.length+' / '+users.length+' users';
 }
@@ -360,13 +362,42 @@ async function showUserRecord(id){
     const data=await jfetch('/api/users/'+selectedUserId);
     if(selectedUserId!==Number(id))return;
     const u=data.user,summary=data.summary||{};
-    const meta=[['User ID',u.id],['Display Name',u.display_name],['Account Type',u.account_type],['Residence',[u.location_country,u.location_region].filter(Boolean).join(' / ')||'—'],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0],['Bio',u.bio||'—'],['Residence Visibility',u.residence_visibility||'Private'],['Bio Visibility',u.bio_visibility||'Public'],['Avatar Visibility',u.avatar_visibility||'Public'],['Signature Guitar ID',u.signature_individual_id||'—']];
+    const meta=[['User ID',u.id],['Display Name',u.display_name],['Account Type',u.account_type],['BAN Status',u.ban_status||'normal'],['Residence',[u.location_country,u.location_region].filter(Boolean).join(' / ')||'—'],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0],['Bio',u.bio||'—'],['Birth Visibility',u.birth_visibility||'Private'],['Residence Visibility',u.residence_visibility||'Private'],['Bio Visibility',u.bio_visibility||'Public'],['Avatar Visibility',u.avatar_visibility||'Public'],['Signature Guitar ID',u.signature_individual_id||'—']];
     const guitars=data.guitars||[];
     panel.className='';
     panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><strong>'+esc(u.display_name)+'</strong></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
+      (CONSOLE_ADMIN_TOKEN?'<div class="detail-section">Edit User</div><form id="adminUserForm" class="admin-user-form" onsubmit="saveAdminUser(event,'+Number(u.id)+')">'+
+        '<label>Display Name<input name="display_name" maxlength="120" required value="'+esc(u.display_name)+'"></label>'+
+        '<label>Account Type<select name="account_type">'+['user','shop','builder','repairer','organization'].map(x=>'<option value="'+x+'"'+(u.account_type===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
+        '<label>BAN Status<select name="ban_status">'+['normal','silent_ban','ban'].map(x=>'<option value="'+x+'"'+((u.ban_status||'normal')===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
+        '<label>Country<input name="location_country" maxlength="80" value="'+esc(u.location_country||'')+'"></label>'+
+        '<label>City / Region<input name="location_region" maxlength="120" value="'+esc(u.location_region||'')+'"></label>'+
+        '<label>Bio<textarea name="bio" maxlength="2000">'+esc(u.bio||'')+'</textarea></label>'+
+        ['birth','residence','bio','avatar'].map(key=>'<label>'+esc(key)+' Visibility<select name="'+key+'_visibility">'+['Public','Members','Followers','Private'].map(v=>'<option value="'+v+'"'+((u[key+'_visibility']||'Private')===v?' selected':'')+'>'+v+'</option>').join('')+'</select></label>').join('')+
+        '<label>Signature Guitar<select name="signature_individual_id"><option value="">None</option>'+guitars.filter(g=>g.ownership_status==='current_owner'||Number(g.individual_id)===Number(u.signature_individual_id)).map(g=>'<option value="'+Number(g.individual_id)+'"'+(Number(u.signature_individual_id)===Number(g.individual_id)?' selected':'')+'>'+esc(g.manufacturer+' '+(g.model||'')+' / '+(g.serial_number||''))+'</option>').join('')+'</select></label>'+
+        '<label>Avatar image<input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif"></label>'+
+        '<div class="toolbar"><button type="submit">Save User</button></div></form>':'')+
       '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'" target="_blank" rel="noopener">User Profile</a>'+(activeUser&&Number(activeUser.user.id)===Number(u.id)?'<a href="/user-view/edit" target="_blank" rel="noopener">User Settings</a>':'')+'</div>'+
       '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
   }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
+}
+async function saveAdminUser(event,id){
+  event.preventDefault();const form=event.currentTarget,fields=new FormData(form);
+  const status=String(fields.get('ban_status'));
+  if(status!=='normal'&&!confirm('このアカウントを '+status+' にします。公開Claimと個体情報が再計算されます。続行しますか？'))return;
+  const body={};for(const key of ['display_name','account_type','ban_status','location_country','location_region','bio','birth_visibility','residence_visibility','bio_visibility','avatar_visibility']){
+    const value=String(fields.get(key)||'').trim();body[key]=value||null;
+  }
+  body.signature_individual_id=fields.get('signature_individual_id')?Number(fields.get('signature_individual_id')):null;
+  const file=fields.get('avatar');const btn=form.querySelector('button[type=submit]');btn.disabled=true;
+  try{
+    await jfetch('/api/admin/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify(body)});
+    if(file&&file.size){const avatarData=new FormData();avatarData.set('avatar',file);
+      try{await jfetch('/api/users/'+id+'/avatar',{method:'POST',body:avatarData})}
+      catch(e){alert('ユーザー情報は保存しましたが、Avatarの更新に失敗しました。\n'+e.message)}
+    }
+    await loadUsers();await loadIndividuals();if(selectedIndividualId)await showIndividual(selectedIndividualId);
+  }catch(e){alert('User更新に失敗しました。\n'+e.message);btn.disabled=false}
 }
 async function createUser(){
   try{
@@ -389,7 +420,7 @@ async function setActiveUser(value){
 function updateOpenTopButton(){document.getElementById('openUserTopBtn').disabled=!document.getElementById('activeUserSelect').value}
 function openTopPageAsActiveUser(){
   const id=document.getElementById('activeUserSelect').value;
-  if(!id||!users.some(user=>String(user.id)===id))return;
+  if(!id||!users.some(user=>user.ban_status!=='ban'&&String(user.id)===id))return;
   localStorage.setItem(ACTIVE_USER_KEY,id);
   window.open('/user-view','_blank','noopener');
 }

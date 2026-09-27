@@ -38,9 +38,13 @@ def _local_console_request(request: Request) -> bool:
         return False
 
 
-def _require_console_admin(request: Request) -> None:
+def _console_admin_authorized(request: Request) -> bool:
     token = request.headers.get("X-YGC-Console-Admin", "")
-    if not _local_console_request(request) or not secrets.compare_digest(token, CONSOLE_ADMIN_TOKEN):
+    return bool(_local_console_request(request) and secrets.compare_digest(token, CONSOLE_ADMIN_TOKEN))
+
+
+def _require_console_admin(request: Request) -> None:
+    if not _console_admin_authorized(request):
         raise HTTPException(status_code=403, detail="Local Browser Console administrator access required")
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.crawl_service import crawl_query
@@ -353,6 +357,20 @@ class UserUpdateRequest(BaseModel):
     bio_visibility: str | None = None
     avatar_visibility: str | None = None
     signature_individual_id: int | None = None
+
+
+class AdminUserUpdateRequest(BaseModel):
+    display_name: str = Field(min_length=1,max_length=120)
+    account_type: str
+    location_country: str | None = Field(default=None,max_length=80)
+    location_region: str | None = Field(default=None,max_length=120)
+    bio: str | None = Field(default=None,max_length=2000)
+    birth_visibility: str
+    residence_visibility: str
+    bio_visibility: str
+    avatar_visibility: str
+    signature_individual_id: int | None = None
+    ban_status: str
 
 
 class UserGuitarLinkRequest(BaseModel):
@@ -1699,7 +1717,7 @@ def api_user_avatar(
     user, _guitars = repository.get_user(
         user_id
     )
-    if not user:
+    if not user or user["ban_status"] == "ban":
         raise HTTPException(
             status_code=404,
             detail="User not found",
@@ -1742,11 +1760,8 @@ async def api_update_user_avatar(
     user, _guitars = repository.get_user(
         user_id
     )
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+    if not user or user["ban_status"] == "ban":
+        raise HTTPException(status_code=403, detail="Account is banned")
 
     content_type = (
         avatar.content_type
@@ -1856,8 +1871,10 @@ async def api_update_user_avatar(
 
 
 @app.get("/api/individuals")
-def api_individuals() -> list[dict[str, Any]]:
-    return [_row_dict(row) for row in repo().list_individuals()]
+def api_individuals(request: Request) -> list[dict[str, Any]]:
+    rows = repo().list_individuals()
+    return [_row_dict(row) for row in rows
+            if _console_admin_authorized(request) or row["claim_count"] > 0]
 
 
 @app.get("/api/new-discoveries")
@@ -1878,12 +1895,14 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                     FROM claims c
                     WHERE c.individual_id = i.id
                       AND c.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                 ) AS latest_claim_at,
                 (
                     SELECT c2.claim_type
                     FROM claims c2
                     WHERE c2.individual_id = i.id
                       AND c2.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c2.author_user_id AND u.ban_status='normal')
                     ORDER BY c2.created_at DESC, c2.id DESC
                     LIMIT 1
                 ) AS latest_claim_type,
@@ -1895,9 +1914,12 @@ def api_new_discoveries() -> list[dict[str, Any]]:
             FROM individuals i
             ORDER BY MAX(
                 COALESCE((SELECT MAX(c.created_at) FROM claims c
-                          WHERE c.individual_id = i.id AND c.status = 'active'), ''),
+                          WHERE c.individual_id = i.id AND c.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')), ''),
                 COALESCE((SELECT MAX(o.observed_at) FROM observations o
-                          WHERE o.individual_id = i.id), '')
+                          WHERE o.individual_id = i.id AND NOT EXISTS
+                          (SELECT 1 FROM claims blocked JOIN users actor
+                           ON actor.id=blocked.author_user_id AND actor.ban_status<>'normal'
+                           WHERE blocked.observation_id=o.id)), '')
             ) DESC, i.id DESC
             LIMIT 200
             """
@@ -1934,13 +1956,29 @@ def api_new_discoveries() -> list[dict[str, Any]]:
 
 
 @app.get("/api/individuals/{individual_id}")
-def api_individual(individual_id: int) -> dict[str, Any]:
-    individual, observations = repo().get_individual(individual_id)
+def api_individual(individual_id: int, request: Request,
+                   viewer_user_id: int | None = None) -> dict[str, Any]:
+    repository = repo()
+    individual, observations = repository.get_individual(individual_id)
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
-    individual_data = _row_dict(
-        individual
-    )
+    admin = _console_admin_authorized(request)
+    with repository.connect() as con:
+        visible = con.execute("SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id "
+                              "WHERE c.individual_id=? AND c.status='active' AND "
+                              "(author.ban_status='normal' OR "
+                              "(author.ban_status='silent_ban' AND author.id=?)) LIMIT 1",
+                              (individual_id, viewer_user_id)).fetchone()
+        if not admin and not visible:
+            raise HTTPException(status_code=404, detail="Individual not found")
+        observations = [o for o in observations if admin or not con.execute(
+            "SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id "
+            "WHERE c.observation_id=? AND author.ban_status<>'normal' "
+            "AND NOT (author.ban_status='silent_ban' AND author.id=?) LIMIT 1",
+            (o['id'],viewer_user_id)).fetchone()]
+    individual_data = _row_dict(individual)
+    if viewer_user_id is not None:
+        individual_data.update(repo().preview_silent_profile(viewer_user_id, individual_id))
     representative_media_id = (
         individual_data.get(
             "representative_media_asset_id"
@@ -1973,6 +2011,8 @@ def api_individual(individual_id: int) -> dict[str, Any]:
                 representative_media_id and media_id == int(representative_media_id)
             ),
         })
+    if representative_media_id and not any(img["id"] == representative_media_id for img in gallery_images):
+        individual_data["representative_image_url"] = None
     gallery_images.sort(key=lambda item: (
         0 if item["is_representative"] else 1,
         str(item["occurred_at"]),
@@ -1986,7 +2026,7 @@ def api_individual(individual_id: int) -> dict[str, Any]:
             individual_id
         )
         if row["claim_type"] == "listing"
-        and row["status"] == "active"
+        and row["effective_status"] == "active"
     ]
     current_listing = (
         listing_claims[-1]
@@ -2009,13 +2049,13 @@ def api_individual_claims(
 ) -> list[dict[str, Any]]:
     repository = repo()
     claims = [
-        _row_dict(row)
+        {**_row_dict(row), "status": row["effective_status"]}
         for row
         in repository.list_claims(
             individual_id,
             viewer_user_id=viewer_user_id,
         )
-        if row["status"] == "active"
+        if row["effective_status"] == "active"
     ]
 
     items_by_claim: dict[
@@ -2071,7 +2111,7 @@ def api_individual_claims(
         ).append(
             {
                 "id": int(item["id"]),
-                "url": f"/api/media/{int(item['id'])}",
+                "url": f"/api/media/{int(item['id'])}" + (f"?viewer_user_id={viewer_user_id}" if viewer_user_id is not None else ""),
                 "original_filename": item.get("original_filename"),
             }
         )
@@ -2318,11 +2358,9 @@ def api_delete_individual(
 
 @app.get("/api/media/{media_asset_id}")
 def api_media(
-    media_asset_id: int,
+    media_asset_id: int, viewer_user_id: int | None = None,
 ) -> FileResponse:
-    media = repo().get_media_asset(
-        media_asset_id
-    )
+    media = repo().get_media_asset(media_asset_id, viewer_user_id)
     if not media:
         raise HTTPException(
             status_code=404,
@@ -2862,12 +2900,10 @@ def api_read_notification(
 
 
 @app.get("/api/users")
-def api_users() -> list[dict[str, Any]]:
-    return [
-        _row_dict(row)
-        for row
-        in repo().list_users()
-    ]
+def api_users(request: Request) -> list[dict[str, Any]]:
+    admin = _console_admin_authorized(request)
+    return [{**_row_dict(row), "ban_status": row["ban_status"] if admin else "normal"}
+            for row in repo().list_users() if row["ban_status"] != "ban" or admin]
 
 
 @app.post("/api/users")
@@ -2888,27 +2924,35 @@ def api_create_user() -> dict[str, Any]:
     }
 
 
+@app.patch("/api/admin/users/{user_id}")
+def api_admin_update_user(user_id: int, body: AdminUserUpdateRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    repository = repo()
+    try:
+        updated = repository.admin_update_user(user_id, body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    user, guitars = repository.get_user(user_id)
+    return {"user": _row_dict(user), "guitars": [_row_dict(row) for row in guitars],
+            "summary": repository.get_user_summary(user_id)}
+
+
 @app.get("/api/users/{user_id}")
 def api_user(
-    user_id: int,
+    user_id: int, request: Request,
 ) -> dict[str, Any]:
     user, guitars = repo().get_user(
         user_id
     )
 
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+    if not user or (user["ban_status"] == "ban" and not _console_admin_authorized(request)):
+        raise HTTPException(status_code=404, detail="User not found")
 
     return {
-        "user": _row_dict(user),
-        "guitars": [
-            _row_dict(row)
-            for row
-            in guitars
-        ],
+        "user": {**_row_dict(user), "ban_status": user["ban_status"] if _console_admin_authorized(request) else "normal"},
+        "guitars": [_row_dict(row) for row in guitars],
         "summary": repo().get_user_summary(user_id),
     }
 
@@ -2917,9 +2961,15 @@ def api_user(
 def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, Any]:
     repository = repo()
     user, guitars = repository.get_user(user_id)
-    if not user or user["account_type"] == "source":
+    if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
         raise HTTPException(status_code=404, detail="User not found")
     own = viewer_id == user_id
+    if user["ban_status"] == 'silent_ban' and not own:
+        guitars = []
+    if own and user["ban_status"] == 'silent_ban':
+        ownership = repository.preview_silent_profile(user_id)
+        guitars = [{**_row_dict(g), "ownership_status": ownership.get(g["individual_id"], g["ownership_status"])}
+                   for g in guitars]
     member = own or (viewer_id is not None and
                      repository.get_user(viewer_id)[0] is not None)
 
@@ -2928,6 +2978,7 @@ def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, An
         return own or level == "Public" or (level == "Members" and member)
 
     public_user = _row_dict(user)
+    public_user["ban_status"] = "normal"
     if not visible("residence_visibility"):
         public_user["location_country"] = None
         public_user["location_region"] = None
@@ -2939,17 +2990,21 @@ def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, An
     return {
         "user": public_user,
         "guitars": [_row_dict(row) for row in guitars],
-        "summary": repository.get_user_summary(user_id),
+        "summary": ({**repository.get_user_summary(user_id, viewer_id),
+                     "owned_count": sum(g["ownership_status"] == 'current_owner' for g in guitars),
+                     "former_count": sum(g["ownership_status"] == 'former_owner' for g in guitars)}
+                    if user["ban_status"] == 'silent_ban'
+                    else repository.get_user_summary(user_id, viewer_id)),
     }
 
 
 @app.get("/api/users/{user_id}/chronicle")
-def api_user_chronicle(user_id: int) -> list[dict[str, Any]]:
+def api_user_chronicle(user_id: int, viewer_id: int | None = None) -> list[dict[str, Any]]:
     repository = repo()
     user, _guitars = repository.get_user(user_id)
-    if not user or user["account_type"] == "source":
+    if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
         raise HTTPException(status_code=404, detail="User not found")
-    return repository.list_user_chronicle(user_id)
+    return repository.list_user_chronicle(user_id, viewer_user_id=viewer_id)
 
 
 @app.patch("/api/users/{user_id}")
@@ -2958,6 +3013,9 @@ def api_update_user(
     request: UserUpdateRequest,
 ) -> dict[str, Any]:
     repository = repo()
+    existing, _ = repository.get_user(user_id)
+    if existing and existing["ban_status"] == "ban":
+        raise HTTPException(status_code=403, detail="Account is banned")
 
     try:
         updated = repository.update_user(

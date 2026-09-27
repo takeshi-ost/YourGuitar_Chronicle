@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  display_name TEXT NOT NULL,
  account_type TEXT NOT NULL DEFAULT 'user',
+ ban_status TEXT NOT NULL DEFAULT 'normal' CHECK (ban_status IN ('normal','silent_ban','ban')),
  location_country TEXT,
  location_region TEXT,
  bio TEXT,
@@ -303,6 +304,13 @@ CREATE TABLE IF NOT EXISTS claim_admin_actions (
  action TEXT NOT NULL,
  previous_verification TEXT,
  actor TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_admin_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ user_id INTEGER NOT NULL,
+ previous_ban_status TEXT NOT NULL,
+ ban_status TEXT NOT NULL,
  created_at TEXT NOT NULL
 );
 

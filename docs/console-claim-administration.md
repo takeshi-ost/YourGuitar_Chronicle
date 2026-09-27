@@ -45,3 +45,33 @@ A restarted search resets the scan cursor but preserves its run history.
 The matching stage may also process previously staged pending candidates after an
 interrupted run; the log's `candidate_total` is the actual reconciliation queue.
 Historical runs predating these fields have no stage counters.
+
+### User moderation and User Detail
+
+The local administrator can edit a user's display name, account type, residence,
+bio, four profile visibility settings, signature guitar, avatar upload, and BAN
+status from Browser Console User Detail. Database IDs, creation timestamps,
+stored image paths, and calculated counts are read-only. Signature choices must
+refer to an owned Individual. The administrator endpoint validates values before
+a single transaction updates the user, records BAN transitions in
+`user_admin_actions`, and rebuilds affected Individuals from Claims. Existing
+users migrate to `normal` without changing their data.
+
+- `normal`: existing behavior.
+- `silent_ban`: Claims remain stored and retain their original status but have no
+  public effect on Individual snapshots, specification/media selections, discovery lists, or notifications. Their author sees their own Claims as
+  active; their own profile and Product Detail preview the Claim-derived state
+  within a rolled-back database savepoint. Their future Claims follow the same
+  rule. A different viewer sees neither their Claims nor their profile's guitar
+  relationships. An Individual backed only by suppressed Claims is absent from
+  public product lists and detail endpoints.
+- `ban`: account profile and ordinary account access are unavailable; the user
+  cannot publish new Claims or vote. Past Claims and media are hidden and have no
+  public effect. Good/Bad votes and existing notifications from the user are
+  excluded from visible totals and feeds. Data is retained, and changing back to
+  `normal` restores the prior Claim/interaction records.
+
+The current prototype selects a user through a client-supplied ID. It has no
+server-side login/authentication, so this viewer distinction is not an access
+control boundary. Before exposing the service to untrusted clients, integrate
+real authentication and derive the viewer ID on the server.

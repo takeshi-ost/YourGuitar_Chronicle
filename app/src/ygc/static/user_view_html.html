@@ -1234,7 +1234,7 @@ async function showIndividual(id){
   if(typeof renderIndividuals==='function')renderIndividuals();
   if(PROFILE_USER_ID){renderProfileGuitars('owned');renderProfileGuitars('former')}
   const [d,claims,currentSpecifications]=await Promise.all([
-    jfetch('/api/individuals/'+id),
+    jfetch('/api/individuals/'+id+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
@@ -2049,7 +2049,7 @@ async function loadProfilePage(){
   try{
     const [data,chronicle]=await Promise.all([
       jfetch('/api/users/'+PROFILE_USER_ID+'/profile?viewer_id='+Number(activeUser.user.id)),
-      jfetch('/api/users/'+PROFILE_USER_ID+'/chronicle')
+      jfetch('/api/users/'+PROFILE_USER_ID+'/chronicle?viewer_id='+Number(activeUser.user.id))
     ]);
     const u=data.user, summary=data.summary||{};
     profileGuitars=data.guitars||[];
