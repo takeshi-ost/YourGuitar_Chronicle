@@ -105,10 +105,16 @@ Individual Snapshot再構築
 ```
 
 - **Claim**: 履歴・意味情報のSource of Truth
-  - Owner Change / Releaseは新規作成では **Ownership** Typeへ統合され、`ownership_kind`（Acquire / Transfer / Inherit / Release）で意味を区別する
-  - 既存のlegacy Owner Change / Release Claimは互換性のため読み取り可能
+  - 所有権の変化は **Ownership** Typeと`ownership_kind`（Acquire / Transfer / Inherit / Release）で表す。旧Owner Change / ReleaseのClaim種別と作成APIは扱わない
 - **Individual**: active Claimから作られる現在状態のSnapshot
 - **Observation**: Reverb等の取得元・証拠・provenance
+
+## 収集の実行経路
+- Browser ConsoleとCLIのCrawlは共通の`crawl_service.crawl_query`を使う
+- 取得済みListing IDと期限内の対象外判定は両方の入口でスキップする
+- 収集結果・失敗は`crawl_runs`に記録する
+- DB初期化と互換列の補正はWebアプリ起動時に一度実行する
+- New DiscoveryはDBで最新24個体を選んでから画面に返す
 
 このため、入力元が増えても同じClaim-centeredパイプラインへ接続できます。
 

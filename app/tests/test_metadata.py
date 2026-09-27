@@ -465,7 +465,7 @@ def test_user_owned_guitar_order_can_be_rearranged(
     ]
 
 
-def test_owner_change_claim_response_and_vote(
+def test_ownership_acquire_and_vote(
     tmp_path,
 ):
     repository = Repository(
@@ -496,10 +496,11 @@ def test_owner_change_claim_response_and_vote(
     )
 
     observation_id, claim_id = (
-        repository.create_owner_change_claim(
+        repository.create_ownership_claim(
             owner_id,
             individual_id,
-            acquired_at="2026-09-25",
+            ownership_kind="acquire",
+            occurred_at="2099-09-25",
             previous_owner_text="Shop A",
             body="Purchased in person.",
         )
@@ -528,7 +529,7 @@ def test_owner_change_claim_response_and_vote(
         if row["id"] == claim_id
     )
     assert owner_claim["claim_type"] == (
-        "owner_change"
+        "ownership"
     )
     assert owner_claim["author_user_id"] == (
         owner_id
@@ -551,10 +552,11 @@ def test_owner_change_claim_response_and_vote(
     ) == owner_id
 
     _other_observation_id, other_claim_id = (
-        repository.create_owner_change_claim(
+        repository.create_ownership_claim(
             other_id,
             individual_id,
-            acquired_at="2026-09-26",
+            ownership_kind="acquire",
+            occurred_at="2099-09-26",
             body="Other ownership Claim.",
         )
     )
@@ -569,11 +571,6 @@ def test_owner_change_claim_response_and_vote(
         "Other User"
     )
 
-    assert repository.set_claim_response(
-        other_claim_id,
-        owner_id,
-        "endorse",
-    )
     assert repository.set_claim_vote(
         claim_id,
         other_id,
@@ -596,9 +593,7 @@ def test_owner_change_claim_response_and_vote(
     )
     assert owner_claim["good_count"] == 1
     assert owner_claim["bad_count"] == 0
-    assert other_claim["viewer_stance"] == (
-        "endorse"
-    )
+    assert other_claim["claim_type"] == "ownership"
 
 
 def test_listing_observation_is_backfilled_as_claim(
@@ -1403,10 +1398,11 @@ def test_release_marks_former_owner_and_sets_unknown(
     )
 
     observation_id, claim_id = (
-        repository.create_release_claim(
+        repository.create_ownership_claim(
             user_id,
             individual_id,
-            reason="Sold to another collector.",
+            ownership_kind="release",
+            body="Sold to another collector.",
         )
     )
 
@@ -1432,7 +1428,7 @@ def test_release_marks_former_owner_and_sets_unknown(
         )
     )
     latest = observations[-1]
-    assert latest["event_type"] == "release"
+    assert latest["event_type"] == "ownership"
     assert latest["owner_name"] == "Unknown"
     assert latest["owner_type"] == "unknown"
 
@@ -1444,7 +1440,8 @@ def test_release_marks_former_owner_and_sets_unknown(
         for row in claims
         if row["id"] == claim_id
     )
-    assert release["claim_type"] == "release"
+    assert release["claim_type"] == "ownership"
+    assert release["ownership_kind"] == "release"
     assert release["body"] == (
         "Sold to another collector."
     )
@@ -1489,9 +1486,10 @@ def test_release_claim_requires_current_ownership(
     )
 
     try:
-        repository.create_release_claim(
+        repository.create_ownership_claim(
             other_id,
             individual_id,
+            ownership_kind="release",
         )
     except ValueError as exc:
         assert "current owner" in str(exc)

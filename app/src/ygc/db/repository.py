@@ -1056,9 +1056,7 @@ class Repository:
                   )
                   AND c.claim_type IN (
                         'listing',
-                        'ownership',
-                        'owner_change',
-                        'release'
+                        'ownership'
                   )
                 ORDER BY
                     COALESCE(
@@ -1141,7 +1139,7 @@ class Repository:
                     items.get("source_url")
                     or None
                 )
-            elif claim_type in ("ownership", "owner_change"):
+            elif claim_type == "ownership":
                 ownership_kind = (
                     str(claim["ownership_kind"] or "acquire").strip().lower()
                     if "ownership_kind" in claim.keys()
@@ -1206,13 +1204,6 @@ class Repository:
                     and str(user["location_region"]).strip()
                     else None
                 )
-            elif claim_type == "release":
-                state["current_owner_name"] = "Unknown"
-                state["current_owner_type"] = "unknown"
-                state["current_owner_user_id"] = None
-                state["current_owner_source_url"] = None
-                state["location_country"] = None
-                state["location_region"] = None
 
         normalized_maker = normalize_manufacturer(
             state["manufacturer"]
@@ -2752,7 +2743,6 @@ class Repository:
                           AND (
                                 (
                                     c.claim_type IN (
-                                        'owner_change',
                                         'ownership'
                                     )
                                     AND c.value_text = ?
@@ -3719,10 +3709,7 @@ class Repository:
                         FROM claims c
                         WHERE c.individual_id = ?
                           AND c.status = 'active'
-                          AND c.claim_type IN (
-                                'ownership',
-                                'owner_change'
-                          )
+                          AND c.claim_type = 'ownership'
                           AND COALESCE(
                                 c.ownership_kind,
                                 'acquire'
@@ -4006,38 +3993,6 @@ class Repository:
                 "claim_ids": claim_ids,
                 "snapshot": snapshot,
             }
-
-    def create_owner_change_claim(
-        self,
-        user_id: int,
-        individual_id: int,
-        *,
-        acquired_at: str | None = None,
-        previous_owner_text: str | None = None,
-        body: str | None = None,
-    ) -> tuple[int, int]:
-        return self.create_ownership_claim(
-            user_id,
-            individual_id,
-            ownership_kind="acquire",
-            occurred_at=acquired_at,
-            previous_owner_text=previous_owner_text,
-            body=body,
-        )
-
-    def create_release_claim(
-        self,
-        user_id: int,
-        individual_id: int,
-        *,
-        reason: str | None = None,
-    ) -> tuple[int, int]:
-        return self.create_ownership_claim(
-            user_id,
-            individual_id,
-            ownership_kind="release",
-            body=reason,
-        )
 
     def create_incident_claim(
         self,
@@ -4899,20 +4854,6 @@ class Repository:
                             observation_id,
                         ),
                     )
-                elif claim["claim_type"] == "release":
-                    con.execute(
-                        """
-                        UPDATE observations
-                        SET raw_text = ?,
-                            occurred_at = ?
-                        WHERE id = ?
-                        """,
-                        (
-                            note,
-                            event_date,
-                            observation_id,
-                        ),
-                    )
                 else:
                     con.execute(
                         """
@@ -4926,12 +4867,8 @@ class Repository:
                         ),
                     )
 
-            if claim["claim_type"] in ("ownership", "owner_change"):
-                ownership_kind = (
-                    str(claim["ownership_kind"] or "acquire").strip().lower()
-                    if claim["claim_type"] == "ownership"
-                    else "acquire"
-                )
+            if claim["claim_type"] == "ownership":
+                ownership_kind = str(claim["ownership_kind"] or "acquire").strip().lower()
                 if ownership_kind == "release":
                     con.execute(
                         """
@@ -4965,23 +4902,6 @@ class Repository:
                             claim["individual_id"],
                         ),
                     )
-            elif claim["claim_type"] == "release":
-                con.execute(
-                    """
-                    UPDATE user_guitars
-                    SET released_at = ?,
-                        updated_at = ?
-                    WHERE user_id = ?
-                      AND individual_id = ?
-                      AND ownership_status = 'former_owner'
-                    """,
-                    (
-                        event_date,
-                        now,
-                        user_id,
-                        claim["individual_id"],
-                    ),
-                )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
@@ -5680,8 +5600,6 @@ class Repository:
             if (
                 claim["claim_type"] in (
                     "ownership",
-                    "owner_change",
-                    "release",
                     "listing",
                     "identity_correction",
                 )

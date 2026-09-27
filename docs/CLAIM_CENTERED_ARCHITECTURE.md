@@ -15,8 +15,7 @@ Claims are the semantic source of truth.
 A Claim represents a meaningful statement or event in an Individual's Chronicle, including:
 
 - Listing
-- Owner Change
-- Release
+- Ownership (Acquire / Transfer / Inherit / Release)
 - Specification
 - Repair
 - Identity Correction

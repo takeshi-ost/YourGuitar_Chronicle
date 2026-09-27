@@ -26,6 +26,9 @@ ygc-web = "ygc.web:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+ygc = ["db/schema.sql", "static/*.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
