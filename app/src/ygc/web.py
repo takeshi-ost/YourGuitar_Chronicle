@@ -1026,6 +1026,13 @@ def api_statistics() -> dict[str, Any]:
     return repo().statistics()
 
 
+@app.get("/api/claims/unverified-acquires")
+def api_unverified_acquires(limit: int = 100, offset: int = 0) -> dict:
+    if not 1 <= limit <= 200 or offset < 0:
+        raise HTTPException(status_code=400, detail="Invalid pagination")
+    return repo().unverified_acquires(limit, offset)
+
+
 @app.get("/api/top-page-charts")
 def api_top_page_charts() -> dict[str, Any]:
     repository = repo()

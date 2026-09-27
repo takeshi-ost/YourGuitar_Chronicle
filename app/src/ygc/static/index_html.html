@@ -124,6 +124,12 @@ Gibson ES-335</textarea>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 <div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">Unverified Acquire <span id="unverifiedAcquireTotal" class="sub"></span></h2><button class="secondary" onclick="loadUnverifiedAcquires(0)">更新</button></div>
+<div class="sub">有効なAcquire Claimのうち、Owner VerificationがUnverifiedのもの。ユーザーとAutomationの両方を含みます。行をクリックするとProduct Detailを開きます。</div>
+<div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
+<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">前へ</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">次へ</button></div>
+</div>
+<div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
 <div id="statistics" class="sub">集計中...</div>
 </div>
@@ -155,9 +161,9 @@ const ACTIVE_USER_KEY='ygc_active_user_id';
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
-function statCard(label,value){return '<span class="crawl-metric"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
+function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Registered Guitars',s.individuals),statCard('Serial Listings',s.serial_observations),statCard('Repeated',s.repeated_individuals)
+statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登録とクロール登録の両方を含みます。'),statCard('Serial Listings',s.serial_observations,'シリアルのある個体に紐付く外部Listing数。同じサイト・Listing IDは重複除外。Acquireによる再出品と所有者確認待ちも含みます。'),statCard('Repeated',s.repeated_individuals,'異なる外部Listingが2件以上紐付く個体数。有効なListing・Acquire Claimを持つ掲載記録を集計します。')
 ].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'環境変数で設定済み（値は表示不可）':'Tokenを入力'}}
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);document.getElementById('tokenInput').blur();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);const input=document.getElementById('tokenInput');input.value='';input.blur();await refreshStatus()}
@@ -243,7 +249,20 @@ async function resetDatabase(){
     alert(e.message);
   }
 }
-async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
+async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals();await loadUnverifiedAcquires();await refreshStatus()}
+let unverifiedAcquireOffset=0;
+async function loadUnverifiedAcquires(offset=unverifiedAcquireOffset){
+  try{
+    const d=await jfetch('/api/claims/unverified-acquires?limit=100&offset='+Math.max(0,offset));
+    if(d.total>0&&offset>=d.total)return loadUnverifiedAcquires(Math.floor((d.total-1)/100)*100);
+    unverifiedAcquireOffset=d.offset;
+    document.getElementById('unverifiedAcquireTotal').textContent='('+d.total+'件)';
+    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">未承認のAcquireはありません。</td></tr>';
+    document.getElementById('unverifiedAcquirePage').textContent=d.total?(d.offset+1)+'–'+(d.offset+d.items.length)+' / '+d.total:'0 / 0';
+    document.getElementById('unverifiedAcquirePrev').disabled=d.offset===0||!d.total;
+    document.getElementById('unverifiedAcquireNext').disabled=d.offset+d.items.length>=d.total;
+  }catch(e){document.getElementById('unverifiedAcquireBody').innerHTML='<tr><td colspan="7">'+esc(e.message)+'</td></tr>'}
+}
 function countList(title,rows){
   return '<div class="stat-group"><strong>'+esc(title)+'</strong>'+((rows&&rows.length)?rows.map(x=>'<div class="stat-line"><span>'+esc(x.label)+'</span><span>'+esc(x.count)+'</span></div>').join(''):'<div class="sub">—</div>')+'</div>';
 }

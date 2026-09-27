@@ -6379,6 +6379,29 @@ class Repository:
                 observations,
             )
 
+    def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
+        """Active pending Acquire claims from both users and Automation."""
+        where = ("c.claim_type='ownership' AND c.ownership_kind='acquire' "
+                 "AND c.status='active' AND c.verification_status='unverified'")
+        with self.connect() as con:
+            total = con.execute("SELECT COUNT(*) FROM claims c WHERE " + where).fetchone()[0]
+            rows = con.execute(
+                "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, "
+                "COALESCE(proposed.display_name, c.value_text) AS proposed_owner, "
+                "c.ownership_source, c.occurred_at, c.created_at, "
+                "u.display_name AS author_name, i.manufacturer, i.model, i.serial_number, "
+                "i.current_owner_name, i.current_owner_user_id, "
+                "o.source_site, o.source_listing_id "
+                "FROM claims c JOIN individuals i ON i.id=c.individual_id "
+                "JOIN users u ON u.id=c.author_user_id "
+                "LEFT JOIN users proposed ON CAST(proposed.id AS TEXT)=c.value_text "
+                "AND COALESCE(c.ownership_source, 'user') <> 'automation' "
+                "LEFT JOIN observations o ON o.id=c.observation_id WHERE " + where +
+                " ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?", (limit, offset),
+            ).fetchall()
+        return {"total": total, "items": [dict(row) for row in rows],
+                "limit": limit, "offset": offset}
+
     def stats(
         self,
     ):
@@ -6390,39 +6413,38 @@ class Repository:
                 """
             ).fetchone()[0]
 
-            serial = con.execute(
+            # Count external listings represented by active Listing/Acquire
+            # claims, not Claim rows: a relisting has an Acquire, not a second
+            # Listing Claim. Ownership verification does not erase its evidence.
+            listing_counts = con.execute(
                 """
-                SELECT COUNT(DISTINCT c.id)
-                FROM claims c
-                INNER JOIN claim_listing_items li
-                  ON li.claim_id = c.id
-                 AND li.field_name = 'serial_number'
-                WHERE c.claim_type = 'listing'
-                  AND c.status = 'active'
-                  AND NULLIF(TRIM(li.value_text), '') IS NOT NULL
-                """
-            ).fetchone()[0]
-
-            individuals = con.execute(
-                """
-                SELECT COUNT(*)
-                FROM individuals
-                """
-            ).fetchone()[0]
-
-            repeated = con.execute(
-                """
-                SELECT COUNT(*)
-                FROM (
-                    SELECT c.individual_id
-                    FROM claims c
-                    WHERE c.claim_type = 'listing'
-                      AND c.status = 'active'
-                    GROUP BY c.individual_id
-                    HAVING COUNT(*) >= 2
+                WITH linked AS (
+                    SELECT DISTINCT o.individual_id, o.source_site, o.source_listing_id
+                    FROM observations o
+                    JOIN individuals i ON i.id = o.individual_id
+                    WHERE NULLIF(TRIM(o.source_site), '') IS NOT NULL
+                      AND o.source_site <> 'user'
+                      AND NULLIF(TRIM(o.source_listing_id), '') IS NOT NULL
+                      AND NULLIF(TRIM(i.serial_number), '') IS NOT NULL
+                      AND EXISTS (
+                        SELECT 1 FROM claims c
+                        WHERE c.observation_id = o.id
+                          AND c.individual_id = o.individual_id
+                          AND c.status = 'active'
+                          AND (c.claim_type = 'listing' OR
+                               (c.claim_type = 'ownership' AND c.ownership_kind = 'acquire'))
+                      )
+                ), repeated AS (
+                    SELECT individual_id FROM linked
+                    GROUP BY individual_id HAVING COUNT(*) >= 2
                 )
+                SELECT (SELECT COUNT(*) FROM
+                    (SELECT DISTINCT source_site, source_listing_id FROM linked)),
+                    (SELECT COUNT(*) FROM repeated)
                 """
-            ).fetchone()[0]
+            ).fetchone()
+            serial, repeated = listing_counts
+            individuals = con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0]
 
             max_observations = con.execute(
                 """
