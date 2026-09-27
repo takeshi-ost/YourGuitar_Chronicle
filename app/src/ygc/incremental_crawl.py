@@ -16,9 +16,7 @@ from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provena
 
 
 CATEGORY_QUERY = {"electric": "electric guitar", "acoustic": "acoustic guitar"}
-MAX_SUMMARIES = 500
-MAX_DETAILS = 100
-MAX_LIST_PAGES = 5
+MAX_SUMMARIES = 2000
 MAX_RECHECKS = 5
 MIN_REQUEST_GAP = 0.5
 DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category")
@@ -229,11 +227,8 @@ def advance_program(repository: Repository, collector: Any, category: str,
             pending = json.loads(program["pending_json"]) if program["pending_json"] else []
             known_ids = _known_listing_ids(repository, collector, pending)
             while (counts["summaries_processed"] < MAX_SUMMARIES
-                   and counts["details_fetched"] < MAX_DETAILS
                    and not program["finished"]):
                 if not pending:
-                    if counts["listing_pages_fetched"] >= MAX_LIST_PAGES:
-                        break
                     last_request = _pause(last_request)
                     if program["page_url"]:
                         payload = collector._get_json(collector.safe_api_url(program["page_url"]))

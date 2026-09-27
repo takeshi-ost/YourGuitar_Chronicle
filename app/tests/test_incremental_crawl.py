@@ -6,7 +6,7 @@ from ygc.collectors.reverb import ReverbAPICollector
 from ygc.db.repository import Repository
 from ygc.db.repository import utcnow
 from ygc.incremental_crawl import advance_program, restart_program
-from ygc.incremental_crawl import MAX_SUMMARIES, MAX_DETAILS, MAX_LIST_PAGES
+from ygc.incremental_crawl import MAX_SUMMARIES
 from ygc.incremental_crawl import _year_matches
 
 
@@ -60,8 +60,6 @@ def _summary(n):
 
 def test_cursor_survives_restart_and_bounds_work(tmp_path, monkeypatch):
     monkeypatch.setattr("ygc.incremental_crawl.MAX_SUMMARIES", 5)
-    monkeypatch.setattr("ygc.incremental_crawl.MAX_DETAILS", 5)
-    monkeypatch.setattr("ygc.incremental_crawl.MAX_LIST_PAGES", 1)
     repo = Repository(tmp_path / "ygc.db")
     repo.init_db()
     pages = [
@@ -90,10 +88,8 @@ def test_cursor_survives_restart_and_bounds_work(tmp_path, monkeypatch):
     assert repeat["skipped_existing"] == 5
 
 
-def test_page_and_detail_budgets_continue_mid_page(tmp_path, monkeypatch):
+def test_summary_budget_continues_mid_page(tmp_path, monkeypatch):
     monkeypatch.setattr("ygc.incremental_crawl.MAX_SUMMARIES", 6)
-    monkeypatch.setattr("ygc.incremental_crawl.MAX_DETAILS", 3)
-    monkeypatch.setattr("ygc.incremental_crawl.MAX_LIST_PAGES", 2)
     repo = Repository(tmp_path / "ygc.db")
     repo.init_db()
     pages = [
@@ -104,22 +100,19 @@ def test_page_and_detail_budgets_continue_mid_page(tmp_path, monkeypatch):
     collector = Collector(pages)
     first = advance_program(repo, collector, "electric", 1970, 1979)
     assert first["listing_pages_fetched"] == 2
-    assert first["summaries_processed"] == 3
-    assert first["details_fetched"] == 3
+    assert first["summaries_processed"] == 6
+    assert first["details_fetched"] == 6
     assert not first["finished"]
     repo.init_db()
     second = advance_program(repo, collector, "electric", 1970, 1979)
     assert second["listing_pages_fetched"] == 0
-    assert second["summaries_processed"] == 3
-    assert second["processed"] == 6
-    third = advance_program(repo, collector, "electric", 1970, 1979)
-    assert third["summaries_processed"] == 1
-    assert third["processed"] == 7
-    assert third["finished"]
+    assert second["summaries_processed"] == 1
+    assert second["processed"] == 7
+    assert second["finished"]
 
 
-def test_production_budget_handles_hundred_details_in_one_click(tmp_path):
-    assert (MAX_SUMMARIES, MAX_DETAILS, MAX_LIST_PAGES) == (500, 100, 5)
+def test_production_budget_handles_more_than_hundred_details_in_one_click(tmp_path):
+    assert MAX_SUMMARIES == 2000
     repo = Repository(tmp_path / "ygc.db")
     repo.init_db()
     collector = Collector([
@@ -128,13 +121,64 @@ def test_production_budget_handles_hundred_details_in_one_click(tmp_path):
         {"listings": [_summary(n) for n in range(121, 151)]},
     ])
     first = advance_program(repo, collector, "electric", 1970, 1979)
-    assert first["summaries_processed"] == 100
-    assert first["details_fetched"] == 100
-    assert first["new_observations"] == 100
+    assert first["summaries_processed"] == 150
+    assert first["details_fetched"] == 150
+    assert first["new_observations"] == 150
+    assert first["finished"]
     second = advance_program(repo, collector, "electric", 1970, 1979)
-    assert second["summaries_processed"] == 50
-    assert second["new_observations"] == 50
+    assert second["summaries_processed"] == 0
+    assert second["new_observations"] == 0
     assert second["processed"] == 150
+    assert second["finished"]
+
+
+def test_more_than_five_pages_are_processed(tmp_path):
+    repo = Repository(tmp_path / "ygc.db")
+    repo.init_db()
+
+    class ManyPages(Collector):
+        def _get_json(self, url, params=None):
+            if url.endswith("/listings") or "?page=" in url:
+                page = int(url.split("?page=")[-1]) if "?page=" in url else 1
+                payload = {"listings": [_summary(page)]}
+                if page < 6:
+                    payload["_links"] = {"next": {"href":
+                        f"https://api.reverb.com/api/listings?page={page + 1}"}}
+                return payload
+            return super()._get_json(url, params)
+
+    result = advance_program(repo, ManyPages(), "electric", 1970, 1979)
+    assert result["listing_pages_fetched"] == 6
+    assert result["summaries_processed"] == 6
+    assert result["details_fetched"] == 6
+    assert result["finished"]
+
+
+def test_two_thousand_summary_limit_resumes_on_next_click(tmp_path):
+    repo = Repository(tmp_path / "ygc.db")
+    repo.init_db()
+
+    class ManySummaryPages(Collector):
+        def _get_json(self, url, params=None):
+            if url.endswith("/listings") or "?page=" in url:
+                page = int(url.split("?page=")[-1]) if "?page=" in url else 1
+                payload = {"listings": [{**_summary(n), "year": "2020"}
+                            for n in range((page - 1) * 24 + 1,
+                                           min(page * 24, 2001) + 1)]}
+                if page < 84:
+                    payload["_links"] = {"next": {"href":
+                        f"https://api.reverb.com/api/listings?page={page + 1}"}}
+                return payload
+            return super()._get_json(url, params)
+
+    collector = ManySummaryPages()
+    first = advance_program(repo, collector, "electric", 1970, 1979)
+    assert first["summaries_processed"] == 2000
+    assert first["details_fetched"] == 0
+    assert not first["finished"]
+    second = advance_program(repo, collector, "electric", 1970, 1979)
+    assert second["summaries_processed"] == 1
+    assert second["processed"] == 2001
     assert second["finished"]
 
 

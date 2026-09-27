@@ -3202,10 +3202,9 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
                 request.year_max,
                 progress_callback=lambda counts: _set_job(
                     job_id,
-                    message=(f"一覧 {counts['summaries_processed']}/500・"
-                             f"詳細 {counts['details_fetched']}/100"),
-                    progress=min(0.95, max(counts["summaries_processed"] / 500,
-                                           counts["details_fetched"] / 100)),
+                    message=(f"一覧 {counts['summaries_processed']}/2000・"
+                             f"詳細 {counts['details_fetched']}"),
+                    progress=min(0.95, counts["summaries_processed"] / 2000),
                 ),
             )
         _set_job(job_id, status="done", message="1回分の処理が完了しました",
