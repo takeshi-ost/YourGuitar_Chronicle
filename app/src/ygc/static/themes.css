@@ -174,3 +174,22 @@
 :root[data-theme] .sticky-header .account-hub :is(.account-hub-summary,.account-hub-action,.account-hub-count) {background:#252a2f;color:#edf0f3;border-color:#2a2f35}
 :root[data-theme] .sticky-header .account-hub :is(.account-hub-stat-label,.account-hub-location) {color:#9ba6b0}
 :root[data-theme] .sticky-header button.secondary {background:#2a3036;color:#edf0f3}
+
+/* All brand variants use the same canvas; the page's active theme picks one. */
+.sticky-header .brand-link{display:inline-flex;vertical-align:middle;align-items:center;line-height:0}
+.sticky-header .brand-logo{display:none;width:210px;height:46px;object-fit:contain}
+.sticky-header .brand-logo-script{display:block}
+:root[data-theme="dark_default"] .brand-logo-script,
+:root[data-theme="black_pearl"] .brand-logo-script,
+:root[data-theme="goldtop_cream"] .brand-logo-script,
+:root[data-theme="cherry_red_black"] .brand-logo-script{display:none}
+:root[data-theme="dark_default"] .brand-logo-block,
+:root[data-theme="black_pearl"] .brand-logo-block,
+:root[data-theme="goldtop_cream"] .brand-logo-block,
+:root[data-theme="cherry_red_black"] .brand-logo-block{display:block}
+:root[data-theme="butterscotch_black"] .brand-logo-script,
+:root[data-theme="vintage_white_gold"] .brand-logo-script,
+:root[data-theme="lake_blue_pearl"] .brand-logo-script{display:none}
+:root[data-theme="butterscotch_black"] .brand-logo-badge,
+:root[data-theme="vintage_white_gold"] .brand-logo-badge,
+:root[data-theme="lake_blue_pearl"] .brand-logo-badge{display:block}

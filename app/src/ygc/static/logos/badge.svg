@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 56" role="img" aria-label="Your Guitar Chronicle">
+ <path d="M7 11 26 6h208l19 5v34l-19 5H26L7 45z" fill="none" stroke="#d9b879" stroke-width="1.4"/>
+ <path d="M15 15h230M15 41h230" stroke="#d9b879" stroke-width=".65"/>
+ <text x="130" y="32" text-anchor="middle" fill="#f5eee1" font-family="Georgia, Times New Roman, serif" font-size="20" font-weight="bold" letter-spacing="1.5">YOUR GUITAR</text>
+ <text x="130" y="47" text-anchor="middle" fill="#d9b879" font-family="Georgia, serif" font-size="8" letter-spacing="4">CHRONICLE</text>
+</svg>

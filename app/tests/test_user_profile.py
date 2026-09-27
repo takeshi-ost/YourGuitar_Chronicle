@@ -27,6 +27,16 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         choices = client.get('/api/themes').json()
         assert [item['id'] for item in choices] == [key for key, _ in THEMES]
         assert len(choices) == 13
+        assert next(item['label'] for item in choices if item['id'] == 'sunburst_3ply') == 'Sunburst & White'
+        for variant in ('script', 'block', 'badge'):
+            logo = client.get(f'/assets/logos/{variant}.svg')
+            assert logo.status_code == 200
+            assert logo.headers['content-type'].startswith('image/svg+xml')
+            assert b'viewBox="0 0 260 56"' in logo.content
+        assert client.get('/assets/logos/secret.svg').status_code == 404
+        for page in ('/user-view', '/user-view/edit', '/'):
+            html = client.get(page).text
+            assert 'brand-logo-script' in html and 'brand-logo-block' in html and 'brand-logo-badge' in html
         for key, _ in THEMES[1:]:
             assert f':root[data-theme="{key}"]' in stylesheet.text
         for filename in ('butterscotch-wood.webp', 'cherry-wood.webp', 'white-pearl.webp'):

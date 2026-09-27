@@ -19,3 +19,5 @@ User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は�
 | Lake Blue & Pearl | 青の単色 | 白パール画像を薄く重ねる | 白／黒／白／黒 |
 
 定義は `ygc.theme_catalog.THEMES`、見た目は `app/src/ygc/static/themes.css`、画像は同じ `static` ディレクトリにある。旧DBの `users.theme` には3種類のみを許可する CHECK 制約が残るため、追加テーマの選択は nullable な `users.theme_override` に保存し、読み取りでは優先して適用する。将来 PostgreSQL へ移行する際には1列に統合できる。
+
+ヘッダーのロゴは同一寸法の3種類（筆記体・斜体ブロック・装飾バッジ）。Dark Default／Black & Pearl／Goldtop & Cream／Cherry Red & Black は斜体ブロック、Butterscotch & Black／Vintage White & Gold／Lake Blue & Pearl は装飾バッジ、その他のテーマは筆記体を表示する。文字と図案は YGC 独自のデザインで、ヘッダーの共通背景色に合わせている。
