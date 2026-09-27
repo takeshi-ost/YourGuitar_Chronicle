@@ -86,6 +86,11 @@ class Repository:
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
                 "avatar_mime_type": "TEXT",
+                "birth_visibility": "TEXT NOT NULL DEFAULT 'Private'",
+                "residence_visibility": "TEXT NOT NULL DEFAULT 'Private'",
+                "bio_visibility": "TEXT NOT NULL DEFAULT 'Public'",
+                "avatar_visibility": "TEXT NOT NULL DEFAULT 'Public'",
+                "signature_individual_id": "INTEGER",
             },
             "user_guitars": {
                 "display_order": "INTEGER",
@@ -2779,6 +2784,9 @@ class Repository:
         location_country: str | None,
         location_region: str | None,
         bio: str | None = None,
+        visibility: dict[str, str] | None = None,
+        signature_individual_id: int | None = None,
+        update_signature: bool = False,
     ) -> bool:
         name = display_name.strip()
         account = account_type.strip().lower()
@@ -2795,7 +2803,20 @@ class Repository:
                 "account_type must be user, shop, builder, repairer, or organization"
             )
 
+        visibility = visibility or {}
+        if any(value not in ("Public", "Members", "Followers", "Private")
+               for value in visibility.values()):
+            raise ValueError("Invalid profile visibility")
+
         with self.connect() as con:
+            if update_signature and signature_individual_id is not None:
+                owned = con.execute(
+                    "SELECT 1 FROM user_guitars WHERE user_id = ? AND individual_id = ? "
+                    "AND ownership_status = 'current_owner'",
+                    (user_id, signature_individual_id),
+                ).fetchone()
+                if not owned:
+                    raise ValueError("Signature guitar must be an owned guitar")
             cur = con.execute(
                 """
                 UPDATE users
@@ -2804,6 +2825,11 @@ class Repository:
                     location_country = ?,
                     location_region = ?,
                     bio = COALESCE(?, bio),
+                    birth_visibility = COALESCE(?, birth_visibility),
+                    residence_visibility = COALESCE(?, residence_visibility),
+                    bio_visibility = COALESCE(?, bio_visibility),
+                    avatar_visibility = COALESCE(?, avatar_visibility),
+                    signature_individual_id = CASE WHEN ? THEN ? ELSE signature_individual_id END,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -2821,6 +2847,12 @@ class Repository:
                         else None
                     ),
                     bio.strip() if bio is not None else None,
+                    visibility.get("birth"),
+                    visibility.get("residence"),
+                    visibility.get("bio"),
+                    visibility.get("avatar"),
+                    update_signature,
+                    signature_individual_id,
                     utcnow(),
                     user_id,
                 ),

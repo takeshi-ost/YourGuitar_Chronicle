@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS users (
  avatar_storage_path TEXT,
  avatar_original_filename TEXT,
  avatar_mime_type TEXT,
+ birth_visibility TEXT NOT NULL DEFAULT 'Private',
+ residence_visibility TEXT NOT NULL DEFAULT 'Private',
+ bio_visibility TEXT NOT NULL DEFAULT 'Public',
+ avatar_visibility TEXT NOT NULL DEFAULT 'Public',
+ signature_individual_id INTEGER,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL
 );

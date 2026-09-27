@@ -69,3 +69,38 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         })
         assert response.status_code == 200
         assert response.json()["user"]["account_type"] == "builder"
+
+
+def test_profile_visibility_and_signature_guitar(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "chronicle.db")
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    owner = repository.create_user("Owner")
+    viewer = repository.create_user("Viewer")
+    guitar, *_ = repository.create_initial_listing_claim(
+        owner, manufacturer="Fender", model="Mustang",
+        serial_number="SIGNATURE01", media_storage_path="media/test.jpg",
+    )
+    with TestClient(app) as client:
+        response = client.patch(f"/api/users/{owner}", json={
+            "display_name": "Owner", "account_type": "user",
+            "location_country": "JP", "location_region": "Tokyo",
+            "bio": "Private bio", "residence_visibility": "Followers",
+            "bio_visibility": "Private", "avatar_visibility": "Members",
+            "signature_individual_id": guitar,
+        })
+        assert response.status_code == 200
+        other = client.get(f"/api/users/{owner}/profile?viewer_id={viewer}").json()["user"]
+        assert other["location_country"] is None
+        assert other["bio"] is None
+        assert other["avatar_visible"] is True
+        assert other["signature_individual_id"] == guitar
+        own = client.get(f"/api/users/{owner}/profile?viewer_id={owner}").json()["user"]
+        assert own["location_country"] == "JP"
+        assert own["bio"] == "Private bio"
+        assert client.get(f"/api/users/{owner}/profile").json()["user"]["avatar_visible"] is False
+        invalid = client.patch(f"/api/users/{viewer}", json={
+            "display_name": "Viewer", "account_type": "user",
+            "signature_individual_id": guitar,
+        })
+        assert invalid.status_code == 400

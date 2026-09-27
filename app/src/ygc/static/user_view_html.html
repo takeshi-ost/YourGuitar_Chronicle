@@ -2010,7 +2010,7 @@ async function loadProfilePage(){
   }
   try{
     const [data,chronicle]=await Promise.all([
-      jfetch('/api/users/'+PROFILE_USER_ID),
+      jfetch('/api/users/'+PROFILE_USER_ID+'/profile?viewer_id='+Number(activeUser.user.id)),
       jfetch('/api/users/'+PROFILE_USER_ID+'/chronicle')
     ]);
     const u=data.user, summary=data.summary||{};
@@ -2019,7 +2019,7 @@ async function loadProfilePage(){
     const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
     const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
     hero.innerHTML='<div class="profile-hero">'+
-      '<img class="profile-avatar" src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
       '<div class="profile-meta">'+esc(locationText)+' · '+esc(u.account_type||'user')+' · Member since '+esc(String(u.created_at||'').slice(0,10))+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
@@ -2030,7 +2030,8 @@ async function loadProfilePage(){
     renderProfileGuitars('former');
     renderUserChronicle(chronicle);
     const requested=Number(new URLSearchParams(location.search).get('individual_id')||0);
-    const selected=profileGuitars.find(g=>Number(g.individual_id)===requested)||profileGuitars[0];
+    const signature=profileGuitars.find(g=>g.ownership_status==='current_owner'&&Number(g.individual_id)===Number(u.signature_individual_id));
+    const selected=profileGuitars.find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0];
     if(selected)await showIndividual(Number(selected.individual_id));
   }catch(e){
     hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';

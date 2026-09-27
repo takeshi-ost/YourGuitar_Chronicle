@@ -321,6 +321,11 @@ class UserUpdateRequest(BaseModel):
         max_length=120,
     )
     bio: str | None = Field(default=None, max_length=2000)
+    birth_visibility: str | None = None
+    residence_visibility: str | None = None
+    bio_visibility: str | None = None
+    avatar_visibility: str | None = None
+    signature_individual_id: int | None = None
 
 
 class UserGuitarLinkRequest(BaseModel):
@@ -2824,6 +2829,36 @@ def api_user(
     }
 
 
+@app.get("/api/users/{user_id}/profile")
+def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, Any]:
+    repository = repo()
+    user, guitars = repository.get_user(user_id)
+    if not user or user["account_type"] == "source":
+        raise HTTPException(status_code=404, detail="User not found")
+    own = viewer_id == user_id
+    member = own or (viewer_id is not None and
+                     repository.get_user(viewer_id)[0] is not None)
+
+    def visible(setting: str) -> bool:
+        level = user[setting]
+        return own or level == "Public" or (level == "Members" and member)
+
+    public_user = _row_dict(user)
+    if not visible("residence_visibility"):
+        public_user["location_country"] = None
+        public_user["location_region"] = None
+    if not visible("bio_visibility"):
+        public_user["bio"] = None
+    public_user["avatar_visible"] = visible("avatar_visibility")
+    for field in ("avatar_storage_path", "avatar_original_filename", "avatar_mime_type"):
+        public_user.pop(field, None)
+    return {
+        "user": public_user,
+        "guitars": [_row_dict(row) for row in guitars],
+        "summary": repository.get_user_summary(user_id),
+    }
+
+
 @app.get("/api/users/{user_id}/chronicle")
 def api_user_chronicle(user_id: int) -> list[dict[str, Any]]:
     repository = repo()
@@ -2856,6 +2891,16 @@ def api_update_user(
                 request.location_region
             ),
             bio=request.bio,
+            visibility={
+                name: value for name, value in {
+                    "birth": request.birth_visibility,
+                    "residence": request.residence_visibility,
+                    "bio": request.bio_visibility,
+                    "avatar": request.avatar_visibility,
+                }.items() if value is not None
+            },
+            signature_individual_id=request.signature_individual_id,
+            update_signature="signature_individual_id" in request.model_fields_set,
         )
     except ValueError as exc:
         raise HTTPException(
