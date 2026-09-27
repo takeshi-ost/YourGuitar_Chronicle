@@ -180,6 +180,39 @@ def test_detail_missing_filter_fields_keeps_summary_evidence(tmp_path):
     assert not _year_matches({"year": "1960s"}, 1960, 1965)
 
 
+def test_reverb_full_name_and_apostrophe_decade_are_accepted(tmp_path):
+    repo = Repository(tmp_path / "ygc.db")
+    repo.init_db()
+
+    class ReverbStyleDetail(Collector):
+        def _get_json(self, url, params=None):
+            result = super()._get_json(url, params)
+            if url.endswith("/listings/1"):
+                result["product_type"] = None
+                result["categories"] = [{"full_name": "Guitars / Electric Guitars"}]
+                result["year"] = "1960's"
+            if url.endswith("/listings/2"):
+                result["product_type"] = None
+                result["categories"] = [{"full_name": "Guitars / Electric Guitars"}]
+                result["year"] = "Mid-60s"
+            return result
+
+    summaries = []
+    for n in (1, 2):
+        summary = _summary(n)
+        summary.pop("product_type")
+        summary["categories"] = [{"full_name": "Guitars / Electric Guitars"}]
+        summary["year"] = "1960's" if n == 1 else "Mid-60s"
+        summaries.append(summary)
+    result = advance_program(repo, ReverbStyleDetail([{"listings": summaries}]),
+                             "electric", 1950, 1980)
+    assert result["new_observations"] == 2
+    assert result["skipped_category"] == 0
+    assert result["missing_year"] == 0
+    assert _year_matches({"year": "1950’s"}, 1950, 1980)
+    assert not _year_matches({"year": "Mid-60s"}, 1960, 1965)
+
+
 def test_rejected_detail_explains_year_mismatch(tmp_path):
     repo = Repository(tmp_path / "ygc.db")
     repo.init_db()

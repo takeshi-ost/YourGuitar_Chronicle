@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from ygc import config
 from ygc.db.repository import Repository, utcnow
-from ygc.reverb_adapter import to_listing_claim_data, to_provenance_observation
+from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provenance_observation
 
 
 CATEGORY_QUERY = {"electric": "electric guitar", "acoustic": "acoustic guitar"}
@@ -24,15 +24,8 @@ DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category")
 
 
 def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool:
-    values = [str(item.get("product_type") or "")]
-    for entry in item.get("categories") or []:
-        values.append(str(entry.get("name") or entry.get("slug") or "")
-                      if isinstance(entry, dict) else str(entry))
-    entry = item.get("category")
-    if entry:
-        values.append(str(entry.get("name") or entry.get("slug") or "")
-                      if isinstance(entry, dict) else str(entry))
-    value = " ".join(values).lower().replace("-", " ")
+    value = (str(item.get("product_type") or "") + " " + _category_text(item))
+    value = value.lower().replace("-", " ").replace("_", " ").strip()
     if not value.strip():
         return not strict  # Do not infer a category from a model/title.
     return category in value and "guitar" in value and not any(
@@ -42,15 +35,15 @@ def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool
 
 def _year_span(item: dict) -> tuple[int, int] | None:
     """Keep fuzzy Reverb decades within the entire selected manufacture range."""
-    raw = str(item.get("year") or "")
+    raw = str(item.get("year") or "").replace("’", "'")
     years = [int(value) for value in re.findall(
         r"(?<!\d)(?:18|19|20)\d{2}(?!\d)", raw,
     )]
     for year in list(years):
-        if re.search(rf"(?<!\d){year}s\b", raw, flags=re.I):
+        if re.search(rf"(?<!\d){year}\s*'?s\b", raw, flags=re.I):
             years.append(year + 9)
     if not years:
-        for digit in re.findall(r"(?<!\d)([5-9])0s\b", raw, flags=re.I):
+        for digit in re.findall(r"(?<!\d)([5-9])0\s*'?s\b", raw, flags=re.I):
             years.extend((1900 + int(digit) * 10,
                           1909 + int(digit) * 10))
     return (min(years), max(years)) if years else None
@@ -65,8 +58,7 @@ def _year_matches(item: dict, year_min: int, year_max: int, *, strict: bool = Tr
 def _missing_metadata(item: dict, field: str) -> bool:
     if field == "year":
         return _year_span(item) is None
-    return not (item.get("product_type") or item.get("categories")
-                or item.get("category"))
+    return not (item.get("product_type") or _category_text(item))
 
 
 def _merge_listing(summary: dict, fetched: dict) -> dict:
@@ -316,6 +308,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                         if detail else None,
                                         "product_type": str((detail or summary).get(
                                             "product_type") or "")[:60],
+                                        "category": _category_text(detail or summary)[:120],
                                     })
                 counts["summaries_processed"] += 1
                 pending = pending[1:]
