@@ -1053,13 +1053,9 @@ class Repository:
                   AND c.status = 'active'
                   AND (
                         c.claim_type <> 'ownership'
-                        OR COALESCE(c.ownership_source, '') <> 'former_owner'
+                        OR COALESCE(c.ownership_source, '') NOT IN
+                           ('former_owner', 'automation')
                         OR COALESCE(c.verification_status, 'positive') = 'positive'
-                  )
-                  AND NOT (
-                        c.claim_type = 'ownership'
-                        AND c.ownership_source = 'automation'
-                        AND c.verification_status <> 'positive'
                   )
                   AND c.claim_type IN (
                         'listing',
@@ -1405,6 +1401,13 @@ class Repository:
         year: str | None = None,
     ) -> None:
         with self.connect() as con:
+            if con.execute(
+                "SELECT 1 FROM claims WHERE individual_id = ? AND status = 'active' LIMIT 1",
+                (individual_id,),
+            ).fetchone():
+                raise ValueError(
+                    "Claim-backed Individuals must be changed through Claims"
+                )
             con.execute(
                 """
                 UPDATE individuals
@@ -1705,7 +1708,7 @@ class Repository:
             )
             if existing_individual is not None:
                 current_owner_user_id = existing_individual["current_owner_user_id"]
-                verification = "pending" if current_owner_user_id else "positive"
+                verification = "unverified" if current_owner_user_id else "positive"
                 occurred_at = provenance.get("observed_at") or utcnow()
                 now = provenance.get("created_at") or utcnow()
                 cur = con.execute(

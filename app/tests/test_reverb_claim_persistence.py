@@ -136,6 +136,8 @@ def test_reverb_listing_creates_claim_and_snapshot(
             (claims[0]["author_user_id"],),
         ).fetchone()
     assert tuple(author) == ("Automation", "source")
+    with pytest.raises(ValueError, match="through Claims"):
+        repository.update_individual_metadata(individual_id, finish="Red")
 
 
 def test_second_reverb_listing_reuses_individual_and_rebuilds_location(
@@ -248,7 +250,7 @@ def test_relisted_guitar_owned_by_user_waits_for_owner_confirmation(tmp_path: Pa
         _claim_data(listing_id="2", region="NY"),
         _provenance(listing_id="2"),
     )
-    assert second["verification_status"] == "pending"
+    assert second["verification_status"] == "unverified"
     with repository.connect() as con:
         individual = con.execute(
             "SELECT current_owner_user_id, location_region FROM individuals WHERE id = ?",
@@ -256,6 +258,13 @@ def test_relisted_guitar_owned_by_user_waits_for_owner_confirmation(tmp_path: Pa
         ).fetchone()
     assert int(individual["current_owner_user_id"]) == user_id
     assert individual["location_region"] is None
+    repository.init_db()
+    with repository.connect() as con:
+        status = con.execute(
+            "SELECT verification_status FROM claims WHERE id = ?",
+            (second["claim_id"],),
+        ).fetchone()[0]
+    assert status == "unverified"
     assert repository.set_claim_response(second["claim_id"], user_id, "positive")
     with repository.connect() as con:
         approved = con.execute(

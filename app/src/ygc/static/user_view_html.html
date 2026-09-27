@@ -963,7 +963,7 @@ function claimHeaderHtml(c,type,eventDate){
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
       '<option value="negative"'+(current==='negative'?' selected':'')+'>Negative</option>'+
-      '<option value="unverified"'+(['unverified','pending'].includes(current)?' selected':'')+'>Unverified</option>'+
+      '<option value="unverified"'+(current==='unverified'?' selected':'')+'>Unverified</option>'+
       '</select>';
   }
   return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
@@ -1075,7 +1075,7 @@ function compactClaimType(c){
 function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
   if(verification==='positive')return claimCardFull(c);
-  if(verification==='unverified'||verification==='pending'){
+  if(verification==='unverified'){
     return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }
   if(verification==='negative'){
