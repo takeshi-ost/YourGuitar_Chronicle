@@ -14,7 +14,7 @@ pip install -e ".[dev]"
 
 Reverb Token は2通りの方法で設定できます。
 
-1. Web Crawl領域の **Token設定** から入力して保存
+1. Web Crawl領域の **Reverb API Token入力欄** から入力して保存
 2. 従来どおり環境変数 `REVERB_API_TOKEN` を設定
 
 WebUIで保存したTokenを優先し、未設定の場合は環境変数を使用します。
@@ -56,9 +56,9 @@ ygc-web --no-browser
 ## GUIでできること
 
 Browser ConsoleはWeb Crawl、Guitar DB Management、User DB Managementの3領域で構成します。Product Detailの画像は固定の表示枠内で縦横比を維持して縮小・拡大します。User DB ManagementではID・表示名・種別・居住地でユーザーを検索し、選択したユーザーの登録内容、Claim数、所有ギターを確認できます。
-ヘッダーは固定表示し、各領域へのアンカーリンクを配置します。Product DetailもTop Pageと同様に右側へ固定して独立スクロールし、狭い画面ではギターDBの下へ移動します。Web Crawlの統計カードはコンパクト表示です。User DB Managementで操作用ユーザーを選ぶと、そのユーザーを選択した状態でTop Pageを新しいタブに開けます。
+ヘッダーは固定表示し、各領域へのアンカーリンクを配置します。Product DetailとUser Detailはそれぞれ一覧の右側に並び、ページとともにスクロールします。Product Detail内のSpecification / ChronicleはTop Pageと同様に開閉できます。Web Crawlの4指標は単一の帯にまとめ、Statisticsも枠を分けず一覧で表示します。User DB Managementで操作用ユーザーを選ぶと、そのユーザーを選択した状態でTop Pageを新しいタブに開けます。
 
-- Token設定
+- Token入力欄
   - Reverb Personal Access TokenをWebUIへ貼り付けて保存
   - 同じブラウザではWebUI再起動後も保持
   - SQLite DBやGitHubには保存しない
@@ -141,7 +141,7 @@ CLIで収集したデータはGUIからそのまま見えます。逆にGUIで�
 
 GUIはローカル利用を前提として、既定では `127.0.0.1` のみにbindします。
 
-WebUIで設定したReverb Tokenはブラウザの `localStorage` に保存され、APIリクエスト時だけローカルYGCサーバーへ送信されます。SQLite DBやGitHubには保存されません。ブラウザのlocalStorageは平文相当の保存領域なので、共有PCでは使用せず、必要に応じてWebUIの「Token設定 → 削除」で消してください。
+WebUIで設定したReverb Tokenはブラウザの `localStorage` に保存され、入力欄に現在値を表示し、APIリクエスト時にローカルYGCサーバーへ送信されます。環境変数から設定したToken値は画面に表示できません。SQLite DBやGitHubには保存されません。ブラウザのlocalStorageは平文相当の保存領域なので、共有PCでは使用せず、必要に応じてWeb Crawl領域の「削除」で消してください。
 
 環境変数 `REVERB_API_TOKEN` も引き続き利用できます。WebUI保存Tokenがある場合はそちらを優先します。
 
