@@ -3,7 +3,7 @@
 THEMES = (
     ("dark_default", "Dark Default"),
     ("light_default", "Light Default"),
-    ("sunburst_3ply", "Sunburst&3ply"),
+    ("sunburst_3ply", "Sunburst & White"),
     ("butterscotch_black", "Butterscotch & Black"),
     ("olympic_white_mint", "Olympic White & Mint"),
     ("surf_green_white", "Surf Green & White"),

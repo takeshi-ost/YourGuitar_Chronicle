@@ -6,7 +6,7 @@ User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は�
 | --- | --- | --- | --- |
 | Dark Default | 濃いグレー | 黒系 | 標準 |
 | Light Default | 明るいグレー | 淡いグレー | 標準 |
-| Sunburst&3ply | アルダー風サンバースト画像 | アイボリー | 白／黒／白 |
+| Sunburst & White | アルダー風サンバースト画像 | アイボリー | 白／黒／白 |
 | Butterscotch & Black | 透ける黄褐色の木目画像 | 黒 | 黒の1ply |
 | Olympic White & Mint | 温かい白の単色 | ミントグリーン | ミント／黒／ミント |
 | Surf Green & White | 緑の単色 | 白 | 白／黒／白 |
