@@ -48,3 +48,24 @@ def test_profile_uses_top_page_shell_and_chronicle_is_user_scoped(tmp_path, monk
         assert any(item["category"] == "Claim" and "Exhibition" in item["message"]
                    for item in other_entries)
         assert client.get("/api/users/999999/chronicle").status_code == 404
+
+
+def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "chronicle.db")
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    user_id = repository.create_user("Builder")
+    with TestClient(app) as client:
+        page = client.get("/user-view/edit")
+        assert page.status_code == 200
+        assert '<h2 id="profileHeading">User Profile</h2>' in page.text
+        assert 'id="newGuitarModal"' in page.text
+        assert 'Product Detail' not in page.text
+        assert 'data-field="residence"' in page.text
+        assert 'type="email"' in page.text
+        response = client.patch(f"/api/users/{user_id}", json={
+            "display_name": "Builder", "account_type": "builder",
+            "location_country": "JP", "location_region": "Tokyo",
+        })
+        assert response.status_code == 200
+        assert response.json()["user"]["account_type"] == "builder"

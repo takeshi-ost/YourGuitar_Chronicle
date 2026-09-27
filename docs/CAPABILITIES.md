@@ -241,6 +241,13 @@ Individual Snapshot再構築
 - User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
 - GuestにはMembers onlyを表示し、プロフィールのギターとUser Chronicleを表示しない
 
+## User Settings Page
+- /user-view/edit はTop Pageの固定ヘッダーとユーザー行を使う単一のUser Profile枠。Product Detailは配置しない
+- Display Name、数値User ID、Account Type、UserName、Email、Date of Birth、Residence（Country / City）、Bio、Avatar、Preferred Languageを並べ、将来のRequired / Optionalと固定・選択式の公開範囲を表示する。現時点ですべての入力は任意
+- Display Name、Account Type（User / Shop / Builder / Repairer / Organization）、Residence、Bio、Avatarは既存のユーザーデータに保存する。ギターの新規登録操作も同じページに残す
+- UserName、Email、Date of Birth、Preferred Languageは認証・非公開情報の保護・UI多言語化が未搭載のためダミー欄とし、保存しない
+- 公開範囲の初期値はDate of Birth / ResidenceがPrivate、Bio / AvatarがPublic。選択値はこのブラウザのローカルストレージのみに保存し、閲覧制限には未適用。Followersの判定も未搭載であり、他ブラウザやAPI経由の閲覧を制御しない
+
 
 ## Top Page / Guest Mode
 - 従来の /user-view は公開Top Pageとして扱う

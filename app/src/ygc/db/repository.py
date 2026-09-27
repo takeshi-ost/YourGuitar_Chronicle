@@ -2789,11 +2789,10 @@ class Repository:
             )
 
         if account not in (
-            "user",
-            "shop",
+            "user", "shop", "builder", "repairer", "organization",
         ):
             raise ValueError(
-                "account_type must be user or shop"
+                "account_type must be user, shop, builder, repairer, or organization"
             )
 
         with self.connect() as con:
