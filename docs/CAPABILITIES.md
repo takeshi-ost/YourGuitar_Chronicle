@@ -234,6 +234,7 @@ Individual Snapshot再構築
 - 左側のスクロール領域をUser Profile / Owned Guitars / Formerly Owned Guitars / Favorite Guitars / Activityの5枠に差し替える。各枠に公開設定を後付けできる識別子を持たせる
 - ProfileにはAvatar / Display Name / Account Type / Location / Member Since / Bio / Owned / Formerly Owned / Claimsを表示する。Followers / Followingは現時点で0の表示
 - Owned / Formerly OwnedはProduct Listと同じ列の表で表示し、行を選ぶと右側のProduct Detailが切り替わる
+- Owned / Formerly Ownedのリストは件数に応じて高さが変わり、上限370pxを超えたら枠内スクロールする。Favoriteも将来のリスト用に同じ高さ上限を持つ
 - Favorite Guitarsは未実装の案内を表示する
 - Activityは本人が投稿したactive Claimを入力日時の新しい順に表示し、選択するとProduct Detailへ移動する
 - 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
@@ -248,5 +249,5 @@ Individual Snapshot再構築
 - Guestが Add to Your Chronicle / Add Claim / Good / Bad など参加操作を行うとアカウント導線へ移動する
 - Guestには User Profileへのリンクを表示せず、Current Owner / Claim authorは名前のみ表示する
 - User ProfileはYGCメンバーのみ閲覧可能とし、Guestが直接URLへアクセスした場合はMembers only表示にする
-- Logged-in Userでは従来どおりNotifications / Messages / View Profile / Edit Your Chronicle等を表示する
+- Logged-in Userのヘッダーではユーザーアイコン・名前の領域から本人のUser Profileへ移動できる。Notifications / Messagesを表示し、Edit Your Chronicleは本人のUser Profile内に表示する
 - 開発中の互換性のためURLは当面 /user-view のまま維持する
