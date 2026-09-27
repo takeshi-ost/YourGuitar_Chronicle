@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS user_guitars (
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
  UNIQUE(user_id, individual_id)
 );
+CREATE TABLE IF NOT EXISTS user_favorites (
+ user_id INTEGER NOT NULL,
+ individual_id INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(user_id, individual_id),
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS media_assets (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -252,6 +252,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 @media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}#detail .accordion-header .toolbar{width:100%;justify-content:flex-start;margin:3px 0 0 32px}}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
+<style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
+<style>.profile-mode .profile-list-panel th:nth-child(2),.profile-mode .profile-list-panel td:nth-child(2){width:36px}.profile-mode .profile-list-panel th:nth-child(3),.profile-mode .profile-list-panel td:nth-child(3){width:120px}.profile-mode .profile-list-panel th:nth-child(4),.profile-mode .profile-list-panel td:nth-child(4){width:190px}.profile-mode .profile-list-panel th:nth-child(5),.profile-mode .profile-list-panel td:nth-child(5){width:120px}.profile-mode .profile-list-panel th:nth-child(6),.profile-mode .profile-list-panel td:nth-child(6){width:72px}.profile-mode .profile-list-panel th:nth-child(7),.profile-mode .profile-list-panel td:nth-child(7){width:145px}.profile-mode .profile-list-panel th:nth-child(8),.profile-mode .profile-list-panel td:nth-child(8){width:64px}</style>
 </head>
 <body>
 <div class="sticky-header">
@@ -294,6 +296,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <table>
         <thead><tr>
           <th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th>
+          <th class="favorite-cell" aria-label="Favorite">♡</th>
           <th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th>
           <th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th>
           <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
@@ -577,7 +580,9 @@ window.addEventListener('resize',syncHeaderHeight);
 syncHeaderHeight();
 const PROFILE_USER_ID=Number((location.pathname.match(/^\/users\/(\d+)$/)||[])[1]||0);
 let profileGuitars=[];
-const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1}};
+let profileFavorites=[];
+let favoriteIds=new Set();
+const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1},favorites:{key:'id',direction:1}};
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
@@ -585,6 +590,36 @@ async function jfetch(url,opt={}){
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.detail||r.statusText);
   return d;
+}
+function favoriteButton(id){
+  if(!activeUser||!activeUser.user)return '';
+  const selected=favoriteIds.has(Number(id));
+  return '<button type="button" class="favorite-button'+(selected?' is-favorite':'')+'" aria-label="'+(selected?'Remove from favorites':'Add to favorites')+'" aria-pressed="'+selected+'" title="'+(selected?'Remove from favorites':'Add to favorites')+'" onclick="toggleFavorite(event,'+Number(id)+')">'+(selected?'♥':'♡')+'</button>';
+}
+async function toggleFavorite(event,id){
+  event.stopPropagation();
+  if(!activeUser||!activeUser.user)return;
+  const wasFavorite=favoriteIds.has(Number(id));
+  try{
+    await jfetch('/api/users/'+activeUser.user.id+'/favorites/'+id,{method:wasFavorite?'DELETE':'PUT'});
+    if(wasFavorite)favoriteIds.delete(Number(id));else favoriteIds.add(Number(id));
+    renderIndividuals();
+    if(PROFILE_USER_ID){
+      if(Number(activeUser.user.id)===PROFILE_USER_ID){
+        const profile=await jfetch('/api/users/'+PROFILE_USER_ID+'/profile?viewer_id='+Number(activeUser.user.id));
+        profileFavorites=profile.favorites||[];
+      }
+      for(const section of ['owned','former','favorites'])renderProfileGuitars(section);
+    }
+    document.querySelectorAll('#detail .favorite-button').forEach(button=>{
+      if(Number(selectedIndividualId)!==Number(id))return;
+      const selected=favoriteIds.has(Number(id));
+      button.textContent=selected?'♥':'♡';button.classList.toggle('is-favorite',selected);
+      button.setAttribute('aria-pressed',String(selected));
+      button.setAttribute('aria-label',selected?'Remove from favorites':'Add to favorites');
+      button.title=button.getAttribute('aria-label');
+    });
+  }catch(e){alert('Favoriteの更新に失敗しました。\n'+e.message)}
 }
 function renderAccountHub(){
   const hub=document.getElementById('accountHub');
@@ -693,6 +728,7 @@ async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
+    favoriteIds=new Set();
     notificationData={unread_count:0,notifications:[]};
     renderAccountHub();
     renderNotificationPanel();
@@ -700,8 +736,10 @@ async function loadActiveUser(){
   }
   try{
     activeUser=await jfetch('/api/users/'+id);
+    favoriteIds=new Set(await jfetch('/api/users/'+id+'/favorites'));
   }catch(e){
     activeUser=null;
+    favoriteIds=new Set();
     localStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
@@ -785,7 +823,7 @@ function renderIndividuals(){
   });
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
-    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
+    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td class="favorite-cell">'+favoriteButton(x.id)+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
   ).join('');
 }
 
@@ -1236,7 +1274,7 @@ async function showIndividual(id){
     if(detail)detail.scrollTop=0;
   }
   if(typeof renderIndividuals==='function')renderIndividuals();
-  if(PROFILE_USER_ID){renderProfileGuitars('owned');renderProfileGuitars('former')}
+  if(PROFILE_USER_ID){for(const section of ['owned','former','favorites'])renderProfileGuitars(section)}
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
@@ -1295,7 +1333,7 @@ async function showIndividual(id){
       }
       return ak.localeCompare(bk);
     });
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
+  out+='<div class="detail-header"><div class="detail-title-row"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+favoriteButton(i.id)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
     ownershipControlsHtml(i.id)+'</div>';
@@ -1974,10 +2012,10 @@ async function loadTopPageCharts(){
 }
 
 function profileGuitarTable(section,title){
-  const columns=[['id','ID'],['manufacturer','Maker'],['model','Model'],['finish','Finish'],['year','Year'],['serial_number','Serial'],['claim_count','Claims']];
+  const columns=[['id','ID'],['favorite','♡'],['manufacturer','Maker'],['model','Model'],['finish','Finish'],['year','Year'],['serial_number','Serial'],['claim_count','Claims']];
   return '<section class="panel profile-panel profile-list-panel page-section" data-profile-section="'+section+'" id="profile-'+section+'">'+
     '<div class="toolbar"><h2>'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
-    '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
+    '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>key==='favorite'?'<th class="favorite-cell" aria-label="Favorite">'+label+'</th>':'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
     '<tbody id="profileRows-'+section+'"></tbody></table></div></section>';
 }
 function setProfileSort(section,key){
@@ -1993,7 +2031,7 @@ function renderProfileGuitars(section){
   const filter=document.getElementById('profileFilter-'+section).value.trim().toLowerCase();
   const status=section==='owned'?'current_owner':'former_owner';
   const state=profileSort[section];
-  const rows=profileGuitars.filter(g=>g.ownership_status===status &&
+  const rows=(section==='favorites'?profileFavorites:profileGuitars.filter(g=>g.ownership_status===status)).filter(g=>
     [g.manufacturer,g.model,g.finish,g.year,g.serial_number].join(' ').toLowerCase().includes(filter)).sort((a,b)=>{
       const av=normalizeSortValue(state.key==='id'?a.individual_id:a[state.key],state.key);
       const bv=normalizeSortValue(state.key==='id'?b.individual_id:b[state.key],state.key);
@@ -2007,8 +2045,8 @@ function renderProfileGuitars(section){
   }
   root.innerHTML=rows.length?rows.map(g=>
     '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+')">'+
-      '<td>'+Number(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
-  ).join(''):'<tr><td colspan="7" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
+      '<td>'+Number(g.individual_id)+'</td><td class="favorite-cell">'+favoriteButton(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
+  ).join(''):'<tr><td colspan="8" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
 }
 function renderUserChronicle(items){
   const root=document.getElementById('userChronicleList');
@@ -2035,7 +2073,7 @@ function setupProfileShell(){
     '<section class="panel profile-panel page-section" data-profile-section="user" id="profile-user"><h2>User Profile</h2><div id="profileHero" class="sub">Loading...</div></section>'+
     profileGuitarTable('owned','Owned Guitars')+
     profileGuitarTable('former','Formerly Owned Guitars')+
-    '<section class="panel profile-panel page-section" data-profile-section="favorites" id="profile-favorites"><h2>Favorite Guitars</h2><div class="profile-placeholder">Favorite Guitars is coming soon.</div></section>'+
+    profileGuitarTable('favorites','Favorite Guitars')+
     '<section class="panel profile-panel page-section" data-profile-section="chronicle" id="profile-chronicle"><h2>User Chronicle</h2><div class="profile-activity-list" id="userChronicleList"><div class="sub">Loading...</div></div></section>';
   for(const selector of ['#statistics','#world-map','.page-bottom-space']){
     const el=document.querySelector(selector);
@@ -2058,6 +2096,7 @@ async function loadProfilePage(){
     ]);
     const u=data.user, summary=data.summary||{};
     profileGuitars=data.guitars||[];
+    profileFavorites=data.favorites||[];
     const own=Number(activeUser.user.id)===Number(u.id);
     const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
     const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
@@ -2071,10 +2110,11 @@ async function loadProfilePage(){
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');
+    renderProfileGuitars('favorites');
     renderUserChronicle(chronicle);
     const requested=Number(new URLSearchParams(location.search).get('individual_id')||0);
     const signature=profileGuitars.find(g=>g.ownership_status==='current_owner'&&Number(g.individual_id)===Number(u.signature_individual_id));
-    const selected=profileGuitars.find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0];
+    const selected=[...profileGuitars,...profileFavorites].find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0]||profileFavorites[0];
     if(selected)await showIndividual(Number(selected.individual_id));
   }catch(e){
     hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';

@@ -5,6 +5,34 @@ from ygc.db.repository import Repository
 from ygc.web import app
 
 
+def test_favorites_toggle_and_profile_excludes_owned_guitars(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "favorites.db")
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    owner = repository.create_user("Owner")
+    viewer = repository.create_user("Viewer")
+    owned, *_ = repository.create_initial_listing_claim(
+        owner, manufacturer="Fender", model="Mustang",
+        serial_number="FAVOWN01", media_storage_path="media/owned.jpg",
+    )
+    other, *_ = repository.create_initial_listing_claim(
+        viewer, manufacturer="Gibson", model="SG",
+        serial_number="FAVOTHER01", media_storage_path="media/other.jpg",
+    )
+    with TestClient(app) as client:
+        for guitar in (owned, other):
+            assert client.put(f"/api/users/{owner}/favorites/{guitar}").json() == {"favorite": True}
+        assert set(client.get(f"/api/users/{owner}/favorites").json()) == {owned, other}
+        profile = client.get(f"/api/users/{owner}/profile?viewer_id={viewer}").json()
+        assert [g["individual_id"] for g in profile["favorites"]] == [other]
+        assert [g["individual_id"] for g in profile["guitars"]] == [owned]
+        assert client.delete(f"/api/users/{owner}/favorites/{other}").json() == {"favorite": False}
+        assert client.get(f"/api/users/{owner}/profile?viewer_id={viewer}").json()["favorites"] == []
+        assert client.put(f"/api/users/{owner}/favorites/999999").status_code == 404
+    repository.init_db()
+    assert [g["individual_id"] for g in repository.get_user_favorites(owner)] == [owned]
+
+
 def test_profile_uses_top_page_shell_and_chronicle_is_user_scoped(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "chronicle.db")
     repository = Repository(config.DB_PATH)

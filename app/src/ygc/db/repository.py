@@ -2519,6 +2519,33 @@ class Repository:
                 guitars,
             )
 
+    def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(con.execute("""
+                SELECT f.individual_id, f.created_at, i.manufacturer, i.model,
+                       i.finish, i.year, i.serial_number,
+                       (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id
+                        AND c.status='active') AS claim_count
+                FROM user_favorites f
+                JOIN individuals i ON i.id=f.individual_id
+                WHERE f.user_id=?
+                ORDER BY f.created_at DESC, f.individual_id DESC
+            """, (user_id,)))
+
+    def set_user_favorite(self, user_id: int, individual_id: int, favorite: bool) -> bool:
+        with self.connect() as con:
+            user = con.execute("SELECT account_type, ban_status FROM users WHERE id=?", (user_id,)).fetchone()
+            if not user or user['account_type'] == 'source' or user['ban_status'] == 'ban':
+                raise ValueError("User not available")
+            if not con.execute("SELECT 1 FROM individuals WHERE id=?", (individual_id,)).fetchone():
+                raise ValueError("Guitar not found")
+            if favorite:
+                con.execute("INSERT OR IGNORE INTO user_favorites (user_id, individual_id, created_at) VALUES (?,?,?)",
+                            (user_id, individual_id, utcnow()))
+            else:
+                con.execute("DELETE FROM user_favorites WHERE user_id=? AND individual_id=?", (user_id, individual_id))
+            return favorite
+
     def preview_silent_profile(self, user_id: int, individual_id: int | None = None) -> dict:
         """Show a silent user's own Claim-derived state without persisting it."""
         with self.connect() as con:
@@ -6690,6 +6717,8 @@ class Repository:
                     for table in ("observations", "claims", "media_assets", "notifications"):
                         con.execute(f"UPDATE {table} SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
                     con.execute("UPDATE OR IGNORE user_guitars SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("INSERT OR IGNORE INTO user_favorites (user_id,individual_id,created_at) "
+                                "SELECT user_id,?,created_at FROM user_favorites WHERE individual_id=?", (keep_id, source_id))
                     con.execute("UPDATE users SET signature_individual_id=? WHERE signature_individual_id=?", (keep_id, source_id))
                 else:
                     con.execute("DELETE FROM observations WHERE individual_id=?", (source_id,))

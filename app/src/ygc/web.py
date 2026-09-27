@@ -2986,6 +2986,10 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
         ownership = repository.preview_silent_profile(user_id)
         guitars = [{**_row_dict(g), "ownership_status": ownership.get(g["individual_id"], g["ownership_status"])}
                    for g in guitars]
+    owned_ids = {int(g['individual_id']) for g in guitars}
+    favorites = ([] if user['ban_status'] == 'silent_ban' and not own else
+                 [_row_dict(g) for g in repository.get_user_favorites(user_id)
+                  if int(g['individual_id']) not in owned_ids])
     member = own or (viewer_id is not None and
                      repository.get_user(viewer_id)[0] is not None)
 
@@ -3006,12 +3010,37 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
     return {
         "user": public_user,
         "guitars": [_row_dict(row) for row in guitars],
+        "favorites": favorites,
         "summary": ({**repository.get_user_summary(user_id, viewer_id),
                      "owned_count": sum(g["ownership_status"] == 'current_owner' for g in guitars),
                      "former_count": sum(g["ownership_status"] == 'former_owner' for g in guitars)}
                     if user["ban_status"] == 'silent_ban'
                     else repository.get_user_summary(user_id, viewer_id)),
     }
+
+
+@app.get("/api/users/{user_id}/favorites")
+def api_user_favorites(user_id: int) -> list[int]:
+    user, _ = repo().get_user(user_id)
+    if not user or user['account_type'] == 'source' or user['ban_status'] == 'ban':
+        raise HTTPException(status_code=404, detail="User not found")
+    return [int(row['individual_id']) for row in repo().get_user_favorites(user_id)]
+
+
+@app.put("/api/users/{user_id}/favorites/{individual_id}")
+def api_add_user_favorite(user_id: int, individual_id: int) -> dict[str, bool]:
+    try:
+        return {"favorite": repo().set_user_favorite(user_id, individual_id, True)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/users/{user_id}/favorites/{individual_id}")
+def api_remove_user_favorite(user_id: int, individual_id: int) -> dict[str, bool]:
+    try:
+        return {"favorite": repo().set_user_favorite(user_id, individual_id, False)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/users/{user_id}/chronicle")
