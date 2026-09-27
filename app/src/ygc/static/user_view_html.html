@@ -218,6 +218,36 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 @media(max-width:650px){.profile-chronicle-row{grid-template-columns:55px 14px 108px minmax(0,1fr);gap:4px}.profile-chronicle-time{font-size:9px;overflow:hidden;text-overflow:ellipsis}}
 .profile-mode [hidden]{display:none!important}
 @media(max-width:650px){.profile-mode .profile-hero{grid-template-columns:70px minmax(0,1fr)}.profile-mode .profile-avatar{width:70px;height:70px}.profile-mode .profile-actions{grid-column:1/-1}}
+
+/* Product Detail: consistent alignment and control heights across its rows. */
+.detail-panel #detail{min-width:0}
+#detail .detail-image,#detail .detail-gallery,#detail .detail-image-link{margin-left:auto;margin-right:auto}
+#detail .detail-image-link{width:75%}#detail .detail-image-link .detail-image{width:100%}
+#detail .detail-gallery{grid-template-columns:28px minmax(0,1fr) 28px}
+#detail .detail-gallery-nav{width:28px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+#detail .detail-source{text-align:center;overflow-wrap:anywhere}
+#detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}
+#detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}
+#detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}
+#detail .catalog-spec{font-size:12px;line-height:1.55}
+#detail .catalog-spec-row{padding:3px 0}
+#detail .catalog-spec-label{text-align:left}
+#detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}
+#detail .detail-header>.toolbar button,#detail .detail-header>.toolbar .status{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+#detail .accordion-header{min-width:0;flex-wrap:wrap;min-height:34px}
+#detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
+#detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
+#detail .accordion-header .toolbar select{width:auto;max-width:100%;border:1px solid #343b43;border-radius:7px;background:#111418;color:var(--text)}
+#detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}
+#detail .claim-badge{min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:4px 8px}
+#detail .claim-response-select{height:26px;min-height:26px;max-width:100%;padding:3px 6px;line-height:1.2}
+#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}
+#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}
+#detail .claim-votes{align-items:center;flex:0 0 auto}
+#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
+#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}
+#detail .claim-footer-meta a{color:inherit}
+@media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}#detail .accordion-header .toolbar{width:100%;justify-content:flex-start;margin:3px 0 0 32px}}
 </style>
 </head>
 <body>
