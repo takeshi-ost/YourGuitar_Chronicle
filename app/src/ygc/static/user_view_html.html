@@ -956,7 +956,7 @@ function claimHeaderHtml(c,type,eventDate){
   );
   const isAutomationAcquire=(
     c.claim_type==='ownership'
-    && String(c.ownership_source||'')==='automation'
+    && ['automation','merged_listing'].includes(String(c.ownership_source||''))
   );
   if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire)){
     const current=String(c.verification_status||'unverified').toLowerCase();
@@ -984,7 +984,7 @@ function claimCardFull(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.ownership_source==='automation'?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
+    const owner=String(['automation','merged_listing'].includes(c.ownership_source)?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')

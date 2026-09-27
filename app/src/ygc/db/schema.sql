@@ -299,3 +299,11 @@ CREATE TABLE IF NOT EXISTS claim_admin_actions (
  actor TEXT NOT NULL,
  created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS individual_resolution_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ source_id INTEGER NOT NULL,
+ keep_id INTEGER NOT NULL,
+ action TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);

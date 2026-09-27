@@ -26,7 +26,7 @@ def test_external_listing_metrics_include_acquire_and_exclude_manual_listing(tmp
     assert first["individual_id"] == second["individual_id"]
     assert repo.stats()["individuals"] == 2
     assert repo.stats()["serial_observations"] == 2
-    assert repo.stats()["repeated_individuals"] == 1
+    assert repo.stats()["repeated_individuals"] == 0
     add_listing(repo, "2")
     assert repo.stats()["serial_observations"] == 2
     with repo.connect() as con:
@@ -59,7 +59,7 @@ def test_pending_acquire_endpoint_total_paging_and_approval(tmp_path, monkeypatc
         stats = client.get('/api/status').json()["stats"]
         assert stats["individuals"] == 1
         assert stats["serial_observations"] == 2
-        assert stats["repeated_individuals"] == 1
+        assert stats["repeated_individuals"] == 0
         with repo.connect() as con:
             con.execute("UPDATE claims SET verification_status='positive' WHERE id=?",
                         (first["claim_id"],))

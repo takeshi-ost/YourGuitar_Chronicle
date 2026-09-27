@@ -1070,7 +1070,7 @@ class Repository:
             claim_type = str(
                 claim["claim_type"]
             )
-            if claim_type == "listing":
+            if claim_type == "listing" or claim["ownership_source"] == "merged_listing":
                 items = {
                     str(row["field_name"]): (
                         str(row["value_text"]).strip()
@@ -1135,6 +1135,9 @@ class Repository:
                     items.get("source_url")
                     or None
                 )
+                if claim["ownership_source"] == "merged_listing":
+                    state["location_country"] = items.get("location_country")
+                    state["location_region"] = items.get("location_region")
             elif claim_type == "ownership":
                 if claim["ownership_source"] == "automation":
                     if claim["ownership_kind"] == "release":
@@ -5883,7 +5886,7 @@ class Repository:
             )
             is_automation_acquire = (
                 claim["claim_type"] == "ownership"
-                and claim["ownership_source"] == "automation"
+                and claim["ownership_source"] in ("automation", "merged_listing")
             )
             if (
                 claim["claim_type"] in (
@@ -6421,23 +6424,123 @@ class Repository:
         where = ("c.claim_type='ownership' AND c.ownership_kind='acquire' "
                  "AND c.status='active' AND c.verification_status='unverified'")
         with self.connect() as con:
-            total = con.execute("SELECT COUNT(*) FROM claims c WHERE " + where).fetchone()[0]
             rows = con.execute(
-                "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, "
+                "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, c.ownership_pair_id, "
                 "COALESCE(proposed.display_name, c.value_text) AS proposed_owner, "
                 "c.ownership_source, c.occurred_at, c.created_at, "
                 "u.display_name AS author_name, i.manufacturer, i.model, i.serial_number, "
-                "i.current_owner_name, i.current_owner_user_id, "
+                "i.current_owner_name, i.current_owner_user_id, i.current_owner_type, "
                 "o.source_site, o.source_listing_id "
                 "FROM claims c JOIN individuals i ON i.id=c.individual_id "
                 "JOIN users u ON u.id=c.author_user_id "
                 "LEFT JOIN users proposed ON CAST(proposed.id AS TEXT)=c.value_text "
                 "AND COALESCE(c.ownership_source, 'user') <> 'automation' "
                 "LEFT JOIN observations o ON o.id=c.observation_id WHERE " + where +
-                " ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?", (limit, offset),
+                " ORDER BY c.created_at DESC, c.id DESC",
             ).fetchall()
-        return {"total": total, "items": [dict(row) for row in rows],
+            eligible = []
+            def owner_key(row):
+                uid = row["current_owner_user_id"]
+                if uid is not None:
+                    return ("user", str(uid))
+                return ("external", row["current_owner_name"] or "Unknown",
+                        row["current_owner_type"] or "unknown")
+            for row in rows:
+                # Use exactly the same chronological reducer and paired approval
+                # as moderation. Roll back ALL snapshot/user_guitars changes.
+                con.execute("SAVEPOINT acquire_preview")
+                try:
+                    if row["ownership_pair_id"]:
+                        con.execute("UPDATE claims SET verification_status='positive' "
+                                    "WHERE individual_id=? AND ownership_pair_id=?",
+                                    (row["individual_id"], row["ownership_pair_id"]))
+                    else:
+                        con.execute("UPDATE claims SET verification_status='positive' WHERE id=?",
+                                    (row["claim_id"],))
+                    snapshot = self._rebuild_individual_snapshot_in_connection(con, row["individual_id"])
+                    if owner_key(snapshot) != owner_key(row):
+                        item = dict(row)
+                        item["proposed_owner"] = snapshot["current_owner_name"] or "Unknown"
+                        eligible.append(item)
+                finally:
+                    con.execute("ROLLBACK TO acquire_preview")
+                    con.execute("RELEASE acquire_preview")
+        return {"total": len(eligible), "items": eligible[offset:offset + limit],
                 "limit": limit, "offset": offset}
+
+    @staticmethod
+    def _repeated_groups(con) -> list[dict]:
+        rows = con.execute("""
+            SELECT i.*,
+              (SELECT COUNT(*) FROM observations o WHERE o.individual_id=i.id) AS listing_count,
+              (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id) AS claim_count
+            FROM individuals i JOIN (
+                SELECT normalized_manufacturer, normalized_serial FROM individuals
+                WHERE NULLIF(TRIM(normalized_manufacturer),'') IS NOT NULL
+                  AND NULLIF(TRIM(normalized_serial),'') IS NOT NULL
+                GROUP BY normalized_manufacturer, normalized_serial HAVING COUNT(*)>1
+            ) d USING(normalized_manufacturer, normalized_serial)
+            ORDER BY normalized_manufacturer, normalized_serial, i.id
+        """).fetchall()
+        groups = {}
+        for row in rows:
+            key = (row["normalized_manufacturer"], row["normalized_serial"])
+            group = groups.setdefault(key, {"manufacturer": key[0], "serial": key[1], "items": []})
+            group["items"].append(dict(row))
+        return list(groups.values())
+
+    def repeated_groups(self) -> dict:
+        with self.connect() as con:
+            groups = self._repeated_groups(con)
+        return {"total": len(groups), "items": groups}
+
+    def resolve_repeated(self, keep_id: int, member_ids: list[int], action: str) -> dict:
+        if action not in ("merge", "delete"):
+            raise ValueError("Invalid resolution action")
+        members = set(member_ids)
+        if len(members) != len(member_ids) or len(members) < 2 or keep_id not in members:
+            raise ValueError("Select one survivor and at least two distinct members")
+        with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            keeper = con.execute("SELECT * FROM individuals WHERE id=?", (keep_id,)).fetchone()
+            if not keeper or not keeper["normalized_manufacturer"] or not keeper["normalized_serial"]:
+                raise ValueError("Duplicate group no longer exists; refresh the list")
+            actual = {r[0] for r in con.execute(
+                "SELECT id FROM individuals WHERE normalized_manufacturer=? AND normalized_serial=?",
+                (keeper["normalized_manufacturer"], keeper["normalized_serial"]))}
+            if actual != members:
+                raise ValueError("Duplicate group changed; refresh before resolving")
+            for source_id in sorted(members - {keep_id}):
+                if action == "merge":
+                    incoming = con.execute("SELECT * FROM claims WHERE individual_id=?", (source_id,)).fetchall()
+                    for claim in incoming:
+                        con.execute("INSERT INTO claim_admin_actions "
+                                    "(claim_id,individual_id,action,previous_verification,actor,created_at) "
+                                    "VALUES (?,?,?,?, 'local-console-admin',?)",
+                                    (claim["id"], source_id, f"merge_into:{keep_id}", claim["verification_status"], utcnow()))
+                        if claim["claim_type"] == "listing":
+                            items = {r[0]: r[1] for r in con.execute(
+                                "SELECT field_name,value_text FROM claim_listing_items WHERE claim_id=?", (claim["id"],))}
+                            con.execute("UPDATE claims SET claim_type='ownership',ownership_kind='acquire', "
+                                        "ownership_source='merged_listing',value_text=? WHERE id=?",
+                                        (items.get("owner_name") or "Unknown", claim["id"]))
+                        if claim["claim_type"] in ("listing", "ownership", "identity_correction", "specification"):
+                            con.execute("UPDATE claims SET verification_status=CASE WHEN verification_status='positive' "
+                                        "THEN 'unverified' ELSE verification_status END WHERE id=?", (claim["id"],))
+                    for table in ("observations", "claims", "media_assets", "notifications"):
+                        con.execute(f"UPDATE {table} SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("UPDATE OR IGNORE user_guitars SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("UPDATE users SET signature_individual_id=? WHERE signature_individual_id=?", (keep_id, source_id))
+                else:
+                    con.execute("DELETE FROM observations WHERE individual_id=?", (source_id,))
+                    con.execute("UPDATE users SET signature_individual_id=NULL WHERE signature_individual_id=?", (source_id,))
+                con.execute("INSERT INTO individual_resolution_actions "
+                            "(source_id,keep_id,action,created_at) VALUES (?,?,?,?)",
+                            (source_id, keep_id, action, utcnow()))
+                con.execute("DELETE FROM individuals WHERE id=?", (source_id,))
+            if action == "merge":
+                self._rebuild_individual_snapshot_in_connection(con, keep_id)
+        return {"individual_id": keep_id, "resolved": len(members)-1, "action": action}
 
     def stats(
         self,
@@ -6480,7 +6583,11 @@ class Repository:
                     (SELECT COUNT(*) FROM repeated)
                 """
             ).fetchone()
-            serial, repeated = listing_counts
+            serial, relisted = listing_counts
+            repeated = con.execute("SELECT COUNT(*) FROM (SELECT 1 FROM individuals "
+                                   "WHERE NULLIF(TRIM(normalized_manufacturer),'') IS NOT NULL "
+                                   "AND NULLIF(TRIM(normalized_serial),'') IS NOT NULL "
+                                   "GROUP BY normalized_manufacturer, normalized_serial HAVING COUNT(*)>1)").fetchone()[0]
             individuals = con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0]
 
             max_observations = con.execute(

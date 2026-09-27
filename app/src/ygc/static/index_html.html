@@ -125,7 +125,7 @@ Gibson ES-335</textarea>
 </div>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Unverified Acquire <span id="unverifiedAcquireTotal" class="sub"></span></h2><button class="secondary" onclick="loadUnverifiedAcquires(0)">更新</button></div>
-<div class="sub">有効なAcquire Claimのうち、Owner VerificationがUnverifiedのもの。ユーザーとAutomationの両方を含みます。行をクリックするとProduct Detailを開きます。</div>
+<div class="sub">承認すると現在の所有者が変わるUnverified Acquireのみを表示します。過去の履歴や同じ所有者へのAcquireは除外します。行をクリックするとProduct Detailを開きます。</div>
 <div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
 <div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">前へ</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">次へ</button></div>
 </div>
@@ -147,6 +147,11 @@ Gibson ES-335</textarea>
 </section>
 </main>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
+<dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
+<div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="document.getElementById('repeatedDialog').close()">Close</button></div>
+<p class="sub">メーカー・シリアルが一致する重複候補です。同一個体か確認し、残す個体を選択してください。Mergeは記録を引き継ぎ、統合元の状態変更Claimを確認待ちにします。Deleteは選択した個体以外の関連記録も削除します。</p>
+<div id="repeatedGroups" aria-live="polite"></div>
+</dialog>
 <script>
 const CONSOLE_ADMIN_TOKEN="";
 let individuals=[];
@@ -164,8 +169,39 @@ function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登録とクロール登録の両方を含みます。'),statCard('Serial Listings',s.serial_observations,'シリアルのある個体に紐付く外部Listing数。同じサイト・Listing IDは重複除外。Acquireによる再出品と所有者確認待ちも含みます。'),statCard('Repeated',s.repeated_individuals,'異なる外部Listingが2件以上紐付く個体数。有効なListing・Acquire Claimを持つ掲載記録を集計します。')
+statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登録とクロール登録の両方を含みます。'),statCard('Serial Listings',s.serial_observations,'シリアルのある個体に紐付く外部Listing数。同じサイト・Listing IDは重複除外。Acquireによる再出品と所有者確認待ちも含みます。'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'メーカーとシリアルが一致する複数のDB個体の組数。クリックして確認・統合・削除。')+'</button>'
 ].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'環境変数で設定済み（値は表示不可）':'Tokenを入力'}}
+let repeatedGroups=[];
+let repeatedBusy=false;
+async function openRepeated(){
+  const dialog=document.getElementById('repeatedDialog');
+  if(!dialog.open)dialog.showModal();
+  const container=document.getElementById('repeatedGroups');
+  container.textContent='Loading…';
+  try{
+    const d=await jfetch('/api/admin/repeated',{headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
+    repeatedGroups=d.items;
+    container.innerHTML=d.items.length?d.items.map((g,n)=>'<section class="panel"><h3>'+esc(g.manufacturer)+' / '+esc(g.serial)+'</h3><div style="overflow:auto"><table><thead><tr><th>残す</th><th>ID</th><th>Maker / Model</th><th>Year / Serial</th><th>Owner</th><th>Listings / Claims</th></tr></thead><tbody>'+g.items.map(i=>'<tr><td><input type="radio" name="repeated-'+n+'" value="'+Number(i.id)+'" aria-label="個体 '+Number(i.id)+' を残す"></td><td><button class="secondary" onclick="document.getElementById(\'repeatedDialog\').close();showIndividual('+Number(i.id)+')">#'+Number(i.id)+'</button></td><td>'+esc(i.manufacturer)+' / '+esc(i.model)+'</td><td>'+esc(i.year)+' / '+esc(i.serial_number)+'</td><td>'+esc(i.current_owner_name||'Unknown')+'</td><td>'+Number(i.listing_count)+' / '+Number(i.claim_count)+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button onclick="resolveRepeated('+n+',\'merge\')">Merge</button><button class="danger" onclick="resolveRepeated('+n+',\'delete\')">Delete</button></div></section>').join(''):'重複候補はありません。';
+  }catch(e){container.textContent=e.message}
+}
+async function resolveRepeated(index,action){
+  if(repeatedBusy)return;
+  const selected=document.querySelector('input[name="repeated-'+index+'"]:checked');
+  if(!selected){alert('残す個体を選択してください。');return}
+  const keepId=Number(selected.value), ids=repeatedGroups[index].items.map(i=>Number(i.id));
+  const removed=ids.filter(id=>id!==keepId);
+  if(!confirm('#'+keepId+' を残し、#'+removed.join(', #')+(action==='merge'?' の記録を統合します。所有者などを変更する統合元Claimは確認待ちになります。':' とその関連記録を完全に削除します。この操作は元に戻せません。')+' 続行しますか？'))return;
+  if(action==='delete'&&prompt('確認のため DELETE と入力してください。')!=='DELETE')return;
+  repeatedBusy=true;
+  document.querySelectorAll('#repeatedGroups button').forEach(b=>b.disabled=true);
+  try{
+    await jfetch('/api/admin/repeated/resolve',{method:'POST',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify({keep_id:keepId,member_ids:ids,action})});
+    await loadIndividuals();await loadStatistics();
+    await showIndividual(keepId);
+    if(activeUser&&activeUser.user)await loadActiveUser();
+  }catch(e){alert(e.message)}
+  finally{repeatedBusy=false;await openRepeated()}
+}
 async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);document.getElementById('tokenInput').blur();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);const input=document.getElementById('tokenInput');input.value='';input.blur();await refreshStatus()}
 function exportDatabase(){window.location.href='/api/export-db'}
@@ -444,7 +480,7 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.ownership_source==='automation'?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
+    const owner=String(['automation','merged_listing'].includes(c.ownership_source)?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')

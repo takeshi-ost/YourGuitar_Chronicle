@@ -2257,6 +2257,27 @@ def api_delete_claim(
     return result
 
 
+class ResolveRepeatedRequest(BaseModel):
+    keep_id: int
+    member_ids: list[int]
+    action: str = Field(pattern="^(merge|delete)$")
+
+
+@app.get("/api/admin/repeated")
+def api_repeated(request: Request) -> dict:
+    _require_console_admin(request)
+    return repo().repeated_groups()
+
+
+@app.post("/api/admin/repeated/resolve")
+def api_resolve_repeated(body: ResolveRepeatedRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        return repo().resolve_repeated(body.keep_id, body.member_ids, body.action)
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 class AdminClaimRequest(BaseModel):
     action: str = Field(pattern="^(positive|negative|unverified|delete)$")
     confirm_individual_delete: bool = False
