@@ -213,8 +213,8 @@ Individual Snapshot再構築
 
 - User View上部のアカウントハブは本人向けのホームヘッダーとして表示する
 - 実データ表示: Avatar / Display Name / You / Location / Owned / Formerly Owned / Claims
-- Notifications / Messages / View Profile は将来機能へのダミー入口として表示し、現時点では無反応
-- Edit Your Chronicle は既存の /user-view/edit への実動入口
+- Notificationsは稼働中、Messagesは将来機能のダミー入口。ユーザーアイコンと名前から本人のProfileへ移動できる
+- User Settingsは本人のUser Profileから既存の /user-view/edit へ移動する
 
 
 ## In-app Notifications
@@ -231,15 +231,15 @@ Individual Snapshot再構築
 
 ## User Profile Page
 - /users/{user_id} はTop Pageの固定ヘッダー・本人用アカウント行・右側Product Detailを共用する
-- 左側のスクロール領域をUser Profile / Owned Guitars / Formerly Owned Guitars / Favorite Guitars / Activityの5枠に差し替える。各枠に公開設定を後付けできる識別子を持たせる
+- 左側のスクロール領域をUser Profile / Owned Guitars / Formerly Owned Guitars / Favorite Guitars / User Chronicleの5枠に差し替える。各枠に公開設定を後付けできる識別子を持たせる
 - ProfileにはAvatar / Display Name / Account Type / Location / Member Since / Bio / Owned / Formerly Owned / Claimsを表示する。Followers / Followingは現時点で0の表示
 - Owned / Formerly OwnedはProduct Listと同じ列の表で表示し、行を選ぶと右側のProduct Detailが切り替わる
 - Owned / Formerly Ownedのリストは件数に応じて高さが変わり、上限370pxを超えたら枠内スクロールする。Favoriteも将来のリスト用に同じ高さ上限を持つ
 - Favorite Guitarsは未実装の案内を表示する
-- Activityは本人が投稿したactive Claimを入力日時の新しい順に表示し、選択するとProduct Detailへ移動する
-- 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
+- User ChronicleはUserの登録・最終更新、Productの追加、active Claimの投稿、Vote / Responseを発生・更新日時の新しい順に表示する。User / Social / Product / Claim / Otherのカテゴリタグを持つ1行表示とし、対象Productがある行からProduct Detailへ移動する。Otherは将来の出来事に備えたカテゴリ
+- 本人閲覧時は You 表示と User Settings への入口を表示する
 - User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
-- GuestにはMembers onlyを表示し、プロフィールのギターとActivityを表示しない
+- GuestにはMembers onlyを表示し、プロフィールのギターとUser Chronicleを表示しない
 
 
 ## Top Page / Guest Mode
@@ -249,5 +249,5 @@ Individual Snapshot再構築
 - Guestが Add to Your Chronicle / Add Claim / Good / Bad など参加操作を行うとアカウント導線へ移動する
 - Guestには User Profileへのリンクを表示せず、Current Owner / Claim authorは名前のみ表示する
 - User ProfileはYGCメンバーのみ閲覧可能とし、Guestが直接URLへアクセスした場合はMembers only表示にする
-- Logged-in Userのヘッダーではユーザーアイコン・名前の領域から本人のUser Profileへ移動できる。Notifications / Messagesを表示し、Edit Your Chronicleは本人のUser Profile内に表示する
+- Logged-in Userのヘッダーではユーザーアイコン・名前の領域から本人のUser Profileへ移動できる。Notifications / Messagesを表示し、User Settingsは本人のUser Profile内に表示する
 - 開発中の互換性のためURLは当面 /user-view のまま維持する

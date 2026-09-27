@@ -2383,23 +2383,98 @@ class Repository:
                 guitars,
             )
 
-    def list_user_activity(self, user_id: int, limit: int = 100) -> list[sqlite3.Row]:
+    def list_user_chronicle(self, user_id: int, limit: int = 100) -> list[dict[str, Any]]:
+        """Visible user milestones and actions, sorted by the time they happened."""
+        entries: list[dict[str, Any]] = []
+
+        def add(category: str, when: str | None, subject: str, message: str,
+                individual_id: int | None = None) -> None:
+            if when:
+                entries.append({
+                    "category": category, "event_at": when,
+                    "subject": subject, "message": message,
+                    "individual_id": individual_id,
+                })
+
+        def product_name(row: sqlite3.Row) -> str:
+            return " ".join(part for part in (row["manufacturer"], row["model"]) if part) \
+                or f"Product #{row['individual_id']}"
+
         with self.connect() as con:
-            return list(con.execute(
-                """
-                SELECT c.id, c.individual_id, c.claim_type,
-                       c.ownership_kind, c.specification_kind, c.value_text,
-                       c.body, c.occurred_at, c.created_at,
-                       i.manufacturer, i.model, i.year, i.finish,
-                       i.serial_number
-                FROM claims c
-                JOIN individuals i ON i.id = c.individual_id
+            user = con.execute(
+                "SELECT display_name, created_at, updated_at FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            if not user:
+                return []
+            name = str(user["display_name"])
+            add("User", user["created_at"], name, "joined Your Guitar Chronicle.")
+            if user["updated_at"] > user["created_at"]:
+                add("User", user["updated_at"], name, "updated their profile.")
+
+            products = "JOIN individuals i ON i.id = c.individual_id"
+            claims = con.execute(f"""
+                SELECT c.id, c.individual_id, c.claim_type, c.ownership_kind,
+                       c.specification_kind, c.value_text, c.created_at,
+                       i.manufacturer, i.model
+                FROM claims c {products}
                 WHERE c.author_user_id = ? AND c.status = 'active'
-                ORDER BY c.created_at DESC, c.id DESC
-                LIMIT ?
-                """,
-                (user_id, limit),
-            ))
+                ORDER BY c.created_at DESC, c.id DESC LIMIT ?
+            """, (user_id, limit))
+            for row in claims:
+                kind = str(row["claim_type"])
+                if kind == "ownership":
+                    kind = str(row["ownership_kind"] or "acquire")
+                elif kind == "specification" and row["specification_kind"] == "repair":
+                    kind = "repair"
+                elif kind in ("incident", "event"):
+                    kind = str(row["value_text"] or kind)
+                add("Claim", row["created_at"], product_name(row),
+                    f"has a new {kind.replace('_', ' ').title()} Claim on record.",
+                    int(row["individual_id"]))
+
+            for table, actor, value, action in (
+                ("claim_votes", "user_id", "vote", "voted"),
+                ("claim_responses", "responder_user_id", "stance", "responded"),
+            ):
+                rows = con.execute(f"""
+                    SELECT c.individual_id, i.manufacturer, i.model,
+                           interaction.{value} AS value, interaction.updated_at
+                    FROM {table} interaction
+                    JOIN claims c ON c.id = interaction.claim_id AND c.status = 'active'
+                    JOIN individuals i ON i.id = c.individual_id
+                    WHERE interaction.{actor} = ?
+                    ORDER BY interaction.updated_at DESC, interaction.id DESC LIMIT ?
+                """, (user_id, limit))
+                for row in rows:
+                    value_text = str(row["value"] or "").replace("_", " ").title()
+                    message = (f"has a Claim with a {value_text} vote from this user."
+                               if action == "voted" else
+                               f"has a Claim with a {value_text} response from this user.")
+                    add("Social", row["updated_at"], product_name(row),
+                        message, int(row["individual_id"]))
+
+            links = con.execute("""
+                SELECT ug.individual_id, ug.created_at, i.manufacturer, i.model
+                FROM user_guitars ug
+                JOIN individuals i ON i.id = ug.individual_id
+                WHERE ug.user_id = ?
+                ORDER BY ug.created_at DESC, ug.id DESC LIMIT ?
+            """, (user_id, limit))
+            for row in links:
+                add("Product", row["created_at"], product_name(row),
+                    "was added to this user's Chronicle.", int(row["individual_id"]))
+
+        def sort_time(item: dict[str, Any]) -> float:
+            try:
+                timestamp = datetime.fromisoformat(item["event_at"].replace("Z", "+00:00"))
+                return timestamp.replace(tzinfo=timezone.utc).timestamp() \
+                    if timestamp.tzinfo is None else timestamp.timestamp()
+            except ValueError:
+                return 0.0
+
+        entries.sort(key=sort_time, reverse=True)
+        return entries[:limit]
 
     def create_claim_notification(
         self,

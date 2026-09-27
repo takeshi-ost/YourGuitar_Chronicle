@@ -2824,13 +2824,13 @@ def api_user(
     }
 
 
-@app.get("/api/users/{user_id}/activity")
-def api_user_activity(user_id: int) -> list[dict[str, Any]]:
+@app.get("/api/users/{user_id}/chronicle")
+def api_user_chronicle(user_id: int) -> list[dict[str, Any]]:
     repository = repo()
     user, _guitars = repository.get_user(user_id)
     if not user or user["account_type"] == "source":
         raise HTTPException(status_code=404, detail="User not found")
-    return [_row_dict(row) for row in repository.list_user_activity(user_id)]
+    return repository.list_user_chronicle(user_id)
 
 
 @app.patch("/api/users/{user_id}")

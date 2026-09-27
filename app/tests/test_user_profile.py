@@ -5,7 +5,7 @@ from ygc.db.repository import Repository
 from ygc.web import app
 
 
-def test_profile_uses_top_page_shell_and_activity_is_user_scoped(tmp_path, monkeypatch):
+def test_profile_uses_top_page_shell_and_chronicle_is_user_scoped(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "chronicle.db")
     repository = Repository(config.DB_PATH)
     repository.init_db()
@@ -19,9 +19,10 @@ def test_profile_uses_top_page_shell_and_activity_is_user_scoped(tmp_path, monke
         owner_id, manufacturer="Fender", model="Telecaster",
         serial_number="PROFILE001", media_storage_path="media/profile.jpg",
     )
-    repository.create_event_claim(
+    event_claim_id = repository.create_event_claim(
         other_id, individual_id, event_kind="exhibition", detail="Exhibited",
     )
+    assert repository.set_claim_vote(event_claim_id, owner_id, "good")
 
     with TestClient(app) as client:
         page = client.get(f"/users/{owner_id}")
@@ -31,9 +32,19 @@ def test_profile_uses_top_page_shell_and_activity_is_user_scoped(tmp_path, monke
         assert "setupProfileShell" in page.text
         assert client.get(f"/api/users/{owner_id}").json()["user"]["bio"] == "My guitars."
 
-        owner_activity = client.get(f"/api/users/{owner_id}/activity").json()
-        other_activity = client.get(f"/api/users/{other_id}/activity").json()
-        assert [item["id"] for item in owner_activity] == [listing_claim_id]
-        assert len(other_activity) == 1
-        assert other_activity[0]["claim_type"] == "event"
-        assert client.get("/api/users/999999/activity").status_code == 404
+        owner_entries = client.get(f"/api/users/{owner_id}/chronicle").json()
+        other_entries = client.get(f"/api/users/{other_id}/chronicle").json()
+        assert {item["category"] for item in owner_entries} == {
+            "User", "Product", "Claim", "Social",
+        }
+        assert any(item["category"] == "Claim" and "Listing" in item["message"]
+                   for item in owner_entries)
+        assert any(item["category"] == "Social" and "Good vote" in item["message"]
+                   for item in owner_entries)
+        assert [item["event_at"] for item in owner_entries] == sorted(
+            (item["event_at"] for item in owner_entries), reverse=True,
+        )
+        assert all(item["category"] != "Social" for item in other_entries)
+        assert any(item["category"] == "Claim" and "Exhibition" in item["message"]
+                   for item in other_entries)
+        assert client.get("/api/users/999999/chronicle").status_code == 404
