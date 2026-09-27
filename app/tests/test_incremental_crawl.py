@@ -299,6 +299,12 @@ def test_rejected_detail_explains_year_mismatch(tmp_path):
     assert result["skipped_year"] == 1
     assert result["rejected_samples"][0]["reason"] == "skipped_year"
     assert result["rejected_samples"][0]["detail_year"] == "2020"
+    with repo.connect() as con:
+        assert con.execute("SELECT COUNT(*) FROM crawl_detail_cache").fetchone()[0] == 1
+    # Expanding the range uses the retained detail, without another API call.
+    from ygc.crawl_detail_cache import reprocess_details
+    retried = reprocess_details(repo, "electric", 2000, 2030)
+    assert retried["new_individuals"] == 1
 
 
 def _seed(repo, listing_id, serial):

@@ -25,6 +25,7 @@ from starlette.background import BackgroundTask
 from ygc import config
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.crawl_service import crawl_query
+from ygc.crawl_detail_cache import reprocess_details
 from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
 from ygc.extractors.serial import extract_serial_candidates
@@ -504,6 +505,7 @@ def _run_batch(
         "new_individuals": 0,
         "existing_individuals_extended": 0,
         "ambiguous_matches": 0,
+        "detail_unavailable": 0,
     }
 
     try:
@@ -3271,6 +3273,44 @@ def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> di
         _active_job_id = job_id
     threading.Thread(target=_run_incremental,
                      args=(job_id, request, token), daemon=True).start()
+    return {"job_id": job_id}
+
+
+def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
+    global _active_job_id
+    try:
+        result = reprocess_details(
+            repo(), request.category, request.year_min, request.year_max,
+            progress_callback=lambda counts: _set_job(
+                job_id, message=f"保存済み詳細 {counts['cached_processed']}/{counts['cached_total']} 件を再判定中",
+                progress=min(0.95, counts["cached_processed"] / max(counts["cached_total"], 1)),
+            ),
+        )
+        _set_job(job_id, status="done", message="保存済み詳細の再判定が完了しました",
+                 progress=1.0, aggregate=result, finished_at=time.time())
+    except Exception as exc:
+        _set_job(job_id, status="error", error=str(exc), message=str(exc), finished_at=time.time())
+    finally:
+        with _jobs_lock:
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+
+@app.post("/api/crawl/cache/reprocess")
+def api_reprocess_cached_details(request: CrawlAdvanceRequest) -> dict:
+    global _active_job_id
+    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    if not repo().claim_architecture_status()["ready"]:
+        raise HTTPException(status_code=409, detail="Run Claim migration before reprocessing")
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {"id": job_id, "status": "running", "progress": 0.0,
+                         "message": "保存済み詳細を再判定中", "started_at": time.time()}
+        _active_job_id = job_id
+    threading.Thread(target=_run_cached_reprocess, args=(job_id, request), daemon=True).start()
     return {"job_id": job_id}
 
 

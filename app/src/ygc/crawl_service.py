@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ygc import config
+from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository
 from ygc.incremental_crawl import _year_matches
@@ -57,6 +58,7 @@ def crawl_query(
         "skipped_existing", "new_observations", "missing_identity",
         "serial_candidates", "new_individuals", "existing_individuals_extended",
         "ambiguous_matches",
+        "detail_unavailable",
     ), 0)
     try:
         summaries = list(collector.iter_listing_summaries(
@@ -81,6 +83,12 @@ def crawl_query(
 
         for item in collector.fetch_listing_details(candidates):
             counts["details_fetched"] += 1
+            if item.get("_ygc_detail_unavailable"):
+                counts["detail_unavailable"] += 1
+                continue
+            listing_id = collector.listing_id(item)
+            if listing_id:
+                save_detail(repository, str(listing_id), item)
             claim_data = to_listing_claim_data(
                 item, config.SERIAL_CONFIDENCE_THRESHOLD,
             )

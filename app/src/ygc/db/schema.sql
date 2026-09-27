@@ -227,6 +227,13 @@ CREATE TABLE IF NOT EXISTS crawl_candidates (
  updated_at TEXT NOT NULL,
  PRIMARY KEY(source_site, source_listing_id)
 );
+CREATE TABLE IF NOT EXISTS crawl_detail_cache (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ payload_json TEXT NOT NULL,
+ fetched_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, source_listing_id)
+);
 CREATE INDEX IF NOT EXISTS idx_crawl_candidates_status
 ON crawl_candidates(source_site, status);
 

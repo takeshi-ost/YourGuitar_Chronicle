@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from ygc import config
+from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
 from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provenance_observation
@@ -305,6 +306,8 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                     raise
                                 detail = None
                             counts["details_fetched"] += 1
+                            if detail is not None:
+                                save_detail(repository, str(listing_id), detail)
                             if detail and (_category_matches(detail, category)
                                     and _year_matches(detail, year_min, year_max)):
                                 claim_data = to_listing_claim_data(detail, config.SERIAL_CONFIDENCE_THRESHOLD)

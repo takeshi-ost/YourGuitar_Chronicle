@@ -555,7 +555,7 @@ class ReverbAPICollector:
         )
 
         if not detail_url:
-            return item
+            return {**item, "_ygc_detail_unavailable": True}
 
         try:
             detail = self._get_json(
@@ -601,7 +601,7 @@ class ReverbAPICollector:
                 exc,
             )
 
-            return item
+            return {**item, "_ygc_detail_unavailable": True}
 
     def fetch_listing_details(
         self,
@@ -662,7 +662,7 @@ class ReverbAPICollector:
                         exc,
                     )
 
-                    yield original
+                    yield {**original, "_ygc_detail_unavailable": True}
 
     def probe(
         self,
