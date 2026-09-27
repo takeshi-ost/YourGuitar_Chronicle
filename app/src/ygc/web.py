@@ -1877,7 +1877,7 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                 COALESCE((SELECT MAX(o.observed_at) FROM observations o
                           WHERE o.individual_id = i.id), '')
             ) DESC, i.id DESC
-            LIMIT 24
+            LIMIT 200
             """
         ).fetchall()
 
