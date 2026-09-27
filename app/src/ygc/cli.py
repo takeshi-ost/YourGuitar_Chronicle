@@ -14,6 +14,7 @@ from ygc.collectors.reverb import (
     ReverbAPICollector,
 )
 from ygc.db.repository import Repository
+from ygc.platform_boundaries import CrawlStep, LocalCrawlRunner, local_repository
 from ygc.extractors.serial import (
     extract_serial_candidates,
 )
@@ -35,9 +36,7 @@ console = Console()
 
 
 def repo() -> Repository:
-    return Repository(
-        config.DB_PATH
-    )
+    return local_repository(config.DB_PATH)
 
 
 def setup_logging() -> None:
@@ -174,6 +173,26 @@ def init_db():
         "[/green] "
         f"{config.DB_PATH}"
     )
+
+
+@app.command("crawl-step")
+def crawl_step(category: str = typer.Option(..., help="electric or acoustic"),
+               year_min: int = typer.Option(...),
+               year_max: int = typer.Option(...)) -> None:
+    """One synchronous, resumable crawl step; suitable as a future Run Job entrypoint."""
+    step = CrawlStep(category, year_min, year_max)
+    if not config.REVERB_API_TOKEN:
+        raise typer.BadParameter("REVERB_API_TOKEN must be set for a crawl job")
+    repository = repo()
+    repository.init_db()
+    if not repository.claim_architecture_status()["ready"]:
+        raise typer.BadParameter("Run Claim migration before crawling")
+    with ReverbAPICollector(token=config.REVERB_API_TOKEN,
+                            api_base=config.REVERB_API_BASE,
+                            timeout=config.REQUEST_TIMEOUT, delay=0.5,
+                            max_workers=1) as collector:
+        result = LocalCrawlRunner().run(step, repository, collector)
+    console.print_json(json.dumps(result, ensure_ascii=False))
 
 
 @app.command(

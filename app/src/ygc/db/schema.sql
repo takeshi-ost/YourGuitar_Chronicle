@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS users (
  display_name TEXT NOT NULL,
  account_type TEXT NOT NULL DEFAULT 'user',
  ban_status TEXT NOT NULL DEFAULT 'normal' CHECK (ban_status IN ('normal','silent_ban','ban')),
+ identity_provider TEXT,
+ identity_subject TEXT,
  location_country TEXT,
  location_region TEXT,
  bio TEXT,

@@ -51,6 +51,9 @@ from ygc.crawl_service import crawl_query
 from ygc.crawl_detail_cache import reprocess_details
 from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
+from ygc.platform_boundaries import (CrawlStep, LocalCrawlRunner, PrototypeIdentity,
+                                     local_repository, require_local_platform,
+                                     PlatformAdapterRequired)
 from ygc.extractors.serial import extract_serial_candidates
 from ygc.reverb_adapter import (
     classify_vintage_listing,
@@ -61,7 +64,8 @@ from ygc.reverb_adapter import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    Repository(config.DB_PATH).init_db()
+    require_local_platform()
+    local_repository(config.DB_PATH).init_db()
     yield
 
 
@@ -103,8 +107,17 @@ NO_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" r
 
 
 def repo() -> Repository:
-    repository = Repository(config.DB_PATH)
-    return repository
+    return local_repository(config.DB_PATH)
+
+
+def prototype_viewer(request: Request, claimed_id: int | None) -> int | None:
+    bearer = request.headers.get("Authorization", "")
+    try:
+        actor = PrototypeIdentity().resolve(
+            bearer_token=bearer if bearer else None, prototype_user_id=claimed_id)
+    except PlatformAdapterRequired as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return actor.user_id
 
 
 def _row_dict(row: Any) -> dict[str, Any]:
@@ -1958,6 +1971,7 @@ def api_new_discoveries() -> list[dict[str, Any]]:
 @app.get("/api/individuals/{individual_id}")
 def api_individual(individual_id: int, request: Request,
                    viewer_user_id: int | None = None) -> dict[str, Any]:
+    viewer_user_id = prototype_viewer(request, viewer_user_id)
     repository = repo()
     individual, observations = repository.get_individual(individual_id)
     if not individual:
@@ -2044,9 +2058,10 @@ def api_individual(individual_id: int, request: Request,
 
 @app.get("/api/individuals/{individual_id}/claims")
 def api_individual_claims(
-    individual_id: int,
+    individual_id: int, request: Request,
     viewer_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
+    viewer_user_id = prototype_viewer(request, viewer_user_id)
     repository = repo()
     claims = [
         {**_row_dict(row), "status": row["effective_status"]}
@@ -2958,7 +2973,8 @@ def api_user(
 
 
 @app.get("/api/users/{user_id}/profile")
-def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, Any]:
+def api_user_profile(user_id: int, request: Request, viewer_id: int | None = None) -> dict[str, Any]:
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     user, guitars = repository.get_user(user_id)
     if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
@@ -2999,7 +3015,8 @@ def api_user_profile(user_id: int, viewer_id: int | None = None) -> dict[str, An
 
 
 @app.get("/api/users/{user_id}/chronicle")
-def api_user_chronicle(user_id: int, viewer_id: int | None = None) -> list[dict[str, Any]]:
+def api_user_chronicle(user_id: int, request: Request, viewer_id: int | None = None) -> list[dict[str, Any]]:
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     user, _guitars = repository.get_user(user_id)
     if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
@@ -3329,9 +3346,9 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
             timeout=config.REQUEST_TIMEOUT, delay=0.5,
             max_workers=1,
         ) as collector:
-            result = advance_program(
-                repo(), collector, request.category, request.year_min,
-                request.year_max,
+            result = LocalCrawlRunner().run(
+                CrawlStep(request.category, request.year_min, request.year_max),
+                repo(), collector,
                 progress_callback=lambda counts: _set_job(
                     job_id,
                     message={"listing": "一覧判定・詳細取得中",

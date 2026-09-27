@@ -83,6 +83,8 @@ class Repository:
             },
             "users": {
                 "ban_status": "TEXT NOT NULL DEFAULT 'normal'",
+                "identity_provider": "TEXT",
+                "identity_subject": "TEXT",
                 "bio": "TEXT",
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
@@ -151,6 +153,9 @@ class Repository:
                     f"ADD COLUMN {column} "
                     f"{data_type}"
                 )
+
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity_subject "
+                    "ON users(identity_provider, identity_subject) WHERE identity_subject IS NOT NULL")
 
         con.execute(
             """
