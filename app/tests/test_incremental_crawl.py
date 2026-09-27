@@ -7,6 +7,7 @@ from ygc.db.repository import Repository
 from ygc.db.repository import utcnow
 from ygc.incremental_crawl import advance_program, restart_program
 from ygc.incremental_crawl import MAX_SUMMARIES, MAX_DETAILS, MAX_LIST_PAGES
+from ygc.incremental_crawl import _year_matches
 
 
 class Collector:
@@ -157,6 +158,48 @@ def test_failed_detail_keeps_the_same_candidate_for_next_click(tmp_path):
     assert resumed["summaries_processed"] == 1
     assert resumed["new_observations"] == 1
     assert resumed["finished"]
+
+
+def test_detail_missing_filter_fields_keeps_summary_evidence(tmp_path):
+    repo = Repository(tmp_path / "ygc.db")
+    repo.init_db()
+
+    class SparseDetail(Collector):
+        def _get_json(self, url, params=None):
+            if url.endswith("/listings/1"):
+                return {"id": "1", "year": None, "product_type": None,
+                        "make": "Fender", "model": "Stratocaster"}
+            return super()._get_json(url, params)
+
+    listing = {**_summary(1), "year": "1960s"}
+    result = advance_program(repo, SparseDetail([{"listings": [listing]}]),
+                             "electric", 1950, 1980)
+    assert result["new_observations"] == 1
+    assert result["missing_year"] == 0
+    assert _year_matches({"year": "60s"}, 1950, 1980)
+    assert not _year_matches({"year": "1960s"}, 1960, 1965)
+
+
+def test_rejected_detail_explains_year_mismatch(tmp_path):
+    repo = Repository(tmp_path / "ygc.db")
+    repo.init_db()
+
+    class ModernDetail(Collector):
+        def _get_json(self, url, params=None):
+            result = super()._get_json(url, params)
+            if url.endswith("/listings/1"):
+                result["year"] = "2020"
+            return result
+
+    listing = _summary(1)
+    del listing["year"]
+    result = advance_program(repo, ModernDetail([{"listings": [listing]}]),
+                             "electric", 1950, 1980)
+    assert result["details_fetched"] == 1
+    assert result["new_observations"] == 0
+    assert result["skipped_year"] == 1
+    assert result["rejected_samples"][0]["reason"] == "skipped_year"
+    assert result["rejected_samples"][0]["detail_year"] == "2020"
 
 
 def _seed(repo, listing_id, serial):

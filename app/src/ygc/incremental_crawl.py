@@ -20,6 +20,7 @@ MAX_DETAILS = 100
 MAX_LIST_PAGES = 5
 MAX_RECHECKS = 5
 MIN_REQUEST_GAP = 0.5
+DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category")
 
 
 def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool:
@@ -39,12 +40,42 @@ def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool
     )
 
 
+def _year_span(item: dict) -> tuple[int, int] | None:
+    """Keep fuzzy Reverb decades within the entire selected manufacture range."""
+    raw = str(item.get("year") or "")
+    years = [int(value) for value in re.findall(
+        r"(?<!\d)(?:18|19|20)\d{2}(?!\d)", raw,
+    )]
+    for year in list(years):
+        if re.search(rf"(?<!\d){year}s\b", raw, flags=re.I):
+            years.append(year + 9)
+    if not years:
+        for digit in re.findall(r"(?<!\d)([5-9])0s\b", raw, flags=re.I):
+            years.extend((1900 + int(digit) * 10,
+                          1909 + int(digit) * 10))
+    return (min(years), max(years)) if years else None
+
+
 def _year_matches(item: dict, year_min: int, year_max: int, *, strict: bool = True) -> bool:
-    # Unknown/range years cannot establish a precise manufacture-year match.
-    years = [int(year) for year in re.findall(r"(?<!\d)(?:18|19|20)\d{2}(?!\d)",
-                                              str(item.get("year") or ""))]
-    return (not strict if not years else
-            min(years) >= year_min and max(years) <= year_max)
+    span = _year_span(item)
+    return (not strict if span is None else
+            span[0] >= year_min and span[1] <= year_max)
+
+
+def _missing_metadata(item: dict, field: str) -> bool:
+    if field == "year":
+        return _year_span(item) is None
+    return not (item.get("product_type") or item.get("categories")
+                or item.get("category"))
+
+
+def _merge_listing(summary: dict, fetched: dict) -> dict:
+    """Detail may omit fields available in the listing summary."""
+    detail = {**summary, **fetched}
+    for field in DETAIL_FALLBACK_FIELDS:
+        if not fetched.get(field) and summary.get(field):
+            detail[field] = summary[field]
+    return detail
 
 
 def _pause(last_request: float) -> float:
@@ -176,7 +207,11 @@ def advance_program(repository: Repository, collector: Any, category: str,
     counts = {"listing_pages_fetched": 0, "summaries_processed": 0,
               "details_fetched": 0,
               "new_observations": 0, "skipped_existing": 0,
-              "skipped_category_or_year": 0}
+              "skipped_category_or_year": 0,
+              "skipped_year": 0, "skipped_category": 0,
+              "missing_year": 0, "missing_category": 0,
+              "detail_unavailable": 0}
+    rejected_samples: list[dict[str, str | None]] = []
     run_id = repository.start_run("reverb")
     last_request = 0.0
     try:
@@ -227,9 +262,12 @@ def advance_program(repository: Repository, collector: Any, category: str,
                         ).fetchone()
                     if exists:
                         counts["skipped_existing"] += 1
-                    elif (not _category_matches(summary, category, strict=False)
-                          or not _year_matches(summary, year_min, year_max, strict=False)):
+                    elif not _category_matches(summary, category, strict=False):
                         counts["skipped_category_or_year"] += 1
+                        counts["skipped_category"] += 1
+                    elif not _year_matches(summary, year_min, year_max, strict=False):
+                        counts["skipped_category_or_year"] += 1
+                        counts["skipped_year"] += 1
                     else:
                         detail_href = collector._self_href(summary)
                         if not detail_href:
@@ -238,7 +276,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                             last_request = _pause(last_request)
                             detail_url = collector.safe_api_url(detail_href)
                             try:
-                                detail = {**summary, **collector._get_json(detail_url)}
+                                detail = _merge_listing(summary, collector._get_json(detail_url))
                             except httpx.HTTPStatusError as exc:
                                 if exc.response.status_code not in (404, 410):
                                     raise
@@ -258,6 +296,27 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                     )
                             else:
                                 counts["skipped_category_or_year"] += 1
+                                if not detail:
+                                    counts["detail_unavailable"] += 1
+                                    reason = "detail_unavailable"
+                                elif not _category_matches(detail, category):
+                                    reason = ("missing_category" if _missing_metadata(
+                                        detail, "category") else "skipped_category")
+                                    counts[reason] += 1
+                                else:
+                                    reason = ("missing_year" if _missing_metadata(
+                                        detail, "year") else "skipped_year")
+                                    counts[reason] += 1
+                                if len(rejected_samples) < 3:
+                                    rejected_samples.append({
+                                        "listing_id": str(listing_id),
+                                        "reason": reason,
+                                        "summary_year": str(summary.get("year") or "")[:40],
+                                        "detail_year": str(detail.get("year") or "")[:40]
+                                        if detail else None,
+                                        "product_type": str((detail or summary).get(
+                                            "product_type") or "")[:60],
+                                    })
                 counts["summaries_processed"] += 1
                 pending = pending[1:]
                 # A per-item checkpoint survives a process restart or failed detail.
@@ -280,7 +339,8 @@ def advance_program(repository: Repository, collector: Any, category: str,
             pages_fetched=counts["details_fetched"] + rechecks["rechecked"],
             observations_created=counts["new_observations"], status="ok",
         )
-        return {**counts, **rechecks, **program_status(repository, *key)}
+        return {**counts, **rechecks, "rejected_samples": rejected_samples,
+                **program_status(repository, *key)}
     except Exception as exc:
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_processed"],
