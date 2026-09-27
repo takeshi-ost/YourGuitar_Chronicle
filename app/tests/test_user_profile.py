@@ -34,9 +34,12 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
             assert logo.headers['content-type'].startswith('image/svg+xml')
             assert b'viewBox="0 0 650 78"' in logo.content
         assert client.get('/assets/logos/secret.svg').status_code == 404
-        for page in ('/user-view', '/user-view/edit', '/'):
+        for page in ('/user-view', '/user-view/edit'):
             html = client.get(page).text
             assert 'brand-logo-script' in html and 'brand-logo-block' in html and 'brand-logo-badge' in html
+        console = client.get('/').text
+        assert '<a class="brand-link" href="/user-view">Your Guitar Chronicle</a>' in console
+        assert 'brand-logo-' not in console
         for key, _ in THEMES[1:]:
             assert f':root[data-theme="{key}"]' in stylesheet.text
         for filename in ('butterscotch-wood.webp', 'cherry-wood.webp', 'white-pearl.webp'):
