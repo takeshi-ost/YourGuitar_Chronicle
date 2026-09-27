@@ -26,6 +26,7 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 @media(max-width:520px){.modal-grid{grid-template-columns:1fr}.modal-grid label.full{grid-column:auto}}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
+<link rel="stylesheet" href="/assets/themes.css">
 </head>
 <body>
 <div class="sticky-header">
@@ -46,6 +47,7 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 <div class="settings-row"><div><div class="field-name">Bio</div><div class="field-note">Optional · 自己紹介</div></div><div class="field-value"><textarea id="bio" maxlength="2000" aria-label="Bio"></textarea></div><select class="visibility" data-field="bio" aria-label="Bio visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Avatar</div><div class="field-note">Optional · プロフィール画像</div></div><div class="field-value avatar-input"><img id="avatarPreview" alt="Current avatar"><input id="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Avatar"><span class="sub">12 MB 以下</span></div><select class="visibility" data-field="avatar" aria-label="Avatar visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Your signature guitar</div><div class="field-note">Optional · Profileで最初に表示するギター</div></div><div class="field-value"><select id="signatureGuitar" aria-label="Your signature guitar"><option value="">Select an owned guitar</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
+<div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">画面の配色 · ヘッダーは共通</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"><option value="dark_default">Dark Default</option><option value="light_default">Light Default</option><option value="sunburst_3ply">Sunburst&amp;3ply</option></select><span class="sub">選択中のテーマをプレビューします。Saveで保存されます。</span></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Preferred Language</div><div class="field-note">Required · UI 言語</div></div><div class="field-value"><select id="language" disabled aria-label="Preferred Language"><option value="en">English</option><option value="ja">Japanese</option></select><span class="sub">UI 多言語対応時に利用できます。</span></div><div class="visibility-fixed">Private · Fixed</div></div>
 <div class="settings-actions"><button id="saveButton" onclick="saveSettings()">Save</button><button type="button" class="secondary" onclick="openNewGuitar()">Add Guitar</button><span class="sub" id="status" role="status"></span></div>
 </div><div id="emptyState" class="sub">Select a user to edit settings.</div>
@@ -66,6 +68,7 @@ const defaults={birth:'Private',residence:'Private',bio:'Public',avatar:'Public'
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const field=id=>document.getElementById(id);
 let activeUser=null;
+function previewTheme(value){document.documentElement.dataset.theme=['light_default','sunburst_3ply'].includes(value)?value:'dark_default'}
 async function request(url,options={}){const response=await fetch(url,options);let data;try{data=await response.json()}catch{data={}}if(!response.ok)throw Error(data.detail||response.statusText);return data}
 function setStatus(message,error=false){field('status').textContent=message;field('status').dataset.error=String(error)}
 function syncHeader(){
@@ -84,10 +87,11 @@ async function switchUser(){
 async function createUser(){try{const result=await request('/api/users',{method:'POST'});localStorage.setItem(ACTIVE_USER_KEY,String(result.user.id));await loadUser()}catch(error){alert(error.message)}}
 async function loadUser(){
  const id=localStorage.getItem(ACTIVE_USER_KEY);
- if(!id){activeUser=null;field('settings').hidden=true;field('emptyState').hidden=false;syncHeader();measureHeader();return}
+ if(!id){activeUser=null;previewTheme('dark_default');field('settings').hidden=true;field('emptyState').hidden=false;syncHeader();measureHeader();return}
  try{
   activeUser=await request('/api/users/'+encodeURIComponent(id));
   const u=activeUser.user;
+  field('theme').value=u.theme||'dark_default';previewTheme(u.theme);
   field('displayName').value=u.display_name||'';field('userId').value=String(u.id);field('accountType').value=u.account_type||'user';
   field('country').value=u.location_country||'';field('city').value=u.location_region||'';field('bio').value=u.bio||'';
   field('avatar').value='';field('avatarPreview').src='/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'');
@@ -99,7 +103,7 @@ async function loadUser(){
   field('signatureGuitar').innerHTML='<option value="">Select an owned guitar</option>'+owned.map(g=>'<option value="'+Number(g.individual_id)+'">'+esc([g.manufacturer,g.model,g.year].filter(Boolean).join(' · '))+'</option>').join('');
   field('signatureGuitar').value=owned.some(g=>Number(g.individual_id)===Number(u.signature_individual_id))?String(u.signature_individual_id):'';
   field('settings').hidden=false;field('emptyState').hidden=true;setStatus('');
- }catch(error){activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY);field('settings').hidden=true;field('emptyState').textContent=error.message;field('emptyState').hidden=false}
+ }catch(error){activeUser=null;previewTheme('dark_default');localStorage.removeItem(ACTIVE_USER_KEY);field('settings').hidden=true;field('emptyState').textContent=error.message;field('emptyState').hidden=false}
  syncHeader();measureHeader();
 }
 async function saveSettings(){
@@ -108,7 +112,7 @@ async function saveSettings(){
  const button=field('saveButton');button.disabled=true;setStatus('Saving...');
  try{
   const visibility=Object.fromEntries([...document.querySelectorAll('.visibility')].map(select=>[select.dataset.field+'_visibility',select.value]));
-  const result=await request('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:field('displayName').value.trim()||activeUser.user.display_name,account_type:field('accountType').value,location_country:field('country').value.trim()||null,location_region:field('city').value.trim()||null,bio:field('bio').value.trim(),signature_individual_id:field('signatureGuitar').value?Number(field('signatureGuitar').value):null,...visibility})});
+  const result=await request('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:field('displayName').value.trim()||activeUser.user.display_name,account_type:field('accountType').value,location_country:field('country').value.trim()||null,location_region:field('city').value.trim()||null,bio:field('bio').value.trim(),signature_individual_id:field('signatureGuitar').value?Number(field('signatureGuitar').value):null,theme:field('theme').value,...visibility})});
   const image=field('avatar').files[0];
   if(image){const data=new FormData();data.append('avatar',image);await request('/api/users/'+id+'/avatar',{method:'POST',body:data})}
   await loadUser();setStatus('Saved.');

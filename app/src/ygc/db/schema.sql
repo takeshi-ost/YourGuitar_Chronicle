@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS users (
  bio_visibility TEXT NOT NULL DEFAULT 'Public',
  avatar_visibility TEXT NOT NULL DEFAULT 'Public',
  signature_individual_id INTEGER,
+ theme TEXT NOT NULL DEFAULT 'dark_default' CHECK (theme IN ('dark_default','light_default','sunburst_3ply')),
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL
 );

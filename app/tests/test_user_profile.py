@@ -5,6 +5,34 @@ from ygc.db.repository import Repository
 from ygc.web import app
 
 
+def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "themes.db")
+    repo = Repository(config.DB_PATH)
+    repo.init_db()
+    owner = repo.create_user("Owner")
+    viewer = repo.create_user("Viewer")
+    assert repo.get_user(owner)[0]["theme"] == "dark_default"
+    with TestClient(app) as client:
+        stylesheet = client.get("/assets/themes.css")
+        assert stylesheet.status_code == 200
+        assert 'sunburst_3ply' in stylesheet.text
+        settings = client.get("/user-view/edit").text
+        assert 'id="theme"' in settings
+        updated = client.patch(f"/api/users/{owner}", json={
+            "display_name": "Owner", "account_type": "user",
+            "theme": "sunburst_3ply",
+        })
+        assert updated.status_code == 200
+        assert updated.json()["user"]["theme"] == "sunburst_3ply"
+        assert client.get(f"/api/users/{owner}/profile?viewer_id={viewer}").json()["user"]["theme"] == "sunburst_3ply"
+        invalid = client.patch(f"/api/users/{owner}", json={
+            "display_name": "Owner", "account_type": "user", "theme": "url(unsafe)",
+        })
+        assert invalid.status_code == 400
+    repo.init_db()
+    assert repo.get_user(owner)[0]["theme"] == "sunburst_3ply"
+
+
 def test_favorites_toggle_and_profile_excludes_owned_guitars(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "favorites.db")
     repository = Repository(config.DB_PATH)

@@ -1,0 +1,88 @@
+/* Operator-curated themes. No user-authored CSS or image URLs are accepted. */
+:root[data-theme="light_default"] {
+  color-scheme: light;
+  --bg: #d4d8d9;
+  --panel: #f3f4f1;
+  --surface: #e9eceb;
+  --input: #ffffff;
+  --line: #abb2b3;
+  --text: #202527;
+  --muted: #566065;
+  --accent: #926320;
+  --control: #dce1e1;
+  --control-hover: #cbd3d3;
+}
+:root[data-theme="sunburst_3ply"] {
+  color-scheme: light;
+  --bg: #130e0b;
+  --page-image: radial-gradient(ellipse at 50% 46%, #593015 0%, #371c0e 43%, #130d0b 78%, #080707 100%);
+  --panel: #f0e7cf;
+  --surface: #e7dbc0;
+  --input: #fff9ea;
+  --line: #29221a;
+  --text: #241d17;
+  --muted: #62584a;
+  --accent: #996629;
+  --control: #ded0b3;
+  --control-hover: #cbb994;
+}
+:root[data-theme="light_default"] body,
+:root[data-theme="sunburst_3ply"] body {
+  background: var(--page-image, var(--bg)) fixed;
+  color: var(--text);
+}
+:root[data-theme="light_default"] :is(.panel,.dashboard-card,.modal,.notification-panel),
+:root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.modal,.notification-panel) {
+  background: var(--panel);
+  color: var(--text);
+}
+:root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.modal,.notification-panel) {
+  border: 4px double #0d0c0b;
+}
+:root[data-theme="light_default"] :is(.discovery-list,.observation-card,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed),
+:root[data-theme="sunburst_3ply"] :is(.discovery-list,.observation-card,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed) {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+:root[data-theme="light_default"] :is(.claim-card,.observation-card.latest,.profile-mode .profile-stat,.world-map-tooltip,.world-map-legend),
+:root[data-theme="sunburst_3ply"] :is(.claim-card,.observation-card.latest,.profile-mode .profile-stat,.world-map-tooltip,.world-map-legend) {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+:root[data-theme="light_default"] :is(.claim-card.claim-type-ownership,.claim-card.claim-type-specification,.claim-card.claim-type-incident,.claim-card.claim-type-event,.claim-card.claim-type-media),
+:root[data-theme="sunburst_3ply"] :is(.claim-card.claim-type-ownership,.claim-card.claim-type-specification,.claim-card.claim-type-incident,.claim-card.claim-type-event,.claim-card.claim-type-media) {
+  background: var(--surface);
+  color: var(--text);
+}
+:root[data-theme="light_default"] .profile-chronicle-tag,
+:root[data-theme="sunburst_3ply"] .profile-chronicle-tag {color:#fff}
+:root[data-theme="light_default"] :is(input,select,textarea),
+:root[data-theme="sunburst_3ply"] :is(input,select,textarea) {
+  background: var(--input);
+  color: var(--text);
+  border-color: var(--line);
+}
+:root[data-theme="light_default"] :is(button.secondary,.account-hub-action,.claim-vote,.claim-compact-tag,.accordion-toggle,.detail-gallery-nav),
+:root[data-theme="sunburst_3ply"] :is(button.secondary,.account-hub-action,.claim-vote,.claim-compact-tag,.accordion-toggle,.detail-gallery-nav) {
+  background: var(--control);
+  color: var(--text);
+}
+:root[data-theme="light_default"] :is(.discovery-item,.clickable,.notification-item):hover,
+:root[data-theme="sunburst_3ply"] :is(.discovery-item,.clickable,.notification-item):hover {
+  background: var(--control-hover);
+}
+:root[data-theme="light_default"] :is(.clickable.selected,.notification-item.unread),
+:root[data-theme="sunburst_3ply"] :is(.clickable.selected,.notification-item.unread) {
+  background: var(--control);
+}
+/* The two header rows stay identical across all themes. */
+:root[data-theme] .sticky-header {--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;background:#101214;color:#edf0f3}
+:root[data-theme] .sticky-header header {background:#101214;color:#edf0f3;border-color:#2a2f35}
+:root[data-theme] .sticky-header .account-hub {background:#15181b;color:#edf0f3;border-color:#2a2f35}
+:root[data-theme] .sticky-header .sub,:root[data-theme] .sticky-header .page-nav a {color:#9ba6b0}
+:root[data-theme] .sticky-header .brand-link,:root[data-theme] .sticky-header .account-user,:root[data-theme] .sticky-header .account-hub-user-link {color:#edf0f3}
+:root[data-theme] .sticky-header .account-hub :is(.account-hub-summary,.account-hub-action,.account-hub-count) {background:#252a2f;color:#edf0f3;border-color:#2a2f35}
+:root[data-theme] .sticky-header .account-hub :is(.account-hub-stat-label,.account-hub-location) {color:#9ba6b0}
+:root[data-theme] .sticky-header button.secondary {background:#2a3036;color:#edf0f3}

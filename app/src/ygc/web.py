@@ -370,6 +370,7 @@ class UserUpdateRequest(BaseModel):
     bio_visibility: str | None = None
     avatar_visibility: str | None = None
     signature_individual_id: int | None = None
+    theme: str | None = None
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -384,6 +385,7 @@ class AdminUserUpdateRequest(BaseModel):
     avatar_visibility: str
     signature_individual_id: int | None = None
     ban_status: str
+    theme: str = 'dark_default'
 
 
 class UserGuitarLinkRequest(BaseModel):
@@ -1032,6 +1034,11 @@ def index(request: Request) -> HTMLResponse:
 @app.get("/user-view", response_class=HTMLResponse)
 def user_view() -> HTMLResponse:
     return HTMLResponse(USER_VIEW_HTML)
+
+
+@app.get("/assets/themes.css")
+def theme_stylesheet() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css")
 
 
 @app.get("/user-view/edit", response_class=HTMLResponse)
@@ -3089,6 +3096,7 @@ def api_update_user(
             },
             signature_individual_id=request.signature_individual_id,
             update_signature="signature_individual_id" in request.model_fields_set,
+            theme=request.theme,
         )
     except ValueError as exc:
         raise HTTPException(

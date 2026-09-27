@@ -255,6 +255,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
+<link rel="stylesheet" href="/assets/themes.css">
 </head>
 <body>
 <div class="sticky-header">
@@ -584,6 +585,7 @@ let profileGuitars=[];
 let profileFavorites=[];
 let favoriteIds=new Set();
 const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1},favorites:{key:'id',direction:1}};
+function applyTheme(theme){document.documentElement.dataset.theme=['light_default','sunburst_3ply'].includes(theme)?theme:'dark_default'}
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
@@ -729,6 +731,7 @@ async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
+    if(!PROFILE_USER_ID)applyTheme('dark_default');
     favoriteIds=new Set();
     notificationData={unread_count:0,notifications:[]};
     renderAccountHub();
@@ -737,9 +740,11 @@ async function loadActiveUser(){
   }
   try{
     activeUser=await jfetch('/api/users/'+id);
+    if(!PROFILE_USER_ID)applyTheme(activeUser.user.theme);
     favoriteIds=new Set(await jfetch('/api/users/'+id+'/favorites'));
   }catch(e){
     activeUser=null;
+    if(!PROFILE_USER_ID)applyTheme('dark_default');
     favoriteIds=new Set();
     localStorage.removeItem(ACTIVE_USER_KEY);
   }
@@ -2085,6 +2090,7 @@ function setupProfileShell(){
 async function loadProfilePage(){
   const hero=document.getElementById('profileHero');
   if(!activeUser||!activeUser.user){
+    applyTheme('dark_default');
     hero.innerHTML='<div class="profile-name">Members only</div><div class="profile-meta">Sign in to view member profiles.</div><div class="profile-actions"><button onclick="location.href=\'/user-view/edit\'">Sign In / Create Account</button></div>';
     for(const section of ['owned','former','favorites','chronicle'])document.getElementById('profile-'+section).hidden=true;
     document.getElementById('detail').textContent='User Profile is available to members.';
@@ -2096,6 +2102,7 @@ async function loadProfilePage(){
       jfetch('/api/users/'+PROFILE_USER_ID+'/chronicle?viewer_id='+Number(activeUser.user.id))
     ]);
     const u=data.user, summary=data.summary||{};
+    applyTheme(u.theme);
     profileGuitars=data.guitars||[];
     profileFavorites=data.favorites||[];
     const own=Number(activeUser.user.id)===Number(u.id);
@@ -2118,6 +2125,7 @@ async function loadProfilePage(){
     const selected=[...profileGuitars,...profileFavorites].find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0]||profileFavorites[0];
     if(selected)await showIndividual(Number(selected.individual_id));
   }catch(e){
+    applyTheme('dark_default');
     hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';
   }
 }

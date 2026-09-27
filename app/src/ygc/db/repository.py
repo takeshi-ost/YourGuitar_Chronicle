@@ -94,6 +94,7 @@ class Repository:
                 "bio_visibility": "TEXT NOT NULL DEFAULT 'Public'",
                 "avatar_visibility": "TEXT NOT NULL DEFAULT 'Public'",
                 "signature_individual_id": "INTEGER",
+                "theme": "TEXT NOT NULL DEFAULT 'dark_default'",
             },
             "user_guitars": {
                 "display_order": "INTEGER",
@@ -2986,6 +2987,9 @@ class Repository:
             raise ValueError("Invalid display name or account type")
         if status not in ("normal", "silent_ban", "ban"):
             raise ValueError("Invalid BAN status")
+        theme = fields.get("theme")
+        if theme is not None and theme not in ("dark_default", "light_default", "sunburst_3ply"):
+            raise ValueError("Invalid theme")
         for key in ("birth_visibility", "residence_visibility", "bio_visibility", "avatar_visibility"):
             if fields[key] not in ("Public", "Members", "Followers", "Private"):
                 raise ValueError("Invalid visibility: " + key)
@@ -2994,6 +2998,7 @@ class Repository:
             user = con.execute("SELECT * FROM users WHERE id=? AND account_type<>'source'", (user_id,)).fetchone()
             if not user:
                 return False
+            theme = theme or user["theme"]
             if signature is not None and signature != user["signature_individual_id"] and not con.execute(
                 "SELECT 1 FROM user_guitars WHERE user_id=? AND individual_id=? AND ownership_status='current_owner'",
                 (user_id, signature)).fetchone():
@@ -3001,13 +3006,13 @@ class Repository:
             profile_changed = any(user[key] != fields[key] for key in
                 ("display_name", "account_type", "location_country", "location_region",
                  "bio", "birth_visibility", "residence_visibility", "bio_visibility",
-                 "avatar_visibility", "signature_individual_id"))
+                 "avatar_visibility", "signature_individual_id")) or theme != user["theme"]
             con.execute("""UPDATE users SET display_name=?,account_type=?,location_country=?,
                 location_region=?,bio=?,birth_visibility=?,residence_visibility=?,
-                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,ban_status=?,updated_at=?
+                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,theme=?,ban_status=?,updated_at=?
                 WHERE id=?""", (name, account, fields["location_country"], fields["location_region"],
                 fields["bio"], fields["birth_visibility"], fields["residence_visibility"],
-                fields["bio_visibility"], fields["avatar_visibility"], signature, status,
+                fields["bio_visibility"], fields["avatar_visibility"], signature, theme, status,
                 utcnow() if profile_changed else user["updated_at"], user_id))
             if user["ban_status"] != status:
                 con.execute("INSERT INTO user_admin_actions (user_id,previous_ban_status,ban_status,created_at) "
@@ -3033,6 +3038,7 @@ class Repository:
         visibility: dict[str, str] | None = None,
         signature_individual_id: int | None = None,
         update_signature: bool = False,
+        theme: str | None = None,
     ) -> bool:
         name = display_name.strip()
         account = account_type.strip().lower()
@@ -3053,6 +3059,8 @@ class Repository:
         if any(value not in ("Public", "Members", "Followers", "Private")
                for value in visibility.values()):
             raise ValueError("Invalid profile visibility")
+        if theme is not None and theme not in ("dark_default", "light_default", "sunburst_3ply"):
+            raise ValueError("Invalid theme")
 
         with self.connect() as con:
             if update_signature and signature_individual_id is not None:
@@ -3075,6 +3083,7 @@ class Repository:
                     residence_visibility = COALESCE(?, residence_visibility),
                     bio_visibility = COALESCE(?, bio_visibility),
                     avatar_visibility = COALESCE(?, avatar_visibility),
+                    theme = COALESCE(?, theme),
                     signature_individual_id = CASE WHEN ? THEN ? ELSE signature_individual_id END,
                     updated_at = ?
                 WHERE id = ?
@@ -3097,6 +3106,7 @@ class Repository:
                     visibility.get("residence"),
                     visibility.get("bio"),
                     visibility.get("avatar"),
+                    theme,
                     update_signature,
                     signature_individual_id,
                     utcnow(),
