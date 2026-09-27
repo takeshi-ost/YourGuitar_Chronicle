@@ -177,6 +177,36 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .page-bottom-space{height:24px}
   .page-section{scroll-margin-top:12px}
 }
+.profile-mode .left-column{display:flex;flex-direction:column;gap:14px}
+.profile-mode .profile-panel{min-width:0}
+.profile-mode .profile-hero{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;align-items:center}
+.profile-mode .profile-avatar{width:96px;height:96px;object-fit:cover;border-radius:50%;border:1px solid var(--line);background:#111418}
+.profile-mode .profile-name{font-size:22px;font-weight:800;overflow-wrap:anywhere}
+.profile-mode .profile-meta{color:var(--muted);font-size:11px;margin-top:5px}
+.profile-mode .profile-bio{margin-top:12px;white-space:pre-wrap;font-size:12px}
+.profile-mode .profile-stats{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.profile-mode .profile-stat{background:#14171a;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:10px}
+.profile-mode .profile-stat strong{color:var(--text)}
+.profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap}
+.profile-mode .profile-list-panel{height:370px;display:flex;flex-direction:column}
+.profile-mode .profile-list-panel .table-wrap{flex:1;min-height:0;max-height:none}
+.profile-mode .profile-list-panel th:nth-child(1),.profile-mode .profile-list-panel td:nth-child(1){width:52px}
+.profile-mode .profile-list-panel th:nth-child(2),.profile-mode .profile-list-panel td:nth-child(2){width:120px}
+.profile-mode .profile-list-panel th:nth-child(3),.profile-mode .profile-list-panel td:nth-child(3){width:190px}
+.profile-mode .profile-list-panel th:nth-child(4),.profile-mode .profile-list-panel td:nth-child(4){width:120px}
+.profile-mode .profile-list-panel th:nth-child(5),.profile-mode .profile-list-panel td:nth-child(5){width:72px}
+.profile-mode .profile-list-panel th:nth-child(6),.profile-mode .profile-list-panel td:nth-child(6){width:145px}
+.profile-mode .profile-list-panel th:nth-child(7),.profile-mode .profile-list-panel td:nth-child(7){width:64px}
+.profile-mode .profile-list-panel input{max-width:280px}
+.profile-mode .profile-placeholder{border:1px dashed #394047;border-radius:8px;padding:15px;color:var(--muted);font-size:11px}
+.profile-mode .profile-activity-list{max-height:580px;overflow-y:auto;padding-right:5px}
+.profile-mode .profile-activity-list .claim-card{cursor:pointer;margin-left:0}
+.profile-mode .profile-activity-list .claim-card:hover{border-color:var(--accent)}
+.profile-mode .profile-activity-list .claim-card::after{display:none}
+.profile-mode .profile-activity-product{font-size:12px;font-weight:700}
+.profile-mode .profile-activity-detail{color:var(--muted);font-size:11px;margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.profile-mode [hidden]{display:none!important}
+@media(max-width:650px){.profile-mode .profile-hero{grid-template-columns:70px minmax(0,1fr)}.profile-mode .profile-avatar{width:70px;height:70px}.profile-mode .profile-actions{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -494,6 +524,9 @@ let ownershipClaimMode='acquire';
 let individualSortKey='id';
 let individualSortDirection=1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
+const PROFILE_USER_ID=Number((location.pathname.match(/^\/users\/(\d+)$/)||[])[1]||0);
+let profileGuitars=[];
+const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1}};
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
@@ -691,6 +724,7 @@ function updateSortIndicators(){
   }
 }
 function renderIndividuals(){
+  if(PROFILE_USER_ID)return;
   const q=document.getElementById('individualFilter').value.toLowerCase();
   const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{
     const av=normalizeSortValue(a[individualSortKey],individualSortKey);
@@ -1144,6 +1178,7 @@ async function showIndividual(id){
     if(detail)detail.scrollTop=0;
   }
   if(typeof renderIndividuals==='function')renderIndividuals();
+  if(PROFILE_USER_ID){renderProfileGuitars('owned');renderProfileGuitars('former')}
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
@@ -1880,8 +1915,122 @@ async function loadTopPageCharts(){
   }
 }
 
+function profileGuitarTable(section,title){
+  const columns=[['id','ID'],['manufacturer','Maker'],['model','Model'],['finish','Finish'],['year','Year'],['serial_number','Serial'],['claim_count','Claims']];
+  return '<section class="panel profile-panel profile-list-panel page-section" data-profile-section="'+section+'" id="profile-'+section+'">'+
+    '<div class="toolbar"><h2>'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
+    '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
+    '<tbody id="profileRows-'+section+'"></tbody></table></div></section>';
+}
+function setProfileSort(section,key){
+  const state=profileSort[section];
+  if(state.key===key)state.direction*=-1;
+  else{state.key=key;state.direction=1}
+  renderProfileGuitars(section);
+}
+function renderProfileGuitars(section){
+  const root=document.getElementById('profileRows-'+section);
+  if(!root)return;
+  const filter=document.getElementById('profileFilter-'+section).value.trim().toLowerCase();
+  const status=section==='owned'?'current_owner':'former_owner';
+  const state=profileSort[section];
+  const rows=profileGuitars.filter(g=>g.ownership_status===status &&
+    [g.manufacturer,g.model,g.finish,g.year,g.serial_number].join(' ').toLowerCase().includes(filter)).sort((a,b)=>{
+      const av=normalizeSortValue(state.key==='id'?a.individual_id:a[state.key],state.key);
+      const bv=normalizeSortValue(state.key==='id'?b.individual_id:b[state.key],state.key);
+      if(av<bv)return -state.direction;
+      if(av>bv)return state.direction;
+      return Number(a.individual_id)-Number(b.individual_id);
+    });
+  for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
+    const el=document.getElementById('profileSort-'+section+'-'+key);
+    if(el)el.textContent=state.key===key?(state.direction===1?'▲':'▼'):'';
+  }
+  root.innerHTML=rows.length?rows.map(g=>
+    '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+')">'+
+      '<td>'+Number(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
+  ).join(''):'<tr><td colspan="7" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
+}
+function profileActivityLabel(a){
+  if(a.claim_type==='ownership')return claimTypeLabel(a.ownership_kind||'acquire');
+  if(a.claim_type==='specification')return a.specification_kind==='repair'?'Repair':'Specification';
+  if(a.claim_type==='incident'||a.claim_type==='event')return claimTypeLabel(a.value_text||a.claim_type);
+  return claimTypeLabel(a.claim_type);
+}
+function renderProfileActivity(items){
+  const root=document.getElementById('profileActivityList');
+  if(!root)return;
+  root.innerHTML=items.length?items.map(a=>{
+    const name=[a.manufacturer,a.model].filter(Boolean).join(' ')||('Product #'+a.individual_id);
+    const date=displayEventDate(a.occurred_at||a.created_at);
+    return '<div class="claim-card'+claimVisualTypeClass(a)+'" onclick="showIndividual('+Number(a.individual_id)+')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showIndividual('+Number(a.individual_id)+')}" aria-label="View '+esc(name)+'">'+
+      '<div class="claim-head"><span class="claim-badge">'+esc(profileActivityLabel(a))+'</span><span class="claim-event-date">'+esc(date)+'</span></div>'+
+      '<div class="profile-activity-product">'+esc(name)+'</div>'+
+      (a.body?'<div class="profile-activity-detail">'+esc(a.body)+'</div>':'')+
+      '<div class="claim-footer"><span></span><span>'+esc(displayInputDate(a.created_at))+'</span></div></div>';
+  }).join(''):'<div class="profile-placeholder">No activity yet.</div>';
+}
+function setupProfileShell(){
+  document.body.classList.add('profile-mode');
+  document.querySelector('header .sub').textContent='User Profile';
+  const nav=document.querySelector('.page-nav');
+  nav.innerHTML='<a href="/user-view">Top Page</a><a href="#profile-user">User Profile</a><a href="#profile-owned">Owned Guitars</a><a href="#profile-former">Formerly Owned Guitars</a><a href="#profile-favorites">Favorite Guitars</a><a href="#profile-activity">Activity</a>';
+  document.querySelector('.left-column').innerHTML=
+    '<section class="panel profile-panel page-section" data-profile-section="user" id="profile-user"><h2>User Profile</h2><div id="profileHero" class="sub">Loading...</div></section>'+
+    profileGuitarTable('owned','Owned Guitars')+
+    profileGuitarTable('former','Formerly Owned Guitars')+
+    '<section class="panel profile-panel page-section" data-profile-section="favorites" id="profile-favorites"><h2>Favorite Guitars</h2><div class="profile-placeholder">Favorite Guitars is coming soon.</div></section>'+
+    '<section class="panel profile-panel page-section" data-profile-section="activity" id="profile-activity"><h2>Activity</h2><div class="profile-activity-list" id="profileActivityList"><div class="sub">Loading...</div></div></section>';
+  for(const selector of ['#statistics','#world-map','.page-bottom-space']){
+    const el=document.querySelector(selector);
+    if(el)el.remove();
+  }
+  document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
+}
+async function loadProfilePage(){
+  const hero=document.getElementById('profileHero');
+  if(!activeUser||!activeUser.user){
+    hero.innerHTML='<div class="profile-name">Members only</div><div class="profile-meta">Sign in to view member profiles.</div><div class="profile-actions"><button onclick="location.href=\'/user-view/edit\'">Sign In / Create Account</button></div>';
+    for(const section of ['owned','former','favorites','activity'])document.getElementById('profile-'+section).hidden=true;
+    document.getElementById('detail').textContent='User Profile is available to members.';
+    return;
+  }
+  try{
+    const [data,activity]=await Promise.all([
+      jfetch('/api/users/'+PROFILE_USER_ID),
+      jfetch('/api/users/'+PROFILE_USER_ID+'/activity')
+    ]);
+    const u=data.user, summary=data.summary||{};
+    profileGuitars=data.guitars||[];
+    const own=Number(activeUser.user.id)===Number(u.id);
+    const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
+    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
+    hero.innerHTML='<div class="profile-hero">'+
+      '<img class="profile-avatar" src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<div><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
+      '<div class="profile-meta">'+esc(locationText)+' · '+esc(u.account_type||'user')+' · Member since '+esc(String(u.created_at||'').slice(0,10))+'</div>'+
+      '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
+      '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">Edit Your Chronicle</button>':'')+'</div></div>';
+    document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
+    renderProfileGuitars('owned');
+    renderProfileGuitars('former');
+    renderProfileActivity(activity);
+    const requested=Number(new URLSearchParams(location.search).get('individual_id')||0);
+    const selected=profileGuitars.find(g=>Number(g.individual_id)===requested)||profileGuitars[0];
+    if(selected)await showIndividual(Number(selected.individual_id));
+  }catch(e){
+    hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';
+  }
+}
+
 (async()=>{
   await loadActiveUser();
+  if(PROFILE_USER_ID){
+    setupProfileShell();
+    await loadProfilePage();
+    return;
+  }
   await loadNewDiscoveries();
   await loadIndividuals();
   await Promise.all([loadTopPageCharts(),loadWorldMap()]);

@@ -531,6 +531,7 @@ function renderAccount(){
       '<div class="detail-meta-item"><span class="detail-meta-label">Country</span><input id="accountCountry" value="'+esc(u.location_country||'')+'"></div>'+
       '<div class="detail-meta-item"><span class="detail-meta-label">Region</span><input id="accountRegion" value="'+esc(u.location_region||'')+'"></div>'+
     '</div>'+
+    '<div class="detail-meta-item" style="margin-top:10px"><label class="detail-meta-label" for="accountBio">Bio</label><textarea id="accountBio" maxlength="2000" style="width:100%;min-height:90px;background:#111418;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;font:inherit;resize:vertical">'+esc(u.bio||'')+'</textarea></div>'+
     '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">User ID '+esc(u.id)+'</span></div>'+
     '<div class="detail-section">Owned Guitars</div>'+
     (guitars.length
@@ -708,7 +709,8 @@ async function saveUser(){
     display_name:document.getElementById('accountName').value.trim(),
     account_type:document.getElementById('accountType').value,
     location_country:document.getElementById('accountCountry').value.trim()||null,
-    location_region:document.getElementById('accountRegion').value.trim()||null
+    location_region:document.getElementById('accountRegion').value.trim()||null,
+    bio:document.getElementById('accountBio').value.trim()
   };
   try{
     activeUser=await jfetch('/api/users/'+id,{

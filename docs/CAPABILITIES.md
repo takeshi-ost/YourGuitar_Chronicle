@@ -11,6 +11,7 @@ Your Guitar Chronicle で現在できることを、**一般ユーザー**と**�
 ### アカウント
 - User / Shop アカウントを作成する
 - Display Name、Account Type、Country、Regionを編集する
+- Bioを編集する
 - アバター画像を登録する
 - 自分に紐づくギターを確認する
 
@@ -229,14 +230,15 @@ Individual Snapshot再構築
 
 
 ## User Profile Page
-- /users/{user_id} で本人・他User共通のプロフィールページを表示する
-- 実データ: Avatar / Display Name / Account Type / Location / Member Since / Owned / Formerly Owned / Claims / Owned Guitars / Formerly Owned Guitars
-- Followers / Following は現時点では 0 のダミー表示
-- Bio / Recent Activity は将来機能のプレースホルダー
-- 他User閲覧時の Follow / Message は現時点では無反応のダミー
+- /users/{user_id} はTop Pageの固定ヘッダー・本人用アカウント行・右側Product Detailを共用する
+- 左側のスクロール領域をUser Profile / Owned Guitars / Formerly Owned Guitars / Favorite Guitars / Activityの5枠に差し替える。各枠に公開設定を後付けできる識別子を持たせる
+- ProfileにはAvatar / Display Name / Account Type / Location / Member Since / Bio / Owned / Formerly Owned / Claimsを表示する。Followers / Followingは現時点で0の表示
+- Owned / Formerly OwnedはProduct Listと同じ列の表で表示し、行を選ぶと右側のProduct Detailが切り替わる
+- Favorite Guitarsは未実装の案内を表示する
+- Activityは本人が投稿したactive Claimを入力日時の新しい順に表示し、選択するとProduct Detailへ移動する
 - 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
 - User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
-- User Profileのギターカードから対象IndividualをUser Viewで直接開ける
+- GuestにはMembers onlyを表示し、プロフィールのギターとActivityを表示しない
 
 
 ## Top Page / Guest Mode

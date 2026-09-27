@@ -320,6 +320,7 @@ class UserUpdateRequest(BaseModel):
         default=None,
         max_length=120,
     )
+    bio: str | None = Field(default=None, max_length=2000)
 
 
 class UserGuitarLinkRequest(BaseModel):
@@ -972,7 +973,7 @@ def user_edit() -> HTMLResponse:
 def user_profile(
     user_id: int,
 ) -> HTMLResponse:
-    return HTMLResponse(USER_PROFILE_HTML)
+    return HTMLResponse(USER_VIEW_HTML)
 
 
 @app.get("/api/status")
@@ -2823,6 +2824,15 @@ def api_user(
     }
 
 
+@app.get("/api/users/{user_id}/activity")
+def api_user_activity(user_id: int) -> list[dict[str, Any]]:
+    repository = repo()
+    user, _guitars = repository.get_user(user_id)
+    if not user or user["account_type"] == "source":
+        raise HTTPException(status_code=404, detail="User not found")
+    return [_row_dict(row) for row in repository.list_user_activity(user_id)]
+
+
 @app.patch("/api/users/{user_id}")
 def api_update_user(
     user_id: int,
@@ -2845,6 +2855,7 @@ def api_update_user(
             location_region=(
                 request.location_region
             ),
+            bio=request.bio,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -3279,7 +3290,6 @@ INDEX_HTML = (Path(__file__).with_name("static") / "index_html.html").read_text(
 
 
 
-USER_PROFILE_HTML = (Path(__file__).with_name("static") / "user_profile_html.html").read_text(encoding="utf-8")
 
 
 USER_VIEW_HTML = (Path(__file__).with_name("static") / "user_view_html.html").read_text(encoding="utf-8")

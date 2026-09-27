@@ -82,6 +82,7 @@ class Repository:
                 "representative_media_asset_id": "INTEGER",
             },
             "users": {
+                "bio": "TEXT",
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
                 "avatar_mime_type": "TEXT",
@@ -2347,7 +2348,10 @@ class Repository:
                         i.model,
                         i.finish,
                         i.year,
-                        i.serial_number
+                        i.serial_number,
+                        (SELECT COUNT(*) FROM claims c
+                         WHERE c.individual_id = i.id
+                           AND c.status = 'active') AS claim_count
                     FROM user_guitars ug
                     INNER JOIN individuals i
                       ON i.id = ug.individual_id
@@ -2378,6 +2382,24 @@ class Repository:
                 user,
                 guitars,
             )
+
+    def list_user_activity(self, user_id: int, limit: int = 100) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(con.execute(
+                """
+                SELECT c.id, c.individual_id, c.claim_type,
+                       c.ownership_kind, c.specification_kind, c.value_text,
+                       c.body, c.occurred_at, c.created_at,
+                       i.manufacturer, i.model, i.year, i.finish,
+                       i.serial_number
+                FROM claims c
+                JOIN individuals i ON i.id = c.individual_id
+                WHERE c.author_user_id = ? AND c.status = 'active'
+                ORDER BY c.created_at DESC, c.id DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ))
 
     def create_claim_notification(
         self,
@@ -2681,6 +2703,7 @@ class Repository:
         account_type: str,
         location_country: str | None,
         location_region: str | None,
+        bio: str | None = None,
     ) -> bool:
         name = display_name.strip()
         account = account_type.strip().lower()
@@ -2706,6 +2729,7 @@ class Repository:
                     account_type = ?,
                     location_country = ?,
                     location_region = ?,
+                    bio = COALESCE(?, bio),
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -2722,6 +2746,7 @@ class Repository:
                         if location_region
                         else None
                     ),
+                    bio.strip() if bio is not None else None,
                     utcnow(),
                     user_id,
                 ),
