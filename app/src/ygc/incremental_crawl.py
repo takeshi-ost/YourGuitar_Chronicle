@@ -34,7 +34,28 @@ def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool
 
 def _year_span(item: dict) -> tuple[int, int] | None:
     """Keep fuzzy Reverb decades within the entire selected manufacture range."""
-    raw = str(item.get("year") or "").replace("’", "'")
+    raw = str(item.get("year") or "").translate(str.maketrans({
+        "’": "'", "‘": "'", "–": "-", "—": "-",
+    }))
+    abbreviated_range = re.fullmatch(
+        r"\s*'?(\d{4}|\d{2})\s*(?:-|to)\s*'?(\d{2})\s*", raw, re.I,
+    )
+    if abbreviated_range:
+        first, last = abbreviated_range.groups()
+        start, end = int(first), int(last)
+        if len(first) == 2:
+            # Match the existing 50s–90s convention. Earlier abbreviated
+            # years have an ambiguous century and remain unclassified.
+            if start < 50 or end < 50:
+                return None
+            start, end = 1900 + start, 1900 + end
+        else:
+            end += (start // 100) * 100
+            if end < start:
+                if start % 100 < 90 or end % 100 > 10:
+                    return None
+                end += 100
+        return (start, end) if 1800 <= start <= end <= 2100 else None
     years = [int(value) for value in re.findall(
         r"(?<!\d)(?:18|19|20)\d{2}(?!\d)", raw,
     )]

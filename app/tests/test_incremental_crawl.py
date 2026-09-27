@@ -7,7 +7,28 @@ from ygc.db.repository import Repository
 from ygc.db.repository import utcnow
 from ygc.incremental_crawl import advance_program, restart_program
 from ygc.incremental_crawl import MAX_SUMMARIES
-from ygc.incremental_crawl import _year_matches
+from ygc.incremental_crawl import _year_matches, _year_span
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("‘67-‘69", (1967, 1969)),
+    ("'70-'80", (1970, 1980)),
+    ("80-84", (1980, 1984)),
+    ("‘67–‘69", (1967, 1969)),
+    ("1967-69", (1967, 1969)),
+    ("1998-02", (1998, 2002)),
+    ("69-67", None),
+    ("20-24", None),
+])
+def test_abbreviated_manufacture_year_ranges(value, expected):
+    assert _year_span({"year": value}) == expected
+
+
+def test_abbreviated_range_must_fit_entire_search_interval():
+    assert _year_matches({"year": "‘67-‘69"}, 1950, 1980)
+    assert _year_matches({"year": "'70-'80"}, 1950, 1980)
+    assert not _year_matches({"year": "80-84"}, 1950, 1980)
+    assert not _year_matches({"year": "1967-69"}, 1967, 1967)
 
 
 class Collector:
