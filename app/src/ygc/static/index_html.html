@@ -409,7 +409,7 @@ function claimCard(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.author_name||'User').trim()||'User';
+    const owner=String(c.ownership_source==='automation'?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')

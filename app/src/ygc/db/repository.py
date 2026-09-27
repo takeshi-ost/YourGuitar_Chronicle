@@ -334,12 +334,7 @@ class Repository:
                 row["source_site"]
                 or "source"
             ).strip()
-            source_name = (
-                "Reverb"
-                if source_site.lower()
-                   == "reverb"
-                else source_site
-            )
+            source_name = "Automation"
 
             if source_name not in source_ids:
                 source_ids[
@@ -1045,6 +1040,7 @@ class Repository:
                 """
                 SELECT
                     c.id,
+                    c.observation_id,
                     c.claim_type,
                     c.value_text,
                     c.ownership_kind,
@@ -1059,6 +1055,11 @@ class Repository:
                         c.claim_type <> 'ownership'
                         OR COALESCE(c.ownership_source, '') <> 'former_owner'
                         OR COALESCE(c.verification_status, 'positive') = 'positive'
+                  )
+                  AND NOT (
+                        c.claim_type = 'ownership'
+                        AND c.ownership_source = 'automation'
+                        AND c.verification_status <> 'positive'
                   )
                   AND c.claim_type IN (
                         'listing',
@@ -1146,6 +1147,20 @@ class Repository:
                     or None
                 )
             elif claim_type == "ownership":
+                if claim["ownership_source"] == "automation":
+                    observation = con.execute(
+                        "SELECT owner_name, owner_type, location_country, "
+                        "location_region, source_url FROM observations WHERE id = ?",
+                        (claim["observation_id"],),
+                    ).fetchone()
+                    if observation:
+                        state["current_owner_name"] = observation["owner_name"] or "Unknown"
+                        state["current_owner_type"] = observation["owner_type"] or "unknown"
+                        state["current_owner_user_id"] = None
+                        state["current_owner_source_url"] = observation["source_url"]
+                        state["location_country"] = observation["location_country"]
+                        state["location_region"] = observation["location_region"]
+                    continue
                 ownership_kind = (
                     str(claim["ownership_kind"] or "acquire").strip().lower()
                     if "ownership_kind" in claim.keys()
@@ -1497,6 +1512,7 @@ class Repository:
                 }
 
             individual_id: int | None = None
+            existing_individual = None
 
             if (
                 normalized_maker
@@ -1580,6 +1596,10 @@ class Repository:
 
             observation_columns = [
                 "individual_id",
+                "owner_name",
+                "owner_type",
+                "location_country",
+                "location_region",
                 "event_type",
                 "source_site",
                 "source_url",
@@ -1595,6 +1615,10 @@ class Repository:
             ]
             observation_values = {
                 "individual_id": individual_id,
+                "owner_name": claim_data.get("owner_name"),
+                "owner_type": claim_data.get("owner_type"),
+                "location_country": claim_data.get("location_country"),
+                "location_region": claim_data.get("location_region"),
                 "event_type": (
                     provenance.get(
                         "event_type"
@@ -1677,8 +1701,34 @@ class Repository:
 
             author_user_id = self._source_user_id(
                 con,
-                "Reverb",
+                "Automation",
             )
+            if existing_individual is not None:
+                current_owner_user_id = existing_individual["current_owner_user_id"]
+                verification = "pending" if current_owner_user_id else "positive"
+                occurred_at = provenance.get("observed_at") or utcnow()
+                now = provenance.get("created_at") or utcnow()
+                cur = con.execute(
+                    """
+                    INSERT INTO claims (
+                        individual_id, observation_id, author_user_id,
+                        claim_type, field_name, value_text, ownership_kind,
+                        ownership_source, verification_status, occurred_at,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'ownership', 'owner', ?, 'acquire',
+                              'automation', ?, ?, 'active', ?, ?)
+                    """,
+                    (individual_id, observation_id, author_user_id,
+                     claim_data.get("owner_name"), verification, occurred_at, now, now),
+                )
+                claim_id = int(cur.lastrowid)
+                if verification == "positive":
+                    self._rebuild_individual_snapshot_in_connection(con, individual_id)
+                return {
+                    "created": True, "observation_id": observation_id,
+                    "claim_id": claim_id, "individual_id": individual_id,
+                    "verification_status": verification,
+                }
             occurred_at = (
                 claim_data.get(
                     "listing_date"
@@ -5421,20 +5471,22 @@ class Repository:
                             WHERE o.id = c.observation_id
                             LIMIT 1
                         ) AS observation_raw_text,
-                        (
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_site'
                             LIMIT 1
-                        ) AS source_site,
-                        (
+                        ), (SELECT o.source_site FROM observations o
+                            WHERE o.id = c.observation_id)) AS source_site,
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_url'
                             LIMIT 1
-                        ) AS source_url,
+                        ), (SELECT o.source_url FROM observations o
+                            WHERE o.id = c.observation_id)) AS source_url,
                         (
                             SELECT li.value_text
                             FROM claim_listing_items li
@@ -5728,13 +5780,17 @@ class Repository:
                 claim["claim_type"] == "ownership"
                 and str(claim["ownership_source"] or "") == "former_owner"
             )
+            is_automation_acquire = (
+                claim["claim_type"] == "ownership"
+                and claim["ownership_source"] == "automation"
+            )
             if (
                 claim["claim_type"] in (
                     "ownership",
                     "listing",
                     "identity_correction",
                 )
-                and not is_former_owner_claim
+                and not (is_former_owner_claim or is_automation_acquire)
             ):
                 raise ValueError(
                     "This Claim type does not use Owner Verification"

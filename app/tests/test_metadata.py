@@ -665,7 +665,7 @@ def test_listing_observation_is_backfilled_as_claim(
     assert claim["observation_id"] == (
         observation_id
     )
-    assert claim["author_name"] == "Reverb"
+    assert claim["author_name"] == "Automation"
     assert claim["listing_title"] == (
         "1965 Fender Jazzmaster"
     )

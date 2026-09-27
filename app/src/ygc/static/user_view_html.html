@@ -954,12 +954,16 @@ function claimHeaderHtml(c,type,eventDate){
     c.claim_type==='ownership'
     && String(c.ownership_source||'')==='former_owner'
   );
-  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership)){
+  const isAutomationAcquire=(
+    c.claim_type==='ownership'
+    && String(c.ownership_source||'')==='automation'
+  );
+  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire)){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
       '<option value="negative"'+(current==='negative'?' selected':'')+'>Negative</option>'+
-      '<option value="unverified"'+(current==='unverified'?' selected':'')+'>Unverified</option>'+
+      '<option value="unverified"'+(['unverified','pending'].includes(current)?' selected':'')+'>Unverified</option>'+
       '</select>';
   }
   return '<span class="claim-badge">'+esc(type)+'</span>'+response+'<span class="claim-event-date">'+esc(eventDate)+'</span>';
@@ -980,7 +984,7 @@ function claimCardFull(c){
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.author_name||'User').trim()||'User';
+    const owner=String(c.ownership_source==='automation'?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')
@@ -1071,7 +1075,7 @@ function compactClaimType(c){
 function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
   if(verification==='positive')return claimCardFull(c);
-  if(verification==='unverified'){
+  if(verification==='unverified'||verification==='pending'){
     return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }
   if(verification==='negative'){
