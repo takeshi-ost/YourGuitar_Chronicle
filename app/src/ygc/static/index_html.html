@@ -45,12 +45,19 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .console-domain .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
 #detail .detail-image{height:240px;max-height:none;object-fit:contain;margin-left:auto;margin-right:auto}#detail .detail-image-link{width:75%;margin-left:auto;margin-right:auto}#detail .detail-image-link .detail-image{width:100%}#detail .detail-gallery{margin-left:auto;margin-right:auto}#detail .detail-gallery .detail-image{height:240px}#detail .detail-source{text-align:center}
 @media(max-width:900px){.domain-grid{grid-template-columns:1fr}.console-domain .cards{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.user-detail-list{grid-template-columns:1fr}}
+html{scroll-behavior:smooth}.sticky-header{position:fixed;top:0;left:0;right:0;z-index:900;background:var(--bg);box-shadow:0 8px 24px rgba(0,0,0,.22)}
+.sticky-header header{min-height:47px;padding:8px 22px;justify-content:flex-start;gap:20px}.sticky-header h1{font-size:20px;white-space:nowrap}.sticky-header .page-nav{display:flex;align-items:center;gap:4px;margin-left:auto;overflow-x:auto}.page-nav a{display:block;padding:5px 8px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap}.page-nav a:hover{background:#23282d;color:var(--text)}.sticky-header button{flex:0 0 auto;font-size:11px;padding:5px 8px}
+main{max-width:none;margin:0;padding:calc(var(--header-height,47px) + 14px) calc(clamp(320px,28vw,430px) + 44px) 22px 22px}.console-domain{scroll-margin-top:calc(var(--header-height,47px) + 14px);margin-bottom:24px}.domain-heading{margin-bottom:8px;padding-bottom:6px}.domain-actions.panel{padding:9px 12px;margin-bottom:10px}.console-domain .cards{gap:6px;margin-bottom:10px}.console-domain .card{padding:8px 10px;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:6px}.console-domain .card .num{font-size:17px;line-height:1.2;white-space:nowrap;order:2}.console-domain .card .label{font-size:10px;line-height:1.3;order:1}.console-domain .crawl-query{margin-bottom:8px}.console-domain .crawl-query textarea{min-height:95px}.console-domain .crawl-controls{grid-template-columns:repeat(4,minmax(80px,1fr)) auto;gap:8px}.console-domain .panel{padding:14px}.guitar-content{min-width:0}.guitar-content>.panel{min-width:0}.guitar-content table{min-width:690px}
+.console-domain .domain-actions.panel{padding:9px 12px}.detail-shell{position:fixed;top:calc(var(--header-height,47px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}.detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}.detail-panel #detail{flex:1;min-height:0;min-width:0;overflow-y:auto;padding-right:4px}.detail-panel h2{flex:0 0 auto}
+@media(max-width:1050px){.console-domain .crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.console-domain .crawl-controls>div:last-child{grid-column:1/-1}.console-domain .crawl-controls button{width:100%}}
+@media(max-width:900px){.sticky-header header{flex-wrap:wrap;gap:6px}.sticky-header h1{white-space:normal}.sticky-header .page-nav{margin-left:0;order:3;width:100%}main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{position:static;width:auto;height:520px;margin:0 0 24px}.detail-panel{height:100%}.console-domain .crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.console-domain .cards{grid-template-columns:repeat(2,minmax(0,1fr))}.console-domain .card{display:block}.console-domain .card .num{margin-bottom:3px}.domain-actions select{max-width:100%}}
 </style>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Browser Console</span></h1><div class="sub">収集とデータベースを管理</div></div><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">Top Page</button></header>
+<div class="sticky-header"><header><h1>Your Guitar Chronicle <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">Top Page</button></header></div>
 <main>
-<section class="console-domain" aria-labelledby="crawlHeading">
+<section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb収集と実行状況</span></div>
 <div class="domain-actions panel"><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button></div>
 <div class="cards" id="cards"></div>
@@ -79,10 +86,10 @@ Gibson ES-335</textarea>
 </div>
 </section>
 
-<section class="console-domain" aria-labelledby="guitarHeading">
+<section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
 <div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product / Claim / DBメンテナンス</span></div>
 <div class="domain-actions panel"><span class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</span><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div>
-<div class="domain-grid">
+<div class="guitar-content">
 <section>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
@@ -93,18 +100,12 @@ Gibson ES-335</textarea>
 <div id="statistics" class="sub">集計中...</div>
 </div>
 </section>
-
-<section>
-<div class="panel">
-<h2>Product Detail</h2>
-<div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div>
 </div>
 </section>
-</div>
-</section>
-<section class="console-domain" aria-labelledby="userHeading">
+<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><h2>Product Detail</h2><div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div></div></aside>
+<section class="console-domain" id="user-db" aria-labelledby="userHeading">
 <div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">ユーザーを検索して登録内容を確認</span></div>
-<div class="domain-actions panel"><span class="sub">操作用ユーザー</span><select id="activeUserSelect" style="width:auto;min-width:170px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
+<div class="domain-actions panel"><span class="sub">操作用ユーザー</span><select id="activeUserSelect" style="width:auto;min-width:170px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>このユーザーでTop Pageを開く</button><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
 <div class="domain-grid">
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">User Detail</h2></div><div id="accountPanel" class="sub">左のUsersから対象を選択してください。</div></div>
@@ -263,6 +264,7 @@ async function loadUsers(){
   select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
   const target=users.some(u=>String(u.id)===saved)?saved:'';
   select.value=target;
+  updateOpenTopButton();
   if(target)await loadActiveUser();
   else{activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY)}
   renderUserList();
@@ -290,7 +292,7 @@ async function showUserRecord(id){
     panel.className='';
     panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><strong>'+esc(u.display_name)+'</strong></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
       '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'" target="_blank" rel="noopener">User Profile</a>'+(activeUser&&Number(activeUser.user.id)===Number(u.id)?'<a href="/user-view/edit" target="_blank" rel="noopener">User Settings</a>':'')+'</div>'+
-      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitarHeading" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
+      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
   }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
 }
 async function createUser(){
@@ -305,10 +307,18 @@ async function createUser(){
 async function setActiveUser(value){
   if(value)localStorage.setItem(ACTIVE_USER_KEY,String(value));
   else localStorage.removeItem(ACTIVE_USER_KEY);
+  updateOpenTopButton();
   await loadActiveUser();
   if(value)await showUserRecord(Number(value));
   else if(selectedUserId)await showUserRecord(selectedUserId);
   if(selectedIndividualId)await showIndividual(selectedIndividualId);
+}
+function updateOpenTopButton(){document.getElementById('openUserTopBtn').disabled=!document.getElementById('activeUserSelect').value}
+function openTopPageAsActiveUser(){
+  const id=document.getElementById('activeUserSelect').value;
+  if(!id||!users.some(user=>String(user.id)===id))return;
+  localStorage.setItem(ACTIVE_USER_KEY,id);
+  window.open('/user-view','_blank','noopener');
 }
 async function loadActiveUser(){
   const id=localStorage.getItem(ACTIVE_USER_KEY);
@@ -550,6 +560,8 @@ async function deleteIndividual(individualId){
 async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+const header=document.querySelector('.sticky-header');
+new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
 (async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
 </script>
 </body></html>

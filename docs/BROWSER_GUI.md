@@ -56,6 +56,7 @@ ygc-web --no-browser
 ## GUIでできること
 
 Browser ConsoleはWeb Crawl、Guitar DB Management、User DB Managementの3領域で構成します。Product Detailの画像は固定の表示枠内で縦横比を維持して縮小・拡大します。User DB ManagementではID・表示名・種別・居住地でユーザーを検索し、選択したユーザーの登録内容、Claim数、所有ギターを確認できます。
+ヘッダーは固定表示し、各領域へのアンカーリンクを配置します。Product DetailもTop Pageと同様に右側へ固定して独立スクロールし、狭い画面ではギターDBの下へ移動します。Web Crawlの統計カードはコンパクト表示です。User DB Managementで操作用ユーザーを選ぶと、そのユーザーを選択した状態でTop Pageを新しいタブに開けます。
 
 - Token設定
   - Reverb Personal Access TokenをWebUIへ貼り付けて保存
