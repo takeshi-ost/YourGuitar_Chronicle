@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
+import secrets
 import json
 import re
 import shutil
@@ -23,6 +25,23 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from ygc import config
+
+CONSOLE_ADMIN_TOKEN = secrets.token_urlsafe(32)
+
+
+def _local_console_request(request: Request) -> bool:
+    try:
+        return bool(request.client and ipaddress.ip_address(request.client.host).is_loopback
+                    and (request.url.hostname == "localhost" or
+                         ipaddress.ip_address(request.url.hostname or "").is_loopback))
+    except ValueError:
+        return False
+
+
+def _require_console_admin(request: Request) -> None:
+    token = request.headers.get("X-YGC-Console-Admin", "")
+    if not _local_console_request(request) or not secrets.compare_digest(token, CONSOLE_ADMIN_TOKEN):
+        raise HTTPException(status_code=403, detail="Local Browser Console administrator access required")
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.crawl_service import crawl_query
 from ygc.crawl_detail_cache import reprocess_details
@@ -972,8 +991,11 @@ def _validate_backup_media_references(
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
-    return HTMLResponse(INDEX_HTML)
+def index(request: Request) -> HTMLResponse:
+    token = CONSOLE_ADMIN_TOKEN if _local_console_request(request) else ""
+    return HTMLResponse(INDEX_HTML.replace('const CONSOLE_ADMIN_TOKEN="";',
+                        'const CONSOLE_ADMIN_TOKEN=' + json.dumps(token) + ';'),
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/user-view", response_class=HTMLResponse)
@@ -2214,7 +2236,9 @@ async def api_create_new_guitar(
 @app.delete("/api/claims/{claim_id}")
 def api_delete_claim(
     claim_id: int,
+    request: Request,
 ) -> dict[str, Any]:
+    _require_console_admin(request)
     repository = repo()
     try:
         result = repository.delete_claim(
@@ -2233,10 +2257,30 @@ def api_delete_claim(
     return result
 
 
+class AdminClaimRequest(BaseModel):
+    action: str = Field(pattern="^(positive|negative|unverified|delete)$")
+    confirm_individual_delete: bool = False
+
+
+@app.post("/api/admin/claims/{claim_id}/moderate")
+def api_admin_moderate_claim(claim_id: int, body: AdminClaimRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        result = repo().admin_moderate_claim(
+            claim_id, body.action, confirm_individual_delete=body.confirm_individual_delete)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return result
+
+
 @app.delete("/api/individuals/{individual_id}")
 def api_delete_individual(
     individual_id: int,
+    request: Request,
 ) -> dict[str, Any]:
+    _require_console_admin(request)
     deleted = repo().delete_individual(
         individual_id
     )

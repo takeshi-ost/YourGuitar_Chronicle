@@ -148,6 +148,7 @@ Gibson ES-335</textarea>
 </main>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <script>
+const CONSOLE_ADMIN_TOKEN="";
 let individuals=[];
 let individualSortKey='id';
 let individualSortDirection=1;
@@ -503,7 +504,9 @@ function claimCard(c){
   if(c.evidence_media_id&&c.claim_type!=='media')body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
-  const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span><button class="claim-vote bad" onclick="deleteClaim('+c.id+')">Delete</button></div>';
+  const verification=String(c.verification_status||'positive');
+  const moderation='<label>Verification <select aria-label="Claim Verification" style="width:auto" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onchange="moderateClaim('+Number(c.id)+',this.value)">'+[['positive','Positive / 許可'],['negative','Negative / 不許可'],['unverified','Unverified / 未確認']].map(x=>'<option value="'+x[0]+'" '+(verification===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>';
+  const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote bad" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
 function renderAdminChronicle(claims){
@@ -568,14 +571,17 @@ async function showIndividual(id){
   out+='<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span></div><div class="accordion-body"><div id="chronicleEntries">'+renderAdminChronicle(claims)+'</div></div></section>';
   document.getElementById('detail').innerHTML=out;
 }
-async function deleteClaim(claimId){
-  if(!confirm('Claim #'+claimId+' を完全に削除します。\nこの操作は元に戻せません。続行しますか？'))return;
+async function moderateClaim(claimId,action,isListing=false){
+  const message=action==='delete'?(isListing?'Listing Claimを削除します。最後のListingの場合、個体と全ての関連記録も削除されます。続行しますか？':'Claimを削除します。対になった所有履歴は一緒に削除されます。続行しますか？'):'Claim #'+claimId+' を管理者権限で '+action+' に変更し、個体情報を再計算します。続行しますか？';
+  if(!confirm(message)){if(selectedIndividualId)await showIndividual(selectedIndividualId);return}
   try{
-    const d=await jfetch('/api/claims/'+claimId,{method:'DELETE'});
-    if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
+    const d=await jfetch('/api/admin/claims/'+claimId+'/moderate',{method:'POST',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify({action,confirm_individual_delete:action==='delete'&&isListing})});
+    if(d.individual_deleted){selectedIndividualId=null;document.getElementById('detail').textContent='Individualを削除しました。'}else if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
     await loadIndividuals();
+    await loadStatistics();
   }catch(e){
-    alert('Claim削除に失敗しました。\n'+e.message);
+    alert('管理操作に失敗しました。\n'+e.message);
+    if(selectedIndividualId)await showIndividual(selectedIndividualId);
   }
 }
 async function deleteIndividual(individualId){
@@ -585,7 +591,7 @@ async function deleteIndividual(individualId){
   const typed=prompt('確認のため DELETE と入力してください。');
   if(typed!=='DELETE')return;
   try{
-    await jfetch('/api/individuals/'+individualId,{method:'DELETE'});
+    await jfetch('/api/individuals/'+individualId,{method:'DELETE',headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
     if(selectedIndividualId===Number(individualId))selectedIndividualId=null;
     document.getElementById('detail').textContent='Individualを削除しました。';
     await loadIndividuals();

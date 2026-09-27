@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS claims (
  occurred_at TEXT,
  status TEXT NOT NULL DEFAULT 'active',
  verification_status TEXT NOT NULL DEFAULT 'positive',
+ admin_verification INTEGER NOT NULL DEFAULT 0,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
@@ -288,3 +289,13 @@ CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_i
 CREATE INDEX IF NOT EXISTS idx_claim_spec_items_claim_id ON claim_spec_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_listing_items_claim_id ON claim_listing_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_identity_items_claim_id ON claim_identity_items(claim_id);
+
+CREATE TABLE IF NOT EXISTS claim_admin_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ individual_id INTEGER NOT NULL,
+ action TEXT NOT NULL,
+ previous_verification TEXT,
+ actor TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);

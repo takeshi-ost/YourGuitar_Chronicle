@@ -102,6 +102,7 @@ class Repository:
                 "ownership_pair_id": "TEXT",
                 "target_claim_id": "INTEGER",
                 "verification_status": "TEXT NOT NULL DEFAULT 'positive'",
+                "admin_verification": "INTEGER NOT NULL DEFAULT 0",
             },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
@@ -221,15 +222,6 @@ class Repository:
                         release["id"],
                     ),
                 )
-
-        con.execute(
-            """
-            UPDATE claims
-            SET verification_status = 'positive'
-            WHERE claim_type = 'listing'
-              AND COALESCE(verification_status, '') <> 'positive'
-            """
-        )
 
         con.execute(
             """
@@ -876,6 +868,7 @@ class Repository:
                 """
                 SELECT
                     c.id AS claim_id,
+                    c.verification_status,
                     li.field_name,
                     li.value_text
                 FROM claims c
@@ -922,6 +915,10 @@ class Repository:
                 row["field_name"]
                 or ""
             ).strip().lower()
+            # Retain the founding identity as the stable address of a disputed
+            # Individual; rejected Listing assertions must not set other state.
+            if row["verification_status"] != "positive" and field not in identity_fields:
+                continue
             value = (
                 str(row["value_text"]).strip()
                 if row["value_text"] is not None
@@ -968,6 +965,7 @@ class Repository:
                 WHERE c.individual_id = ?
                   AND c.claim_type = 'identity_correction'
                   AND c.status = 'active'
+                  AND c.verification_status = 'positive'
                 ORDER BY
                     COALESCE(
                         c.occurred_at,
@@ -1051,12 +1049,7 @@ class Repository:
                 FROM claims c
                 WHERE c.individual_id = ?
                   AND c.status = 'active'
-                  AND (
-                        c.claim_type <> 'ownership'
-                        OR COALESCE(c.ownership_source, '') NOT IN
-                           ('former_owner', 'automation')
-                        OR COALESCE(c.verification_status, 'positive') = 'positive'
-                  )
+                  AND COALESCE(c.verification_status, 'positive') = 'positive'
                   AND c.claim_type IN (
                         'listing',
                         'ownership'
@@ -5800,6 +5793,47 @@ class Repository:
             ).fetchone()
 
 
+    def admin_moderate_claim(self, claim_id: int, action: str, *,
+                             confirm_individual_delete: bool = False) -> dict | None:
+        if action not in ("positive", "negative", "unverified", "delete"):
+            raise ValueError("Invalid admin action")
+        with self.connect() as con:
+            claim = con.execute("SELECT * FROM claims WHERE id=?", (claim_id,)).fetchone()
+            if not claim:
+                return None
+            individual_id = int(claim["individual_id"])
+            targets = [claim]
+            if claim["ownership_pair_id"]:
+                targets = con.execute(
+                    "SELECT * FROM claims WHERE individual_id=? AND ownership_pair_id=?",
+                    (individual_id, claim["ownership_pair_id"]),
+                ).fetchall()
+            delete_individual = False
+            if action == "delete" and claim["claim_type"] == "listing" and claim["status"] == "active":
+                other = con.execute("SELECT 1 FROM claims WHERE individual_id=? AND claim_type='listing' "
+                                    "AND status='active' AND id<>?", (individual_id, claim_id)).fetchone()
+                delete_individual = not other
+                if delete_individual and not confirm_individual_delete:
+                    raise ValueError("Deleting the last Listing also deletes the Individual and its related records. Confirmation required.")
+            for target in targets:
+                con.execute("INSERT INTO claim_admin_actions "
+                            "(claim_id, individual_id, action, previous_verification, actor, created_at) "
+                            "VALUES (?, ?, ?, ?, 'local-console-admin', ?)",
+                            (target["id"], individual_id, action, target["verification_status"], utcnow()))
+            if delete_individual:
+                con.execute("DELETE FROM observations WHERE individual_id=?", (individual_id,))
+                con.execute("DELETE FROM individuals WHERE id=?", (individual_id,))
+                return {"claim_id": claim_id, "individual_id": individual_id, "individual_deleted": True}
+            for target in targets:
+                if action == "delete":
+                    con.execute("DELETE FROM claims WHERE id=?", (target["id"],))
+                else:
+                    con.execute("UPDATE claims SET verification_status=?, admin_verification=1, updated_at=? WHERE id=?",
+                                (action, utcnow(), target["id"]))
+            snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            return {"claim_id": claim_id, "individual_id": individual_id,
+                    "individual_deleted": False, "snapshot": snapshot}
+
     def set_claim_response(
         self,
         claim_id: int,
@@ -5823,6 +5857,7 @@ class Repository:
                 SELECT
                     individual_id,
                     author_user_id,
+                    admin_verification,
                     claim_type,
                     ownership_source,
                     ownership_pair_id
@@ -5834,6 +5869,8 @@ class Repository:
             ).fetchone()
             if not claim:
                 return False
+            if claim["admin_verification"]:
+                raise ValueError("This Claim has an administrator verification decision")
 
             if int(claim["author_user_id"]) == int(responder_user_id):
                 raise ValueError(
