@@ -15,10 +15,10 @@
 :root[data-theme="sunburst_3ply"] {
   color-scheme: light;
   --bg: #130e0b;
-  --page-image: radial-gradient(ellipse at 50% 46%, #593015 0%, #371c0e 43%, #130d0b 78%, #080707 100%);
-  --panel: #f0e7cf;
-  --surface: #e7dbc0;
-  --input: #fff9ea;
+  --page-image: linear-gradient(90deg, #28150e 0%, #673015 9%, #a55220 19%, #b9682c 25%, #b9682c 75%, #a55220 81%, #673015 91%, #28150e 100%);
+  --panel: #fffaf0;
+  --surface: #f4ead5;
+  --input: #fffcf5;
   --line: #29221a;
   --text: #241d17;
   --muted: #62584a;
@@ -37,7 +37,12 @@
   color: var(--text);
 }
 :root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.modal,.notification-panel) {
-  border: 4px double #0d0c0b;
+  border: 1px solid #11100d;
+  box-shadow: inset 0 0 0 2px #fffaf0,
+              inset 0 0 0 3px #11100d,
+              inset 0 0 0 5px #fffaf0,
+              inset 0 0 0 6px #11100d,
+              0 8px 22px rgba(12, 8, 5, .22);
 }
 :root[data-theme="light_default"] :is(.discovery-list,.observation-card,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed),
 :root[data-theme="sunburst_3ply"] :is(.discovery-list,.observation-card,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed) {
