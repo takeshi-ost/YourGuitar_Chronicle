@@ -3191,12 +3191,19 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
     try:
         with ReverbAPICollector(
             token=token, api_base=config.REVERB_API_BASE,
-            timeout=config.REQUEST_TIMEOUT, delay=1.0,
+            timeout=config.REQUEST_TIMEOUT, delay=0.5,
             max_workers=1,
         ) as collector:
             result = advance_program(
                 repo(), collector, request.category, request.year_min,
                 request.year_max,
+                progress_callback=lambda counts: _set_job(
+                    job_id,
+                    message=(f"一覧 {counts['summaries_processed']}/500・"
+                             f"詳細 {counts['details_fetched']}/100"),
+                    progress=min(0.95, max(counts["summaries_processed"] / 500,
+                                           counts["details_fetched"] / 100)),
+                ),
             )
         _set_job(job_id, status="done", message="1回分の処理が完了しました",
                  progress=1.0, aggregate=result, finished_at=time.time())

@@ -7,7 +7,7 @@ import re
 import time
 import httpx
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from ygc import config
 from ygc.db.repository import Repository, utcnow
@@ -15,9 +15,11 @@ from ygc.reverb_adapter import to_listing_claim_data, to_provenance_observation
 
 
 CATEGORY_QUERY = {"electric": "electric guitar", "acoustic": "acoustic guitar"}
-MAX_SUMMARIES = 5
-MAX_RECHECKS = 2
-MIN_REQUEST_GAP = 1.0
+MAX_SUMMARIES = 500
+MAX_DETAILS = 100
+MAX_LIST_PAGES = 5
+MAX_RECHECKS = 5
+MIN_REQUEST_GAP = 0.5
 
 
 def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool:
@@ -165,12 +167,14 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
 
 
 def advance_program(repository: Repository, collector: Any, category: str,
-                    year_min: int, year_max: int) -> dict:
+                    year_min: int, year_max: int,
+                    progress_callback: Callable[[dict], None] | None = None) -> dict:
     if category not in CATEGORY_QUERY or year_min < 1800 or year_max > 2100 or year_min > year_max:
         raise ValueError("Invalid category or manufacture-year range")
     key = (category, year_min, year_max)
     program = _program(repository, key)
-    counts = {"summaries_processed": 0, "details_fetched": 0,
+    counts = {"listing_pages_fetched": 0, "summaries_processed": 0,
+              "details_fetched": 0,
               "new_observations": 0, "skipped_existing": 0,
               "skipped_category_or_year": 0}
     run_id = repository.start_run("reverb")
@@ -178,23 +182,40 @@ def advance_program(repository: Repository, collector: Any, category: str,
     try:
         if not program["finished"]:
             pending = json.loads(program["pending_json"]) if program["pending_json"] else []
-            if not pending:
-                last_request = _pause(last_request)
-                if program["page_url"]:
-                    payload = collector._get_json(collector.safe_api_url(program["page_url"]))
-                else:
-                    payload = collector._get_json(
-                        f"{collector.api_base}/listings",
-                        params={"query": CATEGORY_QUERY[category],
-                                "year_min": year_min, "year_max": year_max},
-                    )
-                pending = payload.get("listings") or (payload.get("_embedded") or {}).get("listings") or []
-                next_href = collector._next_href(payload)
-                next_url = collector.safe_api_url(next_href) if next_href else None
-                _save_program(repository, key, pending_json=json.dumps(pending),
-                              next_url=next_url, page_url=None)
-                program["next_url"] = next_url
-            for summary in pending[:MAX_SUMMARIES]:
+            while (counts["summaries_processed"] < MAX_SUMMARIES
+                   and counts["details_fetched"] < MAX_DETAILS
+                   and not program["finished"]):
+                if not pending:
+                    if counts["listing_pages_fetched"] >= MAX_LIST_PAGES:
+                        break
+                    last_request = _pause(last_request)
+                    if program["page_url"]:
+                        payload = collector._get_json(collector.safe_api_url(program["page_url"]))
+                    else:
+                        payload = collector._get_json(
+                            f"{collector.api_base}/listings",
+                            params={"query": CATEGORY_QUERY[category],
+                                    "year_min": year_min, "year_max": year_max},
+                        )
+                    counts["listing_pages_fetched"] += 1
+                    pending = payload.get("listings") or (payload.get("_embedded") or {}).get("listings") or []
+                    next_href = collector._next_href(payload)
+                    next_url = collector.safe_api_url(next_href) if next_href else None
+                    _save_program(repository, key, pending_json=json.dumps(pending),
+                                  next_url=next_url, page_url=None)
+                    program["next_url"] = next_url
+                    program["page_url"] = None
+                    if not pending and not next_url:
+                        _save_program(repository, key, pending_json=None, finished=1)
+                        program["finished"] = 1
+                        break
+                    if not pending:
+                        _save_program(repository, key, pending_json=None,
+                                      page_url=next_url, next_url=None)
+                        program["page_url"] = next_url
+                        program["next_url"] = None
+                        continue
+                summary = pending[0]
                 listing_id = collector.listing_id(summary)
                 if not listing_id:
                     counts["skipped_category_or_year"] += 1
@@ -243,10 +264,16 @@ def advance_program(repository: Repository, collector: Any, category: str,
                 _save_program(repository, key, pending_json=json.dumps(pending),
                               processed=program["processed"] + counts["summaries_processed"],
                               observations_created=program["observations_created"] + counts["new_observations"])
-            if not pending:
-                _save_program(repository, key, pending_json=None,
-                              page_url=program["next_url"], next_url=None,
-                              finished=int(program["next_url"] is None))
+                if progress_callback and counts["summaries_processed"] % 10 == 0:
+                    progress_callback(dict(counts))
+                if not pending:
+                    following_page = program["next_url"]
+                    _save_program(repository, key, pending_json=None,
+                                  page_url=following_page, next_url=None,
+                                  finished=int(following_page is None))
+                    program["page_url"] = following_page
+                    program["next_url"] = None
+                    program["finished"] = int(following_page is None)
         rechecks, last_request = _recheck(repository, collector, last_request)
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_processed"],

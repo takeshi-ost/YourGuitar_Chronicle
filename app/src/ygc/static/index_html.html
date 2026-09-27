@@ -76,7 +76,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 <div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Tokenを入力"><button onclick="saveToken()">保存</button><button class="secondary" onclick="clearToken()">削除</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
 <div class="panel">
 <h2>Incremental Crawl</h2>
-<div class="sub">製造年と分野で検索。1クリックで一覧最大1ページ・候補最大5件・既存Listingの公開確認最大2件を処理します。カテゴリ検索は検索語と取得結果のカテゴリ確認による試作です。</div>
+<div class="sub">製造年と分野で検索。1クリックで一覧最大5ページ・500件を走査し、詳細最大100件・既存Listingの公開確認最大5件を処理します。カテゴリ検索は検索語と取得結果のカテゴリ確認による試作です。</div>
 <div class="crawl-controls" style="margin-top:10px">
 <div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="electric">Electric Guitars</option><option value="acoustic">Acoustic Guitars</option></select></div>
 <div><div class="sub">Year Min</div><input id="programYearMin" type="number" value="1950" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
