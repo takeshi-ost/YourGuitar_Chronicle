@@ -109,8 +109,19 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 #detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}#detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}#detail .catalog-spec{font-size:12px;line-height:1.55}#detail .catalog-spec-row{padding:3px 0}
 #detail .accordion-section{margin-top:10px}#detail .accordion-header{display:flex;align-items:center;gap:8px;min-height:34px;margin:18px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}#detail .accordion-toggle{width:24px;height:24px;min-width:24px;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}#detail .accordion-title{font-weight:700;cursor:pointer}#detail .accordion-section.collapsed .accordion-body{display:none}#detail .accordion-section.collapsed .accordion-toggle{transform:rotate(-90deg)}
 #detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}#detail .claim-badge{min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:4px 8px}#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}#detail .claim-votes{align-items:center}#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}#detail #chronicleEntries{max-height:none;overflow:visible;padding:0}
+.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}
+#detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}#detail .detail-header>.toolbar button{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+#detail .accordion-header{min-width:0;flex-wrap:wrap}#detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap;margin:0 0 0 auto}#detail .accordion-header .toolbar select{height:28px;width:auto;max-width:100%;padding:4px 8px;font-size:11px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:7px}
+#detail .detail-image-link,#detail .detail-gallery{margin-left:auto;margin-right:auto}#detail .detail-gallery .detail-image{height:240px}#detail .detail-source{overflow-wrap:anywhere}
+.claim-compact-row{display:flex;justify-content:center;align-items:center;min-height:24px;margin:2px 0 4px 22px;position:relative}.claim-compact-row:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:6px;background:#4c5258;pointer-events:none}
+.claim-compact-tag{border:0;border-radius:999px;padding:4px 9px;font-size:9px;font-weight:800;cursor:pointer;background:#3a3f45;color:var(--text)}.claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}.claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}.claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}.claim-compact-tag.claim-type-event{background:#9360b8;color:#120917}.claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
+.claim-negative-dot,.claim-negative-dot:hover{background:transparent!important;color:#929aa2!important;border:0;font-size:20px;line-height:1;cursor:pointer}
+.claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}.claim-card.claim-type-specification{background:#101820;border-color:#29465d}.claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}.claim-card.claim-type-event{background:#1b1422;border-color:#4d3560}.claim-card.claim-type-media{background:#21190d;border-color:#5b4724}
+.claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}.claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}.claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}.claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
+#adminClaimPopup{position:fixed;inset:0;z-index:1001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}#adminClaimPopup.open{display:flex}#adminClaimPopupContent{width:min(480px,100%);max-height:calc(100vh - 32px);overflow:auto}#adminClaimPopupContent .claim-card{margin:0}
 @media(max-width:900px){main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{height:auto;margin:0}.stats-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats-columns{grid-template-columns:1fr}#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
+<script src="/assets/product-detail.js" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -206,6 +217,7 @@ Gibson ES-335</textarea>
 <div class="toolbar"><h2 style="margin:0;flex:1">Observation判定経路</h2><button class="secondary" onclick="document.getElementById('observationDiagnosticDialog').close()">Close</button></div>
 <div id="observationDiagnosticBody" aria-live="polite"></div>
 </dialog>
+<div id="adminClaimPopup" onclick="closeAdminClaim(event)" role="dialog" aria-label="Claim Detail"><div id="adminClaimPopupContent"></div></div>
 <script>
 const CONSOLE_ADMIN_TOKEN="";
 let individuals=[];
@@ -694,13 +706,36 @@ function claimCard(c){
   const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote bad" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
-function renderAdminChronicle(claims){
-  const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'').slice(0,10);const bv=String(b.occurred_at||b.created_at||'').slice(0,10);if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
-  const correctionsByTarget=new Map();const roots=[];
-  for(const claim of sorted){if(claim.claim_type==='identity_correction'&&claim.target_claim_id){const key=Number(claim.target_claim_id);if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);correctionsByTarget.get(key).push(claim)}else roots.push(claim)}
-  const ordered=[];for(const claim of roots){ordered.push(claim);const corrections=correctionsByTarget.get(Number(claim.id))||[];corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));ordered.push(...corrections);correctionsByTarget.delete(Number(claim.id))}
-  for(const corrections of correctionsByTarget.values())ordered.push(...corrections);
-  return ordered.length?ordered.map(claimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
+let chronicleSort='event';
+let currentAdminClaims=[];
+function renderAdminChronicle(){
+  const ordered=YGCProductDetail.orderedClaims(currentAdminClaims,chronicleSort);
+  const target=document.getElementById('chronicleEntries');
+  if(target)target.innerHTML=ordered.length?ordered.map(adminClaimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
+}
+function setChronicleSort(value){
+  chronicleSort=value==='input'?'input':'event';
+  renderAdminChronicle();
+  const list=document.getElementById('chronicleEntries');
+  if(list)list.scrollTop=0;
+}
+function adminClaimCard(c){
+  const status=String(c.verification_status||'positive').toLowerCase();
+  if(status==='positive')return claimCard(c);
+  const label=c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):claimTypeLabel(c.claim_type);
+  return '<div class="claim-compact-row">'+(status==='negative'
+    ? '<button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openAdminClaim('+Number(c.id)+')">◉</button>'
+    : '<button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openAdminClaim('+Number(c.id)+')">'+esc(label)+'</button>')+'</div>';
+}
+function openAdminClaim(id){
+  const claim=currentAdminClaims.find(c=>Number(c.id)===Number(id));
+  const content=document.getElementById('adminClaimPopupContent');
+  if(claim&&content)content.innerHTML=claimCard(claim);
+  document.getElementById('adminClaimPopup').classList.add('open');
+}
+function closeAdminClaim(event){
+  if(event&&event.target.id!=='adminClaimPopup')return;
+  document.getElementById('adminClaimPopup').classList.remove('open');
 }
 function toggleDetailAccordion(id){
   const section=document.getElementById(id);
@@ -709,7 +744,10 @@ function toggleDetailAccordion(id){
 let individualLoadSequence=0;
 async function showIndividual(id){
   const sequence=++individualLoadSequence;
+  const changedIndividual=selectedIndividualId!==Number(id);
   selectedIndividualId=Number(id);
+  renderIndividuals();
+  if(changedIndividual)document.getElementById('detail').scrollTop=0;
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
@@ -733,26 +771,17 @@ async function showIndividual(id){
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
 
-  const specMap={};for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
-  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
-  const fixedSpecRows=[['Maker',i.manufacturer||'—'],['Model',i.model||'—'],['Finish',finishValue||'—'],['Year',i.year||'—'],['Serial',i.serial_number||'—']];
-  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
-  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
-  const dynamicSpecs=(currentSpecifications||[]).filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase())).slice().sort((a,b)=>{const ak=String(a.field_name||'').toLowerCase();const bk=String(b.field_name||'').toLowerCase();const ai=preferredOrder.indexOf(ak);const bi=preferredOrder.indexOf(bk);if(ai>=0||bi>=0){if(ai<0)return 1;if(bi<0)return-1;if(ai!==bi)return ai-bi}return ak.localeCompare(bk)});
-
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i.id)+
-    '<div class="toolbar" style="margin-top:8px"><button class="secondary bad" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div></div>';
-  out+='<section class="accordion-section" id="specificationAccordion"><div class="accordion-header"><button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button><span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span></div><div class="accordion-body"><div class="catalog-spec">'+
-    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
-    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
-    '</div></div></section>';
-  out+='<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span></div><div class="accordion-body"><div id="chronicleEntries">'+renderAdminChronicle(claims)+'</div></div></section>';
+  currentAdminClaims=claims||[];
+  const chronicleAction='<div class="toolbar"><select aria-label="Chronicle sort" onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>';
+  out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
+    owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i.id),
+    headerAction:'<div class="toolbar admin-detail-actions"><button class="secondary bad" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
+    chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
+  renderAdminChronicle();
 }
 async function moderateClaim(claimId,action,isListing=false){
+  closeAdminClaim();
   const message=action==='delete'?(isListing?'Listing Claimを削除します。最後のListingの場合、個体と全ての関連記録も削除されます。続行しますか？':'Claimを削除します。対になった所有履歴は一緒に削除されます。続行しますか？'):'Claim #'+claimId+' を管理者権限で '+action+' に変更し、個体情報を再計算します。続行しますか？';
   if(!confirm(message)){if(selectedIndividualId)await showIndividual(selectedIndividualId);return}
   try{

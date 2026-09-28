@@ -256,6 +256,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
 <link rel="stylesheet" href="/assets/themes.css">
+<script src="/assets/product-detail.js" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -1209,42 +1210,10 @@ function toggleDetailAccordion(id){
   if(section)section.classList.toggle('collapsed');
 }
 
-function chronologyValue(c,mode){
-  if(mode==='input')return String(c.created_at||'');
-  return String(c.occurred_at||c.created_at||'').slice(0,10);
-}
 function renderChronicle(){
-  const sorted=currentClaims.slice().sort((a,b)=>{
-    const av=chronologyValue(a,chronicleSort);
-    const bv=chronologyValue(b,chronicleSort);
-    if(av<bv)return 1;
-    if(av>bv)return -1;
-    return Number(b.id)-Number(a.id);
-  });
-  const correctionsByTarget=new Map();
-  const roots=[];
-  for(const claim of sorted){
-    if(claim.claim_type==='identity_correction'&&claim.target_claim_id){
-      const key=Number(claim.target_claim_id);
-      if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);
-      correctionsByTarget.get(key).push(claim);
-    }else{
-      roots.push(claim);
-    }
-  }
-  const claims=[];
-  for(const claim of roots){
-    claims.push(claim);
-    const corrections=correctionsByTarget.get(Number(claim.id))||[];
-    corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    claims.push(...corrections);
-    correctionsByTarget.delete(Number(claim.id));
-  }
-  for(const corrections of correctionsByTarget.values())claims.push(...corrections);
+  const claims=YGCProductDetail.orderedClaims(currentClaims,chronicleSort);
   const el=document.getElementById('chronicleEntries');
-  if(el)el.innerHTML=claims.length
-    ? claims.map(claimCard).join('')
-    : '<div class="sub">Claimはまだありません。</div>';
+  if(el)el.innerHTML=claims.length?claims.map(claimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
 }
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
@@ -1331,53 +1300,10 @@ async function showIndividual(id){
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
-  const specMap={};
-  for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
-  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
-  const fixedSpecRows=[
-    ['Maker',i.manufacturer||'—'],
-    ['Model',i.model||'—'],
-    ['Finish',finishValue||'—'],
-    ['Year',i.year||'—'],
-    ['Serial',i.serial_number||'—']
-  ];
-  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
-  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
-  const dynamicSpecs=(currentSpecifications||[])
-    .filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase()))
-    .slice()
-    .sort((a,b)=>{
-      const ak=String(a.field_name||'').toLowerCase();
-      const bk=String(b.field_name||'').toLowerCase();
-      const ai=preferredOrder.indexOf(ak);
-      const bi=preferredOrder.indexOf(bk);
-      if(ai>=0||bi>=0){
-        if(ai<0)return 1;
-        if(bi<0)return-1;
-        if(ai!==bi)return ai-bi;
-      }
-      return ak.localeCompare(bk);
-    });
-  out+='<div class="detail-header"><div class="detail-title-row"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+favoriteButton(i.id)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i)+'</div>';
-  out+='<section class="accordion-section" id="specificationAccordion">'+
-    '<div class="accordion-header">'+
-      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button>'+
-      '<span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span>'+
-    '</div>'+
-    '<div class="accordion-body"><div class="catalog-spec">'+
-      fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
-      dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
-    '</div></div></section>';
-  out+='<section class="accordion-section" id="chronicleAccordion">'+
-    '<div class="accordion-header">'+
-      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button>'+
-      '<span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span>'+
-      '<div class="toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>'+
-    '</div>'+
-    '<div class="accordion-body"><div id="chronicleEntries"></div></div></section>';
+  const chronicleAction='<div class="toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>';
+  out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
+    owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i),
+    titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
   if(changedIndividual){
