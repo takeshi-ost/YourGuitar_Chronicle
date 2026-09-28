@@ -1731,7 +1731,7 @@ class Repository:
             }
 
     def record_reverb_unavailable(self, listing_id: str) -> dict[str, Any]:
-        """Release only the external owner currently sourced from this listing."""
+        """Record Automation Lost for the current external listing source."""
         with self.connect() as con:
             evidence = con.execute(
                 """SELECT e.claim_id,e.legacy_observation_id,e.source_url,c.individual_id
@@ -1761,7 +1761,7 @@ class Repository:
             )
             if con.execute(
                 "SELECT 1 FROM claims WHERE (observation_id = ? OR target_claim_id = ?) AND "
-                "status = 'active' AND ((ownership_source = 'automation' AND ownership_kind = 'release') "
+                "status = 'active' AND ((ownership_source = 'automation' AND ownership_kind IN ('lost', 'release')) "
                 "OR (claim_type = 'event' AND value_text = 'reverb_unavailable'))",
                 (legacy_id, source_claim_id),
             ).fetchone():
@@ -1781,13 +1781,13 @@ class Repository:
                 (individual_id, legacy_id if con.execute(
                     'SELECT 1 FROM observations WHERE id=?', (legacy_id,)).fetchone() else None,
                  source_claim_id, author_id,
-                 "ownership", "owner", "unknown", "release", "automation",
+                 "ownership", "owner", "unknown", "lost", "automation",
                  "Reverb listing no longer publicly available (confirmed twice).",
                  now, now, now),
             )
             self._rebuild_individual_snapshot_in_connection(con, individual_id)
             return {"created": True, "claim_id": int(cur.lastrowid),
-                    "owner_released": True, "individual_id": individual_id}
+                    "owner_lost": True, "individual_id": individual_id}
 
     def upsert_observation(
         self,
@@ -5159,6 +5159,8 @@ class Repository:
                 raise ValueError(
                     "Identity Correction Claims cannot be edited directly"
                 )
+            if claim["claim_type"] == "ownership" and claim["ownership_kind"] == "lost":
+                raise ValueError("Automation Lost Claims cannot be edited by users")
 
             if claim["claim_type"] == "ownership" and (claim["ownership_kind"] or "acquire") == "acquire":
                 if not event_date:
@@ -6012,7 +6014,8 @@ class Repository:
         responder_user_id: int,
         is_current_owner: bool,
     ) -> str | None:
-        if claim['claim_type'] in ('listing', 'identity_correction'):
+        if (claim['claim_type'] in ('listing', 'identity_correction')
+                or (claim['claim_type'] == 'ownership' and claim['ownership_kind'] == 'lost')):
             return 'This Claim type does not use Owner Verification'
         if not is_current_owner:
             if claim['admin_verification']:
@@ -6035,7 +6038,7 @@ class Repository:
             if not owner:
                 return set()
             claims = con.execute(
-                """SELECT id,claim_type,author_user_id,admin_verification
+                """SELECT id,claim_type,ownership_kind,author_user_id,admin_verification
                    FROM claims WHERE individual_id=? AND status='active'""",
                 (individual_id,),
             )
@@ -6288,6 +6291,8 @@ class Repository:
                 raise ValueError(
                     "This Claim type cannot be deactivated from Edit"
                 )
+            if claim["claim_type"] == "ownership" and claim["ownership_kind"] == "lost":
+                raise ValueError("Automation Lost Claims cannot be deactivated by users")
 
             if (claim['claim_type'] == 'ownership'
                     and (claim['ownership_kind'] or 'acquire') == 'acquire'

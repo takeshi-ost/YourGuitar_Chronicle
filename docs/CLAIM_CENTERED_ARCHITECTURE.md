@@ -2,7 +2,7 @@
 
 ## 記録と現在値
 
-- **Claim:** ギターについての意味のある主張・出来事。Listing、Ownership (Acquire / Transfer / Inherit / Release)、Identity Correction、Specification、Repair、Incident、Event、Mediaなど。ステータス、判定、作成者、日付を保持する。
+- **Claim:** ギターについての意味のある主張・出来事。Listing、Ownership (Acquire / Transfer / Inherit / Release / Lost)、Identity Correction、Specification、Repair、Incident、Event、Mediaなど。ステータス、判定、作成者、日付を保持する。
 - **Individual:** 物理的な一個体を識別するレコード。現在のMaker / Model / Serial、Owner / LocationなどはObservationの判定結果を保存したSnapshot。意味情報をIndividualだけ直接変更しない。
 - **Observation:** 一個体につき一つの論理的なClaim調停機構。Claimの発生日・同日のClaim ID、承認・BAN、必須Evidenceから候補値と採否理由を計算し、Individualに現在値を反映する。過去の判定結果そのものは保存しない。
 - **Evidence:** Claimに紐付く根拠。外部掲載のListing ID、URL、取得日時、Owner / LocationなどはListingまたは再掲載AcquireのEvidence。ユーザーAcquireには取得日Evidenceを必須とする。旧`observations`テーブルは移行中のクロール記録・互換参照として残るが、現在値の判定元ではない。
@@ -12,9 +12,9 @@
 ## 承認と所有状態
 
 - Listing Claimは掲載時点の主張として保持する。再出品が既存個体と確実に結び付く場合は新たなListing Claimを増やさずAcquire Claimで来歴を追加する。それぞれの外部掲載根拠はClaim Evidenceに保存する。
-- 現時点でAcquireはOwnerとLocationを設定し、Transfer / Inherit / ReleaseはOwnerとLocationを空欄にする。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
+- 現時点でAcquireはOwnerとLocationを設定し、Transfer / Inherit / Release / LostはOwnerとLocationをUnknownにする。LostはAutomation専用のOwnership Claimで、確認済みの外部掲載が現在値の唯一の根拠だったときだけ作る。意味は掲載由来の現在値が追跡不能になったことであり、所有放棄ではない。ユーザー操作ではLostを作成・Verification・編集・無効化できない。ユーザーが作るIncident / Lostとは区別する。旧Automation Releaseは履歴として残し、同じSnapshot効果で評価する。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
 - Owner Verificationが必要な第三者のSpecification / Repair / Incident / Event / MediaなどはUnverifiedで開始する。適用対象のClaimはPositive時だけSnapshotやギャラリーに反映する。Negative / Unverifiedも表示方法を変えてChronicleに残す。現在のOwnerは管理者判定後も再判定できる。
-- 通常のOwner VerificationはCurrent Ownerが他ユーザーのClaimに対して行う。自分のClaimは判定できず、ListingやIdentity Correctionなどは通常ユーザーの判定対象外。管理者は別の強制判定操作で全種類のClaimを判定できる。
+- 通常のOwner VerificationはCurrent Ownerが他ユーザーのClaimに対して行う。自分のClaimは判定できず、Listing、Identity Correction、AutomationのLostなどは通常ユーザーの判定対象外。管理者は別の強制判定操作で全種類のClaimを判定できる。
 - Former OwnerのAcquire / Releaseは同じペアIDを持ち、まとめて判定する。ユーザーAcquireは明示的な取得日と日付Evidenceを要する。Current Ownerがいないときは日付Evidenceを持つ新しいAcquireを自動でPositiveにし、Ownerがいる場合の第三者AcquireはOwner承認待ちにする。同日の競合は小さいClaim IDを先に評価する。
 - Claimの通常の「Delete」はinactive化。管理用ハード削除や個体のMerge / Deleteは監査記録を残す別操作。BANされた利用者のClaimもDBからは消さず、公開表示とSnapshot評価で非活性化する。
 

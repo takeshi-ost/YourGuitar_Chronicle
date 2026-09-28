@@ -522,7 +522,7 @@ def test_unavailable_listing_uses_evidence_after_old_crawl_row_is_removed(tmp_pa
     assert repeated['created'] is False
     assert repeated['individual_id'] == listing['individual_id']
     result = repo.record_reverb_unavailable('600')
-    assert result['created'] and result['owner_released']
+    assert result['created'] and result['owner_lost']
     assert repo.record_reverb_unavailable('600')['reason'] == 'already_recorded'
     with repo.connect() as con:
         release = con.execute('SELECT observation_id,target_claim_id FROM claims WHERE id=?',

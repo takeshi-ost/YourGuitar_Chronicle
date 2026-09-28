@@ -423,7 +423,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <label class="form-label" for="incidentClaimKind">Tag</label>
         <select id="incidentClaimKind">
           <option value="damage">Damage</option>
-          <option value="lost">Lost</option>
+          <option value="lost">Incident Lost</option>
           <option value="theft">Theft</option>
         </select>
       </div>
@@ -984,6 +984,7 @@ function identityFieldLabel(value){
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
+function incidentClaimLabel(c){return c.value_text==='lost'?'Incident Lost':claimTypeLabel(c.value_text||'incident')}
 function displayEventDate(value){
   if(!value)return '日付不明';
   const text=String(value).trim();
@@ -1034,7 +1035,7 @@ function claimVisualTypeClass(c){
 function claimCardFull(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?incidentClaimLabel(c):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
@@ -1045,7 +1046,9 @@ function claimCardFull(c){
     const party=firstLine.startsWith('Previous owner:')
       ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
       : 'Unknown';
-    if(kind==='release'){
+    if(kind==='lost'){
+      body='<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>';
+    }else if(kind==='release'){
       body=c.ownership_source==='automation'
         ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
         : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
@@ -1130,7 +1133,7 @@ function compactClaimType(c){
   return c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
     : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire')
-      :(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident')
+      :(c.claim_type==='incident'?incidentClaimLabel(c)
       :(c.claim_type==='event'?claimTypeLabel(c.value_text||'event')
       :claimTypeLabel(c.claim_type))));
 }

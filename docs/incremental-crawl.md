@@ -15,9 +15,9 @@
 
 「保存済み詳細を再判定」はキャッシュ済みJSONを選択中の分野と製造年で再抽出・照合する。Reverbへの通信・APIトークンは使わない。以前に詳細を保存していなかったListingの情報は再現できない。
 
-Incremental Crawlは一覧を最大2000件処理し、既存Listingの公開状態を1回最大5件確認する。API要求は直列で最低0.5秒間隔。404 / 410を24時間以上離して2度確認した場合に、掲載IDごとの確認結果を `crawl_listing_checks` に保存する。その掲載だけが現在の非ユーザーOwner / Locationの根拠なら、現行はAutomationのRelease ClaimによりUnknownへ戻す。ユーザーが所有中、または別の掲載が現在値の根拠ならClaimを追加しない。確認ログはどちらの場合も保持する。旧版で作られた掲載終了Event Claimは自動削除しない。定期実行は未実装。
+Incremental Crawlは一覧を最大2000件処理し、既存Listingの公開状態を1回最大5件確認する。API要求は直列で最低0.5秒間隔。404 / 410を24時間以上離して2度確認した場合に、掲載IDごとの確認結果を `crawl_listing_checks` に保存する。その掲載だけが現在の非ユーザーOwner / Locationの根拠なら、Automation専用のOwnership / Lost ClaimによりUnknownへ戻す。ユーザーが所有中、または別の掲載が現在値の根拠ならClaimを追加しない。確認ログはどちらの場合も保持する。旧版で作られた掲載終了Event ClaimやAutomation Release Claimは自動削除・改変しない。定期実行は未実装。
 
-現行Reverb取り込みでは、掲載のseller名を非ユーザーの `current_owner_name` に、seller名があれば暫定的に `current_owner_type=shop` に反映している。これは売主を実際の所有者と確認した記録ではない。`current_owner_user_id=NULL` にはseller表示中の個体とUnknownの両方が含まれる。掲載終了による所在不明は所有放棄を意味しないため、専用のLost Claimへの置換と非ユーザーOwnerの表現は今後整理する。
+現行Reverb取り込みでは、掲載のseller名を非ユーザーの `current_owner_name` に、seller名があれば暫定的に `current_owner_type=shop` に反映している。これは売主を実際の所有者と確認した記録ではない。`current_owner_user_id=NULL` にはseller表示中の個体とUnknownの両方が含まれる。掲載終了によるLostは所有放棄を意味しない。ユーザーが作るIncident / LostとはClaim種別と作成権限が異なる。
 
 ## 進捗・ログと数値の意味
 

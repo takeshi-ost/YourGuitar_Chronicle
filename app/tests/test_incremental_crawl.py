@@ -319,7 +319,7 @@ def _seed(repo, listing_id, serial):
     return repo.persist_reverb_listing_claim(data, provenance)["individual_id"]
 
 
-def test_two_missing_checks_release_only_reverb_owner(tmp_path):
+def test_two_missing_checks_create_lost_only_for_current_reverb_owner(tmp_path):
     repo = Repository(tmp_path / "ygc.db")
     repo.init_db()
     external_id = _seed(repo, "11", "524436")
@@ -359,11 +359,11 @@ def test_two_missing_checks_release_only_reverb_owner(tmp_path):
         assert con.execute(
             "SELECT COUNT(*) FROM claims WHERE individual_id = ? AND "
             "(claim_type = 'event' OR (ownership_source = 'automation' "
-            "AND ownership_kind = 'release'))", (user_owned_id,),
+            "AND ownership_kind = 'lost'))", (user_owned_id,),
         ).fetchone()[0] == 0
         assert con.execute(
             "SELECT COUNT(*) FROM claims WHERE individual_id = ? AND "
-            "ownership_source = 'automation' AND ownership_kind = 'release'",
+            "ownership_source = 'automation' AND ownership_kind = 'lost'",
             (external_id,),
         ).fetchone()[0] == 1
 
@@ -382,7 +382,8 @@ def test_relisting_after_unavailable_uses_acquire_claim(tmp_path):
     repo.init_db()
     guitar_id = _seed(repo, "11", "524436")
     first = repo.record_reverb_unavailable("11")
-    assert first["owner_released"]
+    assert first["owner_lost"]
+    assert next(c for c in repo.list_claims(guitar_id) if c['id'] == first['claim_id'])['ownership_kind'] == 'lost'
     data = {"manufacturer": "Fender", "model": "Stratocaster",
             "serial_number": "524436", "owner_name": "New Shop", "owner_type": "shop",
             "location_country": "US", "location_region": "NY",
@@ -402,6 +403,43 @@ def test_relisting_after_unavailable_uses_acquire_claim(tmp_path):
             "SELECT COUNT(*) FROM claims WHERE individual_id = ? AND claim_type = 'listing'",
             (guitar_id,),
         ).fetchone()[0] == 1
+
+
+def test_lost_is_automation_only_and_admin_can_redecide(tmp_path):
+    repo = Repository(tmp_path / 'lost.db')
+    repo.init_db()
+    individual_id = _seed(repo, '11', '524436')
+    lost_id = repo.record_reverb_unavailable('11')['claim_id']
+    automation_id = next(c for c in repo.list_claims(individual_id)
+                         if c['id'] == lost_id)['author_user_id']
+    user_id = repo.create_user('Owner')
+    with pytest.raises(ValueError, match='ownership_kind'):
+        repo.create_ownership_claim(user_id, individual_id,
+                                    ownership_kind='lost', occurred_at='2026-09-28')
+    repo.create_ownership_claim(user_id, individual_id,
+                                ownership_kind='acquire', occurred_at='2026-09-28')
+    assert lost_id not in repo.owner_verifiable_claim_ids(individual_id, user_id)
+    with pytest.raises(ValueError, match='Verification'):
+        repo.set_claim_response(lost_id, user_id, 'negative')
+    with pytest.raises(ValueError, match='cannot be edited'):
+        repo.update_claim(lost_id, automation_id, occurred_at='2026-09-29')
+    with pytest.raises(ValueError, match='cannot be deactivated'):
+        repo.deactivate_claim(lost_id, automation_id)
+    assert repo.get_individual(individual_id)[0]['current_owner_user_id'] == user_id
+    repo.admin_moderate_claim(lost_id, 'negative')
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
+def test_existing_automation_release_keeps_its_snapshot_and_prevents_duplicate_lost(tmp_path):
+    repo = Repository(tmp_path / 'legacy-release.db')
+    repo.init_db()
+    individual_id = _seed(repo, '11', '524436')
+    claim_id = repo.record_reverb_unavailable('11')['claim_id']
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET ownership_kind='release' WHERE id=?", (claim_id,))
+    assert repo.rebuild_individual_snapshot(individual_id)['current_owner_name'] == 'Unknown'
+    assert repo.record_reverb_unavailable('11')['reason'] == 'already_recorded'
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
 
 
 def test_unmatched_observation_keeps_public_status_without_claim(tmp_path):

@@ -42,7 +42,8 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
     if not con.execute('SELECT 1 FROM individuals WHERE id=?', (individual_id,)).fetchone():
         raise ValueError('Individual not found')
     claims = con.execute(
-        """SELECT c.*, u.ban_status, u.display_name AS author_name
+        """SELECT c.*, u.ban_status, u.display_name AS author_name,
+                  u.account_type AS author_account_type
            FROM claims c JOIN users u ON u.id=c.author_user_id
            WHERE c.individual_id=? ORDER BY c.id""", (individual_id,),
     ).fetchall()
@@ -112,6 +113,13 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
                         key=_date_key):
         cid = int(claim['id'])
         kind = claim['ownership_kind'] or 'acquire'
+        if (kind == 'lost' and (claim['claim_type'] != 'ownership'
+                or claim['ownership_source'] != 'automation'
+                or claim['author_account_type'] != 'source'
+                or claim['author_name'] != 'Automation')):
+            decisions.append({'claim_id': cid, 'type': claim['claim_type'],
+                              'result': 'not_effective', 'reason': 'non_automation_lost'})
+            continue
         if claim['status'] != 'active' or claim['ban_status'] != 'normal' or claim['verification_status'] != 'positive':
             decisions.append({'claim_id': cid, 'type': claim['claim_type'],
                               'result': 'not_effective', 'reason':
@@ -149,7 +157,7 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
             if claim['ownership_source'] == 'merged_listing':
                 for field in ('location_country', 'location_region'):
                     set_value(field, items.get(field), cid)
-        elif claim['ownership_source'] == 'automation' and kind != 'release':
+        elif claim['ownership_source'] == 'automation' and kind not in ('release', 'lost'):
             evidence = con.execute(
                 """SELECT * FROM claim_source_evidence
                    WHERE claim_id=? AND evidence_type='marketplace_listing' ORDER BY id LIMIT 1""",
@@ -170,7 +178,7 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
                 'location_region': fields.get('location_region'),
             }.items():
                 set_value(field, value, cid)
-        elif kind in ('release', 'transfer', 'inherit'):
+        elif kind in ('release', 'lost', 'transfer', 'inherit'):
             for field, value in {
                 'current_owner_name': 'Unknown', 'current_owner_type': 'unknown',
                 'current_owner_user_id': None, 'current_owner_source_url': None,

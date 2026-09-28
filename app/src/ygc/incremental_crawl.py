@@ -222,7 +222,7 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
                 str(candidate["source_listing_id"])
             )
             counts["unavailable_claims"] += int(result["created"])
-            counts["owners_unknown"] += int(result.get("owner_released", False))
+            counts["owners_unknown"] += int(result.get("owner_lost", False))
     return counts, last_request
 
 
