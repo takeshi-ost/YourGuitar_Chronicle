@@ -1042,6 +1042,11 @@ def theme_stylesheet() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css")
 
 
+@app.get("/assets/list-navigation.js")
+def list_navigation_script() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript")
+
+
 @app.get("/assets/logos/{filename}")
 def theme_logo(filename: str) -> FileResponse:
     if filename not in {"script.svg", "block.svg", "badge.svg"}:

@@ -74,6 +74,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 #detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}#detail .claim-badge{min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:4px 8px}#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}#detail .claim-votes{align-items:center}#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}#detail #chronicleEntries{max-height:none;overflow:visible;padding:0}
 @media(max-width:900px){main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{height:auto;margin:0}.stats-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats-columns{grid-template-columns:1fr}#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
+<script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
 <div class="sticky-header"><header><h1><a class="brand-link" href="/user-view">Your Guitar Chronicle</a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav></header></div>
@@ -643,13 +644,16 @@ function toggleDetailAccordion(id){
   const section=document.getElementById(id);
   if(section)section.classList.toggle('collapsed');
 }
+let individualLoadSequence=0;
 async function showIndividual(id){
+  const sequence=++individualLoadSequence;
   selectedIndividualId=Number(id);
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
+  if(sequence!==individualLoadSequence)return;
   const i=d.individual;
   const listing=d.current_source||d.current_listing||null;
   const galleryImages=d.gallery_images||[];

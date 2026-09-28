@@ -256,6 +256,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
 <link rel="stylesheet" href="/assets/themes.css">
+<script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
 <div class="sticky-header">
@@ -1290,8 +1291,11 @@ async function voteClaim(claimId,vote){
   }
 }
 
+let individualLoadSequence=0;
 async function showIndividual(id){
+  const sequence=++individualLoadSequence;
   await loadActiveUser();
+  if(sequence!==individualLoadSequence)return;
   const nextIndividualId=Number(id);
   const changedIndividual=Number(selectedIndividualId)!==nextIndividualId;
   selectedIndividualId=nextIndividualId;
@@ -1306,6 +1310,7 @@ async function showIndividual(id){
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
+  if(sequence!==individualLoadSequence)return;
   const i=d.individual;
   const observations=d.observations||[];
   currentObservations=observations;
