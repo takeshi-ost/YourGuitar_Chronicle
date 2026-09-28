@@ -8,6 +8,8 @@
 
 同日追記：クロール再掲載によるAutomation AcquireのOwner / Location再構築、掲載終了の判定、登録済みListingの重複判定は掲載Evidenceを優先して参照する。Evidence移行前のDBや未登録のクロール行については旧記録への読取フォールバックを残す。旧掲載行が削除されても再掲載Claimの現在値再構築、同一掲載IDの冪等判定、公開終了Claimの根拠参照が可能なケースをテストで確認した。
 
+実DB切替前の監査：DBと画像をバックアップしてから、更新済みアプリで `ygc migrate-claim-evidence` を一度実行し、`ygc audit-observation-migration --sample-limit 20` で全個体の旧Snapshotと新評価を読み取り専用で照合する。後者は既存DBを作成・更新せず、差分件数・項目・個体IDの標本、Evidence欠損数のみ出力する。テスト用DBでは一致しているが、稼働DBの照合結果が得られるまで全面切替を行わない。
+
 ## 1. 目標と変更しない原則
 
 ```text

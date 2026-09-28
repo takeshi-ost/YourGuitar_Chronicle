@@ -245,6 +245,19 @@ def migrate_claim_evidence() -> None:
     console.print_json(json.dumps(result, ensure_ascii=False))
 
 
+@app.command("audit-observation-migration")
+def audit_observation_migration(
+    sample_limit: int = typer.Option(20, min=0, max=100),
+) -> None:
+    """Read-only audit of Observation parity and missing Claim Evidence."""
+    repository = repo()
+    try:
+        result = repository.audit_observation_migration(sample_limit=sample_limit)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter(f'Database does not exist: {exc}') from exc
+    console.print_json(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 @app.command(
     "reverb-probe"
 )

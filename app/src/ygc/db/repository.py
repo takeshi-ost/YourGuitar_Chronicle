@@ -173,6 +173,69 @@ class Repository:
             }
             return {**evaluated.as_dict(), 'saved': current, 'differences': differences}
 
+    def audit_observation_migration(self, sample_limit: int = 20) -> dict[str, Any]:
+        """Compare every Individual on a consistent, read-only DB snapshot."""
+        if sample_limit < 0 or sample_limit > 100:
+            raise ValueError('sample_limit must be between 0 and 100')
+        if not self.db_path.is_file():
+            raise FileNotFoundError(self.db_path)
+        with self.connect() as con:
+            con.execute('PRAGMA query_only=ON')
+            con.execute('BEGIN')
+            try:
+                ids = [int(row[0]) for row in con.execute('SELECT id FROM individuals ORDER BY id')]
+                mismatched = failed = 0
+                mismatch_fields: dict[str, int] = {}
+                samples: list[dict[str, Any]] = []
+                for individual_id in ids:
+                    try:
+                        individual = con.execute('SELECT * FROM individuals WHERE id=?',
+                                                 (individual_id,)).fetchone()
+                        evaluated = evaluate_observation(con, individual_id)
+                        differing = [field for field in OBSERVATION_FIELDS
+                                     if (str(individual[field]) if individual[field] is not None else None)
+                                     != (str(evaluated.values[field]) if evaluated.values[field] is not None else None)]
+                    except (ValueError, sqlite3.DatabaseError, json.JSONDecodeError) as exc:
+                        failed += 1
+                        if len(samples) < sample_limit:
+                            samples.append({'individual_id': individual_id, 'error': str(exc)})
+                        continue
+                    if differing:
+                        mismatched += 1
+                        for field in differing:
+                            mismatch_fields[field] = mismatch_fields.get(field, 0) + 1
+                        if len(samples) < sample_limit:
+                            samples.append({'individual_id': individual_id, 'fields': differing})
+                source_missing = con.execute(
+                    """SELECT COUNT(*) FROM claims c JOIN observations o ON o.id=c.observation_id
+                       WHERE o.source_site<>'user' AND o.source_listing_id IS NOT NULL
+                         AND (c.claim_type='listing' OR
+                              (c.claim_type='ownership' AND c.ownership_kind='acquire'))
+                         AND NOT EXISTS (SELECT 1 FROM claim_source_evidence e
+                                         WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing')"""
+                ).fetchone()[0]
+                date_missing = con.execute(
+                    """SELECT COUNT(*) FROM claims c
+                       WHERE c.claim_type='ownership' AND c.ownership_kind='acquire'
+                         AND COALESCE(c.ownership_source,'user') NOT IN ('automation','merged_listing')
+                         AND (c.occurred_at IS NULL OR LENGTH(c.occurred_at)<>10 OR
+                              NOT EXISTS (SELECT 1 FROM claim_source_evidence e
+                                          WHERE e.claim_id=c.id AND e.evidence_type='acquisition_date'
+                                            AND e.effective_date=c.occurred_at))"""
+                ).fetchone()[0]
+                result = {
+                    'individuals_checked': len(ids), 'individuals_mismatched': mismatched,
+                    'evaluation_errors': failed, 'mismatch_fields': mismatch_fields,
+                    'samples': samples, 'marketplace_claims_without_evidence': source_missing,
+                    'user_acquires_without_date_evidence': date_missing,
+                    'unregistered_legacy_crawl_rows': con.execute(
+                        'SELECT COUNT(*) FROM observations WHERE individual_id IS NULL'
+                    ).fetchone()[0],
+                }
+                return result
+            finally:
+                con.rollback()
+
     @staticmethod
     def _insert_marketplace_evidence(con: sqlite3.Connection, claim_id: int,
                                      observation_id: int, claim_data: dict,

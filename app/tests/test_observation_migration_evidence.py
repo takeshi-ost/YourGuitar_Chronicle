@@ -1,6 +1,7 @@
 """The first migration phase copies source evidence without changing Individuals."""
 import sqlite3
 from pathlib import Path
+import pytest
 
 from ygc.db.repository import Repository
 
@@ -91,6 +92,10 @@ def test_evaluator_matches_migrated_snapshot_without_writing(tmp_path):
         before = con.total_changes
     mismatches = {id: repo.observation_diagnostic(id)['differences'] for id in ids}
     assert ids and not {id: differences for id, differences in mismatches.items() if differences}
+    audit = repo.audit_observation_migration()
+    assert audit['individuals_checked'] == len(ids)
+    assert audit['individuals_mismatched'] == audit['evaluation_errors'] == 0
+    assert audit['marketplace_claims_without_evidence'] == 0
     with repo.connect() as con:
         assert con.total_changes == before == 0
 
@@ -190,6 +195,7 @@ def test_diagnostic_endpoint_is_admin_only_and_read_only(tmp_path, monkeypatch):
                           headers={'X-YGC-Console-Admin': CONSOLE_ADMIN_TOKEN}).status_code == 404
     with repo.connect() as con:
         assert tuple(con.execute('SELECT * FROM individuals WHERE id=?', (individual_id,)).fetchone()) == before
+    assert repo.audit_observation_migration()['individuals_mismatched'] == 0
 
 
 def test_competing_acquire_waits_for_owner_and_never_appears_owned_early(tmp_path):
@@ -328,3 +334,10 @@ def test_unavailable_listing_uses_evidence_after_old_crawl_row_is_removed(tmp_pa
         assert release['target_claim_id'] == listing['claim_id']
     assert repo.get_individual(listing['individual_id'])[0]['current_owner_name'] == 'Unknown'
     assert repo.observation_diagnostic(listing['individual_id'])['differences'] == {}
+
+
+def test_audit_does_not_create_a_missing_database(tmp_path):
+    path = tmp_path / 'not-present.db'
+    with pytest.raises(FileNotFoundError):
+        Repository(path).audit_observation_migration()
+    assert not path.exists()
