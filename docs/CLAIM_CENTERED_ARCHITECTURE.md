@@ -18,6 +18,27 @@
 - Former OwnerのAcquire / Releaseは同じペアIDを持ち、まとめて判定する。ユーザーAcquireは明示的な取得日と日付Evidenceを要する。Current Ownerがいないときは日付Evidenceを持つ新しいAcquireを自動でPositiveにし、Ownerがいる場合の第三者AcquireはOwner承認待ちにする。同日の競合は小さいClaim IDを先に評価する。
 - Claimの通常の「Delete」はinactive化。管理用ハード削除や個体のMerge / Deleteは監査記録を残す別操作。BANされた利用者のClaimもDBからは消さず、公開表示とSnapshot評価で非活性化する。
 
+### 所有権と判定権限の相互作用（設計上の不変条件）
+
+**通常のユーザー操作では、Current Ownerが自分の所有根拠となるClaimのVerificationを変更して、自分自身の判定権限を崩すことはできない。** これは独立した「所有権のロック」機構ではなく、次の規則を同時に適用した結果である。
+
+1. Current Ownerは、IndividualのObservationが有効なClaimとEvidenceを時系列で評価した結果として決まる。プロフィール上のOwned / Formerly Ownedも、この結果に合わせる。
+2. 通常のVerificationは**その時点のCurrent Ownerだけ**が、**他ユーザーのClaimだけ**に対して行える。自分のClaimは、Positive / Negative / Unverifiedのどれにも自分で変更できない。ListingやIdentity Correctionなどは通常ユーザーの判定対象外。
+3. Ownerがいる個体への第三者AcquireはUnverifiedで始まり、承認されるまでOwnershipを移さない。Current Owner不在の場合は、必須の日付Evidenceを満たすAcquireを既定の調停規則に従って扱う。
+4. 他ユーザーのAcquireをPositiveにしてCurrent OwnerがAからBに移ると、Aは判定権限を失う。Bは自分のAcquireを自己判定できない。Aが再取得を主張する場合は新しいAcquireを出し、その時点のCurrent Owner Bによる判定を受ける。
+
+この性質は、**Claimの作成者・Verification・Evidence・発生日・Observationの現在値・判定権限の連動**に依存する。単独の権限チェックを通しただけでは確認できない。受理済みの自己Acquireの通常Deactivateにも個別の防止処理があるが、それだけをこの性質の根拠としない。管理者の全Claim強制判定、BAN、Merge、Claim削除は通常のユーザー操作とは別の経路であり、Snapshotを再評価して管理画面で判定経路を確認する。
+
+Ownership、Verification、Claimの無効化、BAN、Merge、Observation、プロフィール分類のいずれかを変更する際は、次を回帰確認する。
+
+| 場面 | 維持する条件 |
+| --- | --- |
+| Aが所有中にBがAcquireを申請 | BのClaimは未承認で、AはCurrent Ownerのまま。BのOwned / Formerly Ownedへ誤登録しない |
+| AがBのAcquireをPositive | BへCurrent Ownerと判定権限が移り、AはFormerly Ownedへ移る |
+| 移行前後の自己Claim | A・Bとも自分のClaimをVerificationできず、元Ownerも譲渡後に他人のClaimを判定できない |
+| Aの再取得申請 | AはAcquireを提出できるが自己承認できず、Bの判定を待つ |
+| 過去Claimの判定変更・管理者操作 | 変更後のObservation、Individual Snapshot、プロフィール分類と判定権限が整合する |
+
 ## 重複と移行
 
 同一個体の候補判定ではメーカー、シリアル、モデルの矛盾を検討し、曖昧なら候補をreviewに保持する。管理画面のRepeatedは**同じ正規化メーカー・シリアルを持つ異なるIndividual群**で、同一性が確定した件数ではない。人が残す個体を選んでMergeまたはDeleteする。MergeしたClaimの一部は再承認待ちにする。詳細は [console-claim-administration.md](console-claim-administration.md)。

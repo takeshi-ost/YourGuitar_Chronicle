@@ -1,12 +1,12 @@
 # Your Guitar Chronicle — 現行ドキュメント
 
-このディレクトリは `feature/user-profile-top-page` のローカル試作の**現行実装**を説明する。実行方法は [app/README.md](../app/README.md)。過去の設計案と実装の差分はGit履歴で参照できる。
+このディレクトリは `feature/observation-redesign` のローカル試作の**現行実装**を説明する。実行方法は [app/README.md](../app/README.md)。過去の設計案と実装の差分はGit履歴で参照できる。
 
 | 読む目的 | 文書 |
 | --- | --- |
 | 企画の目的と将来像 | [PROJECT_VISION.md](PROJECT_VISION.md) |
 | 画面・機能・未実装範囲 | [CAPABILITIES.md](CAPABILITIES.md) |
-| Claimと個体Snapshotの規則 | [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) |
+| Claimと個体Snapshotの規則、所有権と判定権限の不変条件 | [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) |
 | 収集・再判定・統計 | [incremental-crawl.md](incremental-crawl.md) |
 | 管理者操作とBAN | [console-claim-administration.md](console-claim-administration.md) |
 | テーマ・ロゴ | [USER_THEMES.md](USER_THEMES.md) |

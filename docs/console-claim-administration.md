@@ -4,7 +4,7 @@ Browser Consoleはlocalhostに接続したローカル管理者向け。ペー�
 
 ## Claim管理と所有者確認
 
-管理者は全ClaimのVerificationをPositive / Negative / Unverifiedに強制変更でき、必要ならClaimをハード削除できる。通常のOwner Verificationで管理者判定を上書きできない。変更した個体のSnapshotを再構築し、`claim_admin_actions` に操作を記録する。ListingをNegativeとしても個体参照に必要な基礎識別情報は残す。最後の有効なListing Claimの削除は個体と関連記録の削除につながるため、画面の明示確認とAPIの追加フラグが必要。監査記録はバックアップではない。
+管理者は全ClaimのVerificationをPositive / Negative / Unverifiedに強制変更でき、必要ならClaimをハード削除できる。現在のOwnerは管理者判定後でも他ユーザーのClaimを再判定できるが、自分のClaimは判定できない。変更した個体のSnapshotを再構築し、`claim_admin_actions` に管理操作を記録する。ListingをNegativeとしても個体参照に必要な基礎識別情報は残す。最後の有効なListing Claimの削除は個体と関連記録の削除につながるため、画面の明示確認とAPIの追加フラグが必要。監査記録はバックアップではない。通常操作の所有権と判定権限の連動は[Claim中心のデータ構造](CLAIM_CENTERED_ARCHITECTURE.md)を参照。
 
 **Unverified Acquire** は、有効な承認待ちAcquireのうち、承認によってCurrent Ownerが変わり得るものだけを数える。ペアClaimを含めて、ロールバックされるsavepoint内でSnapshotを試算する。場所だけ変わる、後続Claimで覆われる、すでに同一Ownerのものは除外する。
 
