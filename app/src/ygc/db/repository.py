@@ -1329,6 +1329,23 @@ class Repository:
                         state["location_country"] = None
                         state["location_region"] = None
                         continue
+                    evidence = con.execute(
+                        """SELECT source_url,payload_json FROM claim_source_evidence
+                           WHERE claim_id=? AND evidence_type='marketplace_listing'
+                           ORDER BY id LIMIT 1""",
+                        (claim['id'],),
+                    ).fetchone()
+                    if evidence:
+                        payload = json.loads(evidence['payload_json'] or '{}')
+                        source = payload.get('claim', payload)
+                        state['current_owner_name'] = source.get('owner_name') or 'Unknown'
+                        state['current_owner_type'] = source.get('owner_type') or 'unknown'
+                        state['current_owner_user_id'] = None
+                        state['current_owner_source_url'] = evidence['source_url']
+                        state['location_country'] = source.get('location_country')
+                        state['location_region'] = source.get('location_region')
+                        continue
+                    # Legacy databases may not have run the Evidence backfill yet.
                     observation = con.execute(
                         "SELECT owner_name, owner_type, location_country, "
                         "location_region, source_url FROM observations WHERE id = ?",
@@ -1663,6 +1680,20 @@ class Repository:
         )
 
         with self.connect() as con:
+            recorded_source = con.execute(
+                """SELECT o.id AS legacy_observation_id,c.individual_id
+                   FROM claim_source_evidence e JOIN claims c ON c.id=e.claim_id
+                   LEFT JOIN observations o ON o.id=e.legacy_observation_id
+                   WHERE e.source_site=? AND e.source_listing_id=? LIMIT 1""",
+                (source_site, source_listing_id),
+            ).fetchone()
+            if recorded_source:
+                return {
+                    'created': False,
+                    'observation_id': recorded_source['legacy_observation_id'],
+                    'claim_id': None,
+                    'individual_id': int(recorded_source['individual_id']),
+                }
             existing_observation = con.execute(
                 """
                 SELECT
@@ -2039,13 +2070,22 @@ class Repository:
     def record_reverb_unavailable(self, listing_id: str) -> dict[str, Any]:
         """Record a confirmed absence as a Claim, preserving independent owners."""
         with self.connect() as con:
-            observation = con.execute(
+            evidence = con.execute(
+                """SELECT e.claim_id,e.legacy_observation_id,e.source_url,c.individual_id
+                   FROM claim_source_evidence e JOIN claims c ON c.id=e.claim_id
+                   WHERE e.source_site='reverb' AND e.source_listing_id=?
+                   LIMIT 1""",
+                (listing_id,),
+            ).fetchone()
+            observation = evidence or con.execute(
                 "SELECT id, individual_id, source_url FROM observations "
                 "WHERE source_site = 'reverb' AND source_listing_id = ?",
                 (listing_id,),
             ).fetchone()
             if not observation or observation["individual_id"] is None:
                 return {"created": False, "reason": "no_individual"}
+            legacy_id = (observation['legacy_observation_id'] if evidence else observation['id'])
+            source_claim_id = evidence['claim_id'] if evidence else None
             individual_id = int(observation["individual_id"])
             individual = con.execute(
                 "SELECT current_owner_user_id, current_owner_source_url "
@@ -2057,25 +2097,25 @@ class Repository:
                 and individual["current_owner_source_url"] == observation["source_url"]
             )
             if con.execute(
-                "SELECT 1 FROM claims WHERE observation_id = ? AND "
-                "status = 'active' AND "
-                + ("ownership_source = 'automation' AND ownership_kind = 'release'"
-                   if reverb_only else
-                   "claim_type = 'event' AND value_text = 'reverb_unavailable'"),
-                (observation["id"],),
+                "SELECT 1 FROM claims WHERE (observation_id = ? OR target_claim_id = ?) AND "
+                "status = 'active' AND ((ownership_source = 'automation' AND ownership_kind = 'release') "
+                "OR (claim_type = 'event' AND value_text = 'reverb_unavailable'))",
+                (legacy_id, source_claim_id),
             ).fetchone():
                 return {"created": False, "reason": "already_recorded"}
             author_id = self._source_user_id(con, "Automation")
             now = utcnow()
             cur = con.execute(
                 """INSERT INTO claims (
-                    individual_id, observation_id, author_user_id,
+                    individual_id, observation_id, target_claim_id, author_user_id,
                     claim_type, field_name, value_text, ownership_kind,
                     ownership_source, body, occurred_at, status,
                     verification_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
                           'positive', ?, ?)""",
-                (individual_id, observation["id"], author_id,
+                (individual_id, legacy_id if con.execute(
+                    'SELECT 1 FROM observations WHERE id=?', (legacy_id,)).fetchone() else None,
+                 source_claim_id, author_id,
                  "ownership" if reverb_only else "event",
                  "owner" if reverb_only else "event",
                  "unknown" if reverb_only else "reverb_unavailable",

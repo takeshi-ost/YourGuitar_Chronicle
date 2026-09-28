@@ -35,6 +35,9 @@ def test_live_reverb_writes_claim_evidence_for_initial_and_relisting(tmp_path):
         assert [row['date_basis'] for row in evidence] == ['listing_date', 'observed_at']
         assert con.execute('SELECT count(*) FROM observations').fetchone()[0] == 2
     assert repo.backfill_claim_source_evidence() == {'created': 0, 'existing': 2, 'conflicts': 0}
+    decisions = repo.observation_diagnostic(first['individual_id'])['decisions']
+    assert any(e['source_listing_id'] == '200' and e['date_basis'] == 'observed_at'
+               for decision in decisions for e in decision['evidence'])
 
 
 def test_old_snapshot_copy_backfills_without_affecting_unregistered_crawl_rows(tmp_path):
@@ -283,3 +286,45 @@ def test_current_owner_can_redecide_admin_verification(tmp_path):
         ).fetchone()
         assert tuple(verification) == ('positive', 0)
     assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == claimant
+
+
+def test_relisting_owner_is_rebuilt_from_evidence_without_legacy_observation(tmp_path):
+    repo = Repository(tmp_path / 'evidence-only.db')
+    repo.init_db()
+    first = repo.persist_reverb_listing_claim(*_reverb_item('500'))
+    claim, provenance = _reverb_item('501')
+    claim['owner_name'] = 'New Shop'
+    claim['location_region'] = 'NY'
+    second = repo.persist_reverb_listing_claim(claim, provenance)
+    individual_id = first['individual_id']
+    assert second['individual_id'] == individual_id
+    with repo.connect() as con:
+        con.execute('DELETE FROM observations WHERE individual_id=?', (individual_id,))
+        con.execute("""UPDATE individuals SET current_owner_name='Wrong',location_region='Wrong'
+                       WHERE id=?""", (individual_id,))
+    rebuilt = repo.rebuild_individual_snapshot(individual_id)
+    assert rebuilt['current_owner_name'] == 'New Shop'
+    assert rebuilt['location_region'] == 'NY'
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
+def test_unavailable_listing_uses_evidence_after_old_crawl_row_is_removed(tmp_path):
+    repo = Repository(tmp_path / 'unavailable.db')
+    repo.init_db()
+    listing = repo.persist_reverb_listing_claim(*_reverb_item('600'))
+    with repo.connect() as con:
+        con.execute('DELETE FROM observations WHERE individual_id=?',
+                    (listing['individual_id'],))
+    repeated = repo.persist_reverb_listing_claim(*_reverb_item('600'))
+    assert repeated['created'] is False
+    assert repeated['individual_id'] == listing['individual_id']
+    result = repo.record_reverb_unavailable('600')
+    assert result['created'] and result['owner_released']
+    assert repo.record_reverb_unavailable('600')['reason'] == 'already_recorded'
+    with repo.connect() as con:
+        release = con.execute('SELECT observation_id,target_claim_id FROM claims WHERE id=?',
+                              (result['claim_id'],)).fetchone()
+        assert release['observation_id'] is None
+        assert release['target_claim_id'] == listing['claim_id']
+    assert repo.get_individual(listing['individual_id'])[0]['current_owner_name'] == 'Unknown'
+    assert repo.observation_diagnostic(listing['individual_id'])['differences'] == {}

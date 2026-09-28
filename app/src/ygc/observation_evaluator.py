@@ -191,4 +191,22 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
                 set_value(field, value, cid)
         decisions.append({'claim_id': cid, 'type': claim['claim_type'],
                           'result': 'accepted', 'event_date': _date_key(claim)[0]})
+    evidence_by_claim: dict[int, list[dict[str, Any]]] = {}
+    for row in con.execute(
+        """SELECT e.claim_id,e.evidence_type,e.source_site,e.source_listing_id,
+                  e.effective_date,e.date_basis
+           FROM claim_source_evidence e JOIN claims c ON c.id=e.claim_id
+           WHERE c.individual_id=? ORDER BY e.id""",
+        (individual_id,),
+    ):
+        evidence_by_claim.setdefault(int(row['claim_id']), []).append({
+            key: row[key] for key in ('evidence_type', 'source_site', 'source_listing_id',
+                                       'effective_date', 'date_basis')
+        })
+    claims_by_id = {int(claim['id']): claim for claim in claims}
+    for decision in decisions:
+        cid = decision['claim_id']
+        decision['verification_status'] = claims_by_id[cid]['verification_status']
+        decision['admin_verification'] = bool(claims_by_id[cid]['admin_verification'])
+        decision['evidence'] = evidence_by_claim.get(cid, [])
     return ObservationEvaluation(individual_id, state, sources, decisions)
