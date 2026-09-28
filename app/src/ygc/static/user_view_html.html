@@ -573,6 +573,20 @@ let ownershipClaimMode='acquire';
 let individualSortKey='id';
 let individualSortDirection=1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
+// Prototype login belongs to this tab. Another console tab must not change
+// the viewer of an already open profile or its Verification controls.
+const launchUserId=new URLSearchParams(location.search).get('prototype_user_id');
+if(launchUserId!==null){
+  if(/^\d+$/.test(launchUserId)&&Number(launchUserId)>0)sessionStorage.setItem(ACTIVE_USER_KEY,launchUserId);
+  else sessionStorage.removeItem(ACTIVE_USER_KEY);
+  const cleaned=new URL(location.href);
+  cleaned.searchParams.delete('prototype_user_id');
+  history.replaceState(null,'',cleaned.pathname+cleaned.search+cleaned.hash);
+}else if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
+  const previous=localStorage.getItem(ACTIVE_USER_KEY);
+  if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
+}
+localStorage.removeItem(ACTIVE_USER_KEY);
 function syncHeaderHeight(){
   const header=document.querySelector('.sticky-header');
   if(header)document.documentElement.style.setProperty('--header-height',Math.ceil(header.getBoundingClientRect().height)+'px');
@@ -728,7 +742,7 @@ async function markAllNotificationsRead(){
 }
 
 async function loadActiveUser(){
-  const id=localStorage.getItem(ACTIVE_USER_KEY);
+  const id=sessionStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
     if(!PROFILE_USER_ID)applyTheme('dark_default');
@@ -746,7 +760,7 @@ async function loadActiveUser(){
     activeUser=null;
     if(!PROFILE_USER_ID)applyTheme('dark_default');
     favoriteIds=new Set();
-    localStorage.removeItem(ACTIVE_USER_KEY);
+    sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
   renderAccountHub();
@@ -899,14 +913,18 @@ function closeAccountRequired(event){
 }
 function ownershipControlsHtml(individual){
   const individualId=Number(individual.id);
+  const actorNote=PROFILE_USER_ID&&activeUser&&activeUser.user
+    && PROFILE_USER_ID!==Number(activeUser.user.id)
+    ? '<div class="sub">Signed in as '+esc(activeUser.user.display_name||('User #'+activeUser.user.id))+'</div>'
+    : '';
   if(activeUser&&activeUser.user&&individual.current_owner_user_id!==null
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
-    return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
+    return actorNote+'<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
   }
   if(!activeUser||!activeUser.user){
     return '<div class="toolbar" style="margin-top:10px"><button onclick="requireAccount()">Add to Your Chronicle</button></div>';
   }
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
+  return actorNote+'<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
 }
 
 function productGalleryHtml(images,model){
@@ -1635,6 +1653,7 @@ function configureOwnershipClaim(mode){
   const fixed=document.getElementById('ownershipClaimFixedTag');
   const previousRow=document.getElementById('ownershipClaimPreviousRow');
   if(ownershipClaimMode==='acquire'){
+    kind.innerHTML='<option value="acquire">Acquire</option>';
     kind.value='acquire';
     kind.style.display='none';
     fixed.style.display='block';

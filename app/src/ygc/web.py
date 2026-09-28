@@ -1034,7 +1034,7 @@ def index(request: Request) -> HTMLResponse:
 
 @app.get("/user-view", response_class=HTMLResponse)
 def user_view() -> HTMLResponse:
-    return HTMLResponse(USER_VIEW_HTML)
+    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/themes.css")
@@ -1068,14 +1068,14 @@ def api_themes() -> list[dict[str, str]]:
 
 @app.get("/user-view/edit", response_class=HTMLResponse)
 def user_edit() -> HTMLResponse:
-    return HTMLResponse(USER_EDIT_HTML)
+    return HTMLResponse(USER_EDIT_HTML, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/users/{user_id}", response_class=HTMLResponse)
 def user_profile(
     user_id: int,
 ) -> HTMLResponse:
-    return HTMLResponse(USER_VIEW_HTML)
+    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status")

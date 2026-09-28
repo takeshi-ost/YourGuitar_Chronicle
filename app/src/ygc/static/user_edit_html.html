@@ -64,6 +64,11 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 </div></div>
 <script>
 const ACTIVE_USER_KEY='ygc_active_user_id';
+if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
+ const previous=localStorage.getItem(ACTIVE_USER_KEY);
+ if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
+}
+localStorage.removeItem(ACTIVE_USER_KEY);
 const defaults={birth:'Private',residence:'Private',bio:'Public',avatar:'Public'};
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const field=id=>document.getElementById(id);
@@ -82,11 +87,11 @@ async function switchUser(){
  if(answer===null)return;
  const found=users.find(u=>String(u.id)===answer.trim());
  if(!found){if(answer.trim())alert('User not found.');return}
- localStorage.setItem(ACTIVE_USER_KEY,String(found.id));await loadUser();
+ sessionStorage.setItem(ACTIVE_USER_KEY,String(found.id));await loadUser();
 }
-async function createUser(){try{const result=await request('/api/users',{method:'POST'});localStorage.setItem(ACTIVE_USER_KEY,String(result.user.id));await loadUser()}catch(error){alert(error.message)}}
+async function createUser(){try{const result=await request('/api/users',{method:'POST'});sessionStorage.setItem(ACTIVE_USER_KEY,String(result.user.id));await loadUser()}catch(error){alert(error.message)}}
 async function loadUser(){
- const id=localStorage.getItem(ACTIVE_USER_KEY);
+ const id=sessionStorage.getItem(ACTIVE_USER_KEY);
  if(!id){activeUser=null;previewTheme('dark_default');field('settings').hidden=true;field('emptyState').hidden=false;syncHeader();measureHeader();return}
  try{
   activeUser=await request('/api/users/'+encodeURIComponent(id));
@@ -105,7 +110,7 @@ async function loadUser(){
   field('signatureGuitar').innerHTML='<option value="">Select an owned guitar</option>'+owned.map(g=>'<option value="'+Number(g.individual_id)+'">'+esc([g.manufacturer,g.model,g.year].filter(Boolean).join(' · '))+'</option>').join('');
   field('signatureGuitar').value=owned.some(g=>Number(g.individual_id)===Number(u.signature_individual_id))?String(u.signature_individual_id):'';
   field('settings').hidden=false;field('emptyState').hidden=true;setStatus('');
- }catch(error){activeUser=null;previewTheme('dark_default');localStorage.removeItem(ACTIVE_USER_KEY);field('settings').hidden=true;field('emptyState').textContent=error.message;field('emptyState').hidden=false}
+ }catch(error){activeUser=null;previewTheme('dark_default');sessionStorage.removeItem(ACTIVE_USER_KEY);field('settings').hidden=true;field('emptyState').textContent=error.message;field('emptyState').hidden=false}
  syncHeader();measureHeader();
 }
 async function saveSettings(){

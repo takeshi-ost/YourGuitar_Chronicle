@@ -179,6 +179,11 @@ let productGallery=[];
 let productGalleryIndex=0;
 const TOKEN_KEY='ygc_reverb_api_token';
 const ACTIVE_USER_KEY='ygc_active_user_id';
+if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
+  const previous=localStorage.getItem(ACTIVE_USER_KEY);
+  if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
+}
+localStorage.removeItem(ACTIVE_USER_KEY);
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
@@ -305,7 +310,7 @@ async function resetDatabase(){
     document.getElementById('jobResults').innerHTML='';
     document.getElementById('jobMessage').textContent='DBを初期化しました';
     document.getElementById('jobBar').style.width='0%';
-    localStorage.removeItem(ACTIVE_USER_KEY);
+    sessionStorage.removeItem(ACTIVE_USER_KEY);
     activeUser=null;
     await refreshStatus();
     await loadIndividuals();
@@ -360,13 +365,13 @@ async function loadUsers(){
   if(!themeOptions.length)themeOptions=await jfetch('/api/themes');
   users=await jfetch('/api/users');
   const select=document.getElementById('activeUserSelect');
-  const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
+  const saved=sessionStorage.getItem(ACTIVE_USER_KEY)||'';
   select.innerHTML='<option value="">Guest</option>'+users.filter(u=>u.ban_status!=='ban').map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
   const target=users.some(u=>u.ban_status!=='ban'&&String(u.id)===saved)?saved:'';
   select.value=target;
   updateOpenTopButton();
   if(target)await loadActiveUser();
-  else{activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY)}
+  else{activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY)}
   renderUserList();
   if(selectedUserId&&users.some(u=>Number(u.id)===selectedUserId))await showUserRecord(selectedUserId);
   else if(target)await showUserRecord(Number(target));
@@ -404,7 +409,7 @@ async function showUserRecord(id){
         '<label>Signature Guitar<select name="signature_individual_id"><option value="">None</option>'+guitars.filter(g=>g.ownership_status==='current_owner'||Number(g.individual_id)===Number(u.signature_individual_id)).map(g=>'<option value="'+Number(g.individual_id)+'"'+(Number(u.signature_individual_id)===Number(g.individual_id)?' selected':'')+'>'+esc(g.manufacturer+' '+(g.model||'')+' / '+(g.serial_number||''))+'</option>').join('')+'</select></label>'+
         '<label>Avatar image<input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif"></label>'+
         '<div class="toolbar"><button type="submit">Save User</button></div></form>':'')+
-      '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'" target="_blank" rel="noopener">User Profile</a></div>'+
+      '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'?prototype_user_id='+encodeURIComponent(sessionStorage.getItem(ACTIVE_USER_KEY)||'')+'" target="_blank" rel="noopener">User Profile</a></div>'+
       '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
   }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
 }
@@ -430,14 +435,14 @@ async function createUser(){
   try{
     const data=await jfetch('/api/users',{method:'POST'});
     const id=String(data.user.id);
-    localStorage.setItem(ACTIVE_USER_KEY,id);
+    sessionStorage.setItem(ACTIVE_USER_KEY,id);
     selectedUserId=Number(id);
     await loadUsers();
   }catch(e){alert('アカウント作成に失敗しました。\n'+e.message)}
 }
 async function setActiveUser(value){
-  if(value)localStorage.setItem(ACTIVE_USER_KEY,String(value));
-  else localStorage.removeItem(ACTIVE_USER_KEY);
+  if(value)sessionStorage.setItem(ACTIVE_USER_KEY,String(value));
+  else sessionStorage.removeItem(ACTIVE_USER_KEY);
   updateOpenTopButton();
   await loadActiveUser();
   if(value)await showUserRecord(Number(value));
@@ -448,15 +453,13 @@ function updateOpenTopButton(){document.getElementById('openUserTopBtn').disable
 function openTopPageAsActiveUser(){
   const id=document.getElementById('activeUserSelect').value;
   if(id&&!users.some(user=>user.ban_status!=='ban'&&String(user.id)===id))return;
-  if(id)localStorage.setItem(ACTIVE_USER_KEY,id);
-  else localStorage.removeItem(ACTIVE_USER_KEY);
-  window.open('/user-view','_blank','noopener');
+  window.open('/user-view?prototype_user_id='+encodeURIComponent(id),'_blank','noopener');
 }
 async function loadActiveUser(){
-  const id=localStorage.getItem(ACTIVE_USER_KEY);
+  const id=sessionStorage.getItem(ACTIVE_USER_KEY);
   if(!id){activeUser=null;return}
   try{activeUser=await jfetch('/api/users/'+encodeURIComponent(id))}
-  catch(e){activeUser=null;localStorage.removeItem(ACTIVE_USER_KEY);document.getElementById('activeUserSelect').value=''}
+  catch(e){activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);document.getElementById('activeUserSelect').value=''}
   if(selectedUserId)await showUserRecord(selectedUserId);
 }
 function renderAccount(){if(selectedUserId)showUserRecord(selectedUserId)}

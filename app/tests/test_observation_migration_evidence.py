@@ -273,6 +273,60 @@ def test_new_owner_can_verify_previous_owners_acquire_and_release(tmp_path):
         raise AssertionError('Former owner verified an Acquire')
 
 
+def test_return_acquire_waits_for_new_owner_across_profiles_and_claim_api(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from ygc import config
+    from ygc.web import app
+
+    monkeypatch.setattr(config, 'DB_PATH', tmp_path / 'return-acquire.db')
+    repo = Repository(config.DB_PATH)
+    repo.init_db()
+    a = repo.create_user('A')
+    b = repo.create_user('B')
+    individual_id, _, listing_id, _ = repo.create_initial_listing_claim(
+        a, manufacturer='Fender', model='Telecaster', serial_number='RETURN-001',
+        media_storage_path='media/return.jpg', occurred_at='2020-01-01')
+    _, b_claim = repo.create_ownership_claim(
+        b, individual_id, ownership_kind='acquire', occurred_at='2022-01-01')
+    assert repo.set_claim_response(b_claim, a, 'positive')
+
+    with TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 45000)) as client:
+        for route in ('/user-view', f'/users/{a}', '/user-view/edit'):
+            assert client.get(route).headers['cache-control'] == 'no-store'
+        response = client.post(f'/api/individuals/{individual_id}/ownership-claim', json={
+            'user_id': a, 'ownership_kind': 'acquire', 'occurred_at': '2023-01-01',
+        })
+        assert response.status_code == 200, response.text
+        a_claim = response.json()['claim_id']
+        a_profile = client.get(f'/api/users/{a}/profile?viewer_id={a}').json()
+        b_profile = client.get(f'/api/users/{b}/profile?viewer_id={b}').json()
+        assert next(g for g in a_profile['guitars'] if g['individual_id'] == individual_id)['ownership_status'] == 'former_owner'
+        assert next(g for g in b_profile['guitars'] if g['individual_id'] == individual_id)['ownership_status'] == 'current_owner'
+        for viewer in (a, b):
+            detail = client.get(f'/api/individuals/{individual_id}?viewer_user_id={viewer}').json()
+            assert int(detail['individual']['current_owner_user_id']) == b
+        a_view = {c['id']: c for c in client.get(
+            f'/api/individuals/{individual_id}/claims?viewer_user_id={a}').json()}
+        b_view = {c['id']: c for c in client.get(
+            f'/api/individuals/{individual_id}/claims?viewer_user_id={b}').json()}
+        assert a_view[a_claim]['verification_status'] == 'unverified'
+        assert not a_view[a_claim]['can_verify']
+        assert b_view[a_claim]['can_verify']
+        assert not b_view[b_claim]['can_verify']
+        assert not b_view[listing_id]['can_verify']
+        assert client.post(f'/api/claims/{a_claim}/response', json={
+            'responder_user_id': a, 'stance': 'positive',
+        }).status_code == 400
+        assert client.post(f'/api/claims/{a_claim}/response', json={
+            'responder_user_id': b, 'stance': 'positive',
+        }).status_code == 200
+        assert int(client.get(f'/api/individuals/{individual_id}').json()['individual']['current_owner_user_id']) == a
+        assert not next(c for c in client.get(
+            f'/api/individuals/{individual_id}/claims?viewer_user_id={a}').json()
+            if c['id'] == a_claim)['can_verify']
+        assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
 def test_restart_does_not_reclassify_verified_history_as_former_owner_pair(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from ygc import config

@@ -31,6 +31,8 @@
 
 Verificationの操作欄と更新APIは、IndividualのCurrent Owner、Claimの作成者・種類・有効性を同じ条件で判断する。未承認・NegativeのClaimもCurrent Ownerが判定できるときはChronicle上に操作欄を表示する。Former OwnerのAcquire / Releaseを一括判定するのは、同時作成された正規のペアだけとし、過去の独立したClaimを`user_guitars`の日付だけからペア化しない。旧データ移行で付与済みの誤ったペアIDや失われたVerificationは自動的に元の判定を推測できないため、対象DBを個別に調査して修正する。
 
+ローカル試作の操作ユーザーはブラウザのタブ単位で保持する。User Profileの表示対象者と操作ユーザーは異なり得るため、プロフィールのOwned / Formerly OwnedとProduct Detailの`Your Guitar`やVerificationの権限を混同しない。Browser Consoleから「このユーザーでTopPageを開く」は新しいタブだけに操作ユーザーを渡し、開いている別タブの操作ユーザーを変更しない。これは将来Identity Platformに置き換える仮の認証境界である。
+
 Ownership、Verification、Claimの無効化、BAN、Merge、Observation、プロフィール分類のいずれかを変更する際は、次を回帰確認する。
 
 | 場面 | 維持する条件 |
