@@ -223,7 +223,15 @@ def test_competing_acquire_waits_for_owner_and_never_appears_owned_early(tmp_pat
     assert repo.set_claim_response(claim_id, first_owner, 'positive')
     assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == claimant
     assert repo.get_user(claimant)[1][0]['ownership_status'] == 'current_owner'
+    assert repo.get_user(first_owner)[1][0]['ownership_status'] == 'former_owner'
     assert repo.observation_diagnostic(individual_id)['differences'] == {}
+    _, return_claim_id = repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='acquire', occurred_at='2022-01-01')
+    return_claim = next(row for row in repo.list_claims(individual_id)
+                        if row['id'] == return_claim_id)
+    assert return_claim['verification_status'] == 'unverified'
+    assert repo.get_user(first_owner)[1][0]['ownership_status'] == 'former_owner'
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == claimant
     try:
         repo.deactivate_claim(claim_id, claimant)
     except ValueError as exc:

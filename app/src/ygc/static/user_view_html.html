@@ -897,8 +897,10 @@ function closeAccountRequired(event){
   const modal=document.getElementById('accountRequiredModal');
   if(modal)modal.classList.remove('open');
 }
-function ownershipControlsHtml(individualId){
-  if(activeUser&&activeUser.user&&activeUserOwns(individualId)){
+function ownershipControlsHtml(individual){
+  const individualId=Number(individual.id);
+  if(activeUser&&activeUser.user&&individual.current_owner_user_id!==null
+     && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
     return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
   }
   if(!activeUser||!activeUser.user){
@@ -1270,6 +1272,7 @@ async function voteClaim(claimId,vote){
 }
 
 async function showIndividual(id){
+  await loadActiveUser();
   const nextIndividualId=Number(id);
   const changedIndividual=Number(selectedIndividualId)!==nextIndividualId;
   selectedIndividualId=nextIndividualId;
@@ -1334,7 +1337,7 @@ async function showIndividual(id){
   out+='<div class="detail-header"><div class="detail-title-row"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+favoriteButton(i.id)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
     '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i.id)+'</div>';
+    ownershipControlsHtml(i)+'</div>';
   out+='<section class="accordion-section" id="specificationAccordion">'+
     '<div class="accordion-header">'+
       '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button>'+
