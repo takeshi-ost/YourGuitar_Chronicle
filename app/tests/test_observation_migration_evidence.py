@@ -312,6 +312,10 @@ def test_relisting_owner_is_rebuilt_from_evidence_without_legacy_observation(tmp
     assert rebuilt['current_owner_name'] == 'New Shop'
     assert rebuilt['location_region'] == 'NY'
     claims = repo.list_claims(individual_id)
+    listing = next(row for row in claims if row['id'] == first['claim_id'])
+    assert listing['source_site'] == 'reverb'
+    assert listing['source_listing_id'] == '500'
+    assert listing['source_url'] == 'https://example.test/500'
     acquire = next(row for row in claims if row['id'] == second['claim_id'])
     assert acquire['source_site'] == 'reverb'
     assert acquire['source_listing_id'] == '501'

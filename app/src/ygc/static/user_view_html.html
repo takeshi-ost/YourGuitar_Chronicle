@@ -1092,10 +1092,15 @@ function claimCardFull(c){
     if(specs)details.push(specs);
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
     if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
-    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }
+  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership')){
+    const id='Reverb ID #'+esc(c.source_listing_id);
+    body+='<div class="claim-memo">Evidence: '+(c.source_url?'<a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+id+'</a>':id)+'</div>';
+  }else if(c.claim_type==='listing'&&c.source_url){
+    body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }
   if(c.evidence_media_id&&c.claim_type!=='media'){
     body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
