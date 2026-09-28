@@ -562,6 +562,7 @@ let individuals=[];
 let newDiscoveries=[];
 let activeUser=null;
 let selectedIndividualId=null;
+let selectedIndividualOwnerId=null;
 let productGallery=[];
 let productGalleryIndex=0;
 let currentObservations=[];
@@ -993,7 +994,8 @@ function displayDiscoveryDateTime(value){
 }
 function claimHeaderHtml(c,type,eventDate){
   let response='';
-  const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
+  const isOwner=activeUser&&activeUser.user&&selectedIndividualOwnerId!==null
+    && Number(selectedIndividualOwnerId)===Number(activeUser.user.id);
   const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
   const verifiableTypes=new Set(['specification','incident','event','media']);
   const isFormerOwnerOwnership=(
@@ -1004,12 +1006,12 @@ function claimHeaderHtml(c,type,eventDate){
     c.claim_type==='ownership'
     && ['automation','merged_listing'].includes(String(c.ownership_source||''))
   );
-  const isManualAcquire=(
+  const isManualOwnership=(
     c.claim_type==='ownership'
-    && String(c.ownership_kind||'')==='acquire'
+    && ['acquire','release','transfer','inherit'].includes(String(c.ownership_kind||''))
     && !['automation','merged_listing','former_owner'].includes(String(c.ownership_source||''))
   );
-  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire||isManualAcquire)){
+  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire||isManualOwnership)){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
@@ -1299,6 +1301,7 @@ async function showIndividual(id){
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
   const i=d.individual;
+  selectedIndividualOwnerId=i.current_owner_user_id;
   const observations=d.observations||[];
   currentObservations=observations;
   currentClaims=claims||[];

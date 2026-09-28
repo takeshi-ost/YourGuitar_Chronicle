@@ -6057,13 +6057,18 @@ class Repository:
                 and claim["ownership_kind"] == "acquire"
                 and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
             )
+            is_manual_ownership = (
+                claim["claim_type"] == "ownership"
+                and claim["ownership_kind"] in ("acquire", "release", "transfer", "inherit")
+                and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
+            )
             if (
                 claim["claim_type"] in (
                     "ownership",
                     "listing",
                     "identity_correction",
                 )
-                and not (is_former_owner_claim or is_automation_acquire or is_manual_acquire)
+                and not (is_former_owner_claim or is_automation_acquire or is_manual_ownership)
             ):
                 raise ValueError(
                     "This Claim type does not use Owner Verification"

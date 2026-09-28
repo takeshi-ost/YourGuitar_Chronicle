@@ -232,6 +232,39 @@ def test_competing_acquire_waits_for_owner_and_never_appears_owned_early(tmp_pat
         raise AssertionError('Current owner invalidated their own accepted Acquire')
 
 
+def test_new_owner_can_verify_previous_owners_acquire_and_release(tmp_path):
+    repo = Repository(tmp_path / 'owner-verification-after-transfer.db')
+    repo.init_db()
+    first_owner = repo.create_user('First')
+    next_owner = repo.create_user('Next')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        first_owner, manufacturer='Fender', model='Telecaster', serial_number='TRANSFER-001',
+        media_storage_path='media/transfer.jpg', occurred_at='2020-01-01')
+    _, release_id = repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='release', occurred_at='2021-01-01')
+    _, previous_acquire_id = repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='acquire', occurred_at='2022-01-01')
+    repo.admin_moderate_claim(release_id, 'negative')
+    _, next_acquire_id = repo.create_ownership_claim(
+        next_owner, individual_id, ownership_kind='acquire', occurred_at='2023-01-01')
+    assert repo.set_claim_response(next_acquire_id, first_owner, 'positive')
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == next_owner
+
+    assert repo.set_claim_response(previous_acquire_id, next_owner, 'negative')
+    assert repo.set_claim_response(release_id, next_owner, 'positive')
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == next_owner
+    claims = {row['id']: row for row in repo.list_claims(individual_id)}
+    assert claims[previous_acquire_id]['verification_status'] == 'negative'
+    assert claims[release_id]['verification_status'] == 'positive'
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+    try:
+        repo.set_claim_response(previous_acquire_id, first_owner, 'positive')
+    except ValueError as exc:
+        assert 'another user' in str(exc)
+    else:
+        raise AssertionError('Former owner verified their own Acquire')
+
+
 def test_unowned_acquires_same_day_use_first_claim_and_later_owner_confirmation(tmp_path):
     repo = Repository(tmp_path / 'same-day.db')
     repo.init_db()
