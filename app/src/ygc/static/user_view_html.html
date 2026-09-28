@@ -1262,8 +1262,8 @@ async function setClaimResponse(claimId,stance){
     });
     closeClaimPopup();
     await loadActiveUser();
-    if(PROFILE_USER_ID)await loadProfilePage();
-    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    if(PROFILE_USER_ID)await loadProfilePage(selectedIndividualId);
+    else if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }catch(e){
     alert('Owner Verificationの更新に失敗しました。\n'+e.message);
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
@@ -2104,7 +2104,7 @@ function setupProfileShell(){
   }
   document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
 }
-async function loadProfilePage(){
+async function loadProfilePage(preferredIndividualId=null){
   const hero=document.getElementById('profileHero');
   if(!activeUser||!activeUser.user){
     applyTheme('dark_default');
@@ -2140,7 +2140,8 @@ async function loadProfilePage(){
     const requested=Number(new URLSearchParams(location.search).get('individual_id')||0);
     const signature=profileGuitars.find(g=>g.ownership_status==='current_owner'&&Number(g.individual_id)===Number(u.signature_individual_id));
     const selected=[...profileGuitars,...profileFavorites].find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0]||profileFavorites[0];
-    if(selected)await showIndividual(Number(selected.individual_id));
+    if(preferredIndividualId!==null)await showIndividual(Number(preferredIndividualId));
+    else if(selected)await showIndividual(Number(selected.individual_id));
   }catch(e){
     applyTheme('dark_default');
     hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';
