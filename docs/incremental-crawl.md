@@ -11,6 +11,8 @@
 
 両入口は詳細保存・メーカー／シリアル抽出・DBへの登録パイプラインを共用する。既知のListing ID、キャッシュ中の見送りなどを一覧段階で除外する。分野や年を判別できない・範囲外の候補は見送り、必要な詳細を取得したら**判定より先に**JSONと取得日時を `crawl_detail_cache` に保存する。詳細取得失敗で成功済み詳細を上書きしない。
 
+新規個体のListing Claimを作る際は、その掲載IDの保存済みDetailから項目名が明示された短い仕様値だけを抽出し、得られた場合だけAutomationのPositiveなSpecification Claimを同じトランザクションで作る。FinishはListingの値と重複するため含めない。状態説明、文章、装飾記号は捨て、Reverb IDをSpecification専用の出典記録に残す。既存個体の再掲載AcquireではSpecificationを自動生成しない。Browser Consoleの「Specificationを整理・追加」は旧自動生成値の整理と、現在ユーザーOwnerがいない既存個体の手動バックフィル用。
+
 条件を満たしてもメーカーまたは有効なシリアルがなければIndividual / Claim / Observationは新設しない。見送り理由とListing IDを期限付きで保存する（identity不足は7日、範囲外は30日）。有効候補は `crawl_candidates` に永続保存し、まとめて個体照合する。候補の段階保存と外部Listing IDの再確認により、停止からの再実行で重複Claimを防ぐ。モデルの矛盾・不明など曖昧な一致は `review` に置き、自動統合しない。管理画面に確認待ち候補の**一覧はあるが承認操作は未実装**。
 
 「保存済み詳細を再判定」はキャッシュ済みJSONを選択中の分野と製造年で再抽出・照合する。Reverbへの通信・APIトークンは使わない。以前に詳細を保存していなかったListingの情報は再現できない。

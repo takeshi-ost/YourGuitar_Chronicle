@@ -56,6 +56,42 @@ class Repository:
         )
         return con
 
+    @staticmethod
+    def _insert_cached_specification_claim(
+        con: sqlite3.Connection, *, individual_id: int, author_id: int,
+        source_listing_id: str, source_url: str | None, occurred_at: str,
+        captured_at: str, detail: dict, existing_fields: set[str],
+    ) -> tuple[int | None, int]:
+        """Create one sourced Automation Claim in the Listing's transaction."""
+        items = {key: value for key, value in extract_specifications(detail).items()
+                 if key not in existing_fields}
+        if not items:
+            return None, 0
+        now = utcnow()
+        cur = con.execute(
+            """INSERT INTO claims (individual_id, author_user_id, claim_type,
+                  specification_kind, occurred_at, status, verification_status,
+                  created_at, updated_at)
+               VALUES (?, ?, 'specification', 'specification', ?, 'active',
+                       'positive', ?, ?)""",
+            (individual_id, author_id, occurred_at, now, now),
+        )
+        claim_id = int(cur.lastrowid)
+        con.executemany(
+            """INSERT INTO claim_spec_items (claim_id, field_name, value_text, created_at)
+               VALUES (?, ?, ?, ?)""",
+            [(claim_id, key, value, now) for key, value in items.items()],
+        )
+        con.execute(
+            """INSERT INTO claim_specification_source
+               (claim_id, source_site, source_listing_id, source_url,
+                captured_at, extracted_json) VALUES (?, 'reverb', ?, ?, ?, ?)""",
+            (claim_id, source_listing_id, source_url, captured_at,
+             json.dumps(items, ensure_ascii=False)),
+        )
+        existing_fields.update(items)
+        return claim_id, len(items)
+
     def backfill_cached_specifications(self) -> dict[str, int]:
         """Add sourced, positive specifications to currently ownerless individuals."""
         counts = {"ownerless": 0, "with_detail": 0, "created": 0,
@@ -150,39 +186,20 @@ class Repository:
                     if not isinstance(detail, dict):
                         counts["skipped_no_specs"] += 1
                         continue
-                    items = {key: value for key, value in extract_specifications(detail).items()
-                             if key not in existing}
-                    if not items:
+                    spec_id, item_count = self._insert_cached_specification_claim(
+                        con, individual_id=individual_id, author_id=automation,
+                        source_listing_id=row["source_listing_id"],
+                        source_url=row["source_url"],
+                        occurred_at=row["occurred_at"] or row["fetched_at"],
+                        captured_at=row["fetched_at"], detail=detail,
+                        existing_fields=existing,
+                    )
+                    if spec_id is None:
                         counts["skipped_no_specs"] += 1
                         continue
-                    now = utcnow()
-                    cur = con.execute(
-                        """INSERT INTO claims (individual_id, author_user_id, claim_type,
-                              specification_kind, occurred_at, status, verification_status,
-                              created_at, updated_at)
-                           VALUES (?, ?, 'specification', 'specification', ?, 'active',
-                                   'positive', ?, ?)""",
-                        (individual_id, automation, row["occurred_at"] or
-                         row["fetched_at"], now, now),
-                    )
-                    claim_id = cur.lastrowid
-                    con.executemany(
-                        """INSERT INTO claim_spec_items
-                           (claim_id, field_name, value_text, created_at)
-                           VALUES (?, ?, ?, ?)""",
-                        [(claim_id, key, value, now) for key, value in items.items()],
-                    )
-                    con.execute(
-                        """INSERT INTO claim_specification_source
-                           (claim_id, source_site, source_listing_id, source_url,
-                            captured_at, extracted_json) VALUES (?, 'reverb', ?, ?, ?, ?)""",
-                        (claim_id, row["source_listing_id"], row["source_url"],
-                         row["fetched_at"], json.dumps(items, ensure_ascii=False)),
-                    )
-                    existing.update(items)
                     created_for_individual = True
                     counts["created"] += 1
-                    counts["items"] += len(items)
+                    counts["items"] += item_count
                 if created_for_individual:
                     self._rebuild_individual_snapshot_in_connection(con, individual_id)
         return counts
@@ -1850,6 +1867,27 @@ class Repository:
                 acquire=False,
             )
 
+            specification_claim_id = None
+            if source_site == "reverb":
+                cached = con.execute(
+                    """SELECT payload_json, fetched_at FROM crawl_detail_cache
+                       WHERE source_site='reverb' AND source_listing_id=?""",
+                    (source_listing_id,),
+                ).fetchone()
+                if cached:
+                    try:
+                        detail = json.loads(cached["payload_json"])
+                    except (TypeError, ValueError):
+                        detail = None
+                    if isinstance(detail, dict):
+                        specification_claim_id, _ = self._insert_cached_specification_claim(
+                            con, individual_id=individual_id, author_id=author_user_id,
+                            source_listing_id=source_listing_id,
+                            source_url=provenance.get("source_url"),
+                            occurred_at=occurred_at, captured_at=cached["fetched_at"],
+                            detail=detail, existing_fields=set(),
+                        )
+
             self._rebuild_individual_snapshot_in_connection(
                 con,
                 individual_id,
@@ -1859,6 +1897,7 @@ class Repository:
                 "created": True,
                 "observation_id": observation_id,
                 "claim_id": claim_id,
+                "specification_claim_id": specification_claim_id,
                 "individual_id": individual_id,
             }
 

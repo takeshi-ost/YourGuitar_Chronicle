@@ -8,6 +8,42 @@ from ygc.specification_extractor import extract_specifications
 
 
 class CachedSpecificationBackfillTest(unittest.TestCase):
+    def test_new_listing_creates_positive_specification_not_relisting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Repository(Path(directory) / "chronicle.db")
+            repo.init_db()
+            claim = {"manufacturer": "Fender", "model": "Mustang", "finish": "Natural",
+                     "year": "1974", "serial_number": "ABC-123", "owner_name": "Shop",
+                     "owner_type": "shop", "source_site": "reverb", "source_listing_id": "301",
+                     "source_url": "https://reverb.com/item/301", "listing_date": "2026-09-20"}
+            provenance = {"source_site": "reverb", "source_listing_id": "301",
+                          "source_url": "https://reverb.com/item/301", "observed_at": "2026-09-25"}
+            save_detail(repo, "301", {"id": "301", "finish": "Natural",
+                        "description": "Pickups: Two humbuckers\n"
+                                       "Pickguard: a hairline crack near the screw."})
+            result = repo.persist_reverb_listing_claim(claim, provenance)
+            self.assertTrue(result["specification_claim_id"] > result["claim_id"])
+            guitar = result["individual_id"]
+            spec = next(row for row in repo.list_claims(guitar)
+                        if row["claim_type"] == "specification")
+            self.assertEqual(spec["verification_status"], "positive")
+            self.assertEqual(spec["source_listing_id"], "301")
+            self.assertEqual({row["field_name"] for row in repo.list_current_specifications(guitar)},
+                             {"pickups"})
+            self.assertFalse(repo.persist_reverb_listing_claim(claim, provenance)["created"])
+
+            relist = {**claim, "source_listing_id": "302",
+                      "source_url": "https://reverb.com/item/302"}
+            new_provenance = {**provenance, "source_listing_id": "302",
+                              "source_url": "https://reverb.com/item/302"}
+            save_detail(repo, "302", {"id": "302", "description": "Bridge: Fixed"})
+            second = repo.persist_reverb_listing_claim(relist, new_provenance)
+            self.assertEqual(second["individual_id"], guitar)
+            self.assertEqual(second["claim_id"], max(
+                row["id"] for row in repo.list_claims(guitar)))
+            self.assertEqual({row["field_name"] for row in repo.list_current_specifications(guitar)},
+                             {"pickups"})
+
     def test_explicit_values_only_and_ownerless_idempotent_backfill(self):
         self.assertEqual(
             extract_specifications({"description": "<p>Pickups: Two humbuckers</p>"
