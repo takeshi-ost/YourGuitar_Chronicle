@@ -11,8 +11,29 @@ FIELDS = {
     "nut": "nut", "pickups": "pickups", "pickup": "pickups",
     "pickguard": "pickguard", "potentiometers": "potentiometers",
     "pots": "potentiometers", "tuners": "tuners", "tuning machines": "tuners",
-    "wiring": "wiring", "weight": "weight", "finish": "finish",
+    "wiring": "wiring", "weight": "weight",
 }
+
+
+def clean_specification_value(field: str, value: object) -> str | None:
+    """Reject prose, condition notes and decoration rather than guessing a part."""
+    if field not in set(FIELDS.values()) or not isinstance(value, (str, int, float)):
+        return None
+    cleaned = re.sub(r"\s+", " ", unescape(str(value))).strip(" :;,-")
+    if (not cleaned or len(cleaned) > 80 or len(cleaned.split()) > 9
+            or not any(char.isalnum() for char in cleaned)
+            or re.search(r"[.!?;★☆·]", re.sub(r"\d+\.\d+", "0", cleaned)
+                         if field == "weight" else cleaned)
+            or re.search(r"\b(?:a|an|the|near|crack|cracked|damage|damaged|"
+                         r"featuring|features|controlled|original|still|"
+                         r"condition|includes|including|appears|seems|"
+                         r"worn|wear|very|slight|minor|unknown|none|other)\b",
+                         cleaned, re.I)
+            or cleaned.lower() in {"n/a", "not specified"}):
+        return None
+    if field == "weight" and not re.search(r"\b(?:kg|g|lbs?|pounds?|oz)\b", cleaned, re.I):
+        return None
+    return cleaned
 
 
 def extract_specifications(detail: dict) -> dict[str, str]:
@@ -21,11 +42,8 @@ def extract_specifications(detail: dict) -> dict[str, str]:
 
     def add(label: str, value: object) -> None:
         field = FIELDS.get(str(label).strip().lower())
-        if field is None or not isinstance(value, (str, int, float)):
-            return
-        cleaned = re.sub(r"\s+", " ", unescape(str(value))).strip(" :;,-")
-        if (cleaned and len(cleaned) <= 500 and cleaned.lower() not in
-                {"unknown", "n/a", "none", "not specified", "other"}):
+        cleaned = clean_specification_value(field, value)
+        if cleaned:
             result.setdefault(field, cleaned)
 
     for key in FIELDS:

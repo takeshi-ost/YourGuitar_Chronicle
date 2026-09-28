@@ -14,7 +14,7 @@ from ygc.extractors.normalization import (
 )
 from ygc.theme_catalog import THEME_IDS
 from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
-from ygc.specification_extractor import extract_specifications
+from ygc.specification_extractor import extract_specifications, clean_specification_value
 
 
 def utcnow() -> str:
@@ -59,8 +59,48 @@ class Repository:
     def backfill_cached_specifications(self) -> dict[str, int]:
         """Add sourced, positive specifications to currently ownerless individuals."""
         counts = {"ownerless": 0, "with_detail": 0, "created": 0,
-                  "items": 0, "skipped_no_specs": 0, "skipped_existing": 0}
+                  "items": 0, "skipped_no_specs": 0, "skipped_existing": 0,
+                  "corrected_items": 0, "corrected_claims": 0, "removed_claims": 0}
         with self.connect() as con:
+            # Repair only values still identical to this backfill's own recorded
+            # output. Preserve any subsequent manual changes and all user Claims.
+            affected: set[int] = set()
+            for source in con.execute(
+                """SELECT s.*, c.individual_id FROM claim_specification_source s
+                   JOIN claims c ON c.id=s.claim_id JOIN users u ON u.id=c.author_user_id
+                   WHERE c.claim_type='specification' AND c.status='active'
+                     AND c.verification_status='positive'
+                     AND u.account_type='source' AND u.display_name='Automation'"""
+            ).fetchall():
+                try:
+                    original = json.loads(source["extracted_json"])
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(original, dict):
+                    continue
+                changed = False
+                for item in con.execute(
+                    "SELECT id, field_name, value_text FROM claim_spec_items WHERE claim_id=?",
+                    (source["claim_id"],),
+                ).fetchall():
+                    if original.get(item["field_name"]) != item["value_text"]:
+                        continue
+                    if clean_specification_value(item["field_name"], item["value_text"]):
+                        continue
+                    con.execute("DELETE FROM claim_spec_items WHERE id=?", (item["id"],))
+                    counts["corrected_items"] += 1
+                    changed = True
+                if changed:
+                    counts["corrected_claims"] += 1
+                    affected.add(source["individual_id"])
+                    if not con.execute(
+                        "SELECT 1 FROM claim_spec_items WHERE claim_id=? LIMIT 1",
+                        (source["claim_id"],),
+                    ).fetchone():
+                        con.execute("DELETE FROM claims WHERE id=?", (source["claim_id"],))
+                        counts["removed_claims"] += 1
+            for individual_id in affected:
+                self._rebuild_individual_snapshot_in_connection(con, individual_id)
             individuals = con.execute(
                 "SELECT id FROM individuals WHERE current_owner_user_id IS NULL ORDER BY id"
             ).fetchall()
