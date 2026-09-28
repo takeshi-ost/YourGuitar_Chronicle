@@ -1689,6 +1689,11 @@ async function submitOwnershipClaim(){
   if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
   const button=document.getElementById('ownershipClaimSubmit');
   const kind=document.getElementById('ownershipClaimKind').value;
+  if(kind==='acquire'&&!document.getElementById('ownershipClaimDate').value){
+    alert('Acquireには取得日が必要です。');
+    document.getElementById('ownershipClaimDate').focus();
+    return;
+  }
   if(kind==='release'){
     const guitar=individuals.find(x=>Number(x.id)===Number(pendingOwnershipClaimIndividualId));
     const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'このギター';

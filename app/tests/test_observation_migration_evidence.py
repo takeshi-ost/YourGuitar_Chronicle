@@ -82,6 +82,7 @@ def test_evaluator_matches_migrated_snapshot_without_writing(tmp_path):
     repo.init_db()
     repo.migrate_legacy_observations_to_claims()
     repo.backfill_claim_source_evidence()
+    repo.backfill_acquisition_date_evidence()
     with repo.connect() as con:
         ids = [row['id'] for row in con.execute('SELECT id FROM individuals ORDER BY id')]
         before = con.total_changes
@@ -104,3 +105,181 @@ def test_legacy_detail_cache_preserves_owner_fields_as_claim_evidence(tmp_path):
                                           '2026-09-25T00:00:00+00:00'))
     assert repo.backfill_claim_source_evidence()['created'] == 1
     assert repo.observation_diagnostic(created['individual_id'])['differences'] == {}
+
+
+def test_manual_acquire_requires_explicit_date_and_preserves_edited_evidence(tmp_path):
+    repo = Repository(tmp_path / 'acquire.db')
+    repo.init_db()
+    owner = repo.create_user('Owner')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        owner, manufacturer='Fender', model='Telecaster', serial_number='DATE-001',
+        media_storage_path='media/date.jpg', occurred_at='2020-01-01')
+    with repo.connect() as con:
+        initial_claims = con.execute('SELECT count(*) FROM claims').fetchone()[0]
+    for value in (None, '', '2026-02-30', '2026-03-01T00:00:00Z'):
+        try:
+            repo.create_ownership_claim(owner, individual_id, ownership_kind='acquire',
+                                        occurred_at=value)
+        except ValueError as exc:
+            assert 'Acquisition Date' in str(exc)
+        else:
+            raise AssertionError(f'Invalid acquisition date accepted: {value}')
+    with repo.connect() as con:
+        assert con.execute('SELECT count(*) FROM claims').fetchone()[0] == initial_claims
+
+    _, claim_id = repo.create_ownership_claim(owner, individual_id, ownership_kind='acquire',
+                                              occurred_at='2026-03-01')
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+    assert repo.update_claim(claim_id, owner, occurred_at='2026-03-02')
+    assert repo.update_claim(claim_id, owner, occurred_at='2026-03-03')
+    with repo.connect() as con:
+        rows = con.execute("""SELECT effective_date,date_basis FROM claim_source_evidence
+                              WHERE claim_id=? AND evidence_type='acquisition_date'""",
+                           (claim_id,)).fetchall()
+        assert [tuple(row) for row in rows] == [('2026-03-03', 'user_reported')]
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
+def test_acquisition_date_backfill_uses_only_recorded_dates(tmp_path):
+    repo = Repository(tmp_path / 'legacy-date.db')
+    repo.init_db()
+    owner = repo.create_user('Owner')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        owner, manufacturer='Fender', model='Telecaster', serial_number='DATE-002',
+        media_storage_path='media/date2.jpg', occurred_at='2020-01-01')
+    _, claim_id = repo.create_ownership_claim(owner, individual_id, ownership_kind='acquire',
+                                              occurred_at='2026-03-01')
+    with repo.connect() as con:
+        con.execute('DELETE FROM claim_source_evidence WHERE claim_id=?', (claim_id,))
+    assert repo.backfill_acquisition_date_evidence()['created'] == 1
+    assert repo.backfill_acquisition_date_evidence()['existing'] == 1
+    with repo.connect() as con:
+        con.execute('DELETE FROM claim_source_evidence WHERE claim_id=?', (claim_id,))
+        con.execute('UPDATE claims SET occurred_at=NULL WHERE id=?', (claim_id,))
+    assert repo.backfill_acquisition_date_evidence()['missing_date'] == 1
+    with repo.connect() as con:
+        assert con.execute('SELECT count(*) FROM claim_source_evidence WHERE claim_id=?',
+                           (claim_id,)).fetchone()[0] == 0
+
+
+def test_diagnostic_endpoint_is_admin_only_and_read_only(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from ygc import config
+    from ygc.web import app, CONSOLE_ADMIN_TOKEN
+
+    monkeypatch.setattr(config, 'DB_PATH', tmp_path / 'api.db')
+    repo = Repository(config.DB_PATH)
+    repo.init_db()
+    owner = repo.create_user('Owner')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        owner, manufacturer='Fender', model='Telecaster', serial_number='DIAG-001',
+        media_storage_path='media/diag.jpg', occurred_at='2020-01-01')
+    url = f'/api/admin/individuals/{individual_id}/observation-diagnostic'
+    with repo.connect() as con:
+        before = tuple(con.execute('SELECT * FROM individuals WHERE id=?', (individual_id,)).fetchone())
+    with TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 45000)) as client:
+        assert client.get(url).status_code == 403
+        response = client.get(url, headers={'X-YGC-Console-Admin': CONSOLE_ADMIN_TOKEN})
+        assert response.status_code == 200
+        assert response.json()['differences'] == {}
+        assert response.json()['decisions']
+        assert client.get('/api/admin/individuals/99999/observation-diagnostic',
+                          headers={'X-YGC-Console-Admin': CONSOLE_ADMIN_TOKEN}).status_code == 404
+    with repo.connect() as con:
+        assert tuple(con.execute('SELECT * FROM individuals WHERE id=?', (individual_id,)).fetchone()) == before
+
+
+def test_competing_acquire_waits_for_owner_and_never_appears_owned_early(tmp_path):
+    repo = Repository(tmp_path / 'pending.db')
+    repo.init_db()
+    first_owner = repo.create_user('First')
+    claimant = repo.create_user('Claimant')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        first_owner, manufacturer='Fender', model='Telecaster', serial_number='PENDING-001',
+        media_storage_path='media/pending.jpg', occurred_at='2020-01-01')
+    _, claim_id = repo.create_ownership_claim(
+        claimant, individual_id, ownership_kind='acquire', occurred_at='2021-01-01')
+    with repo.connect() as con:
+        assert con.execute('SELECT verification_status FROM claims WHERE id=?',
+                           (claim_id,)).fetchone()[0] == 'unverified'
+    assert repo.get_user(claimant)[1] == []
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == first_owner
+    assert repo.unverified_acquires()['total'] == 1
+    try:
+        repo.set_claim_response(claim_id, claimant, 'positive')
+    except ValueError as exc:
+        assert 'another user' in str(exc)
+    else:
+        raise AssertionError('Claimant was able to self approve')
+    assert repo.set_claim_response(claim_id, first_owner, 'positive')
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == claimant
+    assert repo.get_user(claimant)[1][0]['ownership_status'] == 'current_owner'
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+    try:
+        repo.deactivate_claim(claim_id, claimant)
+    except ValueError as exc:
+        assert 'Current owner cannot deactivate' in str(exc)
+    else:
+        raise AssertionError('Current owner invalidated their own accepted Acquire')
+
+
+def test_unowned_acquires_same_day_use_first_claim_and_later_owner_confirmation(tmp_path):
+    repo = Repository(tmp_path / 'same-day.db')
+    repo.init_db()
+    first = repo.persist_reverb_listing_claim(*_reverb_item('300'))
+    first_owner = repo.create_user('First')
+    second_owner = repo.create_user('Second')
+    individual_id = first['individual_id']
+    _, first_id = repo.create_ownership_claim(first_owner, individual_id,
+                                              ownership_kind='acquire', occurred_at='2026-09-26')
+    _, second_id = repo.create_ownership_claim(second_owner, individual_id,
+                                               ownership_kind='acquire', occurred_at='2026-09-26')
+    with repo.connect() as con:
+        assert first_id < second_id
+        assert [r[0] for r in con.execute(
+            'SELECT verification_status FROM claims WHERE id IN (?,?) ORDER BY id',
+            (first_id, second_id))] == ['positive', 'unverified']
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == first_owner
+    assert repo.set_claim_response(second_id, first_owner, 'positive')
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == second_owner
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
+def test_earlier_acquire_entered_later_does_not_replace_later_owner(tmp_path):
+    repo = Repository(tmp_path / 'backdate.db')
+    repo.init_db()
+    listing = repo.persist_reverb_listing_claim(*_reverb_item('400'))
+    earlier = repo.create_user('Earlier')
+    later = repo.create_user('Later')
+    individual_id = listing['individual_id']
+    repo.create_ownership_claim(later, individual_id, ownership_kind='acquire',
+                                occurred_at='2026-09-27')
+    _, backdated_id = repo.create_ownership_claim(earlier, individual_id,
+                                                  ownership_kind='acquire', occurred_at='2026-09-26')
+    with repo.connect() as con:
+        assert con.execute('SELECT verification_status FROM claims WHERE id=?',
+                           (backdated_id,)).fetchone()[0] == 'unverified'
+    assert repo.set_claim_response(backdated_id, later, 'positive')
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == later
+    assert repo.observation_diagnostic(individual_id)['differences'] == {}
+
+
+def test_current_owner_can_redecide_admin_verification(tmp_path):
+    repo = Repository(tmp_path / 'override.db')
+    repo.init_db()
+    first_owner = repo.create_user('First')
+    claimant = repo.create_user('Claimant')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        first_owner, manufacturer='Fender', model='Telecaster', serial_number='OVERRIDE-001',
+        media_storage_path='media/override.jpg', occurred_at='2020-01-01')
+    _, claim_id = repo.create_ownership_claim(
+        claimant, individual_id, ownership_kind='acquire', occurred_at='2021-01-01')
+    repo.admin_moderate_claim(claim_id, 'negative')
+    assert repo.set_claim_response(claim_id, first_owner, 'positive')
+    with repo.connect() as con:
+        verification = con.execute(
+            'SELECT verification_status,admin_verification FROM claims WHERE id=?',
+            (claim_id,),
+        ).fetchone()
+        assert tuple(verification) == ('positive', 0)
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == claimant

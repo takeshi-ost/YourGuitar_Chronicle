@@ -113,6 +113,47 @@ class Repository:
                 created += 1
         return {'created': created, 'existing': existing, 'conflicts': conflicts}
 
+    def backfill_acquisition_date_evidence(self) -> dict[str, int]:
+        """Copy explicitly recorded dates on older user Acquire Claims.
+
+        Never infer an acquisition date from submission time or a marketplace
+        observation; those have different meanings and stay distinguishable.
+        """
+        created = existing = missing_date = 0
+        with self.connect() as con:
+            claims = con.execute(
+                """SELECT id,author_user_id,occurred_at FROM claims
+                   WHERE claim_type='ownership' AND ownership_kind='acquire'
+                     AND COALESCE(ownership_source,'user') NOT IN ('automation','merged_listing')
+                   ORDER BY id"""
+            ).fetchall()
+            for claim in claims:
+                if con.execute(
+                    """SELECT 1 FROM claim_source_evidence
+                       WHERE claim_id=? AND evidence_type='acquisition_date'""",
+                    (claim['id'],),
+                ).fetchone():
+                    existing += 1
+                    continue
+                date = str(claim['occurred_at'] or '')
+                try:
+                    if len(date) != 10:
+                        raise ValueError('Incomplete date')
+                    datetime.strptime(date, '%Y-%m-%d')
+                except ValueError:
+                    missing_date += 1
+                    continue
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                       VALUES (?, 'acquisition_date', ?, 'legacy_claim_date', ?, ?)""",
+                    (claim['id'], date,
+                     json.dumps({'reported_by_user_id': claim['author_user_id']}, ensure_ascii=False),
+                     utcnow()),
+                )
+                created += 1
+        return {'created': created, 'existing': existing, 'missing_date': missing_date}
+
     def observation_diagnostic(self, individual_id: int) -> dict[str, Any]:
         """Compare a read-only Observation evaluation to the saved Individual."""
         with self.connect() as con:
@@ -1199,11 +1240,7 @@ class Repository:
                         'ownership'
                   )
                 ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
+                    SUBSTR(COALESCE(c.occurred_at, c.created_at), 1, 10),
                     c.id
                 """,
                 (individual_id,),
@@ -3934,6 +3971,16 @@ class Repository:
                 "ownership_kind must be acquire, transfer, release, or inherit"
             )
 
+        if kind == "acquire":
+            if not occurred_at or not occurred_at.strip():
+                raise ValueError("Acquisition Date is required for Acquire")
+            try:
+                datetime.strptime(occurred_at.strip(), "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValueError("Acquisition Date must use YYYY-MM-DD") from exc
+            if len(occurred_at.strip()) != 10:
+                raise ValueError("Acquisition Date must use YYYY-MM-DD")
+
         now = utcnow()
         event_date = (
             occurred_at.strip()
@@ -3976,6 +4023,12 @@ class Repository:
                 raise ValueError(
                     "User is not the current owner of this Individual"
                 )
+
+            pending_owner_verification = (
+                kind == "acquire"
+                and individual["current_owner_user_id"] is not None
+                and int(individual["current_owner_user_id"]) != user_id
+            )
 
             owner_name = (
                 "Unknown"
@@ -4057,13 +4110,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, ?, ?, 'ownership',
                     'owner_user_id', ?, ?, ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
@@ -4078,11 +4132,21 @@ class Repository:
                     kind,
                     note,
                     event_date,
+                    "unverified" if pending_owner_verification else "positive",
                     now,
                     now,
                 ),
             )
             claim_id = int(cur.lastrowid)
+
+            if kind == "acquire":
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                       VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                    (claim_id, event_date,
+                     json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                )
 
             if kind in ending_kinds:
                 con.execute(
@@ -4095,7 +4159,7 @@ class Repository:
                     """,
                     (event_date, now, user_id, individual_id),
                 )
-            else:
+            elif not pending_owner_verification:
                 next_order = int(
                     con.execute(
                         """
@@ -4141,6 +4205,37 @@ class Repository:
                 individual_id,
             )
             return observation_id, claim_id
+
+    @staticmethod
+    def _record_accepted_acquire(con: sqlite3.Connection, claim: sqlite3.Row) -> None:
+        """Add a user guitar only after its Acquire becomes accepted."""
+        if (claim['claim_type'] != 'ownership' or claim['ownership_kind'] != 'acquire'
+                or claim['ownership_source'] not in (None, 'user')):
+            return
+        date_evidence = con.execute(
+            """SELECT 1 FROM claim_source_evidence
+               WHERE claim_id=? AND evidence_type='acquisition_date' AND effective_date=?""",
+            (claim['id'], claim['occurred_at']),
+        ).fetchone()
+        if date_evidence is None:
+            return
+        user_id = claim['value_text']
+        if not user_id or not con.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone():
+            return
+        now = utcnow()
+        next_order = int(con.execute(
+            'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
+            (user_id,),
+        ).fetchone()[0])
+        con.execute(
+            """INSERT INTO user_guitars
+               (user_id,individual_id,ownership_status,display_order,acquired_at,created_at,updated_at)
+               VALUES (?,?,'current_owner',?,?,?,?)
+               ON CONFLICT(user_id,individual_id) DO UPDATE SET
+                 acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
+                 updated_at=excluded.updated_at""",
+            (user_id, claim['individual_id'], next_order, claim['occurred_at'], now, now),
+        )
 
     def create_former_owner_claims(
         self,
@@ -4433,7 +4528,16 @@ class Repository:
                         now,
                     ),
                 )
-                return observation_id, int(cur.lastrowid)
+                new_claim_id = int(cur.lastrowid)
+                if kind == "acquire":
+                    con.execute(
+                        """INSERT INTO claim_source_evidence
+                           (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                           VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                        (new_claim_id, event_date,
+                         json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                    )
+                return observation_id, new_claim_id
 
             acquire_observation_id, acquire_claim_id = (
                 insert_ownership_event(
@@ -5346,6 +5450,29 @@ class Repository:
                     "Identity Correction Claims cannot be edited directly"
                 )
 
+            if claim["claim_type"] == "ownership" and (claim["ownership_kind"] or "acquire") == "acquire":
+                if not event_date:
+                    raise ValueError("Acquisition Date is required for Acquire")
+                try:
+                    datetime.strptime(event_date, "%Y-%m-%d")
+                except ValueError as exc:
+                    raise ValueError("Acquisition Date must use YYYY-MM-DD") from exc
+                if len(event_date) != 10:
+                    raise ValueError("Acquisition Date must use YYYY-MM-DD")
+                updated = con.execute(
+                    """UPDATE claim_source_evidence SET effective_date=?
+                       WHERE claim_id=? AND evidence_type='acquisition_date'""",
+                    (event_date, claim_id),
+                )
+                if not updated.rowcount:
+                    con.execute(
+                        """INSERT INTO claim_source_evidence
+                           (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                           VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                        (claim_id, event_date,
+                         json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                    )
+
             con.execute(
                 """
                 UPDATE claims
@@ -6135,6 +6262,8 @@ class Repository:
                 else:
                     con.execute("UPDATE claims SET verification_status=?, admin_verification=1, updated_at=? WHERE id=?",
                                 (action, utcnow(), target["id"]))
+                    if action == 'positive':
+                        self._record_accepted_acquire(con, target)
             snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
             return {"claim_id": claim_id, "individual_id": individual_id,
                     "individual_deleted": False, "snapshot": snapshot}
@@ -6160,12 +6289,16 @@ class Repository:
             claim = con.execute(
                 """
                 SELECT
+                    id,
                     individual_id,
                     author_user_id,
                     admin_verification,
                     claim_type,
+                    ownership_kind,
                     ownership_source,
-                    ownership_pair_id
+                    ownership_pair_id,
+                    value_text,
+                    occurred_at
                 FROM claims
                 WHERE id = ?
                   AND status = 'active'
@@ -6174,9 +6307,12 @@ class Repository:
             ).fetchone()
             if not claim:
                 return False
-            if claim["admin_verification"]:
-                raise ValueError("This Claim has an administrator verification decision")
-
+            if claim['admin_verification'] and not con.execute(
+                """SELECT 1 FROM user_guitars
+                   WHERE user_id=? AND individual_id=? AND ownership_status='current_owner'""",
+                (responder_user_id, claim['individual_id']),
+            ).fetchone():
+                raise ValueError('Only the current owner may change an administrator verification')
             if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
                                (responder_user_id,)).fetchone():
                 raise ValueError("Account is banned")
@@ -6193,13 +6329,18 @@ class Repository:
                 claim["claim_type"] == "ownership"
                 and claim["ownership_source"] in ("automation", "merged_listing")
             )
+            is_manual_acquire = (
+                claim["claim_type"] == "ownership"
+                and claim["ownership_kind"] == "acquire"
+                and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
+            )
             if (
                 claim["claim_type"] in (
                     "ownership",
                     "listing",
                     "identity_correction",
                 )
-                and not (is_former_owner_claim or is_automation_acquire)
+                and not (is_former_owner_claim or is_automation_acquire or is_manual_acquire)
             ):
                 raise ValueError(
                     "This Claim type does not use Owner Verification"
@@ -6227,7 +6368,7 @@ class Repository:
                 con.execute(
                     """
                     UPDATE claims
-                    SET verification_status = ?,
+                    SET verification_status = ?, admin_verification = 0,
                         updated_at = ?
                     WHERE ownership_pair_id = ?
                       AND ownership_source = 'former_owner'
@@ -6243,7 +6384,7 @@ class Repository:
                 con.execute(
                     """
                     UPDATE claims
-                    SET verification_status = ?,
+                    SET verification_status = ?, admin_verification = 0,
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -6253,6 +6394,9 @@ class Repository:
                         claim_id,
                     ),
                 )
+
+            if normalized == 'positive' and is_manual_acquire:
+                self._record_accepted_acquire(con, claim)
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
@@ -6379,6 +6523,17 @@ class Repository:
                 raise ValueError(
                     "This Claim type cannot be deactivated from Edit"
                 )
+
+            if (claim['claim_type'] == 'ownership'
+                    and (claim['ownership_kind'] or 'acquire') == 'acquire'
+                    and claim['verification_status'] == 'positive'):
+                current_owner = con.execute(
+                    'SELECT current_owner_user_id FROM individuals WHERE id=?',
+                    (claim['individual_id'],),
+                ).fetchone()
+                if (current_owner and current_owner['current_owner_user_id'] is not None
+                        and int(current_owner['current_owner_user_id']) == user_id):
+                    raise ValueError('Current owner cannot deactivate their own accepted Acquire')
 
             individual_id = int(claim["individual_id"])
             con.execute(

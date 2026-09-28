@@ -238,7 +238,10 @@ def migrate_claim_evidence() -> None:
     """Copy linked legacy marketplace observations to Claim Evidence."""
     repository = repo()
     repository.init_db()
-    result = repository.backfill_claim_source_evidence()
+    result = {
+        'marketplace': repository.backfill_claim_source_evidence(),
+        'acquisition_dates': repository.backfill_acquisition_date_evidence(),
+    }
     console.print_json(json.dumps(result, ensure_ascii=False))
 
 

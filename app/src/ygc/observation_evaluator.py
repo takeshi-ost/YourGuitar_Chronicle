@@ -123,6 +123,17 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
             decisions.append({'claim_id': cid, 'type': 'ownership',
                               'result': 'not_effective', 'reason': 'missing_acquisition_date'})
             continue
+        if (claim['claim_type'] == 'ownership' and kind == 'acquire'
+                and claim['ownership_source'] not in ('automation', 'merged_listing')):
+            date_evidence = con.execute(
+                """SELECT effective_date FROM claim_source_evidence
+                   WHERE claim_id=? AND evidence_type='acquisition_date' ORDER BY id LIMIT 1""",
+                (cid,),
+            ).fetchone()
+            if date_evidence is None or date_evidence['effective_date'] != _date_key(claim)[0]:
+                decisions.append({'claim_id': cid, 'type': 'ownership',
+                                  'result': 'not_effective', 'reason': 'missing_acquisition_date_evidence'})
+                continue
         if claim['claim_type'] == 'listing' or claim['ownership_source'] == 'merged_listing':
             items = claim_items('claim_listing_items', cid)
             owner_id = items.get('owner_user_id')
