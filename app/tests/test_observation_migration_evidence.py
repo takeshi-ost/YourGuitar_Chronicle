@@ -265,6 +265,24 @@ def test_new_owner_can_verify_previous_owners_acquire_and_release(tmp_path):
         raise AssertionError('Former owner verified their own Acquire')
 
 
+def test_former_owner_stays_former_when_new_acquire_is_pending(tmp_path):
+    repo = Repository(tmp_path / 'pending-return.db')
+    repo.init_db()
+    first_owner = repo.create_user('First')
+    next_owner = repo.create_user('Next')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        first_owner, manufacturer='Fender', model='Telecaster', serial_number='RETURN-001',
+        media_storage_path='media/return.jpg', occurred_at='2020-01-01')
+    _, next_claim_id = repo.create_ownership_claim(
+        next_owner, individual_id, ownership_kind='acquire', occurred_at='2022-01-01')
+    assert repo.set_claim_response(next_claim_id, first_owner, 'positive')
+    repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='acquire', occurred_at='2023-01-01')
+    guitar = next(g for g in repo.get_user(first_owner)[1] if g['individual_id'] == individual_id)
+    assert guitar['ownership_status'] == 'former_owner'
+    assert repo.get_user_summary(first_owner)['former_count'] == 1
+
+
 def test_unowned_acquires_same_day_use_first_claim_and_later_owner_confirmation(tmp_path):
     repo = Repository(tmp_path / 'same-day.db')
     repo.init_db()

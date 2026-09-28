@@ -2373,6 +2373,34 @@ class Repository:
                     INNER JOIN individuals i
                       ON i.id = ug.individual_id
                     WHERE ug.user_id = ?
+                      AND (ug.ownership_status <> 'former_owner'
+                           OR EXISTS (
+                               SELECT 1 FROM claims c
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.author_user_id=ug.user_id
+                                 AND c.claim_type='ownership'
+                                 AND c.ownership_kind='acquire'
+                                 AND c.status='active'
+                                 AND c.verification_status='positive'
+                           )
+                           OR EXISTS (
+                               SELECT 1 FROM claims c
+                               JOIN claim_listing_items li ON li.claim_id=c.id
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.claim_type='listing'
+                                 AND c.status='active'
+                                 AND c.verification_status='positive'
+                                 AND li.field_name='owner_user_id'
+                                 AND li.value_text=CAST(ug.user_id AS TEXT)
+                           )
+                           OR NOT EXISTS (
+                               SELECT 1 FROM claims c
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.author_user_id=ug.user_id
+                                 AND c.claim_type='ownership'
+                                 AND c.ownership_kind='acquire'
+                                 AND c.ownership_source='former_owner'
+                           ))
                     ORDER BY
                         CASE
                             WHEN ug.ownership_status
@@ -2835,6 +2863,31 @@ class Repository:
                         FROM user_guitars
                         WHERE user_id = ?
                           AND ownership_status = 'former_owner'
+                          AND (EXISTS (
+                              SELECT 1 FROM claims c
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.author_user_id=user_guitars.user_id
+                                AND c.claim_type='ownership'
+                                AND c.ownership_kind='acquire'
+                                AND c.status='active'
+                                AND c.verification_status='positive'
+                          ) OR EXISTS (
+                              SELECT 1 FROM claims c
+                              JOIN claim_listing_items li ON li.claim_id=c.id
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.claim_type='listing'
+                                AND c.status='active'
+                                AND c.verification_status='positive'
+                                AND li.field_name='owner_user_id'
+                                AND li.value_text=CAST(user_guitars.user_id AS TEXT)
+                          ) OR NOT EXISTS (
+                              SELECT 1 FROM claims c
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.author_user_id=user_guitars.user_id
+                                AND c.claim_type='ownership'
+                                AND c.ownership_kind='acquire'
+                                AND c.ownership_source='former_owner'
+                          ))
                     ) AS former_count,
                     (
                         SELECT COUNT(*)
@@ -4275,49 +4328,6 @@ class Repository:
                     acquire_claim_id,
                     release_claim_id,
                 ]
-            )
-
-            next_order = int(
-                con.execute(
-                    """
-                    SELECT COALESCE(MAX(display_order), -1) + 1
-                    FROM user_guitars
-                    WHERE user_id = ?
-                    """,
-                    (user_id,),
-                ).fetchone()[0]
-            )
-            con.execute(
-                """
-                INSERT INTO user_guitars (
-                    user_id,
-                    individual_id,
-                    ownership_status,
-                    display_order,
-                    acquired_at,
-                    released_at,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    ?, ?, 'former_owner', ?, ?, ?, ?, ?
-                )
-                ON CONFLICT(user_id, individual_id)
-                DO UPDATE SET
-                    ownership_status = 'former_owner',
-                    acquired_at = excluded.acquired_at,
-                    released_at = excluded.released_at,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    user_id,
-                    individual_id,
-                    next_order,
-                    acquired,
-                    released,
-                    now,
-                    now,
-                ),
             )
 
             snapshot = self._rebuild_individual_snapshot_in_connection(
@@ -6108,6 +6118,31 @@ class Repository:
                         claim["ownership_pair_id"],
                     ),
                 )
+                if normalized == 'positive':
+                    pair = con.execute(
+                        """SELECT ownership_kind,occurred_at FROM claims
+                           WHERE ownership_pair_id=? AND ownership_source='former_owner'
+                             AND status='active' AND verification_status='positive'""",
+                        (claim["ownership_pair_id"],),
+                    ).fetchall()
+                    dates = {row['ownership_kind']: row['occurred_at'] for row in pair}
+                    if 'acquire' in dates and 'release' in dates:
+                        next_order = int(con.execute(
+                            'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
+                            (claim['author_user_id'],),
+                        ).fetchone()[0])
+                        con.execute(
+                            """INSERT INTO user_guitars
+                               (user_id,individual_id,ownership_status,display_order,
+                                acquired_at,released_at,created_at,updated_at)
+                               VALUES (?,?,'former_owner',?,?,?,?,?)
+                               ON CONFLICT(user_id,individual_id) DO UPDATE SET
+                                 acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
+                                 released_at=COALESCE(user_guitars.released_at,excluded.released_at),
+                                 updated_at=excluded.updated_at""",
+                            (claim['author_user_id'], claim['individual_id'], next_order,
+                             dates['acquire'], dates['release'], now, now),
+                        )
             else:
                 con.execute(
                     """
