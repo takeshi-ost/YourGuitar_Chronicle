@@ -200,6 +200,27 @@ CREATE TABLE IF NOT EXISTS claim_evidence (
  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id) ON DELETE CASCADE,
  UNIQUE(claim_id, media_asset_id)
 );
+-- Structured source evidence belongs to a Claim. The existing observations
+-- table remains available for crawl checkpoints and legacy reads during migration.
+CREATE TABLE IF NOT EXISTS claim_source_evidence (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+ evidence_type TEXT NOT NULL CHECK (evidence_type IN ('marketplace_listing', 'acquisition_date')),
+ source_site TEXT,
+ source_listing_id TEXT,
+ source_url TEXT,
+ captured_at TEXT,
+ effective_date TEXT,
+ date_basis TEXT,
+ payload_json TEXT,
+ legacy_observation_id INTEGER UNIQUE,
+ created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_claim_source_listing_unique
+ ON claim_source_evidence(source_site, source_listing_id)
+ WHERE source_site IS NOT NULL AND source_listing_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_claim_source_evidence_claim
+ ON claim_source_evidence(claim_id);
 CREATE TABLE IF NOT EXISTS notifications (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  recipient_user_id INTEGER NOT NULL,

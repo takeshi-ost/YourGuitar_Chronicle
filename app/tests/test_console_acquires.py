@@ -42,7 +42,8 @@ def test_pending_acquire_endpoint_total_paging_and_approval(tmp_path, monkeypatc
     owner = repo.create_user("Owner")
     individual_id, _, _, _ = repo.create_initial_listing_claim(
         owner, manufacturer="Fender", model="Stratocaster",
-        serial_number="524436", media_storage_path="media/test.jpg")
+        serial_number="524436", media_storage_path="media/test.jpg",
+        occurred_at="2026-09-20")
     first = add_listing(repo, "1")
     second = add_listing(repo, "2")
     assert first["verification_status"] == "unverified"

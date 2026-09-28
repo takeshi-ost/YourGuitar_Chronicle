@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,96 @@ class Repository:
             "PRAGMA foreign_keys = ON"
         )
         return con
+
+    def backfill_claim_source_evidence(self) -> dict[str, int]:
+        """Copy legacy external listing provenance without altering Claims or snapshots.
+
+        A source occurrence belongs to its Listing or relisting Acquire Claim.
+        Unregistered crawl observations deliberately stay outside Individual data.
+        This may be run repeatedly; conflicting links are reported, not overwritten.
+        """
+        created = existing = conflicts = 0
+        with self.connect() as con:
+            rows = con.execute(
+                """SELECT o.id AS legacy_id, o.source_site, o.source_listing_id,
+                          o.source_url, o.observed_at, o.listing_date,
+                          o.owner_name, o.owner_type, o.location_country,
+                          o.location_region, o.raw_text, o.title, o.image_url,
+                          o.serial_confidence, o.extraction_version,
+                          c.id AS claim_id, c.claim_type, c.ownership_kind,
+                          c.occurred_at
+                   FROM observations o
+                   JOIN claims c ON c.observation_id=o.id
+                   WHERE o.source_site <> 'user'
+                     AND o.source_listing_id IS NOT NULL
+                     AND (c.claim_type='listing' OR
+                          (c.claim_type='ownership' AND c.ownership_kind='acquire'))
+                   ORDER BY o.id, CASE c.claim_type WHEN 'listing' THEN 0 ELSE 1 END, c.id"""
+            ).fetchall()
+            for row in rows:
+                prior = con.execute(
+                    """SELECT claim_id FROM claim_source_evidence
+                       WHERE legacy_observation_id=? OR (source_site=? AND source_listing_id=?)""",
+                    (row['legacy_id'], row['source_site'], row['source_listing_id']),
+                ).fetchone()
+                if prior:
+                    if prior['claim_id'] == row['claim_id']:
+                        existing += 1
+                    else:
+                        conflicts += 1
+                    continue
+                detail = con.execute(
+                    """SELECT payload_json FROM crawl_detail_cache
+                       WHERE source_site=? AND source_listing_id=?""",
+                    (row['source_site'], row['source_listing_id']),
+                ).fetchone()
+                payload = detail['payload_json'] if detail else json.dumps({
+                    'legacy_observation_id': row['legacy_id'],
+                    'title': row['title'], 'raw_text': row['raw_text'],
+                    'image_url': row['image_url'],
+                    'owner_name': row['owner_name'], 'owner_type': row['owner_type'],
+                    'location_country': row['location_country'],
+                    'location_region': row['location_region'],
+                    'serial_confidence': row['serial_confidence'],
+                    'extraction_version': row['extraction_version'],
+                }, ensure_ascii=False)
+                is_acquire = row['claim_type'] == 'ownership'
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,source_site,source_listing_id,
+                        source_url,captured_at,effective_date,date_basis,
+                        payload_json,legacy_observation_id,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (row['claim_id'], 'marketplace_listing', row['source_site'],
+                     row['source_listing_id'], row['source_url'], row['observed_at'],
+                     row['occurred_at'] if is_acquire else row['listing_date'],
+                     'observed_at' if is_acquire else 'listing_date', payload,
+                     row['legacy_id'], utcnow()),
+                )
+                created += 1
+        return {'created': created, 'existing': existing, 'conflicts': conflicts}
+
+    @staticmethod
+    def _insert_marketplace_evidence(con: sqlite3.Connection, claim_id: int,
+                                     observation_id: int, claim_data: dict,
+                                     provenance: dict, *, acquire: bool) -> None:
+        """Keep the new Evidence and the legacy crawl record in one transaction."""
+        con.execute(
+            """INSERT INTO claim_source_evidence
+               (claim_id,evidence_type,source_site,source_listing_id,
+                source_url,captured_at,effective_date,date_basis,payload_json,
+                legacy_observation_id,created_at)
+               VALUES (?, 'marketplace_listing', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (claim_id, provenance.get('source_site') or 'reverb',
+             str(provenance['source_listing_id']), provenance.get('source_url') or '',
+             provenance.get('observed_at'),
+             (provenance.get('observed_at') if acquire else
+              claim_data.get('listing_date') or provenance.get('listing_date')),
+             'observed_at' if acquire else 'listing_date',
+             json.dumps({'claim': claim_data, 'provenance': provenance},
+                        ensure_ascii=False, default=str),
+             observation_id, utcnow()),
+        )
 
     def init_db(self) -> None:
         schema_path = Path(
@@ -1755,6 +1846,10 @@ class Repository:
                      claim_data.get("owner_name"), verification, occurred_at, now, now),
                 )
                 claim_id = int(cur.lastrowid)
+                self._insert_marketplace_evidence(
+                    con, claim_id, observation_id, claim_data, provenance,
+                    acquire=True,
+                )
                 if verification == "positive":
                     self._rebuild_individual_snapshot_in_connection(con, individual_id)
                 return {
@@ -1859,6 +1954,11 @@ class Repository:
                         now,
                     ),
                 )
+
+            self._insert_marketplace_evidence(
+                con, claim_id, observation_id, claim_data, provenance,
+                acquire=False,
+            )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
