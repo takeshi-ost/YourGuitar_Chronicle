@@ -273,6 +273,80 @@ def test_new_owner_can_verify_previous_owners_acquire_and_release(tmp_path):
         raise AssertionError('Former owner verified an Acquire')
 
 
+def test_restart_does_not_reclassify_verified_history_as_former_owner_pair(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from ygc import config
+    from ygc.web import app
+
+    monkeypatch.setattr(config, 'DB_PATH', tmp_path / 'restart.db')
+    repo = Repository(config.DB_PATH)
+    repo.init_db()
+    first_owner = repo.create_user('First')
+    next_owner = repo.create_user('Next')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        first_owner, manufacturer='Fender', model='Telecaster', serial_number='RESTART-001',
+        media_storage_path='media/restart.jpg', occurred_at='2020-01-01')
+    _, former_acquire_id = repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='acquire', occurred_at='2020-01-01')
+    _, release_id = repo.create_ownership_claim(
+        first_owner, individual_id, ownership_kind='release', occurred_at='2021-01-01')
+    repo.admin_moderate_claim(release_id, 'negative')
+    _, next_acquire_id = repo.create_ownership_claim(
+        next_owner, individual_id, ownership_kind='acquire', occurred_at='2022-01-01')
+    assert repo.set_claim_response(next_acquire_id, first_owner, 'positive')
+    before = {row['id']: (row['ownership_source'], row['ownership_pair_id'],
+                          row['verification_status']) for row in repo.list_claims(individual_id)}
+    assert before[release_id][2] == 'negative'
+    assert before[former_acquire_id][2] == 'positive'
+    with repo.connect() as con:
+        former_link = con.execute(
+            "SELECT acquired_at, released_at FROM user_guitars WHERE user_id=? AND individual_id=?",
+            (first_owner, individual_id),
+        ).fetchone()
+        assert former_link['acquired_at'][:10] == '2020-01-01'
+        assert former_link['released_at'][:10] == '2021-01-01'
+    with TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 45000)) as client:
+        # The web app calls init_db at startup; check the actual API payloads
+        # consumed by the Claim cards, not just the repository's stored rows.
+        a_claims = client.get(
+            f'/api/individuals/{individual_id}/claims?viewer_user_id={first_owner}'
+        ).json()
+        b_claims = client.get(
+            f'/api/individuals/{individual_id}/claims?viewer_user_id={next_owner}'
+        ).json()
+        by_a = {item['id']: item for item in a_claims}
+        by_b = {item['id']: item for item in b_claims}
+        assert not any(item['can_verify'] for item in a_claims)
+        assert by_b[former_acquire_id]['can_verify']
+        assert by_b[release_id]['can_verify']
+        assert not by_b[next_acquire_id]['can_verify']
+        assert not by_b[min(before)]['can_verify']  # Listing
+        assert client.post(f'/api/claims/{release_id}/response', json={
+            'responder_user_id': first_owner, 'stance': 'positive',
+        }).status_code == 400
+    repo.init_db()  # Repeated initialization must also leave decisions intact.
+    after = {row['id']: (row['ownership_source'], row['ownership_pair_id'],
+                         row['verification_status']) for row in repo.list_claims(individual_id)}
+    assert after == before
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == next_owner
+
+    # A database already affected by the old startup migration cannot regain
+    # its previous decisions automatically. Its unrelated Claims must at
+    # least remain independently verifiable instead of changing as a pair.
+    with repo.connect() as con:
+        con.execute(
+            """UPDATE claims SET ownership_source='former_owner',
+                 ownership_pair_id='incorrect-legacy-pair', verification_status='unverified'
+                 WHERE id IN (?, ?)""",
+            (former_acquire_id, release_id),
+        )
+    assert repo.set_claim_response(release_id, next_owner, 'positive')
+    damaged = {row['id']: row for row in repo.list_claims(individual_id)}
+    assert damaged[release_id]['verification_status'] == 'positive'
+    assert damaged[former_acquire_id]['verification_status'] == 'unverified'
+    assert int(repo.get_individual(individual_id)[0]['current_owner_user_id']) == next_owner
+
+
 def test_former_owner_stays_former_when_new_acquire_is_pending(tmp_path):
     repo = Repository(tmp_path / 'pending-return.db')
     repo.init_db()

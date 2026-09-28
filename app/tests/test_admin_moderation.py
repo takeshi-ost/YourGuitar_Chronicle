@@ -65,14 +65,15 @@ def test_admin_updates_and_deletes_ownership_pair_together(tmp_path):
     repo = Repository(tmp_path / "db.sqlite")
     repo.init_db()
     user, individual, _ = seed(repo)
+    paired_at = utcnow()
     with repo.connect() as con:
         ids = []
-        for kind in ('acquire', 'release'):
+        for kind, occurred_at in (('acquire', '2020-01-01'), ('release', '2021-01-01')):
             ids.append(con.execute(
                 "INSERT INTO claims (individual_id, author_user_id, claim_type, ownership_kind, "
-                "ownership_source, ownership_pair_id, value_text, verification_status, created_at, updated_at) "
-                "VALUES (?, ?, 'ownership', ?, 'former_owner', 'pair-test', ?, 'unverified', ?, ?)",
-                (individual, user, kind, str(user), utcnow(), utcnow())).lastrowid)
+                "ownership_source, ownership_pair_id, value_text, verification_status, occurred_at, created_at, updated_at) "
+                "VALUES (?, ?, 'ownership', ?, 'former_owner', 'pair-test', ?, 'unverified', ?, ?, ?)",
+                (individual, user, kind, str(user), occurred_at, paired_at, paired_at)).lastrowid)
     repo.admin_moderate_claim(ids[0], 'negative')
     with repo.connect() as con:
         assert [r[0] for r in con.execute("SELECT verification_status FROM claims WHERE ownership_pair_id='pair-test'")] == ['negative', 'negative']

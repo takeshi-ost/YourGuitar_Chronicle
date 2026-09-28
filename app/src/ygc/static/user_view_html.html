@@ -995,9 +995,7 @@ function displayDiscoveryDateTime(value){
 }
 function claimHeaderHtml(c,type,eventDate){
   let response='';
-  const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
-  const isOtherUsersClaim=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
-  if(isOtherUsersClaim&&c.status==='active'&&!['listing','identity_correction'].includes(String(c.claim_type||''))){
+  if(c.can_verify){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
@@ -1120,7 +1118,7 @@ function compactClaimType(c){
 }
 function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
-  if(verification==='positive')return claimCardFull(c);
+  if(verification==='positive'||c.can_verify)return claimCardFull(c);
   if(verification==='unverified'){
     return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }

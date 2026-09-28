@@ -29,6 +29,8 @@
 
 この性質は、**Claimの作成者・Verification・Evidence・発生日・Observationの現在値・判定権限の連動**に依存する。単独の権限チェックを通しただけでは確認できない。受理済みの自己Acquireの通常Deactivateにも個別の防止処理があるが、それだけをこの性質の根拠としない。管理者の全Claim強制判定、BAN、Merge、Claim削除は通常のユーザー操作とは別の経路であり、Snapshotを再評価して管理画面で判定経路を確認する。
 
+Verificationの操作欄と更新APIは、IndividualのCurrent Owner、Claimの作成者・種類・有効性を同じ条件で判断する。未承認・NegativeのClaimもCurrent Ownerが判定できるときはChronicle上に操作欄を表示する。Former OwnerのAcquire / Releaseを一括判定するのは、同時作成された正規のペアだけとし、過去の独立したClaimを`user_guitars`の日付だけからペア化しない。旧データ移行で付与済みの誤ったペアIDや失われたVerificationは自動的に元の判定を推測できないため、対象DBを個別に調査して修正する。
+
 Ownership、Verification、Claimの無効化、BAN、Merge、Observation、プロフィール分類のいずれかを変更する際は、次を回帰確認する。
 
 | 場面 | 維持する条件 |

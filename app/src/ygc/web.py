@@ -2105,6 +2105,9 @@ def api_individual_claims(
         )
         if row["effective_status"] == "active"
     ]
+    verifiable_ids = repository.owner_verifiable_claim_ids(individual_id, viewer_user_id)
+    for claim in claims:
+        claim['can_verify'] = int(claim['id']) in verifiable_ids
 
     items_by_claim: dict[
         int,

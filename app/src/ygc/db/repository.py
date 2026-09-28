@@ -292,6 +292,12 @@ class Repository:
         self,
         con: sqlite3.Connection,
     ) -> None:
+        # This legacy conversion belongs to the schema upgrade only. Running it
+        # on every startup rewrites ordinary Acquire / Release history after a
+        # transfer, including prior owner verification decisions.
+        needs_former_pair_backfill = (
+            'ownership_source' not in self._table_columns(con, 'claims')
+        )
         migrations = {
             "individuals": {
                 "finish": "TEXT",
@@ -393,25 +399,22 @@ class Repository:
         )
 
         # Backfill Former Owner pairs created before ownership_source existed.
-        former_links = list(
-            con.execute(
+        former_links = []
+        if needs_former_pair_backfill:
+            former_links = list(con.execute(
                 """
-                SELECT
-                    user_id,
-                    individual_id,
-                    acquired_at,
-                    released_at
+                SELECT user_id, individual_id, acquired_at, released_at
                 FROM user_guitars
                 WHERE ownership_status = 'former_owner'
                   AND acquired_at IS NOT NULL
                   AND released_at IS NOT NULL
+                  AND substr(acquired_at, 1, 10) < substr(released_at, 1, 10)
                 """
-            )
-        )
+            ))
         for link in former_links:
             acquire = con.execute(
                 """
-                SELECT id
+                SELECT id, created_at, verification_status
                 FROM claims
                 WHERE individual_id = ?
                   AND author_user_id = ?
@@ -430,7 +433,7 @@ class Repository:
             ).fetchone()
             release = con.execute(
                 """
-                SELECT id
+                SELECT id, created_at, verification_status
                 FROM claims
                 WHERE individual_id = ?
                   AND author_user_id = ?
@@ -447,14 +450,18 @@ class Repository:
                     link["released_at"],
                 ),
             ).fetchone()
-            if acquire and release:
+            # A genuine Former Owner request creates both Claims together.
+            # Matching a user's independent historical Acquire / Release by
+            # event date alone incorrectly couples their verification states.
+            if (acquire and release
+                    and acquire['created_at'] == release['created_at']
+                    and acquire['verification_status'] == release['verification_status']):
                 pair_id = str(uuid.uuid4())
                 con.execute(
                     """
                     UPDATE claims
                     SET ownership_source = 'former_owner',
-                        ownership_pair_id = ?,
-                        verification_status = 'unverified'
+                        ownership_pair_id = ?
                     WHERE id IN (?, ?)
                     """,
                     (
@@ -5958,6 +5965,26 @@ class Repository:
             ).fetchone()
 
 
+    @staticmethod
+    def _former_owner_pair(con: sqlite3.Connection, claim: sqlite3.Row) -> list[sqlite3.Row]:
+        """Only Claims created together as a Former Owner request form a pair."""
+        if (claim['claim_type'] != 'ownership'
+                or claim['ownership_source'] != 'former_owner'
+                or not claim['ownership_pair_id']):
+            return []
+        pair = con.execute(
+            """SELECT * FROM claims WHERE individual_id=? AND ownership_pair_id=?
+                 ORDER BY id""",
+            (claim['individual_id'], claim['ownership_pair_id']),
+        ).fetchall()
+        if (len(pair) != 2 or {row['ownership_kind'] for row in pair} != {'acquire', 'release'}
+                or any(row['claim_type'] != 'ownership' or row['ownership_source'] != 'former_owner'
+                       or row['author_user_id'] != claim['author_user_id']
+                       or row['created_at'] != claim['created_at'] for row in pair)):
+            return []
+        dates = {row['ownership_kind']: str(row['occurred_at'] or '')[:10] for row in pair}
+        return pair if dates['acquire'] and dates['acquire'] < dates['release'] else []
+
     def admin_moderate_claim(self, claim_id: int, action: str, *,
                              confirm_individual_delete: bool = False) -> dict | None:
         if action not in ("positive", "negative", "unverified", "delete"):
@@ -5968,11 +5995,7 @@ class Repository:
                 return None
             individual_id = int(claim["individual_id"])
             targets = [claim]
-            if claim["ownership_pair_id"]:
-                targets = con.execute(
-                    "SELECT * FROM claims WHERE individual_id=? AND ownership_pair_id=?",
-                    (individual_id, claim["ownership_pair_id"]),
-                ).fetchall()
+            targets = self._former_owner_pair(con, claim) or [claim]
             delete_individual = False
             if action == "delete" and claim["claim_type"] == "listing" and claim["status"] == "active":
                 other = con.execute("SELECT 1 FROM claims WHERE individual_id=? AND claim_type='listing' "
@@ -6000,6 +6023,42 @@ class Repository:
             snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
             return {"claim_id": claim_id, "individual_id": individual_id,
                     "individual_deleted": False, "snapshot": snapshot}
+
+    @staticmethod
+    def _owner_verification_denial(
+        claim: sqlite3.Row | dict[str, Any],
+        responder_user_id: int,
+        is_current_owner: bool,
+    ) -> str | None:
+        if claim['claim_type'] in ('listing', 'identity_correction'):
+            return 'This Claim type does not use Owner Verification'
+        if not is_current_owner:
+            if claim['admin_verification']:
+                return 'Only the current owner may change an administrator verification'
+            return 'Only the current owner can verify this Claim'
+        if int(claim['author_user_id']) == int(responder_user_id):
+            return "Owner Verification is only for another user's Claim"
+        return None
+
+    def owner_verifiable_claim_ids(self, individual_id: int, viewer_user_id: int | None) -> set[int]:
+        """Return the same normal-user eligibility used by set_claim_response."""
+        if viewer_user_id is None:
+            return set()
+        with self.connect() as con:
+            owner = con.execute(
+                """SELECT 1 FROM individuals i JOIN users u ON u.id=i.current_owner_user_id
+                   WHERE i.id=? AND i.current_owner_user_id=? AND u.ban_status<>'ban'""",
+                (individual_id, viewer_user_id),
+            ).fetchone()
+            if not owner:
+                return set()
+            claims = con.execute(
+                """SELECT id,claim_type,author_user_id,admin_verification
+                   FROM claims WHERE individual_id=? AND status='active'""",
+                (individual_id,),
+            )
+            return {int(claim['id']) for claim in claims
+                    if self._owner_verification_denial(claim, viewer_user_id, True) is None}
 
     def set_claim_response(
         self,
@@ -6031,7 +6090,8 @@ class Repository:
                     ownership_source,
                     ownership_pair_id,
                     value_text,
-                    occurred_at
+                    occurred_at,
+                    created_at
                 FROM claims
                 WHERE id = ?
                   AND status = 'active'
@@ -6043,9 +6103,6 @@ class Repository:
             if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
                                (responder_user_id,)).fetchone():
                 raise ValueError("Account is banned")
-            if claim["claim_type"] in ("listing", "identity_correction"):
-                raise ValueError("This Claim type does not use Owner Verification")
-
             is_former_owner_claim = (
                 claim["claim_type"] == "ownership"
                 and str(claim["ownership_source"] or "") == "former_owner"
@@ -6057,28 +6114,15 @@ class Repository:
             )
 
             owner = con.execute(
-                """
-                SELECT 1
-                FROM user_guitars
-                WHERE user_id = ?
-                  AND individual_id = ?
-                  AND ownership_status = 'current_owner'
-                """,
-                (
-                    responder_user_id,
-                    claim["individual_id"],
-                ),
+                """SELECT 1 FROM individuals
+                   WHERE id=? AND current_owner_user_id=?""",
+                (claim['individual_id'], responder_user_id),
             ).fetchone()
-            if not owner:
-                if claim['admin_verification']:
-                    raise ValueError('Only the current owner may change an administrator verification')
-                raise ValueError(
-                    "Only the current owner can verify this Claim"
-                )
-            if int(claim['author_user_id']) == int(responder_user_id):
-                raise ValueError("Owner Verification is only for another user's Claim")
+            denial = self._owner_verification_denial(claim, responder_user_id, bool(owner))
+            if denial:
+                raise ValueError(denial)
 
-            if is_former_owner_claim and claim["ownership_pair_id"]:
+            if is_former_owner_claim and self._former_owner_pair(con, claim):
                 con.execute(
                     """
                     UPDATE claims
