@@ -47,4 +47,4 @@ Ownership、Verification、Claimの無効化、BAN、Merge、Observation、プ�
 
 同一個体の候補判定ではメーカー、シリアル、モデルの矛盾を検討し、曖昧なら候補をreviewに保持する。管理画面のRepeatedは**同じ正規化メーカー・シリアルを持つ異なるIndividual群**で、同一性が確定した件数ではない。人が残す個体を選んでMergeまたはDeleteする。MergeしたClaimの一部は再承認待ちにする。詳細は [console-claim-administration.md](console-claim-administration.md)。
 
-旧Observation中心DB向けの移行入口は `ygc claim-status` / `ygc migrate-claims`。Evidenceへの複写は `ygc migrate-claim-evidence`、現在値の全件照合は読み取り専用の `ygc audit-observation-migration`。収集前にはreadiness（未移行のListing Observation、Claimなし個体、不完全なIdentity Claim、未完了shellが0）を確認する。移行はバックアップを取ってから実施する。これはローカル旧DB向けであり、PostgreSQLへの移行手順とは別。後者は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) を参照。
+旧Observation中心DB向けの移行入口は `ygc claim-status` / `ygc migrate-claims`。Evidenceへの複写は `ygc migrate-claim-evidence`、現在値の全件照合は読み取り専用の `ygc audit-observation-migration`。収集前にはreadiness（Claim未登録の旧Listing Observation、Claimなし個体、不完全なIdentity Claim、未完了shellが0）を確認する。再掲載に紐付くAutomation Acquireは有効な記録であり、Listing未移行件数に含めず、Listingへ移行しない。移行はバックアップを取ってから実施する。これはローカル旧DB向けであり、PostgreSQLへの移行手順とは別。後者は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) を参照。

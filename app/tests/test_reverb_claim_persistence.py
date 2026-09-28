@@ -251,6 +251,8 @@ def test_relisted_guitar_owned_by_user_waits_for_owner_confirmation(tmp_path: Pa
         _provenance(listing_id="2"),
     )
     assert second["verification_status"] == "unverified"
+    assert repository.claim_architecture_status()['ready'] is True
+    assert repository.migrate_legacy_observations_to_claims()['claims_created'] == 0
     with repository.connect() as con:
         individual = con.execute(
             "SELECT current_owner_user_id, location_region FROM individuals WHERE id = ?",
@@ -274,6 +276,33 @@ def test_relisted_guitar_owned_by_user_waits_for_owner_confirmation(tmp_path: Pa
     assert approved["current_owner_name"] == "Vintage Shop"
     assert approved["current_owner_user_id"] is None
     assert approved["location_region"] == "NY"
+
+
+def test_relist_acquires_are_ready_for_crawl_and_not_migrated_into_listings(tmp_path: Path):
+    repository = Repository(tmp_path / 'relist-readiness.db')
+    repository.init_db()
+    first = repository.persist_reverb_listing_claim(
+        _claim_data(listing_id='1'), _provenance(listing_id='1'))
+    for listing_id in ('2', '3'):
+        relisted = repository.persist_reverb_listing_claim(
+            _claim_data(listing_id=listing_id), _provenance(listing_id=listing_id))
+        assert relisted['individual_id'] == first['individual_id']
+        assert relisted['claim_id'] is not None
+
+    status = repository.claim_architecture_status()
+    assert status['ready'] is True
+    assert status['migration_required'] is False
+    assert status['unmigrated_listing_observations'] == 0
+    assert repository.migrate_legacy_observations_to_claims()['claims_created'] == 0
+    with repository.connect() as con:
+        claims = con.execute(
+            "SELECT claim_type, ownership_kind FROM claims WHERE individual_id=? ORDER BY id",
+            (first['individual_id'],),
+        ).fetchall()
+    assert [(c['claim_type'], c['ownership_kind']) for c in claims] == [
+        ('listing', None), ('ownership', 'acquire'), ('ownership', 'acquire'),
+    ]
+    assert repository.audit_observation_migration()['individuals_mismatched'] == 0
 
 
 def test_reverb_listing_without_identity_stores_provenance_only(

@@ -20,6 +20,23 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# A linked marketplace relisting is represented by an Automation Acquire.
+# Legacy Listing migration must not create a second Listing for that source.
+_UNMIGRATED_LISTING_OBSERVATIONS = """
+    FROM observations o
+    WHERE o.individual_id IS NOT NULL
+      AND COALESCE(o.event_type, 'listing') = 'listing'
+      AND NOT EXISTS (
+          SELECT 1 FROM claims c
+          WHERE c.observation_id = o.id
+            AND (c.claim_type = 'listing'
+                 OR (c.claim_type = 'ownership'
+                     AND c.ownership_kind = 'acquire'
+                     AND c.ownership_source IN ('automation', 'merged_listing')))
+      )
+"""
+
+
 class Repository:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -547,25 +564,7 @@ class Repository:
 
         rows = list(
             con.execute(
-                """
-                SELECT o.*
-                FROM observations o
-                WHERE o.individual_id
-                      IS NOT NULL
-                  AND COALESCE(
-                        o.event_type,
-                        'listing'
-                      ) = 'listing'
-                  AND NOT EXISTS (
-                        SELECT 1
-                        FROM claims c
-                        WHERE c.observation_id
-                              = o.id
-                          AND c.claim_type
-                              = 'listing'
-                  )
-                ORDER BY o.id
-                """
+                'SELECT o.* ' + _UNMIGRATED_LISTING_OBSERVATIONS + ' ORDER BY o.id'
             )
         )
 
@@ -799,21 +798,7 @@ class Repository:
         with self.connect() as con:
             unmigrated_listing_observations = int(
                 con.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM observations o
-                    WHERE o.individual_id IS NOT NULL
-                      AND COALESCE(
-                            o.event_type,
-                            'listing'
-                          ) = 'listing'
-                      AND NOT EXISTS (
-                            SELECT 1
-                            FROM claims c
-                            WHERE c.observation_id = o.id
-                              AND c.claim_type = 'listing'
-                      )
-                    """
+                    'SELECT COUNT(*) ' + _UNMIGRATED_LISTING_OBSERVATIONS
                 ).fetchone()[0]
             )
 
