@@ -628,9 +628,7 @@ async function showIndividual(id){
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
   const i=d.individual;
-  const observations=d.observations||[];
-  const listing=d.current_listing||null;
-  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const listing=d.current_source||d.current_listing||null;
   const galleryImages=d.gallery_images||[];
   let out='';
   if(galleryImages.length){
@@ -642,11 +640,6 @@ async function showIndividual(id){
     const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(listingUrl)out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>';
     else out+=image+'<span class="detail-source">Listing Claim</span>';
-  }else if(imageObservation){
-    const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: Reverb image (provenance)</span>';
-    else out+=image+'<span class="detail-source">Source: Reverb image (provenance)</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }

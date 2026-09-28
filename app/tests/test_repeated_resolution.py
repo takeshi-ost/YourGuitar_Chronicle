@@ -86,8 +86,10 @@ def test_pending_filters_same_owner_and_history_without_writing(repo):
     with repo.connect() as con:
         con.execute("UPDATE claims SET occurred_at='2020-01-01' WHERE id=?",(listing,))
         for uid,date in ((other,'2010-01-01'),(user,'2030-01-01'),(other,'2040-01-01')):
-            con.execute("INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,value_text,verification_status,occurred_at,created_at,updated_at) VALUES (?,?,'ownership','acquire',?,'unverified',?,?,?)",
-                        (iid,uid,str(uid),date,utcnow(),utcnow()))
+            cur=con.execute("INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,value_text,verification_status,occurred_at,created_at,updated_at) VALUES (?,?,'ownership','acquire',?,'unverified',?,?,?)",
+                            (iid,uid,str(uid),date,utcnow(),utcnow()))
+            con.execute("INSERT INTO claim_source_evidence (claim_id,evidence_type,effective_date,date_basis,created_at) VALUES (?,'acquisition_date',?,'user_reported',?)",
+                        (cur.lastrowid,date,utcnow()))
         before = list(con.iterdump())
     result=repo.unverified_acquires(limit=1)
     assert result['total'] == 1

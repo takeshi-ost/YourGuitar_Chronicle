@@ -1,8 +1,8 @@
-"""Read-only, one-per-Individual Observation evaluation for migration diagnostics.
+"""One logical Observation per Individual, evaluated from Claims and Evidence.
 
 A Claim is an assertion; source Evidence belongs to that Claim. This evaluator
 never modifies the Individual and never persists a historical decision trace.
-It runs alongside the legacy snapshot writer until parity has been checked.
+The same result drives the materialized Individual snapshot and admin diagnostics.
 """
 from __future__ import annotations
 

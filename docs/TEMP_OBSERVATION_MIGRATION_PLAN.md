@@ -1,6 +1,6 @@
 # 一時作業計画：Observationを個体単位の調停層に改修する
 
-> **状態：段階B完了、段階C並走中。旧Snapshotが引き続き正規値。** この文書は現行コードの説明ではなく、合意済みの目標、実装順序、検証条件、残る判断をまとめる。改修完了と検証後に削除する。現行動作は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) とコードを参照。作業中に決定が変わった場合はこの計画を先に更新する。
+> **状態：段階Dの切替中。個体Snapshotの書込経路を個体単位Observation評価器へ統一。旧掲載行の記録・互換参照は残存。** この文書は現行コードの説明ではなく、合意済みの目標、実装順序、検証条件、残る判断をまとめる。改修完了と検証後に削除する。現行動作は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) とコードを参照。作業中に決定が変わった場合はこの計画を先に更新する。
 
 2026-09-28 時点：Claimに紐付く掲載Evidenceテーブル、既存掲載の冪等な複写CLI、新規掲載と再掲載の同時保存、読み取り専用の個体単位評価器・管理画面診断を実装した。付属旧テストDBの316個体で、旧Claimの項目を補完した後に新評価と保存値が一致。稼働DB全体の照合、各入口の切替、旧Observation参照の撤去は未実施。再掲載の観測日を実際の取得日として扱うべきかは未決定で、現在のEvidenceは `date_basis=observed_at` と明記している。
 
@@ -9,6 +9,8 @@
 同日追記：クロール再掲載によるAutomation AcquireのOwner / Location再構築、掲載終了の判定、登録済みListingの重複判定は掲載Evidenceを優先して参照する。Evidence移行前のDBや未登録のクロール行については旧記録への読取フォールバックを残す。旧掲載行が削除されても再掲載Claimの現在値再構築、同一掲載IDの冪等判定、公開終了Claimの根拠参照が可能なケースをテストで確認した。
 
 実DB切替前の監査：DBと画像をバックアップしてから、更新済みアプリで `ygc migrate-claim-evidence` を一度実行し、`ygc audit-observation-migration --sample-limit 20` で全個体の旧Snapshotと新評価を読み取り専用で照合する。後者は既存DBを作成・更新せず、差分件数・項目・個体IDの標本、Evidence欠損数のみ出力する。テスト用DBでは一致しているが、稼働DBの照合結果が得られるまで全面切替を行わない。
+
+2026-09-28 実DB照合結果（ユーザー報告）：掲載Evidence 466件、ユーザー取得日Evidence 8件を複写、競合／欠損0。465個体すべてで新旧現在値一致、評価エラー0、個体未登録の旧クロール行1628件は保持。これを根拠に `_rebuild_individual_snapshot_in_connection` を共通Observation評価器の結果を保存する方式へ切り替えた。Product Detailの画像とClaim掲載出典はClaim Evidenceを優先する。旧テーブルのクロール記録や書込・読取の互換経路は段階Eまで残す。
 
 ## 1. 目標と変更しない原則
 

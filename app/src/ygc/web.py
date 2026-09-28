@@ -2065,25 +2065,26 @@ def api_individual(individual_id: int, request: Request,
         int(item["id"]),
     ))
 
-    listing_claims = [
-        _row_dict(row)
-        for row
-        in repo().list_claims(
-            individual_id
-        )
-        if row["claim_type"] == "listing"
-        and row["effective_status"] == "active"
-    ]
+    visible_claims = [_row_dict(row) for row in repository.list_claims(
+        individual_id, viewer_user_id=viewer_user_id)]
+    listing_claims = [row for row in visible_claims
+                      if row['claim_type'] == 'listing' and row['effective_status'] == 'active']
     current_listing = (
         listing_claims[-1]
         if listing_claims
         else None
     )
+    image_sources = [row for row in visible_claims
+                     if row['claim_type'] in ('listing', 'ownership')
+                     and row['effective_status'] == 'active'
+                     and row['verification_status'] == 'positive'
+                     and row['image_url']]
 
     return {
         "individual": individual_data,
         "observations": [_row_dict(row) for row in observations],
         "current_listing": current_listing,
+        "current_source": image_sources[-1] if image_sources else None,
         "gallery_images": gallery_images,
     }
 

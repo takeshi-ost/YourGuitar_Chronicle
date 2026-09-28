@@ -311,6 +311,12 @@ def test_relisting_owner_is_rebuilt_from_evidence_without_legacy_observation(tmp
     rebuilt = repo.rebuild_individual_snapshot(individual_id)
     assert rebuilt['current_owner_name'] == 'New Shop'
     assert rebuilt['location_region'] == 'NY'
+    claims = repo.list_claims(individual_id)
+    acquire = next(row for row in claims if row['id'] == second['claim_id'])
+    assert acquire['source_site'] == 'reverb'
+    assert acquire['source_listing_id'] == '501'
+    assert acquire['source_url'] == 'https://example.test/501'
+    assert acquire['observation_raw_text'] == 'Serial 524436'
     assert repo.observation_diagnostic(individual_id)['differences'] == {}
 
 
@@ -341,3 +347,54 @@ def test_audit_does_not_create_a_missing_database(tmp_path):
     with pytest.raises(FileNotFoundError):
         Repository(path).audit_observation_migration()
     assert not path.exists()
+
+
+def test_product_detail_image_comes_from_claim_evidence(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from ygc import config
+    from ygc.web import app
+
+    monkeypatch.setattr(config, 'DB_PATH', tmp_path / 'detail.db')
+    repo = Repository(config.DB_PATH)
+    repo.init_db()
+    claim, provenance = _reverb_item('700')
+    provenance['image_url'] = 'https://example.test/guitar.jpg'
+    saved = repo.persist_reverb_listing_claim(claim, provenance)
+    with repo.connect() as con:
+        con.execute('DELETE FROM observations WHERE individual_id=?', (saved['individual_id'],))
+    with TestClient(app) as client:
+        response = client.get(f"/api/individuals/{saved['individual_id']}")
+        assert response.status_code == 200
+        detail = response.json()
+        assert detail['observations'] == []
+        assert detail['current_source']['image_url'] == provenance['image_url']
+        assert detail['current_source']['source_listing_id'] == '700'
+
+
+def test_materialized_owner_requires_matching_acquisition_date_evidence(tmp_path):
+    repo = Repository(tmp_path / 'strict-owner.db')
+    repo.init_db()
+    initial = repo.create_user('Initial')
+    claimant = repo.create_user('Claimant')
+    individual_id, _, _, _ = repo.create_initial_listing_claim(
+        initial, manufacturer='Fender', model='Telecaster', serial_number='STRICT-001',
+        media_storage_path='media/strict.jpg', occurred_at='2020-01-01')
+    with repo.connect() as con:
+        claim_id = con.execute(
+            """INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,
+                                    value_text,occurred_at,created_at,updated_at)
+               VALUES (?,?,'ownership','acquire',?,'2021-01-01','2021-01-02','2021-01-02')""",
+            (individual_id, claimant, str(claimant)),
+        ).lastrowid
+    assert int(repo.rebuild_individual_snapshot(individual_id)['current_owner_user_id']) == initial
+    with repo.connect() as con:
+        con.execute(
+            """INSERT INTO claim_source_evidence
+               (claim_id,evidence_type,effective_date,date_basis,created_at)
+               VALUES (?,'acquisition_date','2021-01-01','user_reported','2021-01-02')""",
+            (claim_id,),
+        )
+    assert int(repo.rebuild_individual_snapshot(individual_id)['current_owner_user_id']) == claimant
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET occurred_at='2021-01-03' WHERE id=?", (claim_id,))
+    assert int(repo.rebuild_individual_snapshot(individual_id)['current_owner_user_id']) == initial

@@ -1061,10 +1061,9 @@ class Repository:
         individual_id: int,
     ) -> dict[str, Any]:
         """
-        Rebuild one Individual's materialized current-state snapshot
-        exclusively from active Claims.
-
-        Observation metadata is intentionally not consulted here.
+        Rebuild one Individual's materialized current state from its logical
+        Observation evaluation of Claims and Evidence. Legacy crawl rows are
+        not an input to the result.
         """
         with self.connect() as con:
             return self._rebuild_individual_snapshot_in_connection(
@@ -1090,402 +1089,11 @@ class Repository:
                 "Individual not found"
             )
 
-        state: dict[str, str | None] = {
-            "manufacturer": None,
-            "model": None,
-            "finish": None,
-            "year": None,
-            "serial_number": None,
-            "location_country": None,
-            "location_region": None,
-            "current_owner_name": None,
-            "current_owner_type": None,
-            "current_owner_user_id": None,
-            "current_owner_source_url": None,
-        }
-
-        listing_rows = list(
-            con.execute(
-                """
-                SELECT
-                    c.id AS claim_id,
-                    c.verification_status,
-                    u.ban_status,
-                    li.field_name,
-                    li.value_text
-                FROM claims c
-                INNER JOIN claim_listing_items li
-                  ON li.claim_id = c.id
-                INNER JOIN users u ON u.id = c.author_user_id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'listing'
-                  AND c.status = 'active'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    li.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        first_listing_id: int | None = None
-        identity_fields = {
-            "manufacturer",
-            "model",
-            "year",
-            "serial_number",
-        }
-        listing_snapshot_fields = {
-            "manufacturer",
-            "model",
-            "finish",
-            "year",
-            "serial_number",
-            "location_country",
-            "location_region",
-        }
-
-        for row in listing_rows:
-            claim_id = int(
-                row["claim_id"]
-            )
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            # Retain the founding identity as the stable address of a disputed
-            # Individual; rejected Listing assertions must not set other state.
-            if (row["verification_status"] != "positive" or row["ban_status"] != "normal") and field not in identity_fields:
-                continue
-            value = (
-                str(row["value_text"]).strip()
-                if row["value_text"] is not None
-                else None
-            )
-            if (
-                field not in listing_snapshot_fields
-                or not value
-            ):
-                continue
-
-            if first_listing_id is None:
-                first_listing_id = claim_id
-
-            if claim_id == first_listing_id:
-                state[field] = value
-                continue
-
-            if field in (
-                "location_country",
-                "location_region",
-            ):
-                state[field] = value
-            elif (
-                field == "finish"
-                and state["finish"] is None
-            ):
-                state["finish"] = value
-            elif (
-                field in identity_fields
-                and state[field] is None
-            ):
-                state[field] = value
-
-        correction_rows = list(
-            con.execute(
-                """
-                SELECT
-                    ci.field_name,
-                    ci.new_value
-                FROM claims c
-                INNER JOIN users u ON u.id = c.author_user_id
-                INNER JOIN claim_identity_items ci
-                  ON ci.claim_id = c.id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'identity_correction'
-                  AND c.status = 'active'
-                  AND u.ban_status = 'normal'
-                  AND c.verification_status = 'positive'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    ci.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for row in correction_rows:
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            if field not in identity_fields:
-                continue
-            value = row["new_value"]
-            state[field] = (
-                str(value).strip()
-                if value is not None
-                and str(value).strip()
-                else None
-            )
-
-        specification_rows = list(
-            con.execute(
-                """
-                SELECT
-                    si.field_name,
-                    si.value_text
-                FROM claims c
-                INNER JOIN users u ON u.id = c.author_user_id
-                INNER JOIN claim_spec_items si
-                  ON si.claim_id = c.id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'specification'
-                  AND c.status = 'active'
-                  AND u.ban_status = 'normal'
-                  AND COALESCE(c.verification_status, 'positive') = 'positive'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    si.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for row in specification_rows:
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            value = (
-                str(row["value_text"]).strip()
-                if row["value_text"] is not None
-                else None
-            )
-            if field == "finish" and value:
-                state["finish"] = value
-
-        owner_claims = list(
-            con.execute(
-                """
-                SELECT
-                    c.id,
-                    c.observation_id,
-                    c.claim_type,
-                    c.value_text,
-                    c.ownership_kind,
-                    c.ownership_source,
-                    c.verification_status,
-                    c.occurred_at,
-                    c.created_at
-                FROM claims c
-                JOIN users u ON u.id = c.author_user_id AND u.ban_status = 'normal'
-                WHERE c.individual_id = ?
-                  AND c.status = 'active'
-                  AND COALESCE(c.verification_status, 'positive') = 'positive'
-                  AND c.claim_type IN (
-                        'listing',
-                        'ownership'
-                  )
-                ORDER BY
-                    SUBSTR(COALESCE(c.occurred_at, c.created_at), 1, 10),
-                    c.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for claim in owner_claims:
-            claim_type = str(
-                claim["claim_type"]
-            )
-            if claim_type == "listing" or claim["ownership_source"] == "merged_listing":
-                items = {
-                    str(row["field_name"]): (
-                        str(row["value_text"]).strip()
-                        if row["value_text"] is not None
-                        else None
-                    )
-                    for row
-                    in con.execute(
-                        """
-                        SELECT field_name, value_text
-                        FROM claim_listing_items
-                        WHERE claim_id = ?
-                        """,
-                        (claim["id"],),
-                    )
-                }
-                owner_name = items.get(
-                    "owner_name"
-                )
-                owner_type = items.get(
-                    "owner_type"
-                )
-                owner_user_id = items.get(
-                    "owner_user_id"
-                )
-                owner_user = (
-                    con.execute(
-                        """
-                        SELECT display_name, account_type
-                        FROM users
-                        WHERE id = ?
-                        """,
-                        (owner_user_id,),
-                    ).fetchone()
-                    if owner_user_id
-                    else None
-                )
-                state["current_owner_name"] = (
-                    str(owner_user["display_name"])
-                    if owner_user
-                    else (
-                        owner_name
-                        if owner_name
-                        else None
-                    )
-                )
-                state["current_owner_type"] = (
-                    str(owner_user["account_type"])
-                    if owner_user
-                    else (
-                        owner_type
-                        if owner_type
-                        else None
-                    )
-                )
-                state["current_owner_user_id"] = (
-                    owner_user_id
-                    if owner_user
-                    else None
-                )
-                state["current_owner_source_url"] = (
-                    items.get("source_url")
-                    or None
-                )
-                if claim["ownership_source"] == "merged_listing":
-                    state["location_country"] = items.get("location_country")
-                    state["location_region"] = items.get("location_region")
-            elif claim_type == "ownership":
-                if claim["ownership_source"] == "automation":
-                    if claim["ownership_kind"] == "release":
-                        state["current_owner_name"] = "Unknown"
-                        state["current_owner_type"] = "unknown"
-                        state["current_owner_user_id"] = None
-                        state["current_owner_source_url"] = None
-                        state["location_country"] = None
-                        state["location_region"] = None
-                        continue
-                    evidence = con.execute(
-                        """SELECT source_url,payload_json FROM claim_source_evidence
-                           WHERE claim_id=? AND evidence_type='marketplace_listing'
-                           ORDER BY id LIMIT 1""",
-                        (claim['id'],),
-                    ).fetchone()
-                    if evidence:
-                        payload = json.loads(evidence['payload_json'] or '{}')
-                        source = payload.get('claim', payload)
-                        state['current_owner_name'] = source.get('owner_name') or 'Unknown'
-                        state['current_owner_type'] = source.get('owner_type') or 'unknown'
-                        state['current_owner_user_id'] = None
-                        state['current_owner_source_url'] = evidence['source_url']
-                        state['location_country'] = source.get('location_country')
-                        state['location_region'] = source.get('location_region')
-                        continue
-                    # Legacy databases may not have run the Evidence backfill yet.
-                    observation = con.execute(
-                        "SELECT owner_name, owner_type, location_country, "
-                        "location_region, source_url FROM observations WHERE id = ?",
-                        (claim["observation_id"],),
-                    ).fetchone()
-                    if observation:
-                        state["current_owner_name"] = observation["owner_name"] or "Unknown"
-                        state["current_owner_type"] = observation["owner_type"] or "unknown"
-                        state["current_owner_user_id"] = None
-                        state["current_owner_source_url"] = observation["source_url"]
-                        state["location_country"] = observation["location_country"]
-                        state["location_region"] = observation["location_region"]
-                    continue
-                ownership_kind = (
-                    str(claim["ownership_kind"] or "acquire").strip().lower()
-                    if "ownership_kind" in claim.keys()
-                    else "acquire"
-                )
-                if ownership_kind in ("transfer", "release", "inherit"):
-                    state["current_owner_name"] = "Unknown"
-                    state["current_owner_type"] = "unknown"
-                    state["current_owner_user_id"] = None
-                    state["current_owner_source_url"] = None
-                    state["location_country"] = None
-                    state["location_region"] = None
-                    continue
-                owner_user_id = (
-                    str(claim["value_text"]).strip()
-                    if claim["value_text"] is not None
-                    else ""
-                )
-                user = (
-                    con.execute(
-                        """
-                        SELECT
-                            display_name,
-                            account_type,
-                            location_country,
-                            location_region
-                        FROM users
-                        WHERE id = ?
-                        """,
-                        (owner_user_id,),
-                    ).fetchone()
-                    if owner_user_id
-                    else None
-                )
-                state["current_owner_name"] = (
-                    str(user["display_name"])
-                    if user
-                    else None
-                )
-                state["current_owner_type"] = (
-                    str(user["account_type"])
-                    if user
-                    else None
-                )
-                state["current_owner_user_id"] = (
-                    owner_user_id
-                    if user
-                    else None
-                )
-                state["current_owner_source_url"] = None
-                state["location_country"] = (
-                    str(user["location_country"]).strip()
-                    if user
-                    and user["location_country"]
-                    and str(user["location_country"]).strip()
-                    else None
-                )
-                state["location_region"] = (
-                    str(user["location_region"]).strip()
-                    if user
-                    and user["location_region"]
-                    and str(user["location_region"]).strip()
-                    else None
-                )
+        # One logical Observation evaluates the Claims for this Individual.
+        # Build the candidate without writing; only a valid complete identity
+        # is materialized to Individual and user_guitars below.
+        evaluation = evaluate_observation(con, individual_id)
+        state = evaluation.values
 
         normalized_maker = normalize_manufacturer(
             state["manufacturer"]
@@ -6003,11 +5611,7 @@ class Repository:
                             ROW_NUMBER() OVER (
                                 PARTITION BY field_name
                                 ORDER BY
-                                    COALESCE(
-                                        occurred_at,
-                                        created_at
-                                    ) DESC,
-                                    created_at DESC,
+                                    SUBSTR(COALESCE(occurred_at, created_at), 1, 10) DESC,
                                     claim_id DESC
                             ) AS row_number
                         FROM candidates
@@ -6043,19 +5647,28 @@ class Repository:
                             THEN c.status ELSE 'inactive' END AS effective_status,
                         u.display_name
                             AS author_name,
-                        (
+                        COALESCE((
+                            SELECT COALESCE(
+                                json_extract(e.payload_json, '$.provenance.raw_text'),
+                                json_extract(e.payload_json, '$.source.raw_text'))
+                            FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1
+                        ), (
                             SELECT o.raw_text
                             FROM observations o
                             WHERE o.id = c.observation_id
                             LIMIT 1
-                        ) AS observation_raw_text,
+                        )) AS observation_raw_text,
                         COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_site'
                             LIMIT 1
-                        ), (SELECT o.source_site FROM observations o
+                        ), (SELECT e.source_site FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1), (SELECT o.source_site FROM observations o
                             WHERE o.id = c.observation_id)) AS source_site,
                         COALESCE((
                             SELECT li.value_text
@@ -6063,15 +5676,20 @@ class Repository:
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_url'
                             LIMIT 1
-                        ), (SELECT o.source_url FROM observations o
+                        ), (SELECT e.source_url FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1), (SELECT o.source_url FROM observations o
                             WHERE o.id = c.observation_id)) AS source_url,
-                        (
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'image_url'
                             LIMIT 1
-                        ) AS image_url,
+                        ), (SELECT json_extract(e.payload_json, '$.provenance.image_url')
+                            FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1)) AS image_url,
                         (
                             SELECT li.value_text
                             FROM claim_listing_items li
@@ -6167,13 +5785,15 @@ class Repository:
                               AND li.field_name = 'listing_date'
                             LIMIT 1
                         ) AS listing_date,
-                        (
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_listing_id'
                             LIMIT 1
-                        ) AS source_listing_id,
+                        ), (SELECT e.source_listing_id FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1)) AS source_listing_id,
                         (
                             SELECT ce.media_asset_id
                             FROM claim_evidence ce
