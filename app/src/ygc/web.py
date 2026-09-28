@@ -2356,6 +2356,15 @@ def api_repeated(request: Request) -> dict:
     return repo().repeated_groups()
 
 
+@app.get("/api/admin/individuals/{individual_id}/observation-diagnostic")
+def api_observation_diagnostic(individual_id: int, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        return repo().observation_diagnostic(individual_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/admin/repeated/resolve")
 def api_resolve_repeated(body: ResolveRepeatedRequest, request: Request) -> dict:
     _require_console_admin(request)

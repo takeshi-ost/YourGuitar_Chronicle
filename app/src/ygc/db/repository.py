@@ -13,6 +13,7 @@ from ygc.extractors.normalization import (
     normalize_serial,
 )
 from ygc.theme_catalog import THEME_IDS
+from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
 
 
 def utcnow() -> str:
@@ -79,16 +80,23 @@ class Repository:
                        WHERE source_site=? AND source_listing_id=?""",
                     (row['source_site'], row['source_listing_id']),
                 ).fetchone()
-                payload = detail['payload_json'] if detail else json.dumps({
+                claim_payload = {
                     'legacy_observation_id': row['legacy_id'],
-                    'title': row['title'], 'raw_text': row['raw_text'],
-                    'image_url': row['image_url'],
                     'owner_name': row['owner_name'], 'owner_type': row['owner_type'],
                     'location_country': row['location_country'],
                     'location_region': row['location_region'],
+                }
+                source_payload = {
+                    'legacy_observation_id': row['legacy_id'],
+                    'title': row['title'], 'raw_text': row['raw_text'],
+                    'image_url': row['image_url'],
                     'serial_confidence': row['serial_confidence'],
                     'extraction_version': row['extraction_version'],
-                }, ensure_ascii=False)
+                }
+                if detail:
+                    source_payload['raw_detail'] = json.loads(detail['payload_json'])
+                payload = json.dumps({'claim': claim_payload, 'source': source_payload},
+                                     ensure_ascii=False)
                 is_acquire = row['claim_type'] == 'ownership'
                 con.execute(
                     """INSERT INTO claim_source_evidence
@@ -104,6 +112,25 @@ class Repository:
                 )
                 created += 1
         return {'created': created, 'existing': existing, 'conflicts': conflicts}
+
+    def observation_diagnostic(self, individual_id: int) -> dict[str, Any]:
+        """Compare a read-only Observation evaluation to the saved Individual."""
+        with self.connect() as con:
+            con.execute('PRAGMA query_only=ON')
+            row = con.execute('SELECT * FROM individuals WHERE id=?',
+                              (individual_id,)).fetchone()
+            if row is None:
+                raise ValueError('Individual not found')
+            evaluated = evaluate_observation(con, individual_id)
+            current = {field: row[field] for field in OBSERVATION_FIELDS}
+            differences = {
+                field: {'saved': current[field], 'evaluated': evaluated.values[field],
+                        'claim_id': evaluated.sources.get(field)}
+                for field in OBSERVATION_FIELDS
+                if (str(current[field]) if current[field] is not None else None) !=
+                   (str(evaluated.values[field]) if evaluated.values[field] is not None else None)
+            }
+            return {**evaluated.as_dict(), 'saved': current, 'differences': differences}
 
     @staticmethod
     def _insert_marketplace_evidence(con: sqlite3.Connection, claim_id: int,

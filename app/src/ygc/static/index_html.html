@@ -145,7 +145,7 @@ Gibson ES-335</textarea>
 <div id="statistics" class="sub">集計中...</div>
 </div>
 </section>
-<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><h2>Product Detail</h2><div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div></div></aside>
+<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation判定</button></div><div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div></div></aside>
 </div>
 </section>
 <section class="console-domain" id="user-db" aria-labelledby="userHeading">
@@ -162,6 +162,10 @@ Gibson ES-335</textarea>
 <div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="document.getElementById('repeatedDialog').close()">Close</button></div>
 <p class="sub">メーカー・シリアルが一致する重複候補です。同一個体か確認し、残す個体を選択してください。Mergeは記録を引き継ぎ、統合元の状態変更Claimを確認待ちにします。Deleteは選択した個体以外の関連記録も削除します。</p>
 <div id="repeatedGroups" aria-live="polite"></div>
+</dialog>
+<dialog id="observationDiagnosticDialog" style="width:min(850px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
+<div class="toolbar"><h2 style="margin:0;flex:1">Observation判定経路</h2><button class="secondary" onclick="document.getElementById('observationDiagnosticDialog').close()">Close</button></div>
+<div id="observationDiagnosticBody" aria-live="polite"></div>
 </dialog>
 <script>
 const CONSOLE_ADMIN_TOKEN="";
@@ -184,6 +188,20 @@ statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登
 ].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'環境変数で設定済み（値は表示不可）':'Tokenを入力'}}
 let repeatedGroups=[];
 let repeatedBusy=false;
+async function openObservationDiagnostic(){
+  if(!selectedIndividualId){alert('先に個体を選択してください。');return}
+  const dialog=document.getElementById('observationDiagnosticDialog');
+  if(!dialog.open)dialog.showModal();
+  const body=document.getElementById('observationDiagnosticBody');body.textContent='Loading…';
+  try{
+    const d=await jfetch('/api/admin/individuals/'+selectedIndividualId+'/observation-diagnostic');
+    const diffs=Object.entries(d.differences);
+    body.innerHTML='<p class="sub">個体 #'+Number(d.individual_id)+' · 保存済みSnapshotとの差分 '+diffs.length+' 件（読み取り専用）</p>'+
+      (diffs.length?'<h3>差分</h3><div style="overflow:auto"><table><thead><tr><th>項目</th><th>保存値</th><th>判定値</th><th>Claim</th></tr></thead><tbody>'+diffs.map(([field,x])=>'<tr><td>'+esc(field)+'</td><td>'+esc(x.saved??'—')+'</td><td>'+esc(x.evaluated??'—')+'</td><td>'+(x.claim_id?'#'+Number(x.claim_id):'—')+'</td></tr>').join('')+'</tbody></table></div>':'<p>保存済みSnapshotとの一致を確認しました。</p>')+
+      '<h3>項目別の根拠</h3><div style="overflow:auto"><table><thead><tr><th>項目</th><th>現在値</th><th>Claim</th></tr></thead><tbody>'+Object.entries(d.values).map(([field,value])=>'<tr><td>'+esc(field)+'</td><td>'+esc(value??'—')+'</td><td>'+(d.sources[field]?'#'+Number(d.sources[field]):'—')+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<h3>Claim判定</h3><div style="overflow:auto"><table><thead><tr><th>Claim</th><th>種類</th><th>結果</th><th>理由 / 発生日</th></tr></thead><tbody>'+d.decisions.map(x=>'<tr><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.type)+'</td><td>'+esc(x.result)+'</td><td>'+esc(x.reason||x.event_date||'—')+'</td></tr>').join('')+'</tbody></table></div>';
+  }catch(e){body.textContent=e.message}
+}
 async function openRepeated(){
   const dialog=document.getElementById('repeatedDialog');
   if(!dialog.open)dialog.showModal();
