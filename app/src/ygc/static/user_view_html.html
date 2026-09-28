@@ -994,7 +994,8 @@ function displayDiscoveryDateTime(value){
 function claimHeaderHtml(c,type,eventDate){
   let response='';
   const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
-  if(isOwner&&c.status==='active'&&!['listing','identity_correction'].includes(String(c.claim_type||''))){
+  const isOtherUsersClaim=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
+  if(isOtherUsersClaim&&c.status==='active'&&!['listing','identity_correction'].includes(String(c.claim_type||''))){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+

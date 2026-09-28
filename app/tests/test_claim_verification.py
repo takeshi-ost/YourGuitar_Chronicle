@@ -44,7 +44,7 @@ def test_owner_claim_starts_positive(tmp_path: Path):
     )
 
 
-def test_current_owner_can_verify_own_historical_acquire_and_release(tmp_path: Path):
+def test_current_owner_cannot_verify_own_historical_acquire_or_release(tmp_path: Path):
     repository, owner_id, _, individual_id, _ = _setup(tmp_path)
     _, release_id = repository.create_ownership_claim(
         owner_id, individual_id, ownership_kind="release", occurred_at="2026-02-01",
@@ -52,16 +52,15 @@ def test_current_owner_can_verify_own_historical_acquire_and_release(tmp_path: P
     _, acquire_id = repository.create_ownership_claim(
         owner_id, individual_id, ownership_kind="acquire", occurred_at="2026-03-01",
     )
-    assert repository.set_claim_response(release_id, owner_id, "negative")
-    assert repository.set_claim_response(release_id, owner_id, "positive")
-    assert repository.set_claim_response(acquire_id, owner_id, "unverified")
-    assert repository.get_individual(individual_id)[0]["current_owner_user_id"] is None
-    try:
-        repository.set_claim_response(acquire_id, owner_id, "positive")
-    except ValueError as exc:
-        assert "current owner" in str(exc)
-    else:
-        raise AssertionError("Former owner verified an Acquire")
+    for claim_id in (release_id, acquire_id):
+        try:
+            repository.set_claim_response(claim_id, owner_id, "negative")
+        except ValueError as exc:
+            assert "another user's Claim" in str(exc)
+        else:
+            raise AssertionError("Current owner verified their own ownership Claim")
+    assert repository.get_individual(individual_id)[0]["current_owner_user_id"] == owner_id
+
 
 def test_third_party_specification_requires_owner_positive(tmp_path: Path):
     repository, owner_id, other_id, individual_id, _ = _setup(tmp_path)

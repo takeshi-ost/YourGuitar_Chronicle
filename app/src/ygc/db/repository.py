@@ -6075,6 +6075,8 @@ class Repository:
                 raise ValueError(
                     "Only the current owner can verify this Claim"
                 )
+            if int(claim['author_user_id']) == int(responder_user_id):
+                raise ValueError("Owner Verification is only for another user's Claim")
 
             if is_former_owner_claim and claim["ownership_pair_id"]:
                 con.execute(
