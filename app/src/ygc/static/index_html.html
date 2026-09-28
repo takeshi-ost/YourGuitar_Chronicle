@@ -617,7 +617,7 @@ function claimCard(c){
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
 function renderAdminChronicle(claims){
-  const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'');const bv=String(b.occurred_at||b.created_at||'');if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
+  const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'').slice(0,10);const bv=String(b.occurred_at||b.created_at||'').slice(0,10);if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
   const correctionsByTarget=new Map();const roots=[];
   for(const claim of sorted){if(claim.claim_type==='identity_correction'&&claim.target_claim_id){const key=Number(claim.target_claim_id);if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);correctionsByTarget.get(key).push(claim)}else roots.push(claim)}
   const ordered=[];for(const claim of roots){ordered.push(claim);const corrections=correctionsByTarget.get(Number(claim.id))||[];corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));ordered.push(...corrections);correctionsByTarget.delete(Number(claim.id))}

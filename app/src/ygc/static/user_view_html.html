@@ -1207,7 +1207,7 @@ function toggleDetailAccordion(id){
 
 function chronologyValue(c,mode){
   if(mode==='input')return String(c.created_at||'');
-  return String(c.occurred_at||c.created_at||'');
+  return String(c.occurred_at||c.created_at||'').slice(0,10);
 }
 function renderChronicle(){
   const sorted=currentClaims.slice().sort((a,b)=>{
