@@ -1136,7 +1136,7 @@ function compactClaimType(c){
 }
 function claimCard(c){
   const verification=String(c.verification_status||'positive').toLowerCase();
-  if(verification==='positive'||c.can_verify)return claimCardFull(c);
+  if(verification==='positive')return claimCardFull(c);
   if(verification==='unverified'){
     return '<div class="claim-compact-row"><button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openClaimPopup('+c.id+',this)">'+esc(compactClaimType(c))+'</button></div>';
   }
