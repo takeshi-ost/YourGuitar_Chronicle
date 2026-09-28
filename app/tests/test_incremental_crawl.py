@@ -338,7 +338,8 @@ def test_two_missing_checks_release_only_reverb_owner(tmp_path):
         con.execute("UPDATE crawl_listing_checks SET checked_at = ?, missing_since = ?",
                     (two_days_ago, two_days_ago))
     second = advance_program(repo, collector, "electric", 1970, 1979)
-    assert second["unavailable_claims"] == 2
+    assert second["confirmed_missing"] == 2
+    assert second["unavailable_claims"] == 1
     assert second["owners_unknown"] == 1
     with repo.connect() as con:
         external = con.execute(
@@ -351,6 +352,15 @@ def test_two_missing_checks_release_only_reverb_owner(tmp_path):
         ).fetchone()
         assert tuple(external) == ("Unknown", None)
         assert int(member["current_owner_user_id"]) == user_id
+        assert con.execute(
+            "SELECT COUNT(*) FROM crawl_listing_checks WHERE status = 'unavailable' "
+            "AND source_listing_id IN ('11', '22')"
+        ).fetchone()[0] == 2
+        assert con.execute(
+            "SELECT COUNT(*) FROM claims WHERE individual_id = ? AND "
+            "(claim_type = 'event' OR (ownership_source = 'automation' "
+            "AND ownership_kind = 'release'))", (user_owned_id,),
+        ).fetchone()[0] == 0
         assert con.execute(
             "SELECT COUNT(*) FROM claims WHERE individual_id = ? AND "
             "ownership_source = 'automation' AND ownership_kind = 'release'",
@@ -432,13 +442,18 @@ def test_older_listing_absence_keeps_newer_listing_owner(tmp_path):
                 "source_url": newer["source_url"], "observed_at": utcnow()},
     )
     result = repo.record_reverb_unavailable("11")
-    assert result["created"] and not result["owner_released"]
+    assert result == {"created": False, "reason": "not_current_external_source"}
     with repo.connect() as con:
         row = con.execute(
             "SELECT current_owner_name, location_region FROM individuals WHERE id = ?",
             (guitar_id,),
         ).fetchone()
         assert tuple(row) == ("Current Shop", "NY")
+        assert con.execute(
+            "SELECT COUNT(*) FROM claims WHERE target_claim_id = "
+            "(SELECT c.id FROM claims c JOIN claim_source_evidence e ON e.claim_id = c.id "
+            "WHERE e.source_site = 'reverb' AND e.source_listing_id = '11')"
+        ).fetchone()[0] == 0
 
 
 def test_run_log_tracks_each_stage_and_survives_restart(tmp_path):

@@ -1731,7 +1731,7 @@ class Repository:
             }
 
     def record_reverb_unavailable(self, listing_id: str) -> dict[str, Any]:
-        """Record a confirmed absence as a Claim, preserving independent owners."""
+        """Release only the external owner currently sourced from this listing."""
         with self.connect() as con:
             evidence = con.execute(
                 """SELECT e.claim_id,e.legacy_observation_id,e.source_url,c.individual_id
@@ -1766,6 +1766,8 @@ class Repository:
                 (legacy_id, source_claim_id),
             ).fetchone():
                 return {"created": False, "reason": "already_recorded"}
+            if not reverb_only:
+                return {"created": False, "reason": "not_current_external_source"}
             author_id = self._source_user_id(con, "Automation")
             now = utcnow()
             cur = con.execute(
@@ -1779,18 +1781,13 @@ class Repository:
                 (individual_id, legacy_id if con.execute(
                     'SELECT 1 FROM observations WHERE id=?', (legacy_id,)).fetchone() else None,
                  source_claim_id, author_id,
-                 "ownership" if reverb_only else "event",
-                 "owner" if reverb_only else "event",
-                 "unknown" if reverb_only else "reverb_unavailable",
-                 "release" if reverb_only else None,
-                 "automation" if reverb_only else None,
+                 "ownership", "owner", "unknown", "release", "automation",
                  "Reverb listing no longer publicly available (confirmed twice).",
                  now, now, now),
             )
-            if reverb_only:
-                self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            self._rebuild_individual_snapshot_in_connection(con, individual_id)
             return {"created": True, "claim_id": int(cur.lastrowid),
-                    "owner_released": reverb_only, "individual_id": individual_id}
+                    "owner_released": True, "individual_id": individual_id}
 
     def upsert_observation(
         self,
