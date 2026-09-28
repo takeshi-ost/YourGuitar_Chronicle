@@ -1004,7 +1004,12 @@ function claimHeaderHtml(c,type,eventDate){
     c.claim_type==='ownership'
     && ['automation','merged_listing'].includes(String(c.ownership_source||''))
   );
-  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire)){
+  const isManualAcquire=(
+    c.claim_type==='ownership'
+    && String(c.ownership_kind||'')==='acquire'
+    && !['automation','merged_listing','former_owner'].includes(String(c.ownership_source||''))
+  );
+  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership||isAutomationAcquire||isManualAcquire)){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
@@ -1252,6 +1257,8 @@ async function setClaimResponse(claimId,stance){
       })
     });
     closeClaimPopup();
+    await loadActiveUser();
+    if(PROFILE_USER_ID)await loadProfilePage();
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }catch(e){
     alert('Owner Verificationの更新に失敗しました。\n'+e.message);
