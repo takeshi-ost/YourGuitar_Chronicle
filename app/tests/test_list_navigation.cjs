@@ -5,6 +5,13 @@ const vm = require('node:vm');
 const handlers = {};
 let selected = null;
 let scrolls = 0;
+let selectionStyle = '';
+let frames = [];
+const flushFrames = () => {
+  const callbacks = frames;
+  frames = [];
+  callbacks.forEach(callback => callback());
+};
 const classes = () => {
   const values = new Set();
   return {add: key => values.add(key), remove: key => values.delete(key),
@@ -47,20 +54,26 @@ const document = {
   addEventListener: (event, callback) => { handlers[event] = callback; },
   querySelector: () => null,
   createElement: () => ({}),
-  head: {append() {}},
+  head: {append(style) { selectionStyle = style.textContent; }},
 };
 vm.runInNewContext(fs.readFileSync('app/src/ygc/static/list-navigation.js', 'utf8'),
-  {document, Element, requestAnimationFrame: callback => callback()});
+  {document, Element, requestAnimationFrame: callback => frames.push(callback)});
 const arrow = key => {
   let prevented = false;
   handlers.keydown({key, defaultPrevented: false, preventDefault: () => { prevented = true; }});
+  flushFrames();
   return prevented;
 };
 
 assert.equal(arrow('ArrowDown'), false);
 root.rows[0].click();
+flushFrames();
+assert.equal(root.rows[0].classList.contains('list-keyboard-current'), true);
+assert.match(selectionStyle, /\.clickable\.selected, \.user-results tr\.selected, \.list-keyboard-current/);
+assert.match(selectionStyle, /color-mix\(in srgb, var\(--text/);
 assert.equal(arrow('ArrowDown'), true);
 assert.equal(selected, 1);
+assert.equal(root.rows[1].classList.contains('list-keyboard-current'), true);
 assert.equal(arrow('ArrowDown'), true);
 assert.equal(selected, 2);
 assert.equal(scrolls, 2);
@@ -72,4 +85,5 @@ assert.equal(selected, 2);
 document.activeElement = body;
 handlers.click({target: body});
 assert.equal(arrow('ArrowUp'), false);
+assert.equal(root.rows[2].classList.contains('list-keyboard-current'), false);
 console.log('list navigation: passed');

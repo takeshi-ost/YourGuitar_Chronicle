@@ -7,6 +7,7 @@
   const itemSelector = 'tr.clickable, .discovery-item, .notification-item, '
     + '.profile-chronicle-row.clickable, .user-guitar-row a';
   let active = null;
+  let marked = null;
 
   function items(root) {
     return Array.from(root.querySelectorAll(itemSelector))
@@ -14,10 +15,9 @@
   }
 
   function mark(root, item) {
-    for (const old of root.querySelectorAll('.list-keyboard-current')) {
-      old.classList.remove('list-keyboard-current');
-    }
+    if (marked) marked.classList.remove('list-keyboard-current');
     item.classList.add('list-keyboard-current');
+    marked = item;
   }
 
   document.addEventListener('click', event => {
@@ -26,11 +26,20 @@
     const root = item && item.closest(listSelector);
     if (!root || target.closest('input, select, textarea, button:not(.notification-item), [contenteditable="true"]')) {
       active = null;
+      if (marked) marked.classList.remove('list-keyboard-current');
+      marked = null;
       return;
     }
     const index = items(root).indexOf(item);
     active = index < 0 ? null : {root, index};
-    if (active) mark(root, item);
+    if (active) {
+      mark(root, item);
+      requestAnimationFrame(() => {
+        if (!active || active.root !== root || !root.isConnected) return;
+        const updated = items(root)[active.index];
+        if (updated) mark(root, updated);
+      });
+    }
   }, true);
 
   document.addEventListener('keydown', event => {
@@ -66,6 +75,11 @@
   });
 
   const style = document.createElement('style');
-  style.textContent = '.list-keyboard-current{outline:2px solid var(--accent,#d0a45d);outline-offset:-2px}';
+  style.textContent = `
+    :is(.clickable.selected, .user-results tr.selected, .list-keyboard-current),
+    :is(.clickable.selected, .user-results tr.selected, .list-keyboard-current):hover {
+      background: color-mix(in srgb, var(--text, #edf0f3) 22%, var(--panel, #181b1f)) !important;
+    }
+  `;
   document.head.append(style);
 })();
