@@ -1,77 +1,34 @@
-# Browser Console のClaim管理
+# Browser Consoleの管理操作（ローカル限定）
 
-ローカルのBrowser Consoleで各ClaimのVerificationをPositive（許可）・Negative（不許可）・Unverified（未確認）に変更できる。著者・現所有者・Claim種別の制限を受けない。管理者判定後は通常のOwner Verificationで上書きできない。管理者は再変更できる。
+Browser Consoleはlocalhostに接続したローカル管理者向け。ページが発行するプロセス内トークンと接続元・Hostのloopback判定を管理APIで確認する。**ユーザーのadminロールや本番認証ではない**ため、外部に公開して使用しない。
 
-- Consoleページは、接続元とHostの両方がlocalhost/loopbackの場合にのみ、プロセスごとの管理トークンを返す。管理APIはそのトークンとローカル接続を検証する。ユーザーアカウントのadminロールではなく、現在のローカル試作環境向けの管理権限。公開サーバー・リバースプロキシ構成での認証には別途対応が必要。
-- 判定・削除後はClaimから個体のスナップショットを再構築する。所有履歴のペアは一緒に変更する。Identity Correction、Specification、Ownershipの適用はPositiveのものに限定する。
-- Listingが不許可でも、個体を参照するための基礎識別情報（Maker/Model/Year/Serial）は維持する。Listingの所有者・ロケーション・Finishの主張は適用しない。
-- 最後の有効なListing Claimを削除する場合は、個体と関連記録も削除することをUIで明示して確認する。APIでも明示的な追加フラグが必要。それ以外は対象Claim（ペアの場合はペア）だけ削除して再計算する。
-- 管理操作をclaim_admin_actionsに記録する。削除後も対象ID・操作・変更前の判定・日時は残る。復元用バックアップではない。
+## Claim管理と所有者確認
 
-### Pending ownership and duplicate resolution
+管理者は全ClaimのVerificationをPositive / Negative / Unverifiedに強制変更でき、必要ならClaimをハード削除できる。通常のOwner Verificationで管理者判定を上書きできない。変更した個体のSnapshotを再構築し、`claim_admin_actions` に操作を記録する。ListingをNegativeとしても個体参照に必要な基礎識別情報は残す。最後の有効なListing Claimの削除は個体と関連記録の削除につながるため、画面の明示確認とAPIの追加フラグが必要。監査記録はバックアップではない。
 
-Unverified Acquire counts only active pending acquisitions whose approval (including
-paired Claims) changes the current owner. The existing chronological snapshot
-reducer runs under a rolled-back savepoint, so viewing the queue persists no changes.
-Location-only changes and superseded or same-owner acquisitions are excluded.
+**Unverified Acquire** は、有効な承認待ちAcquireのうち、承認によってCurrent Ownerが変わり得るものだけを数える。ペアClaimを含めて、ロールバックされるsavepoint内でSnapshotを試算する。場所だけ変わる、後続Claimで覆われる、すでに同一Ownerのものは除外する。
 
-Repeated now counts **groups of multiple DB Individuals with the same normalized
-manufacturer and serial**, not multiple external listings of one Individual. Model
-is intentionally excluded from this candidate key. Candidates require human review;
-a shared serial alone is not proof of identity.
+## 重複候補の解決
 
-The local-admin modal requires an explicit survivor. Merge retains observations,
-Claim IDs and their responses/evidence, media, and user associations. Incoming
-Listings become Acquire Claims (`merged_listing`), retaining original Listing items
-as provenance. Incoming positive ownership, identity, and specification Claims
-become unverified; negative Claims retain their decision. The survivor's Claim-driven
-state is rebuilt, never overwritten directly. Other records retain their status.
-Signature selections follow the survivor. Admins can approve incoming Claims normally.
+Repeatedは正規化された**メーカーとシリアルが同じ複数のDB個体群**。モデルは候補キーに含めず、シリアル一致だけで同一個体とは確定しない。モーダルで残す個体を選び、MergeまたはDeleteする。
 
-Delete removes the other Individuals and their related DB records, clearing their
-signature selections. It does not merge history and requires a destructive-operation
-confirmation in the modal. Stored media files follow the existing deletion policy.
-Both operations are atomic, logged, require the local admin capability, and reject
-stale or mismatched group membership. Main and unrelated Individuals are unaffected.
+- MergeはObservation、Claim IDとResponse / Evidence、メディア、ユーザーとの関係を残す。統合元Listingは掲載の情報を保持した`merged_listing`由来のAcquireに変換する。Positiveだった所有・識別・仕様Claimなど一部はUnverifiedに戻し、Negative判定は保持する。選んだ個体の状態をClaimから再構築する。
+- Deleteは選んだ個体以外と関連DBレコードを消し、統合元の履歴を残さない。Signature Guitarの参照も調整する。画面で破壊的操作を明示確認する。
 
-### Incremental Crawl progress and run history
+どちらも一トランザクションで実行し、操作を記録し、候補群が表示時から変わっていた場合は拒否する。画像ファイルの扱いは既存の削除方針に従う。
 
-Browser Console displays the per-run stages: summary screening, detail fetching,
-manufacturer and serial extraction, identity reconciliation, and Claim-backed DB
-registration. Each incremental click saves stage counters to `crawl_runs` while
-running and when it finishes or fails. The log shows the latest 20 runs for the
-selected category and manufacturing-year range; older rows remain in SQLite.
-A restarted search resets the scan cursor but preserves its run history.
-The matching stage may also process previously staged pending candidates after an
-interrupted run; the log's `candidate_total` is the actual reconciliation queue.
-Historical runs predating these fields have no stage counters.
+## User DetailとBAN
 
-### User moderation and User Detail
+Display Name、Account Type、Residence、Bio、4項目の公開範囲、Signature Guitar、Avatar、Theme、BAN状態を編集する。DBのID、日時、画像保存パス、計算値は直接編集しない。Signature Guitarは所有中の個体に限る。BAN変更は`user_admin_actions`に記録し、関連Snapshotを再構築する。
 
-The local administrator can edit a user's display name, account type, residence,
-bio, four profile visibility settings, signature guitar, avatar upload, and BAN
-status from Browser Console User Detail. Database IDs, creation timestamps,
-stored image paths, and calculated counts are read-only. Signature choices must
-refer to an owned Individual. The administrator endpoint validates values before
-a single transaction updates the user, records BAN transitions in
-`user_admin_actions`, and rebuilds affected Individuals from Claims. Existing
-users migrate to `normal` without changing their data.
+| 状態 | 表示と適用 |
+| --- | --- |
+| Normal | 通常の状態 |
+| Silent BAN | ClaimはDBに残るが公開Snapshot、一覧、通知などに反映しない。本人が操作用IDを選んだ画面には有効に見える試作上のプレビューを用意する。他人には本人のClaimやプロフィール上のギター関係を見せない |
+| BAN | アカウントと過去のClaim・メディア・投票の公開効果を止め、今後のClaim投稿・投票も拒否する。DB上の記録は残り、Normalへ戻すと復帰する |
 
-- `normal`: existing behavior.
-- `silent_ban`: Claims remain stored and retain their original status but have no
-  public effect on Individual snapshots, specification/media selections, discovery lists, or notifications. Their author sees their own Claims as
-  active; their own profile and Product Detail preview the Claim-derived state
-  within a rolled-back database savepoint. Their future Claims follow the same
-  rule. A different viewer sees neither their Claims nor their profile's guitar
-  relationships. An Individual backed only by suppressed Claims is absent from
-  public product lists and detail endpoints.
-- `ban`: account profile and ordinary account access are unavailable; the user
-  cannot publish new Claims or vote. Past Claims and media are hidden and have no
-  public effect. Good/Bad votes and existing notifications from the user are
-  excluded from visible totals and feeds. Data is retained, and changing back to
-  `normal` restores the prior Claim/interaction records.
+**注意:** 本人／他人の区別にブラウザから届くIDを使うため、現在のSilent BAN表示は安全なアクセス制御ではない。外部公開前に認証済みIDで置き換える。
 
-The current prototype selects a user through a client-supplied ID. It has no
-server-side login/authentication, so this viewer distinction is not an access
-control boundary. Before exposing the service to untrusted clients, integrate
-real authentication and derive the viewer ID on the server.
+## CrawlとDB運用
+
+管理画面は各段階の件数と最新20回の実行ログを表示する。保存済み詳細の再判定、確認待ち候補一覧、DBのバックアップ・復元・初期化、Claimの旧DB移行と不足項目Backfillを提供する。確認待ち候補を画面で承認する操作は未実装。収集の数値の定義は [incremental-crawl.md](incremental-crawl.md)。

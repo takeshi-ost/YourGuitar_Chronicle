@@ -1,6 +1,6 @@
 # User Themes
 
-User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は操作ユーザーのテーマ、User Profile はプロフィールの持ち主のテーマを表示する。Guest は Dark Default。ヘッダーの2行は全テーマ共通の暗色で固定する。任意の CSS・画像 URL の入力は受け付けない。
+User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は操作ユーザーのテーマ、User Profile はプロフィールの持ち主のテーマを表示する。Guest は Dark Default。Top Page / User Profile / User Settingsのヘッダー2行は全テーマ共通の暗色で固定する。Browser Consoleはテーマ別ロゴを使わずコンパクトな文字リンクを表示する。任意の CSS・画像 URL の入力は受け付けない。
 
 | テーマ | ボディ背景 | ウィンドウ | 枠の層 |
 | --- | --- | --- | --- |
