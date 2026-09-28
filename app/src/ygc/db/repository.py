@@ -14,6 +14,7 @@ from ygc.extractors.normalization import (
 )
 from ygc.theme_catalog import THEME_IDS
 from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
+from ygc.observation_matrix import build_observation_matrix
 from ygc.specification_extractor import extract_specifications, clean_specification_value
 
 
@@ -337,7 +338,12 @@ class Repository:
                 if (str(current[field]) if current[field] is not None else None) !=
                    (str(evaluated.values[field]) if evaluated.values[field] is not None else None)
             }
-            return {**evaluated.as_dict(), 'saved': current, 'differences': differences}
+            matrix = build_observation_matrix(
+                con, individual_id, evaluated, current,
+                self.list_current_specifications(individual_id),
+            )
+            return {**evaluated.as_dict(), 'saved': current,
+                    'differences': differences, 'matrix': matrix}
 
     def audit_observation_migration(self, sample_limit: int = 20) -> dict[str, Any]:
         """Compare every Individual on a consistent, read-only DB snapshot."""

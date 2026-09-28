@@ -9,6 +9,8 @@
 
 手動登録も外部収集も、入力正規化 → 外部Listing IDの重複確認 → Individual照合または作成 → ClaimとEvidenceの保存 → 個体単位Observationの判定 → Individual Snapshotへの反映の流れに従う。同じ外部Listingの判定と、別IDで見つけた**同一の物理個体**の判定は別の問題である。
 
+Browser Consoleの「Observation判定」は読み取り専用のClaim×項目マトリクスで、発生日・同日のClaim ID順にClaimを並べる。各セルにはClaimが提案した値を示し、現在採用中の項目だけ明るく表示する。最下段は保存済みIndividual Snapshotで、Specification列のみProduct Detailで現在表示する仕様値を示す。採用元は共通Observation評価器（Specification列は現行仕様表示の判定）を参照し、マトリクス自体はSnapshotを書き換えない。
+
 ## 承認と所有状態
 
 - Listing Claimは掲載時点の主張として保持する。再出品が既存個体と確実に結び付く場合は新たなListing Claimを増やさずAcquire Claimで来歴を追加する。それぞれの外部掲載根拠はClaim Evidenceに保存する。
