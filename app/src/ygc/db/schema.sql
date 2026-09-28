@@ -221,6 +221,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_claim_source_listing_unique
  WHERE source_site IS NOT NULL AND source_listing_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_claim_source_evidence_claim
  ON claim_source_evidence(claim_id);
+CREATE TABLE IF NOT EXISTS claim_specification_source (
+ claim_id INTEGER PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ source_url TEXT,
+ captured_at TEXT NOT NULL,
+ extracted_json TEXT NOT NULL,
+ UNIQUE(source_site, source_listing_id, claim_id)
+);
 CREATE TABLE IF NOT EXISTS notifications (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  recipient_user_id INTEGER NOT NULL,

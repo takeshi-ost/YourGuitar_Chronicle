@@ -3413,6 +3413,12 @@ def api_migrate_claims() -> dict[str, Any]:
     }
 
 
+@app.post("/api/admin/backfill-cached-specifications")
+def api_backfill_cached_specifications(request: Request) -> dict[str, int]:
+    _require_console_admin(request)
+    return repo().backfill_cached_specifications()
+
+
 def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> None:
     global _active_job_id
     try:

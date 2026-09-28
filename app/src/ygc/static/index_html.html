@@ -130,6 +130,7 @@ Gibson ES-335</textarea>
 <div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div><div class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</div></div>
 <div class="domain-grid guitar-content">
 <section>
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Ownerなし個体にSpecificationを追加</button></div><div class="sub">保存済みReverb Detailの明示的な仕様項目からAutomationのPositive Claimを作成します。ユーザーOwnerのいる個体と既存のSpecification項目は対象外です。</div></div>
 <div class="panel">
 <div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
@@ -288,6 +289,17 @@ async function runClaimMigration(){
   }catch(e){
     alert('Claim Migrationに失敗しました。\n'+e.message);
   }
+}
+
+async function backfillCachedSpecifications(){
+  if(!confirm('現在ユーザーOwnerがいない個体について、保存済みReverb Detailから明記された仕様をAutomationのPositive Claimとして追加します。実行しますか？'))return;
+  const button=document.getElementById('backfillSpecificationsButton');button.disabled=true;
+  try{
+    const d=await jfetch('/api/admin/backfill-cached-specifications',{method:'POST'});
+    await loadIndividuals();
+    alert('Specificationの追加が完了しました。\n対象個体: '+d.ownerless+'\nDetailあり: '+d.with_detail+'\n作成Claim: '+d.created+'\n追加項目: '+d.items+'\n追加可能項目なし: '+d.skipped_no_specs+'\n処理済み: '+d.skipped_existing);
+  }catch(e){alert('Specification追加に失敗しました。\n'+e.message)}
+  finally{button.disabled=false}
 }
 
 async function resetDatabase(){
@@ -605,7 +617,7 @@ function claimCard(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership')){
+  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership'||c.claim_type==='specification')){
     const id='Reverb ID #'+esc(c.source_listing_id);
     body+='<div class="claim-memo">Evidence: '+(c.source_url?'<a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+id+'</a>':id)+'</div>';
   }else if(c.claim_type==='listing'&&c.source_url){

@@ -14,6 +14,7 @@ from ygc.extractors.normalization import (
 )
 from ygc.theme_catalog import THEME_IDS
 from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
+from ygc.specification_extractor import extract_specifications
 
 
 def utcnow() -> str:
@@ -54,6 +55,97 @@ class Repository:
             "PRAGMA foreign_keys = ON"
         )
         return con
+
+    def backfill_cached_specifications(self) -> dict[str, int]:
+        """Add sourced, positive specifications to currently ownerless individuals."""
+        counts = {"ownerless": 0, "with_detail": 0, "created": 0,
+                  "items": 0, "skipped_no_specs": 0, "skipped_existing": 0}
+        with self.connect() as con:
+            individuals = con.execute(
+                "SELECT id FROM individuals WHERE current_owner_user_id IS NULL ORDER BY id"
+            ).fetchall()
+            counts["ownerless"] = len(individuals)
+            automation = self._source_user_id(con, "Automation")
+            for individual in individuals:
+                individual_id = individual["id"]
+                # Only Listing Claims identify the original discovery; later
+                # Automation Acquire listings are outside this backfill's scope.
+                rows = con.execute(
+                    """SELECT c.id AS listing_claim_id, c.occurred_at, d.source_listing_id,
+                              d.payload_json, d.fetched_at, o.source_url
+                       FROM claims c
+                       JOIN observations o ON o.id=c.observation_id
+                       JOIN crawl_detail_cache d ON d.source_site=o.source_site
+                                                AND d.source_listing_id=o.source_listing_id
+                       WHERE c.individual_id=? AND c.claim_type='listing'
+                         AND o.source_site='reverb'
+                       ORDER BY c.id""", (individual_id,),
+                ).fetchall()
+                if not rows:
+                    continue
+                counts["with_detail"] += 1
+                existing = {row["field_name"] for row in con.execute(
+                    """SELECT si.field_name FROM claim_spec_items si
+                       JOIN claims c ON c.id=si.claim_id
+                       JOIN users u ON u.id=c.author_user_id
+                       WHERE c.individual_id=? AND c.claim_type='specification'
+                         AND c.status='active' AND c.verification_status='positive'
+                         AND u.ban_status='normal'""", (individual_id,),
+                )}
+                created_for_individual = False
+                for row in rows:
+                    if con.execute(
+                        """SELECT 1 FROM claim_specification_source s JOIN claims c ON c.id=s.claim_id
+                           WHERE c.individual_id=? AND s.source_site='reverb'
+                             AND s.source_listing_id=?""",
+                        (individual_id, row["source_listing_id"]),
+                    ).fetchone():
+                        counts["skipped_existing"] += 1
+                        continue
+                    try:
+                        detail = json.loads(row["payload_json"])
+                    except (TypeError, ValueError):
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    if not isinstance(detail, dict):
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    items = {key: value for key, value in extract_specifications(detail).items()
+                             if key not in existing}
+                    if not items:
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    now = utcnow()
+                    cur = con.execute(
+                        """INSERT INTO claims (individual_id, author_user_id, claim_type,
+                              specification_kind, occurred_at, status, verification_status,
+                              created_at, updated_at)
+                           VALUES (?, ?, 'specification', 'specification', ?, 'active',
+                                   'positive', ?, ?)""",
+                        (individual_id, automation, row["occurred_at"] or
+                         row["fetched_at"], now, now),
+                    )
+                    claim_id = cur.lastrowid
+                    con.executemany(
+                        """INSERT INTO claim_spec_items
+                           (claim_id, field_name, value_text, created_at)
+                           VALUES (?, ?, ?, ?)""",
+                        [(claim_id, key, value, now) for key, value in items.items()],
+                    )
+                    con.execute(
+                        """INSERT INTO claim_specification_source
+                           (claim_id, source_site, source_listing_id, source_url,
+                            captured_at, extracted_json) VALUES (?, 'reverb', ?, ?, ?, ?)""",
+                        (claim_id, row["source_listing_id"], row["source_url"],
+                         row["fetched_at"], json.dumps(items, ensure_ascii=False)),
+                    )
+                    existing.update(items)
+                    created_for_individual = True
+                    counts["created"] += 1
+                    counts["items"] += len(items)
+                if created_for_individual:
+                    self._rebuild_individual_snapshot_in_connection(con, individual_id)
+        return counts
 
     def backfill_claim_source_evidence(self) -> dict[str, int]:
         """Copy legacy external listing provenance without altering Claims or snapshots.
@@ -5667,7 +5759,8 @@ class Repository:
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_site'
                             LIMIT 1
-                        ), (SELECT e.source_site FROM claim_source_evidence e
+                        ), (SELECT s.source_site FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_site FROM claim_source_evidence e
                             WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
                             ORDER BY e.id LIMIT 1), (SELECT o.source_site FROM observations o
                             WHERE o.id = c.observation_id)) AS source_site,
@@ -5677,7 +5770,8 @@ class Repository:
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_url'
                             LIMIT 1
-                        ), (SELECT e.source_url FROM claim_source_evidence e
+                        ), (SELECT s.source_url FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_url FROM claim_source_evidence e
                             WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
                             ORDER BY e.id LIMIT 1), (SELECT o.source_url FROM observations o
                             WHERE o.id = c.observation_id)) AS source_url,
@@ -5792,7 +5886,8 @@ class Repository:
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_listing_id'
                             LIMIT 1
-                        ), (SELECT e.source_listing_id FROM claim_source_evidence e
+                        ), (SELECT s.source_listing_id FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_listing_id FROM claim_source_evidence e
                             WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
                             ORDER BY e.id LIMIT 1)) AS source_listing_id,
                         (
