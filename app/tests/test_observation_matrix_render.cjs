@@ -29,11 +29,15 @@ const html = vm.runInContext('renderObservationMatrix', context)({
   },
 });
 assert.ok(html.indexOf('#1 · listing') < html.indexOf('#2 · specification'));
-assert.match(html, /matrix-adopted[^>]*>Gibson/);
-assert.match(html, /matrix-rejected[^>]*>Shop/);
+assert.match(html, /matrix-adopted[^>]*><span class="matrix-cell-value">Gibson/);
+assert.match(html, /matrix-rejected[^>]*><span class="matrix-cell-value">Shop/);
 assert.match(html, /matrix-unrelated">—/);
 assert.match(html, /&lt;unsafe>/);
 assert.match(html, /Current Guitar Individual/);
 assert.match(html, /Specification/);
 assert.match(html, /<tfoot>[\s\S]*空欄/);
+assert.match(html, /style="width:278px"/);
+assert.equal((html.match(/<col class="matrix-value-col">/g) || []).length, 3);
+assert.ok(html.indexOf('</tbody>') < html.indexOf('<tfoot>'));
+assert.match(page, /\.observation-matrix tfoot td\{position:static;bottom:auto/);
 console.log('observation matrix rendering: passed');
