@@ -60,6 +60,22 @@ main button:not(.detail-gallery-nav):not(.accordion-toggle){padding:5px 9px;font
 main .panel{padding:10px 12px}.domain-actions{gap:5px}.domain-actions.panel{padding:7px 10px!important}
 main .toolbar{gap:5px;margin-bottom:7px}main input,main select,main textarea{padding:6px 8px;font-size:12px}main .crawl-controls{gap:6px!important}
 .admin-user-form{gap:7px;margin-top:8px}.admin-user-form textarea{min-height:68px}
+#user-db .user-detail-list{grid-template-columns:minmax(0,1fr);gap:0}
+#user-db .user-detail-list .detail-meta-item{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:8px;min-height:26px;padding:3px 5px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+#user-db .user-detail-list .detail-meta-label{margin:0}
+#user-db .user-detail-header{gap:10px;margin-bottom:7px}
+#user-db .user-detail-header img{width:56px;height:56px;flex:0 0 auto}
+#user-db .user-header-text{min-width:0;display:grid;gap:1px;font-size:11px}
+#user-db .user-header-text strong{font-size:13px;color:var(--text)}
+#user-db .user-header-text span{color:var(--muted)}
+#user-db .admin-user-form{grid-template-columns:minmax(0,1fr);gap:0;margin-top:8px}
+#user-db .admin-user-form label{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:8px;min-height:29px;padding:2px 5px;border-bottom:1px solid var(--line)}
+#user-db .admin-user-form input,#user-db .admin-user-form select,#user-db .admin-user-form textarea{margin:0;min-width:0}
+#user-db .admin-user-form textarea{min-height:52px;resize:vertical}
+#user-db .admin-user-form label:has(textarea){align-items:start}
+#user-db .admin-user-form .toolbar{justify-content:flex-end;margin:7px 0 0}
+#user-db .user-detail-title{flex-wrap:wrap}
+#user-db .user-detail-title h2{flex:0 0 auto!important}
 main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14px) 22px 22px}
 .detail-shell{position:static;top:auto;right:auto;bottom:auto;width:auto;height:auto;z-index:auto;min-width:0}
 .detail-panel{height:auto;display:block;box-shadow:none}.detail-panel #detail{overflow:visible;padding:0}
@@ -152,10 +168,10 @@ Gibson ES-335</textarea>
 </section>
 <section class="console-domain" id="user-db" aria-labelledby="userHeading">
 <div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">ユーザーを検索して登録内容を確認</span></div>
-<div class="domain-actions panel"><span class="sub">操作用ユーザー</span><select id="activeUserSelect" style="width:auto;min-width:170px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()">このユーザーでTop Pageを開く</button><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
+<div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">GuestでTop Pageを開く</button><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
 <div class="domain-grid">
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
-<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">User Detail</h2></div><div id="accountPanel" class="sub">左のUsersから対象を選択してください。</div></div>
+<div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>このユーザーでTop Pageを開く</button></div><div id="accountPanel" class="sub">左のUsersから対象を選択してください。</div></div>
 </div>
 </section>
 </main>
@@ -377,18 +393,11 @@ let themeOptions=[];
 async function loadUsers(){
   if(!themeOptions.length)themeOptions=await jfetch('/api/themes');
   users=await jfetch('/api/users');
-  const select=document.getElementById('activeUserSelect');
   const saved=sessionStorage.getItem(ACTIVE_USER_KEY)||'';
-  select.innerHTML='<option value="">Guest</option>'+users.filter(u=>u.ban_status!=='ban').map(u=>'<option value="'+Number(u.id)+'">'+esc(u.display_name)+' (#'+Number(u.id)+')</option>').join('');
-  const target=users.some(u=>u.ban_status!=='ban'&&String(u.id)===saved)?saved:'';
-  select.value=target;
-  updateOpenTopButton();
-  if(target)await loadActiveUser();
-  else{activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY)}
   renderUserList();
   if(selectedUserId&&users.some(u=>Number(u.id)===selectedUserId))await showUserRecord(selectedUserId);
-  else if(target)await showUserRecord(Number(target));
-  else{selectedUserId=null;document.getElementById('accountPanel').textContent='左のUsersから対象を選択してください。'}
+  else if(users.some(u=>String(u.id)===saved))await showUserRecord(Number(saved));
+  else{selectedUserId=null;activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);updateOpenTopButton();document.getElementById('accountPanel').textContent='左のUsersから対象を選択してください。'}
 }
 function renderUserList(){
   const filter=document.getElementById('userFilter').value.trim().toLowerCase();
@@ -399,17 +408,26 @@ function renderUserList(){
 async function showUserRecord(id){
   selectedUserId=Number(id);
   renderUserList();
+  updateOpenTopButton();
   const panel=document.getElementById('accountPanel');
   panel.textContent='Loading...';
   try{
     const data=await jfetch('/api/users/'+selectedUserId);
     if(selectedUserId!==Number(id))return;
     const u=data.user,summary=data.summary||{};
+    if(u.ban_status==='ban'){
+      activeUser=null;
+      sessionStorage.removeItem(ACTIVE_USER_KEY);
+    }else{
+      activeUser=data;
+      sessionStorage.setItem(ACTIVE_USER_KEY,String(u.id));
+    }
+    updateOpenTopButton();
     const meta=[['User ID',u.id],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0]];
     if(!CONSOLE_ADMIN_TOKEN)meta.push(['Display Name',u.display_name],['Account Type',u.account_type],['BAN Status',u.ban_status||'normal'],['Country',u.location_country||'—'],['City / Region',u.location_region||'—'],['Bio',u.bio||'—'],...['birth','residence','bio','avatar'].map(key=>[key+' Visibility',u[key+'_visibility']||'—']),['Signature Guitar ID',u.signature_individual_id||'—'],['Theme',u.theme||'dark_default']);
     const guitars=data.guitars||[];
     panel.className='';
-    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
+    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><div class="user-header-text"><strong>'+esc(u.display_name)+'</strong><span>Account Type: '+esc(u.account_type)+'</span><span>BAN Status: '+esc(u.ban_status||'normal')+'</span></div></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
       (CONSOLE_ADMIN_TOKEN?'<form id="adminUserForm" class="admin-user-form" onsubmit="saveAdminUser(event,'+Number(u.id)+')">'+
         '<label>Display Name<input name="display_name" maxlength="120" required value="'+esc(u.display_name)+'"></label>'+
         '<label>Account Type<select name="account_type">'+['user','shop','builder','repairer','organization'].map(x=>'<option value="'+x+'"'+(u.account_type===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
@@ -424,6 +442,9 @@ async function showUserRecord(id){
         '<div class="toolbar"><button type="submit">Save User</button></div></form>':'')+
       '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'?prototype_user_id='+encodeURIComponent(sessionStorage.getItem(ACTIVE_USER_KEY)||'')+'" target="_blank" rel="noopener">User Profile</a></div>'+
       '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
+    if(selectedIndividualId)showIndividual(selectedIndividualId).catch(e=>{
+      document.getElementById('detail').textContent='Product Detail error: '+e.message;
+    });
   }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
 }
 async function saveAdminUser(event,id){
@@ -448,32 +469,27 @@ async function createUser(){
   try{
     const data=await jfetch('/api/users',{method:'POST'});
     const id=String(data.user.id);
-    sessionStorage.setItem(ACTIVE_USER_KEY,id);
     selectedUserId=Number(id);
     await loadUsers();
   }catch(e){alert('アカウント作成に失敗しました。\n'+e.message)}
 }
-async function setActiveUser(value){
-  if(value)sessionStorage.setItem(ACTIVE_USER_KEY,String(value));
-  else sessionStorage.removeItem(ACTIVE_USER_KEY);
-  updateOpenTopButton();
-  await loadActiveUser();
-  if(value)await showUserRecord(Number(value));
-  else if(selectedUserId)await showUserRecord(selectedUserId);
-  if(selectedIndividualId)await showIndividual(selectedIndividualId);
+function updateOpenTopButton(){
+  const selected=users.find(u=>Number(u.id)===selectedUserId);
+  document.getElementById('openUserTopBtn').disabled=!selected||selected.ban_status==='ban';
 }
-function updateOpenTopButton(){document.getElementById('openUserTopBtn').disabled=false}
 function openTopPageAsActiveUser(){
-  const id=document.getElementById('activeUserSelect').value;
-  if(id&&!users.some(user=>user.ban_status!=='ban'&&String(user.id)===id))return;
-  window.open('/user-view?prototype_user_id='+encodeURIComponent(id),'_blank','noopener');
+  const selected=users.find(user=>Number(user.id)===selectedUserId);
+  if(!selected||selected.ban_status==='ban')return;
+  window.open('/user-view?prototype_user_id='+encodeURIComponent(selected.id),'_blank','noopener');
+}
+function openTopPageAsGuest(){
+  window.open('/user-view?prototype_user_id=','_blank','noopener');
 }
 async function loadActiveUser(){
   const id=sessionStorage.getItem(ACTIVE_USER_KEY);
   if(!id){activeUser=null;return}
   try{activeUser=await jfetch('/api/users/'+encodeURIComponent(id))}
-  catch(e){activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);document.getElementById('activeUserSelect').value=''}
-  if(selectedUserId)await showUserRecord(selectedUserId);
+  catch(e){activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY)}
 }
 function renderAccount(){if(selectedUserId)showUserRecord(selectedUserId)}
 function activeUserOwns(individualId){

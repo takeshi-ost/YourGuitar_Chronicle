@@ -26,6 +26,7 @@
 ## Browser Console（ローカル管理）
 
 - Web Crawl / Guitar DB Management / User DB Managementを固定ヘッダーから移動する。Product DetailとUser Detailはページとともにスクロールする。
+- User DBのUsers一覧で選んだユーザーがBrowser Consoleの操作対象になり、User Detail見出し横からそのユーザーのTop Pageを開ける。GuestでのTop Page表示は別ボタンから開く。User Detailの編集欄は1行1項目とし、アイコン横に名前・アカウント種別・BAN状態を表示する。
 - Batch CrawlとIncremental Crawl、保存済み詳細の再判定、進捗・実行ログ、Claim migration / backfill、DB統計、バックアップ・復元・初期化を操作する。
 - 未承認Acquire欄は**承認するとCurrent Ownerが変わる可能性がある**Claimだけを列挙する。Repeated欄は**同じ正規化メーカーとシリアルを持つ複数のDB個体**の候補を表示し、残す個体を指定してMerge／Deleteする。
 - ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
