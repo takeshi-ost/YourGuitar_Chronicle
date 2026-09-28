@@ -37,13 +37,31 @@ def test_owner_claim_starts_positive(tmp_path: Path):
         if int(row["id"]) == claim_id
     )
     assert claim["verification_status"] == "positive"
-
     current = repository.list_current_specifications(individual_id)
     assert any(
         row["field_name"] == "finish" and row["value_text"] == "Sunburst"
         for row in current
     )
 
+
+def test_current_owner_can_verify_own_historical_acquire_and_release(tmp_path: Path):
+    repository, owner_id, _, individual_id, _ = _setup(tmp_path)
+    _, release_id = repository.create_ownership_claim(
+        owner_id, individual_id, ownership_kind="release", occurred_at="2026-02-01",
+    )
+    _, acquire_id = repository.create_ownership_claim(
+        owner_id, individual_id, ownership_kind="acquire", occurred_at="2026-03-01",
+    )
+    assert repository.set_claim_response(release_id, owner_id, "negative")
+    assert repository.set_claim_response(release_id, owner_id, "positive")
+    assert repository.set_claim_response(acquire_id, owner_id, "unverified")
+    assert repository.get_individual(individual_id)[0]["current_owner_user_id"] is None
+    try:
+        repository.set_claim_response(acquire_id, owner_id, "positive")
+    except ValueError as exc:
+        assert "current owner" in str(exc)
+    else:
+        raise AssertionError("Former owner verified an Acquire")
 
 def test_third_party_specification_requires_owner_positive(tmp_path: Path):
     repository, owner_id, other_id, individual_id, _ = _setup(tmp_path)

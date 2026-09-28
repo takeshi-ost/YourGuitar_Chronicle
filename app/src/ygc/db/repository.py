@@ -6040,49 +6040,21 @@ class Repository:
             ).fetchone()
             if not claim:
                 return False
-            if claim['admin_verification'] and not con.execute(
-                """SELECT 1 FROM user_guitars
-                   WHERE user_id=? AND individual_id=? AND ownership_status='current_owner'""",
-                (responder_user_id, claim['individual_id']),
-            ).fetchone():
-                raise ValueError('Only the current owner may change an administrator verification')
             if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
                                (responder_user_id,)).fetchone():
                 raise ValueError("Account is banned")
-            if int(claim["author_user_id"]) == int(responder_user_id):
-                raise ValueError(
-                    "Owner Verification is only for another user's Claim"
-                )
+            if claim["claim_type"] in ("listing", "identity_correction"):
+                raise ValueError("This Claim type does not use Owner Verification")
 
             is_former_owner_claim = (
                 claim["claim_type"] == "ownership"
                 and str(claim["ownership_source"] or "") == "former_owner"
-            )
-            is_automation_acquire = (
-                claim["claim_type"] == "ownership"
-                and claim["ownership_source"] in ("automation", "merged_listing")
             )
             is_manual_acquire = (
                 claim["claim_type"] == "ownership"
                 and claim["ownership_kind"] == "acquire"
                 and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
             )
-            is_manual_ownership = (
-                claim["claim_type"] == "ownership"
-                and claim["ownership_kind"] in ("acquire", "release", "transfer", "inherit")
-                and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
-            )
-            if (
-                claim["claim_type"] in (
-                    "ownership",
-                    "listing",
-                    "identity_correction",
-                )
-                and not (is_former_owner_claim or is_automation_acquire or is_manual_ownership)
-            ):
-                raise ValueError(
-                    "This Claim type does not use Owner Verification"
-                )
 
             owner = con.execute(
                 """
@@ -6098,8 +6070,10 @@ class Repository:
                 ),
             ).fetchone()
             if not owner:
+                if claim['admin_verification']:
+                    raise ValueError('Only the current owner may change an administrator verification')
                 raise ValueError(
-                    "Only the current owner can verify another user's Claim"
+                    "Only the current owner can verify this Claim"
                 )
 
             if is_former_owner_claim and claim["ownership_pair_id"]:

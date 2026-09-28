@@ -217,7 +217,7 @@ def test_competing_acquire_waits_for_owner_and_never_appears_owned_early(tmp_pat
     try:
         repo.set_claim_response(claim_id, claimant, 'positive')
     except ValueError as exc:
-        assert 'another user' in str(exc)
+        assert 'current owner' in str(exc)
     else:
         raise AssertionError('Claimant was able to self approve')
     assert repo.set_claim_response(claim_id, first_owner, 'positive')
@@ -260,9 +260,9 @@ def test_new_owner_can_verify_previous_owners_acquire_and_release(tmp_path):
     try:
         repo.set_claim_response(previous_acquire_id, first_owner, 'positive')
     except ValueError as exc:
-        assert 'another user' in str(exc)
+        assert 'current owner' in str(exc)
     else:
-        raise AssertionError('Former owner verified their own Acquire')
+        raise AssertionError('Former owner verified an Acquire')
 
 
 def test_former_owner_stays_former_when_new_acquire_is_pending(tmp_path):
