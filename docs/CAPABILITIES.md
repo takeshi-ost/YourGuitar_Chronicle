@@ -1,6 +1,6 @@
 # 現行機能と試作上の制約
 
-対象は現在のローカル試作 (`feature/user-profile-top-page`)。UIとAPIの機能を分けて記載する。新機能を追加・削除するときは本書も更新する。実際の本人確認や公開サーバー運用の保証は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に記した通り未実装。
+対象は現在のローカル試作 (`feature/observation-redesign`)。UIとAPIの機能を分けて記載する。新機能を追加・削除するときは本書も更新する。実際の本人確認や公開サーバー運用の保証は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に記した通り未実装。
 
 ## Top PageとUser Profile
 
@@ -11,7 +11,7 @@
 - Product ListとProduct Detailの♡／♥からお気に入りを追加・解除し、DBに保存する。User ChronicleはUser / Social / Product / Claim / Otherのタグ付き時系列表示。プロフィールの初期Product Detailには本人が指定したSignature Guitarを使用する。
 - User ProfileでClaimの追加・判定・投票を行うと、選択中のギターを維持してプロフィールの件数、Owned / Formerly Ownedなどの一覧、User Chronicleも再取得する。
 - Guestにはプロフィール画面でMembers onlyを表示する。これは現段階の画面上の挙動で、公開サーバー上での情報保護はまだ保証しない。
-- User SettingsはDisplay Name、Account Type、Residence、Bio、Avatar、Signature Guitar、Themeと項目別公開範囲を保存する。Display NameとAccount TypeはPublic固定、UserName、Email、Date of Birth、Preferred Languageは表示用のダミー欄で保存されない。試作中は入力の必須制約を課さない。
+- User SettingsはDisplay Name、Account Type、Date of Birth、Residence、Bio、Avatar、Signature Guitar、Themeと項目別公開範囲を保存する。Date of Birthは有効な過去・当日の日付を受け付け、公開範囲に従ってProfileとUser Chronicleへ表示する。Display NameとAccount TypeはPublic固定、UserName、Email、Preferred Languageは表示用のダミー欄で保存されない。Save成功時とCancel操作時はProfileに戻る。ギター追加は本人ProfileのOwned Guitars直下から行う。
 - 項目別公開範囲はPublic / Members / Followers / Private。Followersはフォロー関係未実装のためPrivateと同じ表示範囲。選択した公開範囲はDBに保存するが、ブラウザ指定の閲覧者IDと一部直接API・画像URLの制約があるため機密情報のアクセス制御とは扱えない。
 - 運営提供の13種類のテーマを設定できる。Top Page / Settingsには操作用ユーザー、User Profileにはプロフィールの持ち主のテーマを使う。管理用Browser Consoleはコンパクトな文字ヘッダー。詳細は [USER_THEMES.md](USER_THEMES.md)。
 
@@ -31,9 +31,10 @@
 - Batch CrawlとIncremental Crawl、保存済み詳細の再判定、進捗・実行ログ、Claim migration / backfill、DB統計、バックアップ・復元・初期化を操作する。
 - 未承認Acquire欄は**承認するとCurrent Ownerが変わる可能性がある**Claimだけを列挙する。Repeated欄は**同じ正規化メーカーとシリアルを持つ複数のDB個体**の候補を表示し、残す個体を指定してMerge／Deleteする。
 - ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
+- Authentication Testで接写・全体写真の2枚を一時アップロードし、ローカルOCR、単純画像の質感検査、知覚ハッシュ・局所特徴点照合を試せる。任意の個体IDのローカル保存画像とも比較する。個体認証・加工検出モデルは未搭載であり、Claimや所有状態には反映しない。追加依存関係と制約は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
 
 ## 未完成・サーバー移行前の要件
 
 - Identity Platformへの接続、サーバー側の本人確認、全APIの認可、管理者ロール、実際のログイン・アカウント作成。
 - SQLiteからPostgreSQLへの移植、複数インスタンス間のClaim更新とCrawlカーソル排他、画像の永続保存、トークンの安全な保管、再試行可能なジョブ実行。
-- フォロー関係、ユーザー間メッセージ、日英UI切替、生年月日の保存・検証、定期自動クロール。収集の実データでの網羅性・誤照合検証も継続課題。
+- フォロー関係、ユーザー間メッセージ、日英UI切替、定期自動クロール。収集の実データでの網羅性・誤照合検証も継続課題。

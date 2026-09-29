@@ -23,6 +23,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ygc import config
 
@@ -85,6 +86,51 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+
+
+@app.post("/api/admin/authentication-test")
+async def api_authentication_test(
+    request: Request,
+    serial_closeup: UploadFile = File(...),
+    guitar_overview: UploadFile = File(...),
+    challenge: str = Form(..., min_length=4, max_length=40),
+    serial: str = Form(..., min_length=1, max_length=160),
+    reference_individual_id: int | None = Form(None),
+) -> dict[str, Any]:
+    _require_console_admin(request)
+    from ygc.authentication_test import analyze_images, normalized
+    if len(normalized(challenge)) < 4 or not normalized(serial):
+        raise HTTPException(status_code=400, detail="Enter an alphanumeric challenge and serial")
+    contents = []
+    for upload in (serial_closeup, guitar_overview):
+        content = await upload.read(MAX_IMAGE_BYTES + 1)
+        if not content or len(content) > MAX_IMAGE_BYTES:
+            raise HTTPException(status_code=400, detail="Each image must be nonempty and 12 MB or smaller")
+        contents.append(content)
+    references = []
+    reference_note = "No existing guitar selected."
+    if reference_individual_id is not None:
+        repository = repo()
+        individual, _ = repository.get_individual(reference_individual_id)
+        if not individual:
+            raise HTTPException(status_code=404, detail="Reference guitar not found")
+        data_root = config.DATA_DIR.resolve()
+        for media in repository.list_media_assets(reference_individual_id):
+            path = (data_root / str(media["storage_path"])).resolve()
+            if path.is_relative_to(data_root) and path.is_file() and path.stat().st_size <= MAX_IMAGE_BYTES:
+                references.append((f"Media #{media['id']}", path.read_bytes()))
+                if len(references) == 5:
+                    break
+        reference_note = ("Comparing up to five locally stored images; remote Reverb images are not downloaded."
+                          if references else "This guitar has no readable local images. Remote Reverb images are not downloaded.")
+    try:
+        result = await run_in_threadpool(analyze_images, *contents, challenge, serial, references)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result["reference_note"] = reference_note
+    return result
 
 
 NO_PICTURE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="No picture">

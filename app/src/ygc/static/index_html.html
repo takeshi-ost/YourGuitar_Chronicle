@@ -136,7 +136,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
-<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav></header></div>
+<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#authentication-test">Authentication Test</a></nav></header></div>
 <main>
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
@@ -217,7 +217,28 @@ Gibson ES-335</textarea>
 <div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
 </section>
+<section class="console-domain" id="authentication-test" aria-labelledby="authenticationTestHeading">
+<div class="domain-heading"><h2 id="authenticationTestHeading">Authentication Test</h2><span class="sub">Local image evidence diagnostics</span></div>
+<div class="panel">
+<p class="sub">Generate test text before taking photos. Include the same paper in both images. Images are processed temporarily and are not saved to the DB. Results do not approve Claims or change ownership.</p>
+<div class="auth-test-fields">
+<label>Expected challenge text<div class="auth-test-inline"><input id="authChallenge" maxlength="40" placeholder="Text written on the paper"><button class="secondary" type="button" onclick="generateAuthenticationChallenge()">Generate</button></div></label>
+<label>Expected serial<input id="authSerial" maxlength="160" placeholder="Serial number"></label>
+<label>Reference guitar ID (optional)<div class="auth-test-inline"><input id="authReferenceId" type="number" min="1" placeholder="Local DB images"><button class="secondary" type="button" onclick="useAuthenticationReference()">Use selected guitar</button></div></label>
+</div>
+<div class="auth-test-images">
+<label>1. Serial close-up + paper<input id="authCloseup" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewAuthenticationImage(this,'authCloseupPreview')"><img id="authCloseupPreview" alt="Serial close-up preview" hidden></label>
+<label>2. Guitar overview + paper<input id="authOverview" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewAuthenticationImage(this,'authOverviewPreview')"><img id="authOverviewPreview" alt="Guitar overview preview" hidden></label>
+</div>
+<div class="toolbar"><button id="authAnalyzeButton" type="button" onclick="runAuthenticationTest()">Analyze images</button><span id="authTestStatus" class="sub" role="status"></span></div>
+<div id="authTestResults" aria-live="polite"></div>
+</div>
+</section>
 </main>
+<style>
+.auth-test-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.auth-test-fields label,.auth-test-images label{font-size:11px;color:var(--muted);min-width:0}.auth-test-fields input,.auth-test-images input{display:block;width:100%;margin-top:5px}.auth-test-inline{display:flex;align-items:center;gap:6px}.auth-test-inline input{min-width:0;flex:1}.auth-test-inline button{flex-shrink:0}.auth-test-images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.auth-test-images img{display:block;width:100%;height:230px;object-fit:contain;margin:8px 0;background:var(--bg);border:1px solid var(--line);border-radius:8px}.auth-test-images img[hidden]{display:none}#authTestResults pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px}#authTestResults td{white-space:normal;overflow-wrap:anywhere}#authTestResults .table-wrap{max-height:none}
+@media(max-width:800px){.auth-test-fields{grid-template-columns:1fr}}@media(max-width:560px){.auth-test-images{grid-template-columns:1fr}}
+</style>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
 <div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="document.getElementById('repeatedDialog').close()">Close</button></div>
@@ -249,6 +270,44 @@ localStorage.removeItem(ACTIVE_USER_KEY);
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function generateAuthenticationChallenge(){
+  const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=crypto.getRandomValues(new Uint8Array(8));
+  document.getElementById('authChallenge').value=Array.from(bytes,b=>alphabet[b%alphabet.length]).join('');
+}
+function useAuthenticationReference(){
+  document.getElementById('authReferenceId').value=selectedIndividualId||'';
+  const guitar=individuals.find(g=>Number(g.id)===Number(selectedIndividualId));
+  if(guitar)document.getElementById('authSerial').value=guitar.serial_number||'';
+}
+function previewAuthenticationImage(input,targetId){
+  const preview=document.getElementById(targetId);
+  if(preview.dataset.objectUrl)URL.revokeObjectURL(preview.dataset.objectUrl);
+  preview.hidden=!input.files.length;
+  if(input.files.length){const url=URL.createObjectURL(input.files[0]);preview.dataset.objectUrl=url;preview.src=url}
+  else{delete preview.dataset.objectUrl;preview.removeAttribute('src')}
+}
+async function runAuthenticationTest(){
+  const button=document.getElementById('authAnalyzeButton'),status=document.getElementById('authTestStatus'),output=document.getElementById('authTestResults');
+  const closeup=document.getElementById('authCloseup').files[0],overview=document.getElementById('authOverview').files[0];
+  const challenge=document.getElementById('authChallenge').value.trim(),serial=document.getElementById('authSerial').value.trim();
+  if(!closeup||!overview||!challenge||!serial){status.textContent='Select both images and enter the challenge text and serial.';return}
+  if([closeup,overview].some(image=>image.size>12*1024*1024)){status.textContent='Each image must be 12 MB or smaller.';return}
+  button.disabled=true;status.textContent='Analyzing images...';output.innerHTML='';
+  try{
+    const data=new FormData();data.append('serial_closeup',closeup);data.append('guitar_overview',overview);data.append('challenge',challenge);data.append('serial',serial);
+    const reference=document.getElementById('authReferenceId').value;if(reference)data.append('reference_individual_id',reference);
+    const result=await jfetch('/api/admin/authentication-test',{method:'POST',body:data});
+    const row=(a,b,c)=>'<tr><td>'+esc(a)+'</td><td>'+esc(b)+'</td><td>'+esc(c)+'</td></tr>';
+    const percentage=value=>value==null?'Not measurable':value+'%';
+    let rows=result.images.map(image=>row(image.image,'Challenge: '+image.challenge.status+' / Serial: '+image.serial.status,'OCR: '+(image.ocr.text||image.ocr.reason||'No text read'))+row(image.image+' texture',image.texture.screening||image.texture.status,'Non-text entropy: '+(image.texture.non_text_entropy_bits??'—')+' bits / Flat area: '+percentage(image.texture.flat_area_percent))).join('');
+    const comparison=(label,c)=>row(label,'Photo hash similarity: '+percentage(c.phash_similarity_percent),'Feature support: '+percentage(c.feature_support_percent)+' / Geometric matches: '+c.geometric_inliers+' / '+c.status);
+    rows+=comparison('Between submitted images',result.between_submitted_images);
+    for(const reference of result.reference_comparisons){rows+=reference.overview?comparison(reference.reference+' vs overview',reference.overview)+comparison(reference.reference+' vs close-up',reference.closeup):row(reference.reference,reference.status,'')}
+    rows+=row('Individual identity',result.guitar_identity.status,result.guitar_identity.reason)+row('Forgery detection',result.forgery_detection.status,result.forgery_detection.reason);
+    output.innerHTML='<div class="table-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Details</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="sub">'+esc(result.reference_note)+' '+esc(result.decision)+' Whole-image feature scores can include the paper, text, and background.</p><details><summary>Raw diagnostic data</summary><pre>'+esc(JSON.stringify(result,null,2))+'</pre></details>';
+    status.textContent='Analysis complete. No data was registered.';
+  }catch(error){status.textContent=error.message}finally{button.disabled=false}
+}
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
 statCard('Registered Guitars',s.individuals,'Total guitars in the DB, including user and crawl registrations.'),statCard('Serial Listings',s.serial_observations,'External Listings linked to guitars with serial numbers. Duplicate site and Listing ID pairs are excluded. Includes relistings represented by Acquire and pending owner confirmation.'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'Groups of DB guitars with the same maker and serial. Select to inspect, merge, or delete.')+'</button>'
