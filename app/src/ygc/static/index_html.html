@@ -126,7 +126,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 #adminClaimPopup{position:fixed;inset:0;z-index:1001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}#adminClaimPopup.open{display:flex}#adminClaimPopupContent{width:min(480px,100%);max-height:calc(100vh - 32px);overflow:auto}#adminClaimPopupContent .claim-card{margin:0}
 @media(max-width:900px){main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{height:auto;margin:0}.stats-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats-columns{grid-template-columns:1fr}#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
-<script src="/assets/product-detail.js?v=album-frame" defer></script>
+<script src="/assets/product-detail.js?v=album-reverb-link" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -761,7 +761,7 @@ async function showIndividual(id){
   }else if(listing&&listing.image_url){
     const listingUrl=String(listing.source_url||'');
     const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(listingUrl)out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" role="button" aria-label="Open photo album">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>';
+    if(listingUrl)out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>';
     else out+=image+'<span class="detail-source">Listing Claim</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';

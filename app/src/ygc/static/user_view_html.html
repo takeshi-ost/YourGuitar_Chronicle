@@ -268,7 +268,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
 <link rel="stylesheet" href="/assets/themes.css">
-<script src="/assets/product-detail.js?v=album-frame" defer></script>
+<script src="/assets/product-detail.js?v=album-reverb-link" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -1332,7 +1332,7 @@ async function showIndividual(id,fromList=false){
   }else if(imageListing){
     const imageUrl=String(imageListing.source_url||'');
     const image='<img class="detail-image" src="'+esc(imageListing.image_url)+'" alt="'+esc(imageListing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" role="button" aria-label="Open photo album">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(imageListing.source_site||'Source'))+'</a></span>';
+    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(imageListing.source_site||'Source'))+'</a></span>';
     else out+=image+'<span class="detail-source">Listing Claim</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';

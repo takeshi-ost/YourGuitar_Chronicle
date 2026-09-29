@@ -138,7 +138,8 @@ window.YGCImageAlbum = (() => {
 
   const style = document.createElement('style');
   style.textContent = `
-    #detail .detail-gallery,#detail .detail-image-link,#detail .detail-image:not(.detail-gallery .detail-image):not(.detail-image-link .detail-image){cursor:zoom-in}
+    #detail .detail-gallery,#detail .detail-image:not(.detail-gallery .detail-image):not(.detail-image-link .detail-image){cursor:zoom-in}
+    #detail .detail-image-link{cursor:pointer}
     #detail .detail-gallery-nav{cursor:pointer}
     #detail .detail-gallery:focus-visible,#detail .detail-image-link:focus-visible,#detail .detail-image:focus-visible{outline:2px solid var(--accent,#d0a45d);outline-offset:3px}
     .ygc-album-backdrop{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:clamp(12px,2.5vw,32px);background:rgba(0,0,0,.88)}
@@ -164,17 +165,15 @@ window.YGCImageAlbum = (() => {
     if (event.target.closest('.detail-gallery-nav')) return false;
     const detail = event.target.closest('#detail');
     if (!detail) return false;
+    if (event.target.closest('.detail-image-link')) return false;
     const gallery = event.target.closest('.detail-gallery');
     if (gallery) {
       if (typeof window.openProductAlbum === 'function') window.openProductAlbum();
       return true;
     }
-    const frame = event.target.closest('.detail-image-link, .detail-image');
+    const frame = event.target.closest('.detail-image');
     if (!frame) return false;
-    const image = frame.matches('img') ? frame : frame.querySelector('img');
-    if (!image) return false;
-    const source = frame.closest('.detail-image-link') ? 'Listing Image' : (image.alt || 'Guitar image');
-    open([{url: image.currentSrc || image.src, label: source}], 0, frame);
+    open([{url: frame.currentSrc || frame.src, label: frame.alt || 'Guitar image'}], 0, frame);
     return true;
   }
   document.addEventListener('click', event => {
