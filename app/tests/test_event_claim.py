@@ -83,3 +83,26 @@ def test_event_claim_validates_tag_and_detail(tmp_path: Path):
         assert "detail" in str(exc)
     else:
         raise AssertionError("Empty Event detail must be rejected")
+
+
+def test_event_images_are_evidence_on_the_same_claim(tmp_path: Path):
+    repository = Repository(tmp_path / "event-images.db")
+    repository.init_db()
+    user_id = repository.create_user("Owner")
+    individual_id, _, _, _ = repository.create_initial_listing_claim(
+        user_id, manufacturer="Fender", model="Mustang",
+        serial_number="EVT-003", media_storage_path="media/base.jpg",
+        occurred_at="2026-01-01",
+    )
+    claim_id = repository.create_event_claim(
+        user_id, individual_id, event_kind="performance",
+        occurred_at="2026-04-01", detail="At the concert",
+        media_items=[{
+            "storage_path": "media/concert.jpg",
+            "original_filename": "concert.jpg",
+            "mime_type": "image/jpeg",
+        }],
+    )
+    attached = repository.list_claim_media_assets(individual_id)
+    assert any(int(row["claim_id"]) == claim_id and row["storage_path"] == "media/concert.jpg" for row in attached)
+    assert sum(int(row["id"]) == claim_id for row in repository.list_claims(individual_id)) == 1

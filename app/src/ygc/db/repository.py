@@ -4831,7 +4831,13 @@ class Repository:
         event_kind: str,
         occurred_at: str | None = None,
         detail: str | None = None,
+        media_items: list[dict[str, str | None]] | None = None,
     ) -> int:
+        media_items = media_items or []
+        if len(media_items) > 10:
+            raise ValueError("An Event Claim can contain up to 10 images")
+        if any(not str(item.get("storage_path") or "").strip() for item in media_items):
+            raise ValueError("storage_path is required")
         kind = event_kind.strip().lower()
         if kind not in (
             "exhibition",
@@ -4919,6 +4925,26 @@ class Repository:
                 ),
             )
             claim_id = int(cur.lastrowid)
+
+            for item in media_items:
+                cur = con.execute(
+                    """
+                    INSERT INTO media_assets (
+                        individual_id, uploader_user_id, media_type,
+                        storage_path, original_filename, mime_type,
+                        captured_at, created_at, updated_at
+                    ) VALUES (?, ?, 'image', ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        individual_id, user_id, str(item["storage_path"]).strip(),
+                        item.get("original_filename"), item.get("mime_type"),
+                        event_date, now, now,
+                    ),
+                )
+                con.execute(
+                    "INSERT INTO claim_evidence (claim_id, media_asset_id, created_at) VALUES (?, ?, ?)",
+                    (claim_id, int(cur.lastrowid), now),
+                )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,

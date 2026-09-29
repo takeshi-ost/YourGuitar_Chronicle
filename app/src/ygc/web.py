@@ -2606,6 +2606,60 @@ def api_event_claim(
     return {"claim_id": claim_id}
 
 
+@app.post("/api/individuals/{individual_id}/event-claim-with-media")
+async def api_event_claim_with_media(
+    individual_id: int,
+    user_id: int = Form(...),
+    event_kind: str = Form(...),
+    occurred_at: str | None = Form(None),
+    detail: str = Form(...),
+    images: list[UploadFile] = File(...),
+) -> dict[str, Any]:
+    if not images or len(images) > 10:
+        raise HTTPException(status_code=400, detail="Select 1 to 10 images")
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    stored_paths: list[Path] = []
+    media_items: list[dict[str, str | None]] = []
+    try:
+        for image in images:
+            content_type = (image.content_type or "").lower()
+            extension = ALLOWED_IMAGE_TYPES.get(content_type)
+            if not extension:
+                raise HTTPException(status_code=400, detail="Images must be JPEG, PNG, WebP, or GIF")
+            image_bytes = await image.read(MAX_IMAGE_BYTES + 1)
+            if not image_bytes:
+                raise HTTPException(status_code=400, detail="Image is empty")
+            if len(image_bytes) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="Each image must be 12 MB or smaller")
+            stored_name = uuid.uuid4().hex + extension
+            stored_path = MEDIA_DIR / stored_name
+            try:
+                stored_path.write_bytes(image_bytes)
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail="Could not save image") from exc
+            stored_paths.append(stored_path)
+            media_items.append({
+                "storage_path": (Path("media") / stored_name).as_posix(),
+                "original_filename": image.filename,
+                "mime_type": content_type,
+            })
+        repository = repo()
+        claim_id = repository.create_event_claim(
+            user_id, individual_id, event_kind=event_kind,
+            occurred_at=occurred_at, detail=detail, media_items=media_items,
+        )
+        repository.create_claim_notification(claim_id)
+    except ValueError as exc:
+        for path in stored_paths:
+            _safe_unlink(path)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        for path in stored_paths:
+            _safe_unlink(path)
+        raise
+    return {"claim_id": claim_id}
+
+
 @app.post("/api/individuals/{individual_id}/incident-claim")
 def api_incident_claim(
     individual_id: int,

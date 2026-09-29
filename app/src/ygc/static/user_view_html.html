@@ -420,6 +420,10 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <label class="form-label" for="eventClaimDetail">Detail</label>
         <textarea id="eventClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
       </div>
+      <div class="form-row full">
+        <label class="form-label" for="eventClaimImages">Images (optional, up to 10)</label>
+        <input id="eventClaimImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeEventClaim()">Cancel</button>
@@ -1448,6 +1452,7 @@ function openEventClaim(individualId){
   document.getElementById('eventClaimKind').value='exhibition';
   document.getElementById('eventClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('eventClaimDetail').value='';
+  document.getElementById('eventClaimImages').value='';
   document.getElementById('eventClaimModal').classList.add('open');
 }
 function closeEventClaim(event){
@@ -1457,9 +1462,25 @@ function closeEventClaim(event){
 async function submitEventClaim(){
   const detail=document.getElementById('eventClaimDetail').value.trim();
   if(!detail){alert('Enter a detail.');return;}
+  const images=Array.from(document.getElementById('eventClaimImages').files||[]);
+  if(images.length>10){alert('Choose up to 10 images.');return;}
+  for(const image of images){
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){alert('Choose a JPEG, PNG, WebP, or GIF image.');return;}
+    if(image.size>12*1024*1024){alert('Each image must be 12 MB or less.');return;}
+  }
   const button=document.getElementById('eventClaimSubmit');button.disabled=true;
   try{
-    await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
+    if(images.length){
+      const form=new FormData();
+      form.append('user_id',String(activeUser.user.id));
+      form.append('event_kind',document.getElementById('eventClaimKind').value);
+      form.append('occurred_at',document.getElementById('eventClaimDate').value||'');
+      form.append('detail',detail);
+      images.forEach(image=>form.append('images',image));
+      await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim-with-media',{method:'POST',body:form});
+    }else{
+      await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
+    }
     closeEventClaim();await showIndividual(selectedIndividualId);
   }catch(e){alert('Event Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
