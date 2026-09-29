@@ -37,8 +37,8 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
             html = client.get(page).text
             assert html.count('src="/assets/logos/your-guitar-chronicle.png"') == 1
         console = client.get('/').text
-        assert '<a class="brand-link" href="/user-view">Your Guitar Chronicle</a>' in console
-        assert 'brand-logo-' not in console
+        assert console.count('src="/assets/logos/your-guitar-chronicle.png"') == 1
+        assert 'brand-logo-script' not in console
         for key, _ in THEMES[1:]:
             assert f':root[data-theme="{key}"]' in stylesheet.text
         for filename in ('butterscotch-wood.webp', 'cherry-wood.webp', 'white-pearl.webp'):
