@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from ygc.db.repository import Repository, utcnow
+from ygc.db.source_records import known_listing_ids
 from ygc.extractors.normalization import (
     normalize_manufacturer, normalize_model, normalize_serial,
 )
@@ -19,8 +20,7 @@ def stage_candidate(repository: Repository, claim: dict, provenance: dict) -> bo
             not normalize_serial(claim.get("serial_number"))):
         return False
     with repository.connect() as con:
-        if con.execute("SELECT 1 FROM observations WHERE source_site='reverb' AND source_listing_id=?",
-                       (listing_id,)).fetchone():
+        if known_listing_ids(con, 'reverb', [listing_id]):
             return False
         con.execute(
             """INSERT INTO crawl_candidates
@@ -94,7 +94,7 @@ def reconcile_candidates(repository: Repository, progress_callback=None) -> dict
                 progress_callback(index, len(rows), dict(counts))
             continue
         # persist_reverb_listing_claim performs a final duplicate check and writes
-        # the Observation and Claim atomically. A crash before status update is safe.
+        # the Claim and Evidence atomically. A crash before status update is safe.
         try:
             result = repository.persist_reverb_listing_claim(claim, provenance)
         except ValueError as exc:

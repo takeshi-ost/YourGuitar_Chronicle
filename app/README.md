@@ -13,6 +13,8 @@ python -m pip install -e '.[dev]'
 python -m pytest -q
 ```
 
+フロントエンドの回帰テストはNode.jsで実行する。リポジトリ直下で `node --test app/tests/*.cjs` を実行する。PythonとJavaScriptのテストはいずれもReverbトークンを必要としない。
+
 macOSはリポジトリ直下の `start_webui.command`、Windowsは `start_webui.bat` でも起動できる。手動起動は次の通り。
 
 ```bash
@@ -32,6 +34,14 @@ Reverb Personal Access Tokenを読み取りに必要な最小権限で用意し�
 - CLIで1ステップ進める場合は `ygc crawl-step --category electric --year-min 1950 --year-max 1980`。
 
 収集の条件・再開・統計の定義は [incremental-crawl.md](../docs/incremental-crawl.md)。古いDBは収集前に `ygc claim-status` でreadinessを確認し、必要ならバックアップ後 `ygc migrate-claims` を実行する。管理画面のDB初期化・復元操作はバックアップを確認してから行う。`ygc init-db` は既存DBの初期化・互換列追加を行う。
+
+現在値は共通Observation評価器から生成する。`ygc audit-observation-migration --sample-limit 20` は保存済みSnapshotと再評価結果、掲載・取得日のEvidence欠損を読み取り専用で照合する。`claim-status` は起動時のスキーマ更新を含むため、完全な読み取り専用監査とは異なる。旧DBのEvidence複写と互換処理の整理手順は [Observation移行の残作業](../docs/TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照。
+
+`ygc show ID` はClaimによる来歴を表示する。旧履歴オプションは廃止済み。個体詳細APIは旧 `observations` を返さず、作成APIは旧Observation IDの代わりにClaim IDを返す。Claim編集は旧履歴に同期しない。
+
+未登録クロール記録は、バックアップ後に `ygc archive-unregistered-crawl` で全列を専用保管先へ複写できる。元行の削除・上書きは行わず、不一致時は複写全体を取り消す。まずDBコピーで確認する。保管先には期限を設けず、元行がなくても既知Listing判定と公開状態確認に使用できる。
+
+新規の未登録記録は `crawl_unregistered_records` に入力全体を保存し、旧Observationを作成しない。`ygc stats` は旧行数ではなく、既知外部掲載数・シリアル付き登録掲載数・その比率を表示する。詳細な集計定義と旧APIの撤去内容は上記の移行文書を参照。
 
 ## ローカルデータと設定
 

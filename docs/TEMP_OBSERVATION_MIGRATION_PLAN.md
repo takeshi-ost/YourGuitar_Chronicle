@@ -1,116 +1,102 @@
-# 一時作業計画：Observationを個体単位の調停層に改修する
+# Observation移行の完了範囲と残作業
 
-> **状態：段階Dの切替中。個体Snapshotの書込経路を個体単位Observation評価器へ統一。旧掲載行の記録・互換参照は残存。** この文書は現行コードの説明ではなく、合意済みの目標、実装順序、検証条件、残る判断をまとめる。改修完了と検証後に削除する。現行動作は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) とコードを参照。作業中に決定が変わった場合はこの計画を先に更新する。
+**2026-09-30更新。共通Observation評価器への切替は完了し、`main`へ統合済み。旧テーブルの互換処理は整理中。** この文書は残作業と撤去条件を管理する一時計画であり、現行仕様は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) を参照する。初期の段階A〜Dの計画・経緯はGit履歴に残る。下記の撤去条件を満たして整理が完了した時点で、必要な運用説明を現行文書へ移し、この計画書を削除する。
 
-2026-09-28 時点：Claimに紐付く掲載Evidenceテーブル、既存掲載の冪等な複写CLI、新規掲載と再掲載の同時保存、読み取り専用の個体単位評価器・管理画面診断を実装した。付属旧テストDBの316個体で、旧Claimの項目を補完した後に新評価と保存値が一致。稼働DB全体の照合、各入口の切替、旧Observation参照の撤去は未実施。再掲載の観測日を実際の取得日として扱うべきかは未決定で、現在のEvidenceは `date_basis=observed_at` と明記している。
+## 完了していること
 
-同日追記：新規のユーザーAcquireに明示的な取得日と `acquisition_date` Evidenceを必須化。既存ユーザーAcquireの記録済み日付は別の冪等複写で移し、欠損時は補完せず件数を返す。他ユーザーの現OwnerがいるAcquireは確認待ちとし、その間は所有一覧へ載せない。現Ownerによる承認後に反映し、同日の所有イベントはClaim IDで整列する。通常操作で現Ownerの承認済みAcquireの自己無効化を防ぐ。これらは旧Snapshot更新器との並走期間の限定的な入口修正であり、評価器への全面切替ではない。
+- Listing / 再掲載Acquireの外部掲載根拠を `claim_source_evidence` に保存し、ユーザーAcquireには明示的な取得日Evidenceを必須化した。旧記録の複写は冪等な移行CLIで行う。
+- 個体Snapshotの書込経路は `_rebuild_individual_snapshot_in_connection` から共通の `evaluate_observation` を呼ぶ。ClaimとEvidenceから採用値を算出し、Individualとユーザーの所有分類に反映する。旧Snapshot評価処理との並走期間は終了した。
+- 判定は発生日の日付順、同日はClaim IDの昇順。時刻や提出順だけで過去の出来事を後日の所有状態に優先させない。Claim一覧とObservationマトリクスも同日のID順を使う。
+- Current Ownerだけが他ユーザーの対象Claimを判定できる。第三者Acquireは承認待ちとし、承認によってOwnerと判定権限が移る。自己判定は禁止。通常操作と管理者の強制判定は別経路としてテストしている。
+- Browser ConsoleのObservation decisionは読み取り専用のClaim×項目マトリクスで、採用根拠と保存値との差を示す。
+- Product Detailの掲載画像・出典はClaim Evidenceを優先する。アップロード画像はClaimに紐付くメディアから表示する。
+- 使用されなくなった旧Observationカード、旧Owner表示関数、画面内の旧Observation保持変数・スタイルを撤去した。
+- 個体詳細APIの旧 `observations` 返却・旧履歴オプションと、作成APIの旧Observation IDフィールドを撤去した。CLIの `ygc show ID` はClaimだけを表示し、`--legacy-observations` は廃止した。
+- クロールの既知Listing判定・公開状態確認は共通のEvidence優先読取に切り替えた。未移行・未登録の旧行をフォールバックとして保持し、同じ掲載を二重計上しない。無効化・BAN済みClaimの掲載も再収集の対象に戻さない。
+- 個体に登録する外部Listing／再掲載Acquireと、手動Listing・Ownership・Former Ownerの旧行への二重書込を停止した。Claim・必要なEvidence・画像・Snapshotを同一トランザクションで保存し、APIはClaim IDを返し、旧Observation IDは返さない。Repository内部の戻り値のみ、段階的整理のため空の互換値を維持する。
+- 新規の未登録クロール記録は `crawl_unregistered_records` に保存する。Claim情報と出典情報の入力全体をJSONで残し、取得日時・Listing ID・URL・未登録理由も保持する。期限や自動削除は設けない。作成結果の `crawl_record_id` はこの記録のIDで、Individual・Claim・旧Observationは作成しない。
+- 現行統計に `external_listing_sources`（重複を除く既知外部掲載数）、`registered_serial_listings`（有効なClaimに結び付くシリアル付き掲載数）、`serial_listing_coverage_percent`（後者÷前者）を追加した。既知掲載数には非活性Claimの出典・未登録記録も含む。この比率は全検索結果の抽出成功率ではない。CLIとAPIは新指標を使い、旧行数と旧抽出率の統計フィールドは撤去した。
+- Claim編集はClaimと取得日Evidenceを更新し、旧履歴行は変更しない。新規OwnershipのPrevious owner入力は `claims.previous_owner_text` に保存する。過去の入力がある旧行は保持し、推測による自動変換や削除はしない。
+- New Discovery、掲載数、未承認Acquireの出典、保存済み詳細からの仕様バックフィルをEvidence優先に変更した。旧移行形式の画像URLもEvidenceから取得する。Repeatedの `listing_count` はListingと外部再掲載Acquire（Automation／Merge由来）のClaim数とし、手動Ownershipの互換行は数えない。
+- 未登録クロール記録の全列を複写する `ygc archive-unregistered-crawl` と、期限なしの `legacy_crawl_archive` を追加した。本文・画像URL・抽出結果・日時・元のIDに加え、追加列もJSONで保持し、SHA-256と元行の一致を確認する。元行の削除や上書きは行わない。保管後に内容が変わった場合は全複写をロールバックし、不一致を報告する。
 
-同日追記：クロール再掲載によるAutomation AcquireのOwner / Location再構築、掲載終了の判定、登録済みListingの重複判定は掲載Evidenceを優先して参照する。Evidence移行前のDBや未登録のクロール行については旧記録への読取フォールバックを残す。旧掲載行が削除されても再掲載Claimの現在値再構築、同一掲載IDの冪等判定、公開終了Claimの根拠参照が可能なケースをテストで確認した。
+## 監査結果とその範囲
 
-実DB切替前の監査：DBと画像をバックアップしてから、更新済みアプリで `ygc migrate-claim-evidence` を一度実行し、`ygc audit-observation-migration --sample-limit 20` で全個体の旧Snapshotと新評価を読み取り専用で照合する。後者は既存DBを作成・更新せず、差分件数・項目・個体IDの標本、Evidence欠損数のみ出力する。テスト用DBでは一致しているが、稼働DBの照合結果が得られるまで全面切替を行わない。
+| 確認 | 個体数 | 現在値の差分 | 評価エラー | 掲載Evidence欠損 | ユーザー取得日Evidence欠損 | 個体未登録の旧クロール行 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026-09-28 切替前のユーザー報告 | 465 | 0 | 0 | 0 | 0 | 1,628 |
+| 2026-09-30 手元の `app/data/chronicle.db` を読み取り専用で再監査 | 587 | 0 | 0 | 0 | 0 | 1,628 |
 
-2026-09-28 実DB照合結果（ユーザー報告）：掲載Evidence 466件、ユーザー取得日Evidence 8件を複写、競合／欠損0。465個体すべてで新旧現在値一致、評価エラー0、個体未登録の旧クロール行1628件は保持。これを根拠に `_rebuild_individual_snapshot_in_connection` を共通Observation評価器の結果を保存する方式へ切り替えた。Product Detailの画像とClaim掲載出典はClaim Evidenceを優先する。旧テーブルのクロール記録や書込・読取の互換経路は段階Eまで残す。
+9月28日の移行では掲載Evidence 466件、取得日Evidence 8件を複写したとの報告がある。9月30日はデータの書換え・複写を行わず、`Repository.audit_observation_migration`で確認した。
 
-## 1. 目標と変更しない原則
+この監査は保存済みの識別・Finish・Owner・Locationと共通評価器の結果、および所定のEvidence欠損を照合する。全画像ファイルの復元、クロール再開位置の移行、すべての表示/APIの互換性を保証するものではない。587個体はこの時点の手元DBの件数であり、Git管理の旧テストDBや将来の稼働DBの件数ではない。
 
-```text
-Guitar Individual (1) ── (1) Observation [個体のClaim調停機構]
-                                  └── (N) Claim ── (0..N) Evidence
+検証専用のDBコピーでは、移行済み外部掲載の旧行589件を除去して、587個体のSnapshot、既知Listing 2,217件、掲載数589件、未承認Acquire、Repeated、新着表示の一致を確認した。Claimの旧参照IDが空になる点を除きClaim表示も一致し、監査差分・エラー・Evidence欠損は0だった。バックアップを別DBへ復元し、起動処理後の統計と監査も確認済み。実DBからの削除は行っていない。
 
-Crawl records [一覧・詳細の取得と調査済み履歴] → 該当するClaimのEvidence
-```
+未登録記録についても別のDBコピーで1,628件を保管し、全列の一致を確認した。元行がある間は重複計上しない。コピー内だけで保管済み元行を除いた後も既知Listing 2,217件は出典・日時まで一致し、残る全テーブル（候補、進捗、公開状態確認、Claim、個体等）は不変だった。587個体の監査差分・エラー・Evidence欠損は0。SQLiteバックアップからの復元と複写の再実行も確認した。
 
-- Guitar Individualは個体の親レコード。Current Ownerを含む検索・表示用の現在値はObservationの調停結果から作り、直接の意味情報更新は行わない。
-- 新Observationは個体と一対一（または個体内部の評価機構）で、複数Claimの優先順・採否から現在値を算出する。**掲載やユーザー操作ごとにObservationを増やさない**。過去の調停結果を履歴テーブルへ蓄積しない。
-- Claimが変更の主張を表し、Evidenceがその根拠を表す。Listingと再掲載によるAcquireの掲載ID、URL、取得日時、元データは**それぞれのClaimのEvidence**。Claim・承認状態・管理操作の既存履歴は保持する。
-- 初回掲載はListing Claim。別IDで再掲載された同一個体は既存の同一個体判定に従ってAcquire Claimを追加し、掲載Evidenceを付ける。曖昧な一致は自動統合せずreviewに保持する。
-- Current Ownerは独立した管理設定ではない。Observationが採用したClaimから決まる。Current Ownerに他ユーザーのClaimを判定する権限が伴う。現Ownerがいる場合、他ユーザーのAcquireはそのOwnerがPositiveとするまで所有者を変更しない。
-- Owner不在のAcquireは必要なEvidenceがあれば自動でPositive。現段階でAcquireに必須とするEvidence条件は**取得日の記載**。証明資料の要否・強度は後日設計する。
-- 取得日を持たないAcquireは新規作成させない。取得日を古い順に、同日のClaimは**Claim IDの小さい順**に評価する。先に提出され自動承認されたOwner不在のAcquireがOwnerを確立したら、後続の他ユーザーのAcquireは新Ownerの判定対象になる。
-- 取得日と提出日時は別。後から追加した過去日付のAcquireは全Claimを同じ評価器で再評価し、後日に有効な所有イベントを登録順だけで覆さない。
-- Owner本人による自己のOwner設定ClaimのNegative／inactive化は通常操作では認めない。管理者の削除・強制判定・BANによる特殊ケースは今回の通常フローの確定範囲外とし、Browser Consoleの診断・管理方針で別途扱う。管理者の判定後もOwnerの再判定を許す方針。
+2026-09-30（JST）、手元の実DBにもスキーマ追加と未登録1,628件の保管を適用した。適用前のDBと画像4件を `app/data/migration-backups/20260929T164324Z/before-migration.zip` に保存し、アプリのバックアップ検証処理で展開・画像参照とファイルの一致を確認した。適用後も既存全テーブルの既存列・全行が不変で、587個体の監査差分・評価エラー・Evidence欠損は0。旧履歴2,235行は削除せず保持している。バックアップはGit対象外。旧API撤去後のPythonテスト206件とブラウザ確認も成功した。
 
-## 2. 現行コードとの差分と影響点
+手動二重書込停止後はPythonテスト205件が成功。ブラウザで手動登録・画像表示・Release後のOwned / Formerly Owned更新を確認した。DBコピーの起動時更新を2回実行し、既存587個体・647 Claimの既存列・旧履歴2,235行が不変であることを確認した。同じコピーで新規手動登録とAcquire承認による所有者移転を行っても旧行は増えず、追加後588個体の監査差分・評価エラー・Evidence欠損は0だった。
 
-| 現行 | 改修後に必要な扱い | 主な場所 |
-| --- | --- | --- |
-| `observations` は掲載等ごとに1行、`claims.observation_id` はnullable | 旧テーブルを当面残し、掲載出典をEvidenceへ移す。新Observationは個体一対一の評価器／評価結果とする | `db/schema.sql`, `db/repository.py` |
-| Claimを直接走査してIndividual Snapshotを再構築 | 共通のObservation評価器が候補状態と採否理由を返し、その結果をIndividualへ反映 | `_rebuild_individual_snapshot_in_connection` と全呼出元 |
-| Automation AcquireのOwner・Locationは旧Observationの列を直接参照 | Claimと掲載Evidenceだけから再現できるよう移す。旧データの値を失わない | `persist_reverb_listing_claim`, Owner評価, `record_reverb_unavailable` |
-| `claim_evidence` は主に画像との紐付け | 画像Evidenceを保持しつつ、外部掲載・取得日のEvidenceを追加。URLやListing IDの一意性も担保 | `media_assets`, Evidenceスキーマ、API |
-| クロールの既知Listing、公開確認、統計は旧 `observations` を参照 | Evidence／クロール記録の適切な保存先に移す。初回・再掲載双方を同じsource + Listing IDで重複防止 | `crawl_service.py`, `crawl_candidates.py`, `crawl_detail_cache.py`, `incremental_crawl.py`, `Repository.stats` |
-| Profile / Console / Claim APIがClaimと旧Observationの両方を表示に利用 | 表示契約を維持して読取元を段階的に交換。管理画面に判定経路を追加 | `web.py`, `static/*.html`, Repositoryの読取処理 |
-| Mergeと旧DB互換移行が旧Observationを参照 | 旧参照の保存・Evidenceの再紐付け、再承認状態を維持 | `resolve_repeated`, `migrate_legacy_observations_to_claims`, DB import/export |
+新規未登録記録の保存先切替もDBコピーで確認した。旧記録1,628件の保管後に新規未登録1件を保存し、既知掲載は2,217件から2,218件へ増えた。既存の全業務テーブルは不変で、再実行は重複せず、SQLite復元後も入力全体と統計が一致した。587個体の監査差分・評価エラー・Evidence欠損は0だった。
 
-リポジトリ付属のテスト用DBには個体未紐付けの旧Observationが多数ある。これは**開発者の稼働DBの件数ではない**。旧Observationを一括削除・一対一制約へ直接変更しない。
+## 撤去済みの互換インターフェース
 
-## 3. データ構造の追加案（命名は実装時に確定）
+利用者に外部API・旧CLIの利用がないことを確認し、以下を撤去した。`start_webui.command` と `save_test_db.command` / `.bat` は維持する。保存スクリプトはSQLite全体のバックアップを使うため新テーブルも含まれる。macOS版は検証用ディレクトリで実行して全テーブル・全行の一致を確認した。Windows版はソース確認のみで、Windows実機では未検証。
 
-- `claim_source_evidence` のような構造化されたEvidence：`claim_id`、種類、`source_site`、`source_listing_id`、`source_url`、取得時刻、掲載／取得日、元データまたは保存先、抽出メタデータ、作成時刻。既存 `claim_evidence` と `media_assets` は画像用として当面維持する。外部掲載IDに対し、出典サイトとの組に一意性を設ける。過去の掲載IDや画像参照を失わない。
-- 新Observationは、まず**個体IDを入力とする純粋な評価処理**で実装する案を優先する。新たな一対一テーブルを設ける場合も `individual_id UNIQUE NOT NULL` とし、調停結果を二重の真実源にしない。Individualには必要なSnapshotと根拠Claim ID等、診断・検索に有用な最小限の派生値を保持する。具体的な永続化形式は新旧比較の実装前に決める。
-- `crawl_detail_cache`、`crawl_candidates`、`crawl_listing_cache`、`crawl_runs`、`crawl_programs`、`crawl_listing_checks` は収集・再実行の状態として維持し、個体のObservationと区別する。個体に結び付かなかった旧掲載調査行も**クロール記録にのみ**残し、新Observation／Individualへ投影しない。削除・保持期間は今回の改修で勝手に変えない。
-- 既存Claim ID、ユーザー、投票、Response、添付メディア、署名ギター参照は保持。旧データのEvidence移行はsource + Listing ID、Claim ID等で冪等にする。
-
-## 4. 評価器の入出力と更新の流れ
-
-評価器は個体IDと有効なClaim群、Evidence、判定、利用者状態を受け取り、**候補となる現在値**と項目別の根拠Claim ID、採用／不採用理由を返す。読み取りだけで再計算でき、呼び出しごとに過去の評価結果を保存しない。同じ入力から常に同じ結果を返す。発生日、Claim IDのタイブレーク、Positive / Unverified / Negative、inactive、Owner資格を一か所で処理する。
-
-1. ClaimとEvidenceの必須項目を検査し、外部掲載IDの重複と物理個体の一致を別々に確認する。
-2. 既存状態とClaim追加後の**一時評価結果**を作る。旧ObservationやIndividualの実レコードを仮上書きしない。差分はOwner / Location / identity / specification等の項目別に示す。
-3. 他ユーザーのAcquireがCurrent Ownerを変え得るならOwner判定を待つ。保留ClaimのEvidenceは残すが、現在値は変えない。Owner不在時は必須日付を確認し、先に提出された取得日順・同日Claim ID順のClaimを適用する。
-4. 採用可能なClaim、Evidence、承認状態、必要ならIndividual Snapshotを**同一DBトランザクション**で確定する。Claimが後から承認・否定された場合も同じ評価器で再計算する。
-5. Browser Consoleは現在の入力から評価器を再実行し、採否理由と保存済みSnapshotとの差分を読み取り表示する。診断画面の表示自体はDBを変更しない。
-
-所有者の権限を現在値から判断する際は、判定対象のClaimを採用する**前の有効Owner**を基準にする。未承認Claim自身で自分に承認権限を与えない。管理者判定とOwner判定の変更履歴は既存の監査記録を維持する。
-
-## 5. 段階的な実装と切替ゲート
-
-### 段階A：基準データと仕様の固定
-
-- コード・テスト・手元稼働DBのバックアップを取得（SQLiteと画像をセットで保全）。クロールreadiness、Claim ID、現Owner／Location、個体ごとのSnapshot、掲載ID、承認状態、添付と候補・カーソルの件数を比較用に記録する。Git管理のテスト用DBだけを稼働DBの代わりにしない。
-- 新Observationが保存されるか評価器のみか、Owner不在時の詳細な判定、既存の日付不明Acquireの移行方針、再掲載由来Acquireの日付の意味を決める。**Reverb掲載日・再発見日は実際の取得日の証明とは限らない**。既存方針の「再発見日」を観測上の有効日として使うなら、実際の取得日と区別して記録する仕様を先に定める。
-- 同じClaimとEvidenceから期待される現在値・判定経路の固定フィクスチャを作る。現Ownerあり／なし、同日・過去日付、再掲載、BAN／管理者の特殊例を含める。
-
-### 段階B：Evidence追加と無停止の複写
-
-- アプリがまだ旧構造を読む間にEvidence用テーブル／列と移行処理を追加する。登録済み個体のListing / Acquireに紐づく旧Observationの掲載ID・URL・日付・Owner / Location・元データを複写し、移行前後のsource + Listing ID、Claim ID、画像の対応を照合する。
-- 個体未登録の旧Observationはクロール履歴の領域に保存し、ClaimのEvidenceに偽装しない。調査済み判定・スキップ／再確認の既存動作を維持する。繰り返し実行で重複を作らない。
-
-### 段階C：新Observation評価器を並走
-
-- Claim作成・承認・無効化後の候補状態を評価するが、最初は**旧Snapshotを正規の表示値として維持**。新旧のOwner / Location / 個体識別／仕様／メディアと根拠を比較して差分を分類する。差がある場合に旧データを新結果で上書きしない。
-- 自動収集に実際の投稿日・取得日が不足する旧Claimは欠損を明示する。適当な日付を捏造せず、移行ルールが定まるまで確認待ち／比較除外として扱う。
-
-### 段階D：書込経路と読取経路の切替
-
-- 手動登録、Ownership（Former Ownerのペア含む）、その他のClaim、判定変更、Reverb初回・再掲載・非公開確認、Merge、BAN、管理者操作の順にEvidenceと共通評価器へ移す。各入口の保存はトランザクションで完結させる。
-- 読取API、統計、プロフィール、Product Detail、New Discovery、クロール既知Listing判定を段階的に切替。Browser Consoleに個体ごとの判定経路・現在Snapshotとの差分を追加する。既存URLと操作結果を必要な間維持する。
-- 並走比較で意図しない差分がなく、実データからOwner / Locationを正しく再計算できることを切替条件とする。切替前のDB+メディアへ復旧できる手順を確認する。
-
-### 段階E：整理
-
-- 旧 `observations` を参照する個体情報の読取／更新をなくし、必要なクロール記録だけを保持する。二重書込や移行用の互換処理はデータ照合と復旧検証が済んでから除去。現行の主要文書を新仕様で更新し、**この一時計画書を削除**する。
-
-## 6. 必須の検証と中止条件
-
-| 検証ケース | 期待する性質 |
+| 撤去済み | 現行の代替 |
 | --- | --- |
-| 初回Listingと別IDの再掲載 | 1個体のまま、初回Listingと再掲載Acquireにそれぞれ掲載Evidence。既知Listingの再実行は冪等 |
-| Ownerがいる再掲載・第三者Acquire | Positive前は現OwnerとLocation不変。承認後にだけ所有者変更。自身のClaimで自分を承認できない |
-| Owner不在・競合Acquire | 取得日必須。同日ならClaim ID順、先行ClaimでOwnerが成立した後は後続にOwner確認が必要 |
-| 後から登録した過去日のAcquire | 後日有効なClaimを登録日時だけで覆さない。Chronicleと現在値の両方が整合 |
-| Listing公開終了 | 所有根拠が当該掲載だけなら規定の確認後にUnknownへ。ユーザーOwnerなど別の根拠があれば維持 |
-| Claim判定変更／無効化、Former Ownerペア | 同じ評価器で再計算。通常ユーザーが自身のOwner設定Claimを無効化できない |
-| 管理者Merge、BAN／Silent BAN | 記録・根拠・ユーザーからの参照が失われない。未定の異常ケースは判定経路を表示して手動判断し、勝手に正常化しない |
-| 旧DB・バックアップ復元 | 旧掲載記録の件数・Listing ID・Claim ID・画像を保持。マイグレーションを再実行しても増殖・欠落しない |
-| Browser Console診断 | 採用／不採用と理由、根拠Claim／Evidence、保存済みSnapshotとの違いを表示するだけでDBは変わらない |
+| 個体詳細APIの `observations` と `include_legacy_observations` | Claim一覧・掲載Evidence・画像 |
+| 作成APIの `observation_id` / `observation_ids` | `claim_id` / `claim_ids`。未登録クロールは `crawl_record_id` |
+| 統計APIの `observations` / `serial_extraction_rate` / `max_observations_per_individual` | `external_listing_sources` / `registered_serial_listings` / `serial_listing_coverage_percent`。旧指標と意味は異なる |
+| `ygc show --legacy-observations` | 通常の `ygc show` によるClaim来歴 |
 
-**中止条件：** Owner / Locationの説明できない差異、同じListing IDによる重複Claim、Evidenceの欠落、クロール再開位置の破損、画像・承認履歴の消失、ロールバック不能なスキーマ変更。差分が出た状態で既存データの上書きや旧テーブルの削除に進まない。
+`serial_observations` は現行Web画面も使う互換名なので、今回の撤去に含めない。旧形式バックアップのインポート・移行CLIは、通常APIの互換廃止とは別に復元経路として維持する。API廃止の判断だけで旧行や旧テーブルを削除しない。
 
-## 7. 今回の範囲外・残る判断
+## 残っている依存関係
 
-- Claim種別ごとのEvidenceの強度・証明書類の必須化。現在合意したのはAcquireに取得日が必要なことだけ。ほかのClaimの既存入力条件はこの計画だけでは変更しない。
-- 再掲載の**観測日**と実際の**取得日**を同じ日にできるか、既存Claimの欠損日付をどう移行するかは段階Aで明示的に決める。決まるまで取得日の自動補完を実装しない。
-- 管理者のClaim削除・強制判定、BAN後にOwnerが巻き戻る特殊ケースの自動解決は後回し。Browser Consoleで判定経路を見て対処できる状態にする。
-- 外部公開向けの本人確認・認可とPostgreSQL移行は別案件。本計画はローカル試作の意味構造を正す作業であり、認証されていないブラウザ指定IDを権限の証明にしない。
+| 残存箇所 | 現行の用途 | 撤去前に必要な変更・確認 |
+| --- | --- | --- |
+| `persist_reverb_listing_claim` | 新規未登録記録は専用保存先へ切替済み。旧掲載の重複確認フォールバックが残る | 既存DBの保管・照合完了後に旧行参照を整理 |
+| `get_individual` / `list_claims` | Repository内部の旧履歴取得と、Evidenceがない旧DBの出典フォールバック | 旧DB復元・移行経路の整理後に撤去。通常の個体詳細APIは旧履歴を返さない |
+| `db/source_records.py` | Evidence、旧行、専用保管先の順に参照。既存の出典がある場合は保管行を二重計上しない | 未登録記録は全列保管・照合が可能。稼働DBの複写と旧参照の整理後にフォールバックを撤去 |
+| 旧シリアル監査・インポート | 過去の抽出内容と旧形式DBの参照 | 旧データの保全と復元を維持しつつ整理 |
+| Merge / Delete / バックアップ・復元 / 起動時移行 | 旧行・参照ID・Evidence・画像の保全と旧DBの読込 | 旧形式バックアップの復元、Claim ID・関係・画像保持、再実行時の冪等性を確認 |
+
+`observations`には移行済み個体の互換行と、個体を作らなかった掲載調査の記録が混在する。1,628件の未登録行をClaimへ偽装したり、一括削除したりしない。必要なクロール記録の保持期間をこの整理作業だけで変更しない。
+
+### 未登録記録を保管する手順
+
+1. SQLiteと画像のバックアップを取り、まずDBコピーで `ygc archive-unregistered-crawl` を実行する。対象は個体・Claim・掲載Evidenceに紐付かない外部の旧記録。Listing IDが欠けている行も保存する。
+2. 出力の `eligible` / `created` / `already_archived` / `archive_total` を確認する。再実行は一致する行を増やさず、内容やチェックサムの不一致では全件の変更を取り消す。コマンドは他の起動時移行を実行せず、存在しないDBも新設しない。
+3. `payload_json` は元行全列、`payload_sha256` はそのUTF-8表現のSHA-256、`legacy_observation_id` は元ID、`archived_at` は複写日時。保管先に期限や元行の削除に連動する外部キーは設けない。期限付きの詳細キャッシュや見送り記録で代用しない。
+4. 元行の撤去を検討する際は、既知Listing、再収集防止、公開状態確認、再開位置、本文・抽出情報・画像参照と復元を照合する。今回のコマンドに削除機能はない。新規の未登録記録は専用保存先へ書くが、登録済み個体・手動操作の旧履歴も残っているため、未登録記録の保管完了だけで旧テーブルを削除してはいけない。
+
+移行監査の `archived_unregistered_crawl_rows` は専用保管先の件数を示す。`unregistered_legacy_crawl_rows` とは複写直後に重なるため、足し合わせて掲載数にしない。保管後も、手動で内容を変更せず複写コマンドの再実行でチェックサムを検証する。
+
+## 整理の順序
+
+1. **未使用処理と文書の整理**：呼出元のない旧表示コードを削除し、現行仕様・実装済み機能・この依存表を更新する。
+2. **読取経路の切替（主要経路完了）**：個体表示・管理用読取・クロール判定をClaim Evidenceへ切替済み。未登録記録の独立保存先への移管と旧監査経路は残る。
+3. **通常書込の切替（完了）**：外部登録と手動操作の旧行作成・同期を停止し、未登録記録も専用保存先へ切替済み。作成・編集・所有権移転・ペア判定・削除・管理者操作の回帰テストを実施済み。旧形式の明示的なインポート・復元処理は残る。
+4. **保存・復元の確認と互換処理の撤去**：旧DBとバックアップの扱いを確定し、照合と復元検証後に不要な列・テーブル・フォールバックを除く。
+
+後続の変更でも、通常ユーザーの所有権と判定権限の遷移例を実装とテストで確認する。管理者判定、BAN、Mergeは別経路として確認する。
+
+## DB変更前の確認手順
+
+1. 稼働SQLiteと画像を一緒にバックアップする。SQLiteはバックアップAPI等で一貫したコピーを作り、復元先は検証用ディレクトリにする。
+2. 旧スキーマに必要なClaim移行・Evidence複写をバックアップ後に行う。`ygc claim-status` は `init_db`によるスキーマ更新を含み、完全な読み取り専用コマンドではない。必要な入口は `ygc migrate-claims`、`ygc migrate-claim-evidence`。
+3. `ygc audit-observation-migration --sample-limit 20`で全個体の現在値とEvidence欠損を監査する。このコマンドは存在しないDBを新設しない。
+4. 読取・書込経路の変更をDBコピー上で実行し、Claim ID、掲載ID、Owner / Location、Verification、ユーザー関係、画像、クロール候補・カーソル・件数を比較する。画像はDB内の参照と実ファイルの両方を照合する。
+5. 旧形式バックアップを復元して同じ照合を行い、移行を再実行しても重複・欠落がないことを確認する。
+
+**中止条件：** 説明できない現在値の差、同一Listingによる重複Claim、Evidence・画像・承認履歴の欠落、クロール再開位置の破損、復旧不能な変更。差がある状態でデータの上書きや旧テーブル削除へ進まない。
+
+## 別途判断・実装すること
+
+- 再掲載の観測日と実際の取得日は同一とは限らない。現行の再掲載Evidenceは観測日を `date_basis=observed_at` として区別する。既存の欠損日付を推測して補完しない。
+- Claim種別ごとの証明資料の強度・必須条件。ユーザーAcquireで合意済みなのは取得日のEvidenceであり、他の証明書類の必須化ではない。
+- 管理者の判定・削除・BANで過去Ownerへ戻る特殊ケースの自動解決。現行は診断画面と管理操作で判断する。
+- 本人確認・全API認可、PostgreSQL、画像の永続化、定期ジョブは [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に従う別作業。

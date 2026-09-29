@@ -23,7 +23,8 @@ def test_batch_match_and_resume_pending_candidate(tmp_path):
     assert reconcile_candidates(repo)["new_observations"] == 0
     with repo.connect() as con:
         assert con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0] == 1
-        assert con.execute("SELECT COUNT(*) FROM observations").fetchone()[0] == 2
+        assert con.execute("SELECT COUNT(*) FROM observations").fetchone()[0] == 0
+        assert con.execute("SELECT COUNT(*) FROM claim_source_evidence").fetchone()[0] == 2
         assert con.execute("SELECT COUNT(*) FROM claims WHERE claim_type='listing'").fetchone()[0] == 1
 
 

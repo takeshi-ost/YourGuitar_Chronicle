@@ -5,6 +5,7 @@ import json
 from ygc import config
 from ygc.crawl_candidates import reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
+from ygc.db.source_records import known_listing_ids
 from ygc.reverb_adapter import to_listing_claim_data, to_provenance_observation
 
 
@@ -43,19 +44,17 @@ def reprocess_details(repository: Repository, category: str, year_min: int,
     while True:
         with repository.connect() as con:
             rows = con.execute(
-                """SELECT d.*, EXISTS(SELECT 1 FROM observations o
-                     WHERE o.source_site=d.source_site AND o.source_listing_id=d.source_listing_id
-                     ) AS registered
-                   FROM crawl_detail_cache d WHERE d.source_site='reverb'
+                """SELECT d.* FROM crawl_detail_cache d WHERE d.source_site='reverb'
                    AND d.source_listing_id > ? ORDER BY d.source_listing_id LIMIT 200""",
                 (last_id,),
             ).fetchall()
+            registered = known_listing_ids(con, 'reverb', [row['source_listing_id'] for row in rows])
         if not rows:
             break
         for row in rows:
             counts["cached_processed"] += 1
             last_id = row["source_listing_id"]
-            if row["registered"]:
+            if row['source_listing_id'] in registered:
                 counts["skipped_existing"] += 1
                 continue
             detail = json.loads(row["payload_json"])

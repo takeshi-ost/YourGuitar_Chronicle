@@ -506,7 +506,7 @@ def test_ownership_acquire_and_vote(
         )
     )
 
-    assert observation_id > 0
+    assert observation_id is None
     assert claim_id > 0
 
     user, guitars = repository.get_user(
@@ -714,7 +714,7 @@ def test_new_guitar_registration_creates_initial_listing_claim(
     )
 
     assert individual_id > 0
-    assert observation_id > 0
+    assert observation_id is None
     assert claim_id > 0
     assert media_asset_id > 0
 
@@ -736,18 +736,7 @@ def test_new_guitar_registration_creates_initial_listing_claim(
         ]
         == media_asset_id
     )
-    assert len(observations) == 1
-    assert observations[0]["event_type"] == (
-        "listing"
-    )
-    assert observations[0]["source_site"] == (
-        "user"
-    )
-    assert observations[0]["manufacturer"] is None
-    assert observations[0]["model"] is None
-    assert observations[0]["serial_number"] is None
-    assert observations[0]["owner_name"] is None
-    assert observations[0]["location_country"] is None
+    assert observations == []
 
     claims = repository.list_claims(
         individual_id,
@@ -937,10 +926,7 @@ def test_user_owner_name_tracks_account_display_name(
             individual_id
         )
     )
-    assert observations[0]["owner_name"] is None
-    assert observations[0]["actor_user_id"] == (
-        user_id
-    )
+    assert observations == []
 
     claims = repository.list_claims(
         individual_id
@@ -1414,7 +1400,7 @@ def test_release_marks_former_owner_and_sets_unknown(
         )
     )
 
-    assert observation_id > 0
+    assert observation_id is None
     assert claim_id > 0
 
     _user, guitars = repository.get_user(
@@ -1435,10 +1421,7 @@ def test_release_marks_former_owner_and_sets_unknown(
             individual_id
         )
     )
-    latest = observations[-1]
-    assert latest["event_type"] == "ownership"
-    assert latest["owner_name"] == "Unknown"
-    assert latest["owner_type"] == "unknown"
+    assert observations == []
 
     claims = repository.list_claims(
         individual_id

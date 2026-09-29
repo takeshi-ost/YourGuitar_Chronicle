@@ -34,8 +34,9 @@ def test_live_reverb_writes_claim_evidence_for_initial_and_relisting(tmp_path):
         assert [row['claim_id'] for row in evidence] == [first['claim_id'], second['claim_id']]
         assert [row['source_listing_id'] for row in evidence] == ['100', '200']
         assert [row['date_basis'] for row in evidence] == ['listing_date', 'observed_at']
-        assert con.execute('SELECT count(*) FROM observations').fetchone()[0] == 2
-    assert repo.backfill_claim_source_evidence() == {'created': 0, 'existing': 2, 'conflicts': 0}
+        assert con.execute('SELECT count(*) FROM observations').fetchone()[0] == 0
+        assert all(row['legacy_observation_id'] is None for row in evidence)
+    assert repo.backfill_claim_source_evidence() == {'created': 0, 'existing': 0, 'conflicts': 0}
     decisions = repo.observation_diagnostic(first['individual_id'])['decisions']
     assert any(e['source_listing_id'] == '200' and e['date_basis'] == 'observed_at'
                for decision in decisions for e in decision['evidence'])
@@ -100,11 +101,12 @@ def test_evaluator_matches_migrated_snapshot_without_writing(tmp_path):
         assert con.total_changes == before == 0
 
 
-def test_legacy_detail_cache_preserves_owner_fields_as_claim_evidence(tmp_path):
+def test_legacy_detail_cache_preserves_owner_fields_as_claim_evidence(tmp_path, legacy_marketplace_row):
     repo = Repository(tmp_path / 'cache.db')
     repo.init_db()
     claim, provenance = _reverb_item('101')
     created = repo.persist_reverb_listing_claim(claim, provenance)
+    legacy_marketplace_row(repo, created, claim, provenance)
     with repo.connect() as con:
         con.execute('DELETE FROM claim_source_evidence')
         con.execute('INSERT OR REPLACE INTO crawl_detail_cache '
@@ -557,7 +559,7 @@ def test_product_detail_image_comes_from_claim_evidence(tmp_path, monkeypatch):
         response = client.get(f"/api/individuals/{saved['individual_id']}")
         assert response.status_code == 200
         detail = response.json()
-        assert detail['observations'] == []
+        assert 'observations' not in detail
         assert detail['current_source']['image_url'] == provenance['image_url']
         assert detail['current_source']['source_listing_id'] == '700'
 

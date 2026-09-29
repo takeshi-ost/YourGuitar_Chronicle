@@ -16,6 +16,7 @@ from ygc.theme_catalog import THEME_IDS
 from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
 from ygc.observation_matrix import build_observation_matrix
 from ygc.specification_extractor import extract_specifications, clean_specification_value
+from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
 
 
 def utcnow() -> str:
@@ -148,10 +149,12 @@ class Repository:
                 # Only Listing Claims identify the original discovery; later
                 # Automation Acquire listings are outside this backfill's scope.
                 rows = con.execute(
-                    """SELECT c.id AS listing_claim_id, c.occurred_at, d.source_listing_id,
+                    f"""WITH sources AS ({MARKETPLACE_SOURCES_SQL})
+                       SELECT c.id AS listing_claim_id, c.occurred_at, d.source_listing_id,
                               d.payload_json, d.fetched_at, o.source_url
                        FROM claims c
-                       JOIN observations o ON o.id=c.observation_id
+                       JOIN sources o ON (o.claim_id=c.id OR (o.claim_id IS NULL
+                                          AND o.legacy_observation_id=c.observation_id))
                        JOIN crawl_detail_cache d ON d.source_site=o.source_site
                                                 AND d.source_listing_id=o.source_listing_id
                        WHERE c.individual_id=? AND c.claim_type='listing'
@@ -403,6 +406,16 @@ class Repository:
                     'unregistered_legacy_crawl_rows': con.execute(
                         'SELECT COUNT(*) FROM observations WHERE individual_id IS NULL'
                     ).fetchone()[0],
+                    'archived_unregistered_crawl_rows': (
+                        con.execute('SELECT COUNT(*) FROM legacy_crawl_archive').fetchone()[0]
+                        if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                       "AND name='legacy_crawl_archive'").fetchone() else 0
+                    ),
+                    'native_unregistered_crawl_rows': (
+                        con.execute('SELECT COUNT(*) FROM crawl_unregistered_records').fetchone()[0]
+                        if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                       "AND name='crawl_unregistered_records'").fetchone() else 0
+                    ),
                 }
                 return result
             finally:
@@ -410,9 +423,9 @@ class Repository:
 
     @staticmethod
     def _insert_marketplace_evidence(con: sqlite3.Connection, claim_id: int,
-                                     observation_id: int, claim_data: dict,
+                                     observation_id: int | None, claim_data: dict,
                                      provenance: dict, *, acquire: bool) -> None:
-        """Keep the new Evidence and the legacy crawl record in one transaction."""
+        """Store source Evidence; the legacy link is only for older crawl records."""
         con.execute(
             """INSERT INTO claim_source_evidence
                (claim_id,evidence_type,source_site,source_listing_id,
@@ -507,6 +520,7 @@ class Repository:
             "claims": {
                 "specification_kind": "TEXT",
                 "ownership_kind": "TEXT",
+                "previous_owner_text": "TEXT",
                 "ownership_source": "TEXT",
                 "ownership_pair_id": "TEXT",
                 "target_claim_id": "INTEGER",
@@ -1455,7 +1469,7 @@ class Repository:
         """
         Persist one Reverb Listing through the Claim-centered pipeline.
 
-        External duplicate detection uses Observation provenance.
+        External duplicate detection uses Evidence and retained crawl records.
         Physical guitar matching uses the current Individual snapshot.
         Semantic state is written only to Listing Claim items, then the
         Individual snapshot is rebuilt from active Claims.
@@ -1549,6 +1563,11 @@ class Repository:
                     ),
                 }
 
+            if known_listing_ids(con, source_site, [source_listing_id]):
+                # An archived unregistered source is still a processed listing.
+                return {'created': False, 'observation_id': None,
+                        'claim_id': None, 'individual_id': None}
+
             individual_id: int | None = None
             existing_individual = None
 
@@ -1632,110 +1651,23 @@ class Repository:
                         cur.lastrowid
                     )
 
-            observation_columns = [
-                "individual_id",
-                "owner_name",
-                "owner_type",
-                "location_country",
-                "location_region",
-                "event_type",
-                "source_site",
-                "source_url",
-                "image_url",
-                "source_listing_id",
-                "observed_at",
-                "listing_date",
-                "title",
-                "raw_text",
-                "serial_confidence",
-                "extraction_version",
-                "created_at",
-            ]
-            observation_values = {
-                "individual_id": individual_id,
-                "owner_name": claim_data.get("owner_name"),
-                "owner_type": claim_data.get("owner_type"),
-                "location_country": claim_data.get("location_country"),
-                "location_region": claim_data.get("location_region"),
-                "event_type": (
-                    provenance.get(
-                        "event_type"
-                    )
-                    or "listing"
-                ),
-                "source_site": source_site,
-                "source_url": (
-                    provenance.get(
-                        "source_url"
-                    )
-                    or ""
-                ),
-                "image_url": provenance.get(
-                    "image_url"
-                ),
-                "source_listing_id": (
-                    source_listing_id
-                ),
-                "observed_at": (
-                    provenance.get(
-                        "observed_at"
-                    )
-                    or utcnow()
-                ),
-                "listing_date": provenance.get(
-                    "listing_date"
-                ),
-                "title": provenance.get(
-                    "title"
-                ),
-                "raw_text": provenance.get(
-                    "raw_text"
-                ),
-                "serial_confidence": (
-                    provenance.get(
-                        "serial_confidence"
-                    )
-                ),
-                "extraction_version": (
-                    provenance.get(
-                        "extraction_version"
-                    )
-                ),
-                "created_at": (
-                    provenance.get(
-                        "created_at"
-                    )
-                    or utcnow()
-                ),
-            }
-            placeholders = ",".join(
-                "?"
-                for _ in observation_columns
-            )
-            cur = con.execute(
-                f"""
-                INSERT INTO observations (
-                    {",".join(observation_columns)}
-                )
-                VALUES ({placeholders})
-                """,
-                [
-                    observation_values[column]
-                    for column
-                    in observation_columns
-                ],
-            )
-            observation_id = int(
-                cur.lastrowid
-            )
-
+            observation_id = None
             if individual_id is None:
-                return {
-                    "created": True,
-                    "observation_id": observation_id,
-                    "claim_id": None,
-                    "individual_id": None,
-                }
+                # Retain complete inputs, including extraction fields that the
+                # old Observation writer did not store. This record has no TTL.
+                now = utcnow()
+                cur = con.execute(
+                    """INSERT INTO crawl_unregistered_records
+                       (source_site,source_listing_id,source_url,observed_at,
+                        reason,payload_json,created_at) VALUES (?,?,?,?,?,?,?)""",
+                    (source_site, source_listing_id, provenance.get('source_url') or '',
+                     provenance.get('observed_at') or now, 'missing_identity',
+                     json.dumps({'claim': claim_data, 'provenance': provenance},
+                                ensure_ascii=False, default=str),
+                     provenance.get('created_at') or now),
+                )
+                return {'created': True, 'observation_id': None, 'claim_id': None,
+                        'individual_id': None, 'crawl_record_id': int(cur.lastrowid)}
 
             author_user_id = self._source_user_id(
                 con,
@@ -3529,7 +3461,7 @@ class Repository:
         year: str | None = None,
         occurred_at: str | None = None,
         body: str | None = None,
-    ) -> tuple[int, int, int, int]:
+    ) -> tuple[int, int | None, int, int]:
         maker = manufacturer.strip()
         serial = serial_number.strip()
         storage_path = media_storage_path.strip()
@@ -3664,43 +3596,7 @@ class Repository:
                 f"user-initial-{individual_id}"
             )
 
-            cur = con.execute(
-                """
-                INSERT INTO observations (
-                    individual_id,
-                    event_type,
-                    actor_user_id,
-                    occurred_at,
-                    source_site,
-                    source_url,
-                    source_listing_id,
-                    observed_at,
-                    listing_date,
-                    title,
-                    raw_text,
-                    created_at
-                )
-                VALUES (
-                    ?, 'listing', ?, ?,
-                    'user', '', ?, ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    user_id,
-                    event_date,
-                    source_listing_id,
-                    now,
-                    event_date,
-                    title,
-                    note,
-                    now,
-                ),
-            )
-
-            observation_id = int(
-                cur.lastrowid
-            )
+            observation_id = None  # Retained return field for legacy callers.
 
             cur = con.execute(
                 """
@@ -3914,7 +3810,7 @@ class Repository:
         occurred_at: str | None = None,
         previous_owner_text: str | None = None,
         body: str | None = None,
-    ) -> tuple[int, int]:
+    ) -> tuple[int | None, int]:
         kind = ownership_kind.strip().lower()
         if kind not in ("acquire", "transfer", "release", "inherit"):
             raise ValueError(
@@ -3980,72 +3876,7 @@ class Repository:
                 and int(individual["current_owner_user_id"]) != user_id
             )
 
-            owner_name = (
-                "Unknown"
-                if kind in ending_kinds
-                else user["display_name"]
-            )
-            owner_type = (
-                "unknown"
-                if kind in ending_kinds
-                else "user"
-            )
-            event_title = f"Ownership / {kind.capitalize()}"
-            details: list[str] = []
-            if previous_owner_text:
-                details.append(
-                    f"Previous owner: {previous_owner_text.strip()}"
-                )
-            if note:
-                details.append(note)
-            raw_text = "\n".join(details) or None
-
-            cur = con.execute(
-                """
-                INSERT INTO observations (
-                    individual_id,
-                    manufacturer,
-                    model,
-                    finish,
-                    year,
-                    serial_number,
-                    owner_name,
-                    owner_type,
-                    event_type,
-                    actor_user_id,
-                    occurred_at,
-                    source_site,
-                    source_url,
-                    observed_at,
-                    title,
-                    raw_text,
-                    created_at
-                )
-                VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?,
-                    'ownership', ?, ?,
-                    'user', ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    individual["manufacturer"],
-                    individual["model"],
-                    individual["finish"],
-                    individual["year"],
-                    individual["serial_number"],
-                    owner_name,
-                    owner_type,
-                    user_id,
-                    event_date,
-                    f"user://{user_id}",
-                    now,
-                    event_title,
-                    raw_text,
-                    now,
-                ),
-            )
-            observation_id = int(cur.lastrowid)
+            observation_id = None  # No compatibility Observation is written.
 
             cur = con.execute(
                 """
@@ -4088,6 +3919,9 @@ class Repository:
                 ),
             )
             claim_id = int(cur.lastrowid)
+            if previous_owner_text and previous_owner_text.strip():
+                con.execute('UPDATE claims SET previous_owner_text=? WHERE id=?',
+                            (previous_owner_text.strip(), claim_id))
 
             if kind == "acquire":
                 con.execute(
@@ -4371,74 +4205,14 @@ class Repository:
                         f"({current_owner_date})"
                     )
 
-            observation_ids: list[int] = []
             claim_ids: list[int] = []
 
             def insert_ownership_event(
                 kind: str,
                 event_date: str,
                 body: str | None,
-            ) -> tuple[int, int]:
+            ) -> int:
                 ending = kind == "release"
-                owner_name = (
-                    "Unknown"
-                    if ending
-                    else str(user["display_name"])
-                )
-                owner_type = (
-                    "unknown"
-                    if ending
-                    else "user"
-                )
-                raw_text = body if body else None
-
-                cur = con.execute(
-                    """
-                    INSERT INTO observations (
-                        individual_id,
-                        manufacturer,
-                        model,
-                        finish,
-                        year,
-                        serial_number,
-                        owner_name,
-                        owner_type,
-                        event_type,
-                        actor_user_id,
-                        occurred_at,
-                        source_site,
-                        source_url,
-                        observed_at,
-                        title,
-                        raw_text,
-                        created_at
-                    )
-                    VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?,
-                        'ownership', ?, ?,
-                        'user', ?, ?, ?, ?, ?
-                    )
-                    """,
-                    (
-                        individual_id,
-                        individual["manufacturer"],
-                        individual["model"],
-                        individual["finish"],
-                        individual["year"],
-                        individual["serial_number"],
-                        owner_name,
-                        owner_type,
-                        user_id,
-                        event_date,
-                        f"user://{user_id}",
-                        now,
-                        f"Ownership / {kind.capitalize()}",
-                        raw_text,
-                        now,
-                    ),
-                )
-                observation_id = int(cur.lastrowid)
-
                 cur = con.execute(
                     """
                     INSERT INTO claims (
@@ -4467,7 +4241,7 @@ class Repository:
                     """,
                     (
                         individual_id,
-                        observation_id,
+                        None,
                         user_id,
                         "unknown" if ending else str(user_id),
                         kind,
@@ -4487,27 +4261,21 @@ class Repository:
                         (new_claim_id, event_date,
                          json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
                     )
-                return observation_id, new_claim_id
+                return new_claim_id
 
-            acquire_observation_id, acquire_claim_id = (
+            acquire_claim_id = (
                 insert_ownership_event(
                     "acquire",
                     acquired,
                     note,
                 )
             )
-            release_observation_id, release_claim_id = (
+            release_claim_id = (
                 insert_ownership_event(
                     "release",
                     released,
                     None,
                 )
-            )
-            observation_ids.extend(
-                [
-                    acquire_observation_id,
-                    release_observation_id,
-                ]
             )
             claim_ids.extend(
                 [
@@ -4522,7 +4290,7 @@ class Repository:
             )
 
             return {
-                "observation_ids": observation_ids,
+                "observation_ids": [],
                 "claim_ids": claim_ids,
                 "snapshot": snapshot,
             }
@@ -5424,37 +5192,6 @@ class Repository:
                 ),
             )
 
-            observation_id = claim["observation_id"]
-            if observation_id is not None:
-                if claim["claim_type"] == "listing":
-                    con.execute(
-                        """
-                        UPDATE observations
-                        SET raw_text = ?,
-                            occurred_at = ?,
-                            listing_date = ?
-                        WHERE id = ?
-                        """,
-                        (
-                            note,
-                            event_date,
-                            event_date,
-                            observation_id,
-                        ),
-                    )
-                else:
-                    con.execute(
-                        """
-                        UPDATE observations
-                        SET occurred_at = ?
-                        WHERE id = ?
-                        """,
-                        (
-                            event_date,
-                            observation_id,
-                        ),
-                    )
-
             if claim["claim_type"] == "ownership":
                 ownership_kind = str(claim["ownership_kind"] or "acquire").strip().lower()
                 if ownership_kind == "release":
@@ -5912,7 +5649,8 @@ class Repository:
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'image_url'
                             LIMIT 1
-                        ), (SELECT json_extract(e.payload_json, '$.provenance.image_url')
+                        ), (SELECT COALESCE(json_extract(e.payload_json, '$.provenance.image_url'),
+                            json_extract(e.payload_json, '$.source.image_url'))
                             FROM claim_source_evidence e
                             WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
                             ORDER BY e.id LIMIT 1)) AS image_url,
@@ -6854,7 +6592,10 @@ class Repository:
     def get_individual(
         self,
         individual_id: int,
+        *,
+        include_legacy_observations: bool = True,
     ):
+        """Compatibility reader; current API callers skip the legacy history."""
         with self.connect() as con:
             individual = con.execute(
                 """
@@ -6866,6 +6607,9 @@ class Repository:
                     individual_id,
                 ),
             ).fetchone()
+
+            if not include_legacy_observations:
+                return individual, []
 
             observations = list(
                 con.execute(
@@ -6910,12 +6654,15 @@ class Repository:
                 "c.ownership_source, c.occurred_at, c.created_at, "
                 "u.display_name AS author_name, i.manufacturer, i.model, i.serial_number, "
                 "i.current_owner_name, i.current_owner_user_id, i.current_owner_type, "
-                "o.source_site, o.source_listing_id "
+                "COALESCE(e.source_site,o.source_site) AS source_site, "
+                "COALESCE(e.source_listing_id,o.source_listing_id) AS source_listing_id "
                 "FROM claims c JOIN individuals i ON i.id=c.individual_id "
                 "JOIN users u ON u.id=c.author_user_id "
                 "LEFT JOIN users proposed ON CAST(proposed.id AS TEXT)=c.value_text "
                 "AND COALESCE(c.ownership_source, 'user') <> 'automation' "
-                "LEFT JOIN observations o ON o.id=c.observation_id WHERE " + where +
+                "LEFT JOIN claim_source_evidence e ON e.id=(SELECT id FROM claim_source_evidence "
+                "WHERE claim_id=c.id AND evidence_type='marketplace_listing' ORDER BY id LIMIT 1) "
+                "LEFT JOIN observations o ON o.id=c.observation_id AND e.id IS NULL WHERE " + where +
                 " ORDER BY c.created_at DESC, c.id DESC",
             ).fetchall()
             eligible = []
@@ -6952,7 +6699,10 @@ class Repository:
     def _repeated_groups(con) -> list[dict]:
         rows = con.execute("""
             SELECT i.*,
-              (SELECT COUNT(*) FROM observations o WHERE o.individual_id=i.id) AS listing_count,
+              (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id AND
+                (c.claim_type='listing' OR (c.claim_type='ownership' AND
+                 c.ownership_kind='acquire' AND c.ownership_source IN
+                 ('automation','merged_listing')))) AS listing_count,
               (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id) AS claim_count
             FROM individuals i JOIN (
                 SELECT normalized_manufacturer, normalized_serial FROM individuals
@@ -7028,34 +6778,25 @@ class Repository:
         self,
     ):
         with self.connect() as con:
-            total = con.execute(
-                """
-                SELECT COUNT(*)
-                FROM observations
-                """
-            ).fetchone()[0]
-
             # Count external listings represented by active Listing/Acquire
             # claims, not Claim rows: a relisting has an Acquire, not a second
             # Listing Claim. Ownership verification does not erase its evidence.
             listing_counts = con.execute(
-                """
-                WITH linked AS (
-                    SELECT DISTINCT o.individual_id, o.source_site, o.source_listing_id
-                    FROM observations o
-                    JOIN individuals i ON i.id = o.individual_id
-                    WHERE NULLIF(TRIM(o.source_site), '') IS NOT NULL
-                      AND o.source_site <> 'user'
-                      AND NULLIF(TRIM(o.source_listing_id), '') IS NOT NULL
+                f"""
+                WITH sources AS ({MARKETPLACE_SOURCES_SQL}), linked AS (
+                    SELECT DISTINCT s.individual_id, s.source_site, s.source_listing_id
+                    FROM sources s JOIN individuals i ON i.id=s.individual_id
+                    WHERE NULLIF(TRIM(s.source_site), '') IS NOT NULL
+                      AND NULLIF(TRIM(s.source_listing_id), '') IS NOT NULL
                       AND NULLIF(TRIM(i.serial_number), '') IS NOT NULL
                       AND EXISTS (
-                        SELECT 1 FROM claims c
-                        WHERE c.observation_id = o.id
-                          AND c.individual_id = o.individual_id
-                          AND c.status = 'active'
-                          AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
-                          AND (c.claim_type = 'listing' OR
-                               (c.claim_type = 'ownership' AND c.ownership_kind = 'acquire'))
+                        SELECT 1 FROM claims c JOIN users u ON u.id=c.author_user_id
+                        WHERE (c.id=s.claim_id OR (s.claim_id IS NULL
+                               AND c.observation_id=s.legacy_observation_id))
+                          AND c.individual_id=s.individual_id
+                          AND c.status='active' AND u.ban_status='normal'
+                          AND (c.claim_type='listing' OR
+                               (c.claim_type='ownership' AND c.ownership_kind='acquire'))
                       )
                 ), repeated AS (
                     SELECT individual_id FROM linked
@@ -7067,45 +6808,25 @@ class Repository:
                 """
             ).fetchone()
             serial, relisted = listing_counts
+            external_sources = con.execute(
+                f'WITH sources AS ({MARKETPLACE_SOURCES_SQL}) '
+                'SELECT COUNT(*) FROM (SELECT DISTINCT source_site,source_listing_id FROM sources)'
+            ).fetchone()[0]
             repeated = con.execute("SELECT COUNT(*) FROM (SELECT 1 FROM individuals "
                                    "WHERE NULLIF(TRIM(normalized_manufacturer),'') IS NOT NULL "
                                    "AND NULLIF(TRIM(normalized_serial),'') IS NOT NULL "
                                    "GROUP BY normalized_manufacturer, normalized_serial HAVING COUNT(*)>1)").fetchone()[0]
             individuals = con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0]
 
-            max_observations = con.execute(
-                """
-                SELECT COALESCE(
-                    MAX(c),
-                    0
-                )
-                FROM (
-                    SELECT COUNT(*) c
-                    FROM observations
-                    WHERE individual_id
-                        IS NOT NULL
-                    GROUP BY individual_id
-                )
-                """
-            ).fetchone()[0]
-
             return {
-                "observations": total,
+                "external_listing_sources": external_sources,
+                "registered_serial_listings": serial,
+                "serial_listing_coverage_percent": serial / external_sources * 100 if external_sources else 0.0,
                 "serial_observations": serial,
-                "serial_extraction_rate": (
-                    serial
-                    / total
-                    * 100
-                    if total
-                    else 0.0
-                ),
                 "individuals": (
                     individuals
                 ),
                 "repeated_individuals": (
                     repeated
-                ),
-                "max_observations_per_individual": (
-                    max_observations
                 ),
             }

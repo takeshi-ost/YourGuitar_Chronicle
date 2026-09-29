@@ -8,6 +8,7 @@ from ygc import config
 from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository
+from ygc.db.source_records import known_listing_ids
 from ygc.incremental_crawl import _year_matches
 from ygc.reverb_adapter import (
     _guitar_category_state,
@@ -17,18 +18,8 @@ from ygc.reverb_adapter import (
 
 
 def existing_listing_ids(repository: Repository, ids: list[str]) -> set[str]:
-    ids = [value for value in ids if value]
-    found: set[str] = set()
     with repository.connect() as con:
-        for start in range(0, len(ids), 500):
-            chunk = ids[start:start + 500]
-            marks = ",".join("?" for _ in chunk)
-            rows = con.execute(
-                "SELECT source_listing_id FROM observations "
-                f"WHERE source_site=? AND source_listing_id IN ({marks})",
-                ["reverb", *chunk],
-            )
-            found.update(str(row[0]) for row in rows)
+        found = known_listing_ids(con, 'reverb', ids)
     found.update(repository.active_cached_listing_ids("reverb", ids))
     found.update(candidate_ids(repository, ids))
     return found
