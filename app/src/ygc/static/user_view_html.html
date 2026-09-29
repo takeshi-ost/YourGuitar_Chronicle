@@ -172,13 +172,18 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   main{padding:14px 14px 22px}
   .left-column{gap:12px}
   .product-list-panel{height:520px}
-  .detail-shell{position:static;width:auto;height:520px;margin-top:14px}
+  .detail-shell{display:none;position:fixed;top:12px;right:12px;bottom:12px;width:min(430px,calc(100vw - 24px));height:auto;margin:0;z-index:950}
+  .detail-shell.compact-open{display:block}
   .detail-panel{height:100%}
   .content-frame{width:100%;max-width:none}
   .dashboard-grid{grid-template-columns:1fr}
   .page-bottom-space{height:24px}
   .page-section{scroll-margin-top:12px}
 }
+.detail-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.detail-panel-heading h2{margin:0 0 8px}
+.compact-detail-close{display:none}
+@media(max-width:900px){.compact-detail-close{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;margin-bottom:8px;background:#2a3036;color:var(--text);font-size:18px}}
 .profile-mode .left-column{gap:14px}
 .profile-mode .profile-panel{min-width:0}
 .profile-mode .profile-hero{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;align-items:center}
@@ -319,9 +324,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 </div>
 
-<aside class="detail-shell">
+<aside class="detail-shell" id="productDetailShell" aria-label="Product Detail">
   <div class="panel detail-panel">
-    <h2>Product Detail</h2>
+    <div class="detail-panel-heading"><h2>Product Detail</h2><button type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()">×</button></div>
     <div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div>
   </div>
 </aside>
@@ -734,7 +739,7 @@ async function openNotification(notificationId,individualId){
   await loadNotifications();
   const panel=document.getElementById('notificationPanel');
   if(panel)panel.classList.remove('open');
-  if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId));
+  if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId),true);
 }
 async function markAllNotificationsRead(){
   if(!activeUser||!activeUser.user)return;
@@ -809,7 +814,7 @@ function renderNewDiscoveries(){
     const when=displayDiscoveryDateTime(item.activity_at||'');
     const product=discoveryProductName(item);
     const message=discoveryMessage(item);
-    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')" title="'+esc(when+' '+product+' '+message)+'">'+
+    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+',true)" title="'+esc(when+' '+product+' '+message)+'">'+
       '<span class="discovery-time">'+esc(when)+'</span>'+
       '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
     '</div>';
@@ -848,7 +853,7 @@ function renderIndividuals(){
   });
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
-    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td class="favorite-cell">'+favoriteButton(x.id)+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
+    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+',true)"><td>'+x.id+'</td><td class="favorite-cell">'+favoriteButton(x.id)+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
   ).join('');
 }
 
@@ -1262,7 +1267,31 @@ async function voteClaim(claimId,vote){
 }
 
 let individualLoadSequence=0;
-async function showIndividual(id){
+function closeCompactDetail(){
+  document.getElementById('productDetailShell').classList.remove('compact-open');
+}
+function openCompactDetail(){
+  if(window.matchMedia('(max-width: 900px)').matches){
+    document.getElementById('productDetailShell').classList.add('compact-open');
+  }
+}
+document.addEventListener('pointerdown',event=>{
+  const shell=document.getElementById('productDetailShell');
+  if(!shell.classList.contains('compact-open')||shell.contains(event.target))return;
+  if(event.target instanceof Element&&event.target.closest('.modal-backdrop.open, dialog[open]'))return;
+  closeCompactDetail();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!document.querySelector('.modal-backdrop.open, dialog[open]'))closeCompactDetail();
+});
+window.addEventListener('resize',()=>{
+  if(!window.matchMedia('(max-width: 900px)').matches)closeCompactDetail();
+});
+async function showIndividual(id,fromList=false){
+  if(fromList){
+    openCompactDetail();
+    if(Number(selectedIndividualId)!==Number(id))document.getElementById('detail').textContent='読み込み中...';
+  }
   const sequence=++individualLoadSequence;
   await loadActiveUser();
   if(sequence!==individualLoadSequence)return;
@@ -2002,7 +2031,7 @@ function renderProfileGuitars(section){
     if(el)el.textContent=state.key===key?(state.direction===1?'▲':'▼'):'';
   }
   root.innerHTML=rows.length?rows.map(g=>
-    '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+')">'+
+    '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+',true)">'+
       '<td>'+Number(g.individual_id)+'</td><td class="favorite-cell">'+favoriteButton(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
   ).join(''):'<tr><td colspan="8" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
 }
@@ -2013,7 +2042,7 @@ function renderUserChronicle(items){
     const category=['User','Social','Product','Claim','Other'].includes(item.category)?item.category:'Other';
     const id=Number(item.individual_id||0);
     const clickable=id>0;
-    const interaction=clickable?' onclick="showIndividual('+id+')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showIndividual('+id+')}"':'';
+    const interaction=clickable?' onclick="showIndividual('+id+',true)" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showIndividual('+id+',true)}"':'';
     const story=String(item.subject||'')+' '+String(item.message||'');
     return '<div class="profile-chronicle-row'+(clickable?' clickable':'')+'"'+interaction+' title="'+esc(story)+'">'+
       '<span class="profile-chronicle-tag '+category.toLowerCase()+'">'+category+'</span>'+
