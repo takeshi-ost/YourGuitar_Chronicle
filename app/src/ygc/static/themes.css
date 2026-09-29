@@ -145,9 +145,15 @@
   color: var(--text);
   border-color: var(--line);
 }
-:root[data-theme]:not([data-theme="dark_default"]) :is(.claim-card.claim-type-ownership,.claim-card.claim-type-specification,.claim-card.claim-type-incident,.claim-card.claim-type-event,.claim-card.claim-type-media) {
-  background: var(--surface);
-  color: var(--text);
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card.claim-type-ownership {--claim-tone:#4f9a68}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card.claim-type-specification {--claim-tone:#4d88b8}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card.claim-type-incident {--claim-tone:#b85a5a}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card.claim-type-event {--claim-tone:#9360b8}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card.claim-type-media {--claim-tone:#c68a32}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-card:is(.claim-type-ownership,.claim-type-specification,.claim-type-incident,.claim-type-event,.claim-type-media) {
+  background:color-mix(in srgb,var(--surface) 78%,var(--claim-tone));
+  border-color:color-mix(in srgb,var(--line) 45%,var(--claim-tone));
+  color:var(--text);
 }
 :root[data-theme]:not([data-theme="dark_default"]) .profile-chronicle-tag {color:#fff}
 :root[data-theme]:not([data-theme="dark_default"]) :is(input,select,textarea) {
@@ -159,6 +165,11 @@
   background: var(--control);
   color: var(--text);
 }
+:root[data-theme]:not([data-theme="dark_default"]) .claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-compact-tag.claim-type-event{background:#9360b8;color:#120917}
+:root[data-theme]:not([data-theme="dark_default"]) .claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
 :root[data-theme]:not([data-theme="dark_default"]) :is(.discovery-item,.clickable,.notification-item):hover {
   background: var(--control-hover);
 }
