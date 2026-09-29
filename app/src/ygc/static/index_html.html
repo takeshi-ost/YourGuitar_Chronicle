@@ -590,7 +590,7 @@ function productGalleryHtml(images,model){
   const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
   return '<div class="detail-gallery">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
-    '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
+    '<img class="detail-image album-trigger" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" role="button" tabindex="0" aria-label="Open photo album" onclick="openProductAlbum()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openProductAlbum()}" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
     '</div><span class="detail-source" id="productGallerySource">'+esc(source)+'</span>';
 }
@@ -605,6 +605,9 @@ function stepProductGallery(delta){
     const caption=String(item.caption||'').trim();
     source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
   }
+}
+function openProductAlbum(){
+  YGCImageAlbum.open(productGallery,productGalleryIndex,document.getElementById('productGalleryImage'));
 }
 function specificationFieldLabel(value){const labels={body:'Body',bridge:'Bridge',fingerboard:'Fingerboard',frets:'Frets',neck:'Neck',nut:'Nut',pickups:'Pickups',pickguard:'Pickguard',potentiometers:'Potentiometers',tuners:'Tuners',wiring:'Wiring',weight:'Weight',finish:'Finish'};const key=String(value||'').trim();return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
 function identityFieldLabel(value){const labels={manufacturer:'Maker',model:'Model',year:'Year',serial_number:'Serial'};return labels[String(value||'')]||String(value||'').replace(/_/g,' ')}
@@ -754,7 +757,7 @@ async function showIndividual(id){
   if(galleryImages.length){
     out+=productGalleryHtml(galleryImages,i.model||'Guitar');
   }else if(i.representative_image_url){
-    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
+    out+='<img class="detail-image album-trigger" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" role="button" tabindex="0" aria-label="Open representative image" onclick="YGCImageAlbum.openRepresentative(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();YGCImageAlbum.openRepresentative(this)}" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(listing&&listing.image_url){
     const listingUrl=String(listing.source_url||'');
     const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';

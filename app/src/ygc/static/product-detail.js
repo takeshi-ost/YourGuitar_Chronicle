@@ -62,3 +62,101 @@ window.YGCProductDetail = (() => {
   }
   return {render, orderedClaims};
 })();
+
+/* The same album is used by Top Page, User Profile, and Browser Console. */
+window.YGCImageAlbum = (() => {
+  let items = [];
+  let index = 0;
+  let opener = null;
+  let previousOverflow = '';
+  let overlay = null;
+
+  function caption(item) {
+    const note = String(item.caption || '').trim();
+    return String(item.label || 'Uploaded Image') + (note ? ' — ' + note : '');
+  }
+
+  function render() {
+    const item = items[index];
+    overlay.querySelector('.ygc-album-image').src = item.url;
+    overlay.querySelector('.ygc-album-image').alt = caption(item);
+    overlay.querySelector('.ygc-album-caption').textContent = caption(item);
+    overlay.querySelector('.ygc-album-counter').textContent = (index + 1) + ' / ' + items.length;
+    overlay.querySelectorAll('.ygc-album-nav').forEach(button => {
+      button.hidden = items.length < 2;
+    });
+  }
+
+  function step(delta) {
+    if (items.length < 2) return;
+    index = (index + delta + items.length) % items.length;
+    render();
+  }
+
+  function close() {
+    if (!overlay) return;
+    overlay.remove();
+    overlay = null;
+    document.body.style.overflow = previousOverflow;
+    if (opener && opener.isConnected) opener.focus();
+    opener = null;
+    items = [];
+  }
+
+  function onKeydown(event) {
+    if (!overlay) return;
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+  }
+  document.addEventListener('keydown', onKeydown);
+
+  function open(images, selectedIndex = 0, trigger = null) {
+    const valid = (images || []).filter(item => item && item.url);
+    if (!valid.length) return;
+    close();
+    items = valid;
+    index = Math.max(0, Math.min(Number(selectedIndex) || 0, items.length - 1));
+    opener = trigger || document.activeElement;
+    previousOverflow = document.body.style.overflow;
+    overlay = document.createElement('div');
+    overlay.className = 'ygc-album-backdrop';
+    overlay.innerHTML = '<div class="ygc-album-panel" role="dialog" aria-modal="true" aria-label="Guitar photo album">' +
+      '<div class="ygc-album-header"><span class="ygc-album-counter"></span><button type="button" class="ygc-album-close">Close</button></div>' +
+      '<div class="ygc-album-stage"><button type="button" class="ygc-album-nav ygc-album-prev" aria-label="Previous image">‹</button>' +
+      '<img class="ygc-album-image" alt=""><button type="button" class="ygc-album-nav ygc-album-next" aria-label="Next image">›</button></div>' +
+      '<div class="ygc-album-caption"></div></div>';
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.querySelector('.ygc-album-close').addEventListener('click', close);
+    overlay.querySelector('.ygc-album-prev').addEventListener('click', () => step(-1));
+    overlay.querySelector('.ygc-album-next').addEventListener('click', () => step(1));
+    document.body.append(overlay);
+    document.body.style.overflow = 'hidden';
+    render();
+    overlay.querySelector('.ygc-album-close').focus();
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .detail-image.album-trigger{cursor:zoom-in}
+    .detail-image.album-trigger:focus-visible{outline:2px solid var(--accent,#d0a45d);outline-offset:3px}
+    .ygc-album-backdrop{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:clamp(12px,2.5vw,32px);background:rgba(0,0,0,.88)}
+    .ygc-album-panel{box-sizing:border-box;width:min(1600px,100%);height:min(1000px,100%);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;padding:12px 16px;background:#111418;color:#f0f0ed;border:1px solid #5a626a;border-radius:12px;box-shadow:0 20px 70px #000b}
+    .ygc-album-header{display:flex;align-items:center;justify-content:space-between;min-height:36px;font-size:13px;color:#c6cbd0}
+    .ygc-album-panel button{border:1px solid #66707a;border-radius:7px;background:#252b31;color:#fff;cursor:pointer}
+    .ygc-album-close{min-height:34px;padding:6px 14px;font-size:13px}
+    .ygc-album-panel button:hover{background:#3a434b}
+    .ygc-album-panel button:focus-visible{outline:2px solid #d0a45d;outline-offset:2px}
+    .ygc-album-stage{min-height:0;display:grid;grid-template-columns:42px minmax(0,1fr) 42px;grid-template-rows:minmax(0,1fr);align-items:center;gap:10px;overflow:hidden}
+    .ygc-album-image{display:block;min-width:0;min-height:0;max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain}
+    .ygc-album-nav{width:42px;height:52px;font-size:32px;line-height:1}
+    .ygc-album-nav[hidden]{visibility:hidden}
+    .ygc-album-caption{min-height:24px;text-align:center;font-size:13px;color:#c6cbd0;overflow-wrap:anywhere}
+    @media(max-width:600px){.ygc-album-panel{padding:8px}.ygc-album-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:2px}.ygc-album-nav{width:30px;height:44px}}
+  `;
+  document.head.append(style);
+  function openRepresentative(image) {
+    open([{url: image.currentSrc || image.src, label: 'Representative Image'}], 0, image);
+  }
+  return {open, openRepresentative, close, step};
+})();
