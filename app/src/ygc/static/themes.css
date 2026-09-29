@@ -177,7 +177,9 @@
 
 /* Curated wordmarks match the selected guitar color theme. */
 .sticky-header .brand-link{display:inline-flex;vertical-align:middle;align-items:center;line-height:0}
-.sticky-header .brand-logo{display:none;width:min(270px,65vw);height:46px;object-fit:contain}
+.sticky-header h1{display:flex;align-items:flex-end;gap:8px}
+.sticky-header h1>.sub{font-size:10px;line-height:1.2;margin-bottom:1px}
+.sticky-header .brand-logo{display:none;height:46px;width:auto;max-width:65vw;object-fit:contain;object-position:left center}
 .sticky-header .brand-logo-script{display:block}
 :root[data-theme="dark_default"] .brand-logo-script,
 :root[data-theme="black_pearl"] .brand-logo-script,

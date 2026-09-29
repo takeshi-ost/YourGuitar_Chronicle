@@ -36,10 +36,10 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         assert client.get('/assets/logos/secret.svg').status_code == 404
         for page in ('/user-view', '/user-view/edit'):
             html = client.get(page).text
-            assert all(html.count(f'src="/assets/logos/{variant}.png"') == 1 for variant in ('script', 'block', 'badge'))
-            assert '/assets/themes.css?v=logo-v4' in html
+            assert all(html.count(f'src="/assets/logos/{variant}.png?v=2"') == 1 for variant in ('script', 'block', 'badge'))
+            assert '/assets/themes.css?v=logo-v5' in html
         console = client.get('/').text
-        assert console.count('src="/assets/logos/block.png"') == 1
+        assert console.count('src="/assets/logos/block.png?v=2"') == 1
         assert 'brand-logo-script' not in console
         for key, _ in THEMES[1:]:
             assert f':root[data-theme="{key}"]' in stylesheet.text
