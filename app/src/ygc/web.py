@@ -1058,7 +1058,7 @@ def product_detail_script() -> FileResponse:
 
 @app.get("/assets/logos/{filename}")
 def theme_logo(filename: str) -> FileResponse:
-    if filename not in {"your-guitar-chronicle-v2.png"}:
+    if filename not in {"script.png", "block.png", "badge.png"}:
         raise HTTPException(status_code=404, detail="Logo asset not found")
     return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/png", headers={"Cache-Control": "no-store"})
 
