@@ -2114,12 +2114,18 @@ async function loadProfilePage(preferredIndividualId=null){
     profileGuitars=data.guitars||[];
     profileFavorites=data.favorites||[];
     const own=Number(activeUser.user.id)===Number(u.id);
-    const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
+    const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ');
+    const profileMeta=[
+      locationText ? 'Location: '+locationText : '',
+      u.date_of_birth ? 'Date of Birth: '+u.date_of_birth : '',
+      u.account_type||'user',
+      'Member since '+String(u.created_at||'').slice(0,10)
+    ].filter(Boolean).map(esc).join(' · ');
     const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
     hero.innerHTML='<div class="profile-hero">'+
       '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
-      '<div class="profile-meta">'+esc(locationText)+' · '+esc(u.account_type||'user')+' · Member since '+esc(String(u.created_at||'').slice(0,10))+'</div>'+
+      '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
       '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
       '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'')+'</div></div>';

@@ -41,6 +41,47 @@ def test_date_of_birth_validation_chronicle_and_visibility(tmp_path, monkeypatch
         assert births(f"?viewer_id={owner}") == []
 
 
+def test_profile_birth_and_location_visibility_for_each_viewer(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "visibility.db")
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    owner = repository.create_user("Owner")
+    member = repository.create_user("Member")
+    url = f"/api/users/{owner}"
+    payload = {"display_name": "Owner", "account_type": "user",
+               "date_of_birth": "1976-04-01", "location_country": "Japan",
+               "location_region": "Tokyo"}
+    with TestClient(app) as client:
+        assert client.patch(url, json=payload).status_code == 200
+        def profile(viewer=None):
+            suffix = "" if viewer is None else f"?viewer_id={viewer}"
+            return client.get(f"{url}/profile{suffix}").json()["user"]
+        assert profile(owner)["date_of_birth"] == "1976-04-01"
+        assert profile(owner)["location_region"] == "Tokyo"
+        for viewer in (None, member):
+            assert profile(viewer)["date_of_birth"] is None
+            assert profile(viewer)["location_country"] is None
+            assert profile(viewer)["location_region"] is None
+        assert client.patch(url, json={**payload, "birth_visibility": "Members",
+                                       "residence_visibility": "Members"}).status_code == 200
+        assert profile(member)["date_of_birth"] == "1976-04-01"
+        assert profile(member)["location_region"] == "Tokyo"
+        assert profile()["date_of_birth"] is None
+        assert profile()["location_country"] is None
+        assert client.patch(url, json={**payload, "birth_visibility": "Public",
+                                       "residence_visibility": "Public"}).status_code == 200
+        assert profile()["date_of_birth"] == "1976-04-01"
+        assert profile()["location_country"] == "Japan"
+        assert client.patch(url, json={**payload, "birth_visibility": "Followers",
+                                       "residence_visibility": "Followers"}).status_code == 200
+        assert profile(member)["date_of_birth"] is None
+        assert profile(member)["location_region"] is None
+        assert profile(owner)["location_region"] == "Tokyo"
+        html = client.get(f"/users/{owner}").text
+        assert "u.date_of_birth ? 'Date of Birth: '+u.date_of_birth" in html
+        assert "locationText ? 'Location: '+locationText" in html
+
+
 def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "themes.db")
     repo = Repository(config.DB_PATH)
