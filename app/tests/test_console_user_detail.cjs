@@ -2,10 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const html = fs.readFileSync('app/src/ygc/static/index_html.html', 'utf8');
+const html = require('./page_source.cjs')('app/src/ygc/static/index_html.html');
 assert.doesNotMatch(html, /id="activeUserSelect"/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
-  .map(match => match[1]).find(text => text.includes('let selectedUserId=null'))
+  .map(match => match[1]).join('\n')
   .split('const header=document.querySelector')[0]
   .replace('const CONSOLE_ADMIN_TOKEN="";', 'const CONSOLE_ADMIN_TOKEN="admin";');
 

@@ -33,8 +33,8 @@ assert.equal(detail.orderedClaims([
   {id: 5, occurred_at: '2026-08-01', created_at: '2026-08-02'},
 ]).map(c => c.id).join(','), '5,4');
 for (const page of ['index_html', 'user_view_html']) {
-  const markup = fs.readFileSync('app/src/ygc/static/' + page + '.html', 'utf8');
-  assert.match(markup, /<script src="\/assets\/product-detail\.js\?v=chronicle-layout-v1" defer><\/script>/);
+  const markup = require('./page_source.cjs')('app/src/ygc/static/' + page + '.html');
+  assert.match(markup, /<script src="\/assets\/product-detail\.js\?v=shared-ui-v2" defer><\/script>/);
   assert.match(markup, /YGCProductDetail\.render\(/);
   assert.match(markup, /YGCProductDetail\.orderedClaims\(/);
   assert.match(markup, /#detail \.detail-image\{width:calc\(100% - 72px\);height:auto;aspect-ratio:4\/3;object-fit:contain\}/);

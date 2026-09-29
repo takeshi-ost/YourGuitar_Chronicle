@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const {test} = require('node:test');
 
-const html = fs.readFileSync('app/src/ygc/static/user_view_html.html', 'utf8');
+const html = require('./page_source.cjs')('app/src/ygc/static/user_view_html.html');
 function source(name) {
   const start = html.indexOf('async function ' + name + '(');
   assert.ok(start >= 0, name);
