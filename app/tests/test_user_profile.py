@@ -28,16 +28,17 @@ def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, mon
         assert [item['id'] for item in choices] == [key for key, _ in THEMES]
         assert len(choices) == 13
         assert next(item['label'] for item in choices if item['id'] == 'sunburst_3ply') == 'Sunburst & White'
-        logo = client.get('/assets/logos/your-guitar-chronicle.png')
+        logo = client.get('/assets/logos/your-guitar-chronicle-v2.png')
         assert logo.status_code == 200
         assert logo.headers['content-type'].startswith('image/png')
         assert logo.content.startswith(b'\x89PNG\r\n\x1a\n')
         assert client.get('/assets/logos/secret.svg').status_code == 404
         for page in ('/user-view', '/user-view/edit'):
             html = client.get(page).text
-            assert html.count('src="/assets/logos/your-guitar-chronicle.png"') == 1
+            assert html.count('src="/assets/logos/your-guitar-chronicle-v2.png"') == 1
+            assert '/assets/themes.css?v=logo-v2' in html
         console = client.get('/').text
-        assert console.count('src="/assets/logos/your-guitar-chronicle.png"') == 1
+        assert console.count('src="/assets/logos/your-guitar-chronicle-v2.png"') == 1
         assert 'brand-logo-script' not in console
         for key, _ in THEMES[1:]:
             assert f':root[data-theme="{key}"]' in stylesheet.text

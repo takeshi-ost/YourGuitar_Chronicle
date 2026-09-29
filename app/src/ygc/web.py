@@ -1039,7 +1039,7 @@ def user_view() -> HTMLResponse:
 
 @app.get("/assets/themes.css")
 def theme_stylesheet() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css")
+    return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/list-navigation.js")
@@ -1058,9 +1058,9 @@ def product_detail_script() -> FileResponse:
 
 @app.get("/assets/logos/{filename}")
 def theme_logo(filename: str) -> FileResponse:
-    if filename not in {"your-guitar-chronicle.png"}:
+    if filename not in {"your-guitar-chronicle-v2.png"}:
         raise HTTPException(status_code=404, detail="Logo asset not found")
-    return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/png")
+    return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/sunburst-wood.webp")

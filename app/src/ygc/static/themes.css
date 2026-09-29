@@ -177,4 +177,4 @@
 
 /* The wordmark is shared by all themes. */
 .sticky-header .brand-link{display:inline-flex;vertical-align:middle;align-items:center;line-height:0}
-.sticky-header .brand-logo{display:block;width:min(380px,65vw);height:46px;object-fit:contain}
+.sticky-header .brand-logo{display:block;width:min(270px,65vw);height:auto;object-fit:contain}
