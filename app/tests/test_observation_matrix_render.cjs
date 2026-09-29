@@ -35,7 +35,7 @@ assert.match(html, /matrix-unrelated">—/);
 assert.match(html, /&lt;unsafe>/);
 assert.match(html, /Current Guitar Individual/);
 assert.match(html, /Specification/);
-assert.match(html, /<tfoot>[\s\S]*空欄/);
+assert.match(html, /<tfoot>[\s\S]*Blank/);
 assert.match(html, /style="width:278px"/);
 assert.equal((html.match(/<col class="matrix-value-col">/g) || []).length, 3);
 assert.ok(html.indexOf('</tbody>') < html.indexOf('<tfoot>'));

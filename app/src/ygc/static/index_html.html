@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -133,31 +133,31 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 <div class="sticky-header"><header><h1><a class="brand-link" href="/user-view">Your Guitar Chronicle</a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav></header></div>
 <main>
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
-<div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb収集と実行状況</span></div>
-<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Tokenを入力"><button onclick="saveToken()">保存</button><button class="danger" onclick="clearToken()">削除</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
+<div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
+<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Enter token"><button onclick="saveToken()">Save</button><button class="danger" onclick="clearToken()">Delete</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
 <div class="panel">
 <h2>Incremental Crawl</h2>
-<div class="sub">製造年と分野で検索。1クリックで一覧最大2000件をページ末尾まで走査し、該当候補の詳細を件数制限なく取得します。既存Listingの公開確認は最大5件です。カテゴリ検索は検索語と取得結果のカテゴリ確認による試作です。</div>
+<div class="sub">Search by manufacture year and category. Each run scans up to 2,000 listings through the end of a page and fetches all matching details. It checks up to five existing listings for availability. Category matching is a prototype using the search query and returned category.</div>
 <div class="crawl-controls" style="margin-top:10px">
 <div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="electric">Electric Guitars</option><option value="acoustic">Acoustic Guitars</option></select></div>
 <div><div class="sub">Year Min</div><input id="programYearMin" type="number" value="1950" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
 <div><div class="sub">Year Max</div><input id="programYearMax" type="number" value="1980" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
 <div><button id="programBtn" onclick="advanceCrawlProgram()">Advance</button></div>
 <div><button class="secondary" onclick="restartCrawlProgram()">Restart Scan</button></div>
-<div><button id="cacheReprocessBtn" class="secondary" onclick="reprocessCachedDetails()">保存済み詳細を再判定</button></div>
+<div><button id="cacheReprocessBtn" class="secondary" onclick="reprocessCachedDetails()">Reprocess saved details</button></div>
 </div>
-<div class="sub">再判定は両Crawlの保存済み詳細を、上の分野・製造年の条件で処理します。Reverbへのアクセスは行いません。</div>
-<div id="programState" class="sub" style="margin-top:8px">状態を確認中</div>
+<div class="sub">Reprocesses saved details from both crawl modes using the category and manufacture year above. This does not contact Reverb.</div>
+<div id="programState" class="sub" style="margin-top:8px">Checking status</div>
 <div id="programProgress" class="sub" role="status" aria-live="polite"></div>
 <div id="programResult" class="sub"></div>
-<div class="toolbar"><h3 style="flex:1;margin-bottom:0">Crawl Run Log</h3><button class="secondary" onclick="loadCrawlRunLog()">更新</button></div>
+<div class="toolbar"><h3 style="flex:1;margin-bottom:0">Crawl Run Log</h3><button class="secondary" onclick="loadCrawlRunLog()">Refresh</button></div>
 <div id="crawlRunLog" class="table-wrap sub"></div>
-<div class="sub" style="margin-top:8px"><button class="secondary" onclick="loadReviewCandidates()">確認待ち候補を表示</button><div id="reviewCandidates"></div></div>
+<div class="sub" style="margin-top:8px"><button class="secondary" onclick="loadReviewCandidates()">Show candidates for review</button><div id="reviewCandidates"></div></div>
 </div>
 <div class="panel">
 <h2>Batch Crawl</h2>
 <div class="crawl-query">
-<div class="sub">1行につき1クエリ</div>
+<div class="sub">One query per line</div>
 <textarea id="queries">Fender Stratocaster
 Fender Telecaster
 Fender Jazzmaster
@@ -167,59 +167,59 @@ Gibson SG
 Gibson ES-335</textarea>
 </div>
 <div class="crawl-controls">
-<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="なし" min="1800" max="2100"></div>
+<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="None" min="1800" max="2100"></div>
 <div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
 <div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
 <div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
 <div><button id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
 </div>
 <div class="progress"><div class="bar" id="jobBar"></div></div>
-<div id="jobMessage" class="sub">待機中</div>
+<div id="jobMessage" class="sub">Idle</div>
 <div id="jobResults" style="margin-top:12px"></div>
 </div>
 </section>
 
 <section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
-<div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product / Claim / DBメンテナンス</span></div>
-<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="danger" onclick="resetDatabase()">DB初期化</button></div><div class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</div></div>
+<div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product, Claim, and DB maintenance</span></div>
+<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">Backup</button><button class="secondary" onclick="openDatabaseImport()">Restore backup</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="danger" onclick="resetDatabase()">Reset DB</button></div><div class="sub">Backups include user data. Resetting the DB deletes guitar and user data.</div></div>
 <div class="domain-grid guitar-content">
 <section>
-<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Specificationを整理・追加</button></div><div class="sub">自動生成済みClaimの誤抽出と重複するFinishを整理し、ユーザーOwnerのいない個体には保存済みReverb Detailの明示的な仕様項目を追加します。</div></div>
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Clean and add Specifications</button></div><div class="sub">Cleans incorrect automated extractions and duplicate Finish values, then adds explicit specifications from saved Reverb details to guitars without a user owner.</div></div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">Backfill existing DB (one time)</button><button class="secondary" onclick="loadIndividuals()">Refresh</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Unverified Acquire <span id="unverifiedAcquireTotal" class="sub"></span></h2><button class="secondary" onclick="loadUnverifiedAcquires(0)">更新</button></div>
-<div class="sub">承認すると現在の所有者が変わるUnverified Acquireのみを表示します。過去の履歴や同じ所有者へのAcquireは除外します。行をクリックするとProduct Detailを開きます。</div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Unverified Acquire <span id="unverifiedAcquireTotal" class="sub"></span></h2><button class="secondary" onclick="loadUnverifiedAcquires(0)">Refresh</button></div>
+<div class="sub">Shows only Unverified Acquire Claims that could change the current owner. Historical Claims and Claims for the same owner are excluded. Select a row to open Product Detail.</div>
 <div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
-<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">前へ</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">次へ</button></div>
+<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">Previous</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">Next</button></div>
 </div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
-<div id="statistics" class="sub">集計中...</div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">Refresh</button></div>
+<div id="statistics" class="sub">Calculating...</div>
 </div>
 </section>
-<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation判定</button></div><div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div></div></aside>
+<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation decision</button></div><div id="detail" class="sub">Select a row in Product List to view its history.</div></div></aside>
 </div>
 </section>
 <section class="console-domain" id="user-db" aria-labelledby="userHeading">
-<div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">ユーザーを検索して登録内容を確認</span></div>
-<div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">GuestでTop Pageを開く</button><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="loadUsers()">更新</button></div>
+<div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">Search users and inspect account data</span></div>
+<div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">Open Top Page as Guest</button><button onclick="createUser()">Create account</button><button class="secondary" onclick="loadUsers()">Refresh</button></div>
 <div class="domain-grid">
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
-<div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>このユーザーでTop Pageを開く</button></div><div id="accountPanel" class="sub">左のUsersから対象を選択してください。</div></div>
+<div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
 </section>
 </main>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
 <div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="document.getElementById('repeatedDialog').close()">Close</button></div>
-<p class="sub">メーカー・シリアルが一致する重複候補です。同一個体か確認し、残す個体を選択してください。Mergeは記録を引き継ぎ、統合元の状態変更Claimを確認待ちにします。Deleteは選択した個体以外の関連記録も削除します。</p>
+<p class="sub">Possible duplicates with the same maker and serial. Check whether they are the same guitar and select the record to keep. Merge retains history and marks source Claims that change state for review. Delete removes related records of the other guitar.</p>
 <div id="repeatedGroups" aria-live="polite"></div>
 </dialog>
 <dialog id="observationDiagnosticDialog" style="width:min(1400px,96vw);max-width:96vw;max-height:91vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
-<div class="toolbar"><h2 style="margin:0;flex:1">Observation判定経路</h2><button class="secondary" onclick="document.getElementById('observationDiagnosticDialog').close()">Close</button></div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Observation decision path</h2><button class="secondary" onclick="document.getElementById('observationDiagnosticDialog').close()">Close</button></div>
 <div id="observationDiagnosticBody" aria-live="polite"></div>
 </dialog>
 <div id="adminClaimPopup" onclick="closeAdminClaim(event)" role="dialog" aria-label="Claim Detail"><div id="adminClaimPopupContent"></div></div>
@@ -245,8 +245,8 @@ function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
 async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Registered Guitars',s.individuals,'DBの個体総数。ユーザー登録とクロール登録の両方を含みます。'),statCard('Serial Listings',s.serial_observations,'シリアルのある個体に紐付く外部Listing数。同じサイト・Listing IDは重複除外。Acquireによる再出品と所有者確認待ちも含みます。'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'メーカーとシリアルが一致する複数のDB個体の組数。クリックして確認・統合・削除。')+'</button>'
-].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'環境変数で設定済み（値は表示不可）':'Tokenを入力'}}
+statCard('Registered Guitars',s.individuals,'Total guitars in the DB, including user and crawl registrations.'),statCard('Serial Listings',s.serial_observations,'External Listings linked to guitars with serial numbers. Duplicate site and Listing ID pairs are excluded. Includes relistings represented by Acquire and pending owner confirmation.'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'Groups of DB guitars with the same maker and serial. Select to inspect, merge, or delete.')+'</button>'
+].join('');const source=d.token_source==='browser'?'saved in browser':(d.token_source==='environment'?'environment':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token not set</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'Set by environment variable (value hidden)':'Enter token'}}
 let repeatedGroups=[];
 let repeatedBusy=false;
 function renderObservationMatrix(d){
@@ -254,8 +254,8 @@ function renderObservationMatrix(d){
   const snapshot=matrix.columns.filter(col=>col.group==='individual');
   const specifications=matrix.columns.filter(col=>col.group==='specification');
   const fieldLabel=key=>({manufacturer:'Maker',model:'Model',finish:'Finish',year:'Year',serial_number:'Serial',location_country:'Country',location_region:'Region',current_owner_name:'Current Owner',current_owner_type:'Owner Type',current_owner_user_id:'Owner User ID',current_owner_source_url:'Owner Source URL'})[key]||('Spec · '+key.slice(5).replace(/_/g,' '));
-  const formatValue=value=>value===null||value===undefined||value===''?'空欄':String(value);
-  const header='<thead><tr><th rowspan="2" style="text-align:left">Claim（古い順）</th><th colspan="'+snapshot.length+'">Guitar Individual</th>'+(specifications.length?'<th colspan="'+specifications.length+'">Specification</th>':'')+'</tr><tr>'+matrix.columns.map(col=>'<th scope="col">'+esc(fieldLabel(col.key))+'</th>').join('')+'</tr></thead>';
+  const formatValue=value=>value===null||value===undefined||value===''?'Blank':String(value);
+  const header='<thead><tr><th rowspan="2" style="text-align:left">Claim (oldest first)</th><th colspan="'+snapshot.length+'">Guitar Individual</th>'+(specifications.length?'<th colspan="'+specifications.length+'">Specification</th>':'')+'</tr><tr>'+matrix.columns.map(col=>'<th scope="col">'+esc(fieldLabel(col.key))+'</th>').join('')+'</tr></thead>';
   const rows=matrix.rows.map(row=>{
     const results=[...new Set((row.decisions||[]).map(x=>x.result+(x.reason?' · '+x.reason:'')))].join(' / ');
     const evidences=[...new Set([...(row.decisions||[]).flatMap(x=>(x.evidence||[]).map(e=>e.source_listing_id?(e.source_site+' #'+e.source_listing_id):e.evidence_type)),...(row.specification_evidence?[row.specification_evidence.source_site+' #'+row.specification_evidence.source_listing_id]:[])])];
@@ -264,22 +264,22 @@ function renderObservationMatrix(d){
       const cell=row.cells[col.key];
       if(!cell)return '<td class="matrix-unrelated">—</td>';
       const value=formatValue(cell.value);
-      return '<td class="'+(cell.adopted?'matrix-adopted':'matrix-rejected')+'" title="'+(cell.adopted?'Observationで採用':'現在値には不採用')+' · '+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
+      return '<td class="'+(cell.adopted?'matrix-adopted':'matrix-rejected')+'" title="'+(cell.adopted?'Adopted by Observation':'Not adopted for current value')+' · '+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
     }).join('')+'</tr>';
   }).join('');
   const footer='<tfoot><tr><th scope="row" class="matrix-claim">Current Guitar Individual</th>'+matrix.columns.map(col=>{
     const mismatch=Object.prototype.hasOwnProperty.call(d.differences||{},col.key);
     const value=Object.prototype.hasOwnProperty.call(matrix.current,col.key)?formatValue(matrix.current[col.key]):'—';
-    return '<td class="'+(mismatch?'matrix-mismatch':'')+'" title="'+(mismatch?'保存値とObservation判定値が異なります · ':'')+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
+    return '<td class="'+(mismatch?'matrix-mismatch':'')+'" title="'+(mismatch?'Saved value differs from Observation result · ':'')+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
   }).join('')+'</tr></tfoot>';
   const mismatches=Object.entries(d.differences||{});
-  return '<p class="sub">個体 #'+Number(d.individual_id)+' · '+matrix.rows.length+' Claims · 保存済みSnapshotとの差分 '+mismatches.length+' 件（読み取り専用）</p>'+
-    '<p class="sub">明るいグレー＝現在採用中、暗いグレー＝不採用、—＝このClaimの対象外。空欄はClaimが値を消す提案です。Specification列の最下段には現在表示中の値を示します。</p>'+
+  return '<p class="sub">Individual #'+Number(d.individual_id)+' · '+matrix.rows.length+' Claims · Differences from saved Snapshot: '+mismatches.length+' (read only)</p>'+
+    '<p class="sub">Light gray = adopted, dark gray = not adopted, — = not applicable. A blank value proposes clearing a field. The final Specification row shows the current displayed value.</p>'+
     '<div class="observation-matrix-scroll"><table class="observation-matrix" style="width:'+(94+60*matrix.columns.length+matrix.columns.length+1)+'px"><colgroup><col class="matrix-claim-col">'+matrix.columns.map(()=>'<col class="matrix-value-col">').join('')+'</colgroup>'+header+'<tbody>'+rows+'</tbody>'+footer+'</table></div>'+
-    (mismatches.length?'<p class="sub">保存値と判定値に差があります: '+mismatches.map(([key,x])=>esc(fieldLabel(key))+'（保存 '+esc(x.saved??'—')+' / 判定 '+esc(x.evaluated??'—')+'）').join('、')+'</p>':'');
+    (mismatches.length?'<p class="sub">Saved values differ from evaluated values: '+mismatches.map(([key,x])=>esc(fieldLabel(key))+' (saved '+esc(x.saved??'—')+' / evaluated '+esc(x.evaluated??'—')+')').join(' / ')+'</p>':'');
 }
 async function openObservationDiagnostic(){
-  if(!selectedIndividualId){alert('先に個体を選択してください。');return}
+  if(!selectedIndividualId){alert('Select a guitar first.');return}
   const dialog=document.getElementById('observationDiagnosticDialog');
   if(!dialog.open)dialog.showModal();
   const body=document.getElementById('observationDiagnosticBody');body.textContent='Loading…';
@@ -296,17 +296,17 @@ async function openRepeated(){
   try{
     const d=await jfetch('/api/admin/repeated',{headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
     repeatedGroups=d.items;
-    container.innerHTML=d.items.length?d.items.map((g,n)=>'<section class="panel"><h3>'+esc(g.manufacturer)+' / '+esc(g.serial)+'</h3><div style="overflow:auto"><table><thead><tr><th>残す</th><th>ID</th><th>Maker / Model</th><th>Year / Serial</th><th>Owner</th><th>Listings / Claims</th></tr></thead><tbody>'+g.items.map(i=>'<tr><td><input type="radio" name="repeated-'+n+'" value="'+Number(i.id)+'" aria-label="個体 '+Number(i.id)+' を残す"></td><td><button class="secondary" onclick="document.getElementById(\'repeatedDialog\').close();showIndividual('+Number(i.id)+')">#'+Number(i.id)+'</button></td><td>'+esc(i.manufacturer)+' / '+esc(i.model)+'</td><td>'+esc(i.year)+' / '+esc(i.serial_number)+'</td><td>'+esc(i.current_owner_name||'Unknown')+'</td><td>'+Number(i.listing_count)+' / '+Number(i.claim_count)+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button onclick="resolveRepeated('+n+',\'merge\')">Merge</button><button class="danger" onclick="resolveRepeated('+n+',\'delete\')">Delete</button></div></section>').join(''):'重複候補はありません。';
+    container.innerHTML=d.items.length?d.items.map((g,n)=>'<section class="panel"><h3>'+esc(g.manufacturer)+' / '+esc(g.serial)+'</h3><div style="overflow:auto"><table><thead><tr><th>Keep</th><th>ID</th><th>Maker / Model</th><th>Year / Serial</th><th>Owner</th><th>Listings / Claims</th></tr></thead><tbody>'+g.items.map(i=>'<tr><td><input type="radio" name="repeated-'+n+'" value="'+Number(i.id)+'" aria-label="Individual '+Number(i.id)+' to keep"></td><td><button class="secondary" onclick="document.getElementById(\'repeatedDialog\').close();showIndividual('+Number(i.id)+')">#'+Number(i.id)+'</button></td><td>'+esc(i.manufacturer)+' / '+esc(i.model)+'</td><td>'+esc(i.year)+' / '+esc(i.serial_number)+'</td><td>'+esc(i.current_owner_name||'Unknown')+'</td><td>'+Number(i.listing_count)+' / '+Number(i.claim_count)+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button onclick="resolveRepeated('+n+',\'merge\')">Merge</button><button class="danger" onclick="resolveRepeated('+n+',\'delete\')">Delete</button></div></section>').join(''):'No duplicate candidates.';
   }catch(e){container.textContent=e.message}
 }
 async function resolveRepeated(index,action){
   if(repeatedBusy)return;
   const selected=document.querySelector('input[name="repeated-'+index+'"]:checked');
-  if(!selected){alert('残す個体を選択してください。');return}
+  if(!selected){alert('Select the guitar to keep.');return}
   const keepId=Number(selected.value), ids=repeatedGroups[index].items.map(i=>Number(i.id));
   const removed=ids.filter(id=>id!==keepId);
-  if(!confirm('#'+keepId+' を残し、#'+removed.join(', #')+(action==='merge'?' の記録を統合します。所有者などを変更する統合元Claimは確認待ちになります。':' とその関連記録を完全に削除します。この操作は元に戻せません。')+' 続行しますか？'))return;
-  if(action==='delete'&&prompt('確認のため DELETE と入力してください。')!=='DELETE')return;
+  if(!confirm('Keep #'+keepId+' and '+(action==='merge'?'merge the history of ':'permanently delete ')+'#'+removed.join(', #')+(action==='merge'?'. Source Claims that change owner or other state will require review.':'. This also deletes related records and cannot be undone.')+' Continue?'))return;
+  if(action==='delete'&&prompt('Type DELETE to confirm.')!=='DELETE')return;
   repeatedBusy=true;
   document.querySelectorAll('#repeatedGroups button').forEach(b=>b.disabled=true);
   try{
@@ -317,14 +317,14 @@ async function resolveRepeated(index,action){
   }catch(e){alert(e.message)}
   finally{repeatedBusy=false;await openRepeated()}
 }
-async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);document.getElementById('tokenInput').blur();await refreshStatus()}
+async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Enter a token.');return}localStorage.setItem(TOKEN_KEY,token);document.getElementById('tokenInput').blur();await refreshStatus()}
 async function clearToken(){localStorage.removeItem(TOKEN_KEY);const input=document.getElementById('tokenInput');input.value='';input.blur();await refreshStatus()}
 function exportDatabase(){window.location.href='/api/export-db'}
 function openDatabaseImport(){const input=document.getElementById('dbImportInput');input.value='';input.click()}
 async function importDatabaseFile(input){
   const file=input.files&&input.files[0];
   if(!file)return;
-  const message='現在のDBとMediaを選択したバックアップで置き換えます。\n\n'+file.name+'\n\n旧形式の .db も復元できますが、その場合Mediaは含まれません。\n\n実行前に必要であれば現在の状態をバックアップしてください。続行しますか？';
+  const message='Replace the current DB and media with the selected backup.\n\n'+file.name+'\n\nA legacy .db file can also be restored, but it does not include media.\n\nBack up the current state first if needed. Continue?';
   if(!confirm(message)){input.value='';return}
   try{
     const d=await jfetch('/api/import-db',{
@@ -333,19 +333,19 @@ async function importDatabaseFile(input){
       body:file
     });
     individuals=[];
-    document.getElementById('detail').textContent='Product List の行をクリックすると履歴を表示します。';
+    document.getElementById('detail').textContent='Select a row in Product List to view its history.';
     document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='バックアップを復元しました';
+    document.getElementById('jobMessage').textContent='Backup restored';
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
     const imported=d.imported_counts||{};
-    const media=d.legacy_database?'旧DB形式（Mediaなし）':('Media: '+(d.imported_media_count??0));
+    const media=d.legacy_database?'Legacy DB format (no media)':('Media: '+(d.imported_media_count??0));
     const architecture=await jfetch('/api/claim-architecture-status');
-    alert('バックアップを復元しました。\nObservations: '+(imported.observations??'')+'\nProduct List: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media+'\nClaim Migration: '+(architecture.ready?'不要':'必要'));
+    alert('Backup restored.\nObservations: '+(imported.observations??'')+'\nProduct List: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media+'\nClaim Migration: '+(architecture.ready?'Not required':'Required'));
   }catch(e){
-    alert('バックアップ復元に失敗しました。\n'+e.message);
+    alert('Could not restore the backup.\n'+e.message);
   }finally{
     input.value='';
   }
@@ -354,10 +354,10 @@ async function runClaimMigration(){
   try{
     const status=await jfetch('/api/claim-architecture-status');
     if(status.ready){
-      alert('このDBはClaim-centered構造で、Snapshotも最新です。');
+      alert('This DB uses the Claim-centered structure and its Snapshot is current.');
       return;
     }
-    const message='旧Observation中心DBをClaim-centered構造へ移行します。\n\n未移行Listing Observation: '+status.unmigrated_listing_observations+'\nClaimなしIndividual: '+status.claimless_individuals+'\n\n既存Claimは重複生成しません。続行しますか？';
+    const message='Migrate the legacy Observation-centered DB to the Claim-centered structure.\n\nUnmigrated Listing Observations: '+status.unmigrated_listing_observations+'\nIndividuals without Claims: '+status.claimless_individuals+'\n\nExisting Claims will not be duplicated. Continue?';
     if(!confirm(message))return;
     const d=await jfetch('/api/migrate-claims',{method:'POST'});
     const m=d.migration||{};
@@ -365,29 +365,29 @@ async function runClaimMigration(){
     await refreshStatus();
     await loadIndividuals();
     const r=d.rebuild||{};
-    alert('Claim Migration / Snapshot Rebuild完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nReverb Listing ClaimのLocation等が不足しています。続けて「既存DBバックフィル（今回のみ）」を実行してください。':''));
+    alert('Claim Migration / Snapshot Rebuild complete\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nSome Reverb Listing Claims lack Location data. Next, run "Backfill existing DB (one time)" .':''));
   }catch(e){
-    alert('Claim Migrationに失敗しました。\n'+e.message);
+    alert('Claim Migration failed.\n'+e.message);
   }
 }
 
 async function backfillCachedSpecifications(){
-  if(!confirm('Automationが生成したSpecificationの誤抽出とFinishを整理します。さらにユーザーOwnerのいない個体には保存済みDetailから安全な仕様を追加します。続行しますか？'))return;
+  if(!confirm('Clean incorrect automated Specifications and duplicate Finish values, then add safe specifications from saved details to guitars without a user owner. Continue?'))return;
   const button=document.getElementById('backfillSpecificationsButton');button.disabled=true;
   try{
     const d=await jfetch('/api/admin/backfill-cached-specifications',{method:'POST'});
     await loadIndividuals();
-    alert('Specificationの整理・追加が完了しました。\n削除した誤抽出・Finish項目: '+d.corrected_items+'\n整理したClaim: '+d.corrected_claims+'\n空になったClaim: '+d.removed_claims+'\nOwnerなし個体: '+d.ownerless+'\nDetailあり: '+d.with_detail+'\n作成Claim: '+d.created+'\n追加項目: '+d.items+'\n追加可能項目なし: '+d.skipped_no_specs+'\n処理済み: '+d.skipped_existing);
-  }catch(e){alert('Specification追加に失敗しました。\n'+e.message)}
+    alert('Specification cleanup and additions complete.\nIncorrect or duplicate Finish fields removed: '+d.corrected_items+'\nClaims cleaned: '+d.corrected_claims+'\nEmpty Claims: '+d.removed_claims+'\nGuitars without a user owner: '+d.ownerless+'\nWith details: '+d.with_detail+'\nClaims created: '+d.created+'\nFields added: '+d.items+'\nNo fields available: '+d.skipped_no_specs+'\nAlready processed: '+d.skipped_existing);
+  }catch(e){alert('Could not add Specifications.\n'+e.message)}
   finally{button.disabled=false}
 }
 
 async function resetDatabase(){
-  const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
+  const message='Delete all current Observation, Individual, and crawl history and recreate an empty DB.\n\nThis action cannot be undone. Continue?';
   if(!confirm(message))return;
-  const typed=prompt('確認のため RESET と入力してください。');
+  const typed=prompt('Type RESET to confirm.');
   if(typed!=='RESET'){
-    if(typed!==null)alert('入力が一致しないため中止しました。');
+    if(typed!==null)alert('The confirmation did not match; action canceled.');
     return;
   }
   try{
@@ -398,16 +398,16 @@ async function resetDatabase(){
     });
     individuals=[];
     document.getElementById('individualBody').innerHTML='';
-    document.getElementById('detail').textContent='Product List の行をクリックすると履歴を表示します。';
+    document.getElementById('detail').textContent='Select a row in Product List to view its history.';
     document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='DBを初期化しました';
+    document.getElementById('jobMessage').textContent='DB reset complete';
     document.getElementById('jobBar').style.width='0%';
     sessionStorage.removeItem(ACTIVE_USER_KEY);
     activeUser=null;
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
-    alert('DBを初期化しました。');
+    alert('DB reset complete.');
   }catch(e){
     alert(e.message);
   }
@@ -419,8 +419,8 @@ async function loadUnverifiedAcquires(offset=unverifiedAcquireOffset){
     const d=await jfetch('/api/claims/unverified-acquires?limit=100&offset='+Math.max(0,offset));
     if(d.total>0&&offset>=d.total)return loadUnverifiedAcquires(Math.floor((d.total-1)/100)*100);
     unverifiedAcquireOffset=d.offset;
-    document.getElementById('unverifiedAcquireTotal').textContent='('+d.total+'件)';
-    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">未承認のAcquireはありません。</td></tr>';
+    document.getElementById('unverifiedAcquireTotal').textContent='('+d.total+')';
+    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">No Unverified Acquire Claims.</td></tr>';
     document.getElementById('unverifiedAcquirePage').textContent=d.total?(d.offset+1)+'–'+(d.offset+d.items.length)+' / '+d.total:'0 / 0';
     document.getElementById('unverifiedAcquirePrev').disabled=d.offset===0||!d.total;
     document.getElementById('unverifiedAcquireNext').disabled=d.offset+d.items.length>=d.total;
@@ -460,12 +460,12 @@ async function loadUsers(){
   renderUserList();
   if(selectedUserId&&users.some(u=>Number(u.id)===selectedUserId))await showUserRecord(selectedUserId);
   else if(users.some(u=>String(u.id)===saved))await showUserRecord(Number(saved));
-  else{selectedUserId=null;activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);updateOpenTopButton();document.getElementById('accountPanel').textContent='左のUsersから対象を選択してください。'}
+  else{selectedUserId=null;activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);updateOpenTopButton();document.getElementById('accountPanel').textContent='Select a user from the list on the left.'}
 }
 function renderUserList(){
   const filter=document.getElementById('userFilter').value.trim().toLowerCase();
   const matches=users.filter(u=>[u.id,u.display_name,u.account_type,u.ban_status,u.location_country,u.location_region].some(x=>String(x??'').toLowerCase().includes(filter)));
-  document.getElementById('userBody').innerHTML=matches.map(u=>'<tr class="clickable'+(selectedUserId===Number(u.id)?' selected':'')+'" onclick="showUserRecord('+Number(u.id)+')"><td class="mono">'+Number(u.id)+'</td><td>'+esc(u.display_name)+'</td><td>'+esc(u.account_type)+'</td><td>'+esc([u.location_country,u.location_region].filter(Boolean).join(' / ')||'—')+'</td><td>'+Number(u.current_guitar_count||0)+'</td></tr>').join('')||'<tr><td colspan="5" class="sub">該当するユーザーはいません。</td></tr>';
+  document.getElementById('userBody').innerHTML=matches.map(u=>'<tr class="clickable'+(selectedUserId===Number(u.id)?' selected':'')+'" onclick="showUserRecord('+Number(u.id)+')"><td class="mono">'+Number(u.id)+'</td><td>'+esc(u.display_name)+'</td><td>'+esc(u.account_type)+'</td><td>'+esc([u.location_country,u.location_region].filter(Boolean).join(' / ')||'—')+'</td><td>'+Number(u.current_guitar_count||0)+'</td></tr>').join('')||'<tr><td colspan="5" class="sub">No matching users.</td></tr>';
   document.getElementById('userCount').textContent=matches.length+' / '+users.length+' users';
 }
 async function showUserRecord(id){
@@ -504,7 +504,7 @@ async function showUserRecord(id){
         '<label>Avatar image<input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif"></label>'+
         '<div class="toolbar"><button type="submit">Save User</button></div></form>':'')+
       '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'?prototype_user_id='+encodeURIComponent(sessionStorage.getItem(ACTIVE_USER_KEY)||'')+'" target="_blank" rel="noopener">User Profile</a></div>'+
-      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">ギターは登録されていません。</div>')+'</div>';
+      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">No guitars registered.</div>')+'</div>';
     if(selectedIndividualId)showIndividual(selectedIndividualId).catch(e=>{
       document.getElementById('detail').textContent='Product Detail error: '+e.message;
     });
@@ -513,7 +513,7 @@ async function showUserRecord(id){
 async function saveAdminUser(event,id){
   event.preventDefault();const form=event.currentTarget,fields=new FormData(form);
   const status=String(fields.get('ban_status'));
-  if(status!=='normal'&&!confirm('このアカウントを '+status+' にします。公開Claimと個体情報が再計算されます。続行しますか？'))return;
+  if(status!=='normal'&&!confirm('Set this account to '+status+'? Public Claims and guitar data will be recalculated. Continue?'))return;
   const body={};for(const key of ['display_name','account_type','ban_status','theme','location_country','location_region','bio','birth_visibility','residence_visibility','bio_visibility','avatar_visibility']){
     const value=String(fields.get(key)||'').trim();body[key]=value||null;
   }
@@ -523,10 +523,10 @@ async function saveAdminUser(event,id){
     await jfetch('/api/admin/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify(body)});
     if(file&&file.size){const avatarData=new FormData();avatarData.set('avatar',file);
       try{await jfetch('/api/users/'+id+'/avatar',{method:'POST',body:avatarData})}
-      catch(e){alert('ユーザー情報は保存しましたが、Avatarの更新に失敗しました。\n'+e.message)}
+      catch(e){alert('User information was saved, but the avatar could not be updated.\n'+e.message)}
     }
     await loadUsers();await loadIndividuals();if(selectedIndividualId)await showIndividual(selectedIndividualId);
-  }catch(e){alert('User更新に失敗しました。\n'+e.message);btn.disabled=false}
+  }catch(e){alert('Could not update the user.\n'+e.message);btn.disabled=false}
 }
 async function createUser(){
   try{
@@ -534,7 +534,7 @@ async function createUser(){
     const id=String(data.user.id);
     selectedUserId=Number(id);
     await loadUsers();
-  }catch(e){alert('アカウント作成に失敗しました。\n'+e.message)}
+  }catch(e){alert('Could not create the account.\n'+e.message)}
 }
 function updateOpenTopButton(){
   const selected=users.find(u=>Number(u.id)===selectedUserId);
@@ -559,9 +559,9 @@ function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
 function ownershipControlsHtml(individualId){
-  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">所有ギターに紐づけるにはUserを選択してください。</div>';
+  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">Select a user to link an owned guitar.</div>';
   if(activeUserOwns(individualId))return '';
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">Add to owned guitars</button></div>';
 }
 async function linkOwnedGuitar(individualId){
   if(!activeUser||!activeUser.user)return;
@@ -570,7 +570,7 @@ async function linkOwnedGuitar(individualId){
     await loadUsers();
     await showIndividual(individualId);
   }catch(e){
-    alert('所有ギターの紐づけに失敗しました。\n'+e.message);
+    alert('Could not link the owned guitar.\n'+e.message);
   }
 }
 function normalizeSortValue(value,key){if(key==='id'||key==='claim_count')return Number(value||0);return String(value??'').toLowerCase()}
@@ -610,8 +610,8 @@ function specificationFieldLabel(value){const labels={body:'Body',bridge:'Bridge
 function identityFieldLabel(value){const labels={manufacturer:'Maker',model:'Model',year:'Year',serial_number:'Serial'};return labels[String(value||'')]||String(value||'').replace(/_/g,' ')}
 function claimTypeLabel(value){return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ')}
 function incidentClaimLabel(c){return c.value_text==='lost'?'Incident Lost':claimTypeLabel(c.value_text||'incident')}
-function displayEventDate(value){if(!value)return '日付不明';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
+function displayEventDate(value){if(!value)return 'Date unknown';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function displayInputDate(value){if(!value)return 'Input date unknown';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('en-US')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
 function claimVisualTypeClass(c){
   if(c.claim_type==='ownership')return ' claim-type-ownership';
@@ -695,7 +695,7 @@ function claimCard(c){
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const verification=String(c.verification_status||'positive');
-  const moderation='<label>Verification <select aria-label="Claim Verification" style="width:auto" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onchange="moderateClaim('+Number(c.id)+',this.value)">'+[['positive','Positive / 許可'],['negative','Negative / 不許可'],['unverified','Unverified / 未確認']].map(x=>'<option value="'+x[0]+'" '+(verification===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>';
+  const moderation='<label>Verification <select aria-label="Claim Verification" style="width:auto" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onchange="moderateClaim('+Number(c.id)+',this.value)">'+[['positive','Positive / Approve'],['negative','Negative / Reject'],['unverified','Unverified / Unverified']].map(x=>'<option value="'+x[0]+'" '+(verification===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>';
   const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote danger" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
@@ -704,7 +704,7 @@ let currentAdminClaims=[];
 function renderAdminChronicle(){
   const ordered=YGCProductDetail.orderedClaims(currentAdminClaims,chronicleSort);
   const target=document.getElementById('chronicleEntries');
-  if(target)target.innerHTML=ordered.length?ordered.map(adminClaimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
+  if(target)target.innerHTML=ordered.length?ordered.map(adminClaimCard).join(''):'<div class="sub">No Claims yet.</div>';
 }
 function setChronicleSort(value){
   chronicleSort=value==='input'?'input':'event';
@@ -765,7 +765,7 @@ async function showIndividual(id){
   }
 
   currentAdminClaims=claims||[];
-  const chronicleAction='<div class="toolbar"><select aria-label="Chronicle sort" onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>';
+  const chronicleAction='<div class="toolbar"><select aria-label="Chronicle sort" onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>Event date</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>Entry date</option></select></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i.id),
     headerAction:'<div class="toolbar admin-detail-actions"><button class="danger" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
@@ -775,46 +775,46 @@ async function showIndividual(id){
 }
 async function moderateClaim(claimId,action,isListing=false){
   closeAdminClaim();
-  const message=action==='delete'?(isListing?'Listing Claimを削除します。最後のListingの場合、個体と全ての関連記録も削除されます。続行しますか？':'Claimを削除します。対になった所有履歴は一緒に削除されます。続行しますか？'):'Claim #'+claimId+' を管理者権限で '+action+' に変更し、個体情報を再計算します。続行しますか？';
+  const message=action==='delete'?(isListing?'Delete this Listing Claim? If it is the last Listing, the guitar and all related records will also be deleted. Continue?':'Delete this Claim and any paired ownership history? Continue?'):'Claim #'+claimId+' will be set to '+action+' by the administrator, and guitar data will be recalculated. Continue?';
   if(!confirm(message)){if(selectedIndividualId)await showIndividual(selectedIndividualId);return}
   try{
     const d=await jfetch('/api/admin/claims/'+claimId+'/moderate',{method:'POST',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify({action,confirm_individual_delete:action==='delete'&&isListing})});
-    if(d.individual_deleted){selectedIndividualId=null;document.getElementById('detail').textContent='Individualを削除しました。'}else if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
+    if(d.individual_deleted){selectedIndividualId=null;document.getElementById('detail').textContent='Individual deleted.'}else if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
     await loadIndividuals();
     await loadStatistics();
   }catch(e){
-    alert('管理操作に失敗しました。\n'+e.message);
+    alert('Admin action failed.\n'+e.message);
     if(selectedIndividualId)await showIndividual(selectedIndividualId);
   }
 }
 async function deleteIndividual(individualId){
   const individual=individuals.find(x=>Number(x.id)===Number(individualId));
   const label=individual?(individual.manufacturer+' '+(individual.model||'')+' / '+(individual.serial_number||'')):('Individual #'+individualId);
-  if(!confirm(label+' を関連するClaim・Observation・所有紐づけを含め完全に削除します。\n\nこの操作は元に戻せません。続行しますか？'))return;
-  const typed=prompt('確認のため DELETE と入力してください。');
+  if(!confirm(label+' and all related Claims, Observations, and ownership links will be permanently deleted.\n\nThis action cannot be undone. Continue?'))return;
+  const typed=prompt('Type DELETE to confirm.');
   if(typed!=='DELETE')return;
   try{
     await jfetch('/api/individuals/'+individualId,{method:'DELETE',headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
     if(selectedIndividualId===Number(individualId))selectedIndividualId=null;
-    document.getElementById('detail').textContent='Individualを削除しました。';
+    document.getElementById('detail').textContent='Individual deleted.';
     await loadIndividuals();
     await loadStatistics();
     if(activeUser&&activeUser.user)await loadActiveUser();
   }catch(e){
-    alert('Individual削除に失敗しました。\n'+e.message);
+    alert('Could not delete the Individual.\n'+e.message);
   }
 }
-async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function startBackfill(){if(!confirm('Fetch existing Reverb Listings again to fill missing Listing Claim details. Observations will not change. Continue?'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 function programRequest(){return {category:document.getElementById('programCategory').value,year_min:Number(document.getElementById('programYearMin').value),year_max:Number(document.getElementById('programYearMax').value)}}
 function crawlStageSummary(c){
   const n=key=>Number(c[key]||0);
   return [
-    ['一覧判定',n('summaries_processed')+' / 2000','既存ID '+n('skipped_existing')+'・分野外 '+n('skipped_category')+'・年範囲外 '+n('skipped_year')+'・詳細URLなし '+n('missing_detail_url')],
-    ['詳細取得',n('details_fetched'),'詳細の分野・年が適合 '+n('detail_scope_matched')+'・詳細取得不可 '+n('detail_unavailable')],
-    ['メーカー＋シリアル抽出',n('serial_candidates'),'番号・メーカー不明 '+n('missing_identity')],
-    ['既存個体と照合',n('candidate_checked')+' / '+n('candidate_total'),'確認待ち '+n('ambiguous_matches')],
-    ['DB登録',n('new_individuals')+' 新規 / '+n('existing_individuals_extended')+' 来歴追加','Listing Claimは新規個体に作成']
+    ['Listing review',n('summaries_processed')+' / 2000','Known IDs '+n('skipped_existing')+' / Wrong category '+n('skipped_category')+' / Outside year range '+n('skipped_year')+' / No detail URL '+n('missing_detail_url')],
+    ['Detail fetch',n('details_fetched'),'Category and year matched '+n('detail_scope_matched')+' / Detail unavailable '+n('detail_unavailable')],
+    ['Maker and serial extraction',n('serial_candidates'),'Serial or maker unknown '+n('missing_identity')],
+    ['Match existing guitars',n('candidate_checked')+' / '+n('candidate_total'),'Needs review '+n('ambiguous_matches')],
+    ['DB registration',n('new_individuals')+' new / '+n('existing_individuals_extended')+' history updated','Create Listing Claim for new guitars']
   ];
 }
 function renderCrawlStage(c){
@@ -825,17 +825,17 @@ async function loadCrawlRunLog(){
   const el=document.getElementById('crawlRunLog');
   try{
     const runs=await jfetch('/api/crawl/program/runs?'+new URLSearchParams(q));
-    el.innerHTML=runs.length?runs.map(r=>'<div class="panel"><strong>#'+Number(r.id)+' '+esc(r.started_at)+' / '+esc(r.status)+' / '+esc(r.phase||'legacy')+'</strong><div>'+esc(crawlStageSummary(r.counts||{}))+'</div>'+(r.error_message?'<div class="status bad">'+esc(r.error_message)+'</div>':'')+'</div>').join(''):'この検索範囲の実行ログはありません。';
+    el.innerHTML=runs.length?runs.map(r=>'<div class="panel"><strong>#'+Number(r.id)+' '+esc(r.started_at)+' / '+esc(r.status)+' / '+esc(r.phase||'legacy')+'</strong><div>'+esc(crawlStageSummary(r.counts||{}).map(row=>row.join(': ')).join(' · '))+'</div>'+(r.error_message?'<div class="status bad">'+esc(r.error_message)+'</div>':'')+'</div>').join(''):'No run log for this search range.';
   }catch(e){el.textContent=e.message}
 }
-async function loadCrawlProgram(){const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max){document.getElementById('programState').textContent='製造年の範囲を確認してください';return}try{const d=await jfetch('/api/crawl/program?'+new URLSearchParams(q));document.getElementById('programState').textContent='一覧処理済み '+d.processed+' 件 / '+(d.finished?'この範囲のページ末尾に到達':'続きから実行可能')+(d.updated_at?' / 最終 '+d.updated_at:'');await loadCrawlRunLog()}catch(e){document.getElementById('programState').textContent=e.message}}
+async function loadCrawlProgram(){const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max){document.getElementById('programState').textContent='Check the manufacture year range';return}try{const d=await jfetch('/api/crawl/program?'+new URLSearchParams(q));document.getElementById('programState').textContent='Listings processed '+d.processed+'  / '+(d.finished?'End of pages for this range':'Can resume')+(d.updated_at?' / Last run '+d.updated_at:'');await loadCrawlRunLog()}catch(e){document.getElementById('programState').textContent=e.message}}
 async function advanceCrawlProgram(){const q=programRequest();const btn=document.getElementById('programBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});pollCrawlProgram(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function restartCrawlProgram(){try{await jfetch('/api/crawl/program/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});document.getElementById('programResult').textContent='先頭から再走査できます。既存ObservationとClaimは保持されます。';await loadCrawlProgram()}catch(e){alert(e.message)}}
-async function pollCrawlProgram(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programState').textContent=d.message||d.status;document.getElementById('programProgress').innerHTML='<strong>'+esc(d.message||'処理中')+'</strong>'+renderCrawlStage(d.stage_counts||d.aggregate||{});if(d.status==='running'){setTimeout(()=>pollCrawlProgram(id),1000);return}document.getElementById('programBtn').disabled=false;if(d.status==='error'){await loadCrawlProgram();alert(d.error||'crawl error');return}const s=d.aggregate||{};const samples=(s.rejected_samples||[]).map(x=>'#'+x.listing_id+' '+x.reason+' (一覧年 '+x.summary_year+' / 詳細年 '+x.detail_year+' / Product Type '+x.product_type+' / Category '+x.category+')').join(' | ');document.getElementById('programResult').textContent='今回: 一覧 '+s.summaries_processed+' 件 / 詳細 '+s.details_fetched+' 件 / 新規個体 '+s.new_individuals+' 件 / 来歴追加 '+s.existing_individuals_extended+' 件 / 確認待ち '+s.ambiguous_matches+' 件 / シリアル候補 '+s.serial_candidates+' 件 / 番号・メーカー不明 '+s.missing_identity+' 件 / 既存 '+s.skipped_existing+' 件 / 公開確認 '+s.rechecked+' 件 / 非公開確認 '+s.confirmed_missing+' 件 / Lost '+s.unavailable_claims+' 件 / Owner Unknown '+s.owners_unknown+' 件。見送り: 年範囲外 '+s.skipped_year+' / 年不明 '+s.missing_year+' / 分野違い '+s.skipped_category+' / 分野不明 '+s.missing_category+' / 詳細取得不可 '+s.detail_unavailable+(samples?'。例: '+samples:'');await loadCrawlProgram();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('programBtn').disabled=false;alert(e.message)}}
-async function loadReviewCandidates(){try{const rows=await jfetch('/api/crawl/candidates/review');document.getElementById('reviewCandidates').innerHTML=rows.length?rows.map(x=>'<div>'+esc(x.manufacturer)+' '+esc(x.model)+' / '+esc(x.serial_number)+' / Listing #'+esc(x.listing_id)+' / '+esc(x.reason)+'</div>').join(''):'確認待ち候補はありません'}catch(e){document.getElementById('reviewCandidates').textContent=e.message}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — 新規個体 '+x.new_individuals+', 来歴追加 '+x.existing_individuals_extended+', 確認待ち '+x.ambiguous_matches+', 詳細 '+x.details_fetched+', 番号・メーカー不明 '+x.missing_identity+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+async function restartCrawlProgram(){try{await jfetch('/api/crawl/program/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});document.getElementById('programResult').textContent='The range can be scanned again from the beginning. Existing Observations and Claims are preserved.';await loadCrawlProgram()}catch(e){alert(e.message)}}
+async function pollCrawlProgram(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programState').textContent=d.message||d.status;document.getElementById('programProgress').innerHTML='<strong>'+esc(d.message||'Processing')+'</strong>'+renderCrawlStage(d.stage_counts||d.aggregate||{});if(d.status==='running'){setTimeout(()=>pollCrawlProgram(id),1000);return}document.getElementById('programBtn').disabled=false;if(d.status==='error'){await loadCrawlProgram();alert(d.error||'crawl error');return}const s=d.aggregate||{};const samples=(s.rejected_samples||[]).map(x=>'#'+x.listing_id+' '+x.reason+' (Listing year '+x.summary_year+' / Detail year '+x.detail_year+' / Product Type '+x.product_type+' / Category '+x.category+')').join(' | ');document.getElementById('programResult').textContent='This run: listings '+s.summaries_processed+'  / details '+s.details_fetched+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / serial candidates '+s.serial_candidates+'  / Serial or maker unknown '+s.missing_identity+'  / known '+s.skipped_existing+'  / availability checked '+s.rechecked+'  / unavailable confirmed '+s.confirmed_missing+'  / Lost '+s.unavailable_claims+'  / Owner Unknown '+s.owners_unknown+' .Skipped: Outside year range '+s.skipped_year+' / year unknown '+s.missing_year+' / wrong category '+s.skipped_category+' / category unknown '+s.missing_category+' / Detail unavailable '+s.detail_unavailable+(samples?'. Examples: '+samples:'');await loadCrawlProgram();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('programBtn').disabled=false;alert(e.message)}}
+async function loadReviewCandidates(){try{const rows=await jfetch('/api/crawl/candidates/review');document.getElementById('reviewCandidates').innerHTML=rows.length?rows.map(x=>'<div>'+esc(x.manufacturer)+' '+esc(x.model)+' / '+esc(x.serial_number)+' / Listing #'+esc(x.listing_id)+' / '+esc(x.reason)+'</div>').join(''):'No candidates for review'}catch(e){document.getElementById('reviewCandidates').textContent=e.message}}
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new guitars '+x.new_individuals+', history updated '+x.existing_individuals_extended+', Needs review '+x.ambiguous_matches+', details '+x.details_fetched+', Serial or maker unknown '+x.missing_identity+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
 async function reprocessCachedDetails(){const btn=document.getElementById('cacheReprocessBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/cache/reprocess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});pollCachedDetails(d.job_id)}catch(e){btn.disabled=false;alert(e.message)}}
-async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programResult').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCachedDetails(id),1000);return}document.getElementById('cacheReprocessBtn').disabled=false;if(d.status==='error'){alert(d.error||'再判定に失敗しました');return}const s=d.aggregate||{};document.getElementById('programResult').textContent='保存済み詳細 '+s.cached_processed+' 件 / 新規個体 '+s.new_individuals+' 件 / 来歴追加 '+s.existing_individuals_extended+' 件 / 確認待ち '+s.ambiguous_matches+' 件 / 登録済み '+s.skipped_existing+' 件 / 範囲外・範囲不明 '+s.skipped_scope+' 件 / 番号・メーカー不明 '+s.missing_identity+' 件';await refreshStatus();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('cacheReprocessBtn').disabled=false;alert(e.message)}}
+async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programResult').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCachedDetails(id),1000);return}document.getElementById('cacheReprocessBtn').disabled=false;if(d.status==='error'){alert(d.error||'Reprocessing failed');return}const s=d.aggregate||{};document.getElementById('programResult').textContent='Saved details '+s.cached_processed+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / already registered '+s.skipped_existing+'  / outside or unknown range '+s.skipped_scope+'  / Serial or maker unknown '+s.missing_identity+' ';await refreshStatus();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('cacheReprocessBtn').disabled=false;alert(e.message)}}
 const header=document.querySelector('.sticky-header');
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
 (async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram()})()

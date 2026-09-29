@@ -593,7 +593,7 @@ def _run_batch(
         _set_job(
             job_id,
             status="done",
-            message="完了",
+            message="Complete",
             progress=1.0,
             aggregate=aggregate,
             finished_at=time.time(),
@@ -631,7 +631,7 @@ def _run_metadata_backfill(
                 job_id,
                 status="done",
                 message=(
-                    "バックフィル対象はありません"
+                    "No Claims need backfilling"
                 ),
                 progress=1.0,
                 aggregate={
@@ -741,7 +741,7 @@ def _run_metadata_backfill(
                     _set_job(
                         job_id,
                         message=(
-                            "Listing Claimをバックフィル中 "
+                            "Backfilling Listing Claims "
                             f"{processed}/{total}"
                         ),
                         progress=(
@@ -757,7 +757,7 @@ def _run_metadata_backfill(
             job_id,
             status="done",
             message=(
-                "Listing Claimバックフィル完了"
+                "Listing Claim backfill complete"
             ),
             progress=1.0,
             aggregate={
@@ -3442,16 +3442,16 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
                 repo(), collector,
                 progress_callback=lambda counts: _set_job(
                     job_id,
-                    message={"listing": "一覧判定・詳細取得中",
-                             "matching": "候補照合・DB登録中",
-                             "availability": "既存掲載の公開確認中",
-                             "done": "処理完了", "error": "処理失敗"}.get(
+                    message={"listing": "Reviewing listings and fetching details",
+                             "matching": "Matching candidates and registering guitars",
+                             "availability": "Checking existing listing availability",
+                             "done": "Processing complete", "error": "Processing failed"}.get(
                                  counts["phase"], counts["phase"]),
                     progress=min(0.95, counts["summaries_processed"] / 2000),
                     stage_counts=counts,
                 ),
             )
-        _set_job(job_id, status="done", message="1回分の処理が完了しました",
+        _set_job(job_id, status="done", message="This crawl run is complete",
                  progress=1.0, aggregate=result, finished_at=time.time())
     except Exception as exc:
         _set_job(job_id, status="error", message=str(exc), error=str(exc),
@@ -3517,7 +3517,7 @@ def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> di
             raise HTTPException(status_code=409, detail="A crawl job is already running")
         job_id = uuid.uuid4().hex[:12]
         _jobs[job_id] = {"id": job_id, "status": "running",
-                         "message": "少量クロールを実行中", "progress": 0.0,
+                         "message": "Running incremental crawl", "progress": 0.0,
                          "query_results": [], "started_at": time.time()}
         _active_job_id = job_id
     threading.Thread(target=_run_incremental,
@@ -3531,11 +3531,11 @@ def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
         result = reprocess_details(
             repo(), request.category, request.year_min, request.year_max,
             progress_callback=lambda counts: _set_job(
-                job_id, message=f"保存済み詳細 {counts['cached_processed']}/{counts['cached_total']} 件を再判定中",
+                job_id, message=f"Reprocessing saved details {counts['cached_processed']}/{counts['cached_total']}",
                 progress=min(0.95, counts["cached_processed"] / max(counts["cached_total"], 1)),
             ),
         )
-        _set_job(job_id, status="done", message="保存済み詳細の再判定が完了しました",
+        _set_job(job_id, status="done", message="Saved details reprocessed",
                  progress=1.0, aggregate=result, finished_at=time.time())
     except Exception as exc:
         _set_job(job_id, status="error", error=str(exc), message=str(exc), finished_at=time.time())
@@ -3557,7 +3557,7 @@ def api_reprocess_cached_details(request: CrawlAdvanceRequest) -> dict:
             raise HTTPException(status_code=409, detail="A crawl job is already running")
         job_id = uuid.uuid4().hex[:12]
         _jobs[job_id] = {"id": job_id, "status": "running", "progress": 0.0,
-                         "message": "保存済み詳細を再判定中", "started_at": time.time()}
+                         "message": "Reprocessing saved details", "started_at": time.time()}
         _active_job_id = job_id
     threading.Thread(target=_run_cached_reprocess, args=(job_id, request), daemon=True).start()
     return {"job_id": job_id}
@@ -3606,7 +3606,7 @@ def api_crawl(
         _jobs[job_id] = {
             "id": job_id,
             "status": "running",
-            "message": "開始しています",
+            "message": "Starting",
             "progress": 0.0,
             "queries": queries,
             "query_results": [],
@@ -3679,7 +3679,7 @@ def api_backfill_metadata(
             "id": job_id,
             "status": "running",
             "message": (
-                "既存DBのバックフィルを開始します"
+                "Starting existing DB backfill"
             ),
             "progress": 0.0,
             "query_results": [],
