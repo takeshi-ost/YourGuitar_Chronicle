@@ -187,15 +187,19 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 @media(max-width:900px){.compact-detail-close{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;margin-bottom:8px;background:#2a3036;color:var(--text);font-size:18px}}
 .profile-mode .left-column{gap:14px}
 .profile-mode .profile-panel{min-width:0}
-.profile-mode .profile-hero{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;align-items:center}
+.profile-mode .profile-hero{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;align-items:start}
 .profile-mode .profile-avatar{width:96px;height:96px;object-fit:cover;border-radius:50%;border:1px solid var(--line);background:#111418}
-.profile-mode .profile-name{font-size:22px;font-weight:800;overflow-wrap:anywhere}
-.profile-mode .profile-meta{color:var(--muted);font-size:11px;margin-top:5px}
-.profile-mode .profile-bio{margin-top:12px;white-space:pre-wrap;font-size:12px}
+.profile-mode .profile-identity{min-width:0}
+.profile-mode .profile-name{font-size:22px;font-weight:800;overflow-wrap:anywhere;line-height:1.25}
+.profile-mode .profile-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin-top:15px}
+.profile-mode .profile-meta-item{display:flex;gap:8px;align-items:baseline;min-width:0;font-size:11px;line-height:1.4}
+.profile-mode .profile-meta-label{flex:0 0 88px;color:var(--muted)}
+.profile-mode .profile-meta-value{min-width:0;overflow-wrap:anywhere}
+.profile-mode .profile-bio{margin-top:15px;padding-top:12px;border-top:1px solid var(--line);white-space:pre-wrap;font-size:12px;line-height:1.5}
 .profile-mode .profile-stats{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .profile-mode .profile-stat{background:#14171a;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:10px}
 .profile-mode .profile-stat strong{color:var(--text)}
-.profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap}
+.profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .profile-mode .profile-list-panel{max-height:370px;display:flex;flex-direction:column}
 .profile-mode .profile-list-panel .table-wrap{flex:0 1 auto;min-height:0;max-height:310px;overflow:auto}
 .profile-mode .profile-favorites-panel{max-height:370px;overflow:auto}
@@ -225,7 +229,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .profile-chronicle-story strong{color:var(--text);font-weight:800}
 @media(max-width:650px){.profile-chronicle-row{grid-template-columns:55px 14px 108px minmax(0,1fr);gap:4px}.profile-chronicle-time{font-size:9px;overflow:hidden;text-overflow:ellipsis}}
 .profile-mode [hidden]{display:none!important}
-@media(max-width:650px){.profile-mode .profile-hero{grid-template-columns:70px minmax(0,1fr)}.profile-mode .profile-avatar{width:70px;height:70px}.profile-mode .profile-actions{grid-column:1/-1}}
+@media(max-width:800px){.profile-mode .profile-hero{grid-template-columns:80px minmax(0,1fr)}.profile-mode .profile-avatar{width:80px;height:80px}.profile-mode .profile-actions{grid-column:2;justify-content:flex-start}}
+@media(max-width:650px){.profile-mode .profile-hero{grid-template-columns:70px minmax(0,1fr);gap:12px}.profile-mode .profile-avatar{width:70px;height:70px}.profile-mode .profile-meta{grid-template-columns:minmax(0,1fr);gap:6px}.profile-mode .profile-actions{grid-column:1/-1}}
 
 /* Product Detail: consistent alignment and control heights across its rows. */
 .detail-panel #detail{min-width:0}
@@ -2116,15 +2121,15 @@ async function loadProfilePage(preferredIndividualId=null){
     const own=Number(activeUser.user.id)===Number(u.id);
     const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ');
     const profileMeta=[
-      locationText ? 'Location: '+locationText : '',
-      u.date_of_birth ? 'Date of Birth: '+u.date_of_birth : '',
-      u.account_type||'user',
-      'Member since '+String(u.created_at||'').slice(0,10)
-    ].filter(Boolean).map(esc).join(' · ');
+      ['Account Type',u.account_type||'user'],
+      ['Member since',String(u.created_at||'').slice(0,10)],
+      ...(locationText?[['Location',locationText]]:[]),
+      ...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])
+    ].map(([label,value])=>'<div class="profile-meta-item"><span class="profile-meta-label">'+esc(label)+'</span><span class="profile-meta-value">'+esc(value)+'</span></div>').join('');
     const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
     hero.innerHTML='<div class="profile-hero">'+
       '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
-      '<div><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
+      '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
       '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+

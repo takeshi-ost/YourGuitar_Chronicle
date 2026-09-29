@@ -78,8 +78,9 @@ def test_profile_birth_and_location_visibility_for_each_viewer(tmp_path, monkeyp
         assert profile(member)["location_region"] is None
         assert profile(owner)["location_region"] == "Tokyo"
         html = client.get(f"/users/{owner}").text
-        assert "u.date_of_birth ? 'Date of Birth: '+u.date_of_birth" in html
-        assert "locationText ? 'Location: '+locationText" in html
+        assert "...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])" in html
+        assert "...(locationText?[['Location',locationText]]:[])" in html
+        assert 'class="profile-meta-label"' in html
 
 
 def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, monkeypatch):
