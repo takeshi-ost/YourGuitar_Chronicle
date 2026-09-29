@@ -238,6 +238,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .catalog-spec-label{text-align:left}
 #detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}
 #detail .detail-header>.toolbar button,#detail .detail-header>.toolbar .status{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+#detail .owner-claim-card{display:block;width:100%;margin-top:12px;padding:14px 16px;text-align:left;white-space:normal;line-height:1.5;font-size:12px;font-weight:600;background:var(--surface,#24282c);color:var(--text);border:1px solid var(--accent);border-radius:9px}
+#detail .owner-claim-card:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface,#24282c));color:var(--text)}
+#detail .owner-claim-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #detail .accordion-header{min-width:0;flex-wrap:wrap;min-height:34px}
 #detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
@@ -923,10 +926,8 @@ function ownershipControlsHtml(individual){
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
     return actorNote+'<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
   }
-  if(!activeUser||!activeUser.user){
-    return '<div class="toolbar" style="margin-top:10px"><button onclick="requireAccount()">Add to Your Chronicle</button></div>';
-  }
-  return actorNote+'<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
+  const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
+  return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
 }
 
 function productGalleryHtml(images,model){
@@ -1620,7 +1621,7 @@ function openOwnershipClaim(individualId,mode='acquire'){
   document.getElementById('ownershipClaimDate').value='';
   document.getElementById('ownershipClaimPrevious').value='';
   document.getElementById('ownershipClaimBody').value='';
-  document.getElementById('ownershipClaimSubmit').textContent=mode==='acquire'?'Add to Your Chronicle':'Claimを追加';
+  document.getElementById('ownershipClaimSubmit').textContent=mode==='acquire'?'Submit Ownership Claim':'Claimを追加';
   document.getElementById('ownershipClaimModal').classList.add('open');
 }
 function openOwnerClaim(individualId){
