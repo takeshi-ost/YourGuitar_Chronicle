@@ -8,6 +8,12 @@
     + '.profile-chronicle-row.clickable, .user-guitar-row a';
   let active = null;
   let marked = null;
+  let hoverMuted = false;
+
+  function restoreHover() {
+    document.documentElement.classList.remove('list-keyboard-hover-muted');
+    hoverMuted = false;
+  }
 
   function items(root) {
     return Array.from(root.querySelectorAll(itemSelector))
@@ -60,6 +66,11 @@
       index + (event.key === 'ArrowDown' ? 1 : -1)));
     event.preventDefault();
     if (next === index) return;
+    if (!hoverMuted) {
+      document.documentElement.classList.add('list-keyboard-hover-muted');
+      document.addEventListener('mousemove', restoreHover, {once: true});
+      hoverMuted = true;
+    }
     active.index = next;
     const item = list[next];
     mark(active.root, item);
@@ -79,6 +90,15 @@
     :is(.clickable.selected, .user-results tr.selected, .list-keyboard-current),
     :is(.clickable.selected, .user-results tr.selected, .list-keyboard-current):hover {
       background: color-mix(in srgb, var(--text, #edf0f3) 22%, var(--panel, #181b1f)) !important;
+    }
+    html.list-keyboard-hover-muted :is(tr.clickable, .discovery-item, .profile-chronicle-row.clickable):hover:not(.selected):not(.list-keyboard-current) {
+      background: transparent !important;
+    }
+    html.list-keyboard-hover-muted .notification-item:hover:not(.list-keyboard-current) {
+      background: var(--surface, #171a1e) !important;
+    }
+    html.list-keyboard-hover-muted .notification-item.unread:hover:not(.list-keyboard-current) {
+      background: var(--control, #1d211e) !important;
     }
   `;
   document.head.append(style);

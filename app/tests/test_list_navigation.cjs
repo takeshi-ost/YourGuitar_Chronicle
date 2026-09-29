@@ -51,6 +51,7 @@ root.querySelector = () => root.rows.find(row => row.classList.contains('list-ke
 const body = new Element();
 const document = {
   activeElement: body,
+  documentElement: {classList: classes()},
   addEventListener: (event, callback) => { handlers[event] = callback; },
   querySelector: () => null,
   createElement: () => ({}),
@@ -74,8 +75,14 @@ assert.match(selectionStyle, /color-mix\(in srgb, var\(--text/);
 assert.equal(arrow('ArrowDown'), true);
 assert.equal(selected, 1);
 assert.equal(root.rows[1].classList.contains('list-keyboard-current'), true);
+assert.equal(document.documentElement.classList.contains('list-keyboard-hover-muted'), true);
+assert.match(selectionStyle, /hover:not\(\.selected\):not\(\.list-keyboard-current\)/);
+assert.match(selectionStyle, /notification-item\.unread:hover/);
 assert.equal(arrow('ArrowDown'), true);
 assert.equal(selected, 2);
+handlers.mousemove();
+assert.equal(document.documentElement.classList.contains('list-keyboard-hover-muted'), false);
+assert.equal(root.rows[2].classList.contains('list-keyboard-current'), true);
 assert.equal(scrolls, 2);
 assert.equal(arrow('ArrowDown'), true);
 assert.equal(selected, 2);
