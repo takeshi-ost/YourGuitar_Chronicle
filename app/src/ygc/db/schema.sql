@@ -56,11 +56,23 @@ CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  display_name TEXT NOT NULL,
  account_type TEXT NOT NULL DEFAULT 'user',
+ ban_status TEXT NOT NULL DEFAULT 'normal' CHECK (ban_status IN ('normal','silent_ban','ban')),
+ identity_provider TEXT,
+ identity_subject TEXT,
  location_country TEXT,
  location_region TEXT,
+ bio TEXT,
+ date_of_birth TEXT,
  avatar_storage_path TEXT,
  avatar_original_filename TEXT,
  avatar_mime_type TEXT,
+ birth_visibility TEXT NOT NULL DEFAULT 'Private',
+ residence_visibility TEXT NOT NULL DEFAULT 'Private',
+ bio_visibility TEXT NOT NULL DEFAULT 'Public',
+ avatar_visibility TEXT NOT NULL DEFAULT 'Public',
+ signature_individual_id INTEGER,
+ theme TEXT NOT NULL DEFAULT 'dark_default',
+ theme_override TEXT,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL
 );
@@ -77,6 +89,14 @@ CREATE TABLE IF NOT EXISTS user_guitars (
  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
  UNIQUE(user_id, individual_id)
+);
+CREATE TABLE IF NOT EXISTS user_favorites (
+ user_id INTEGER NOT NULL,
+ individual_id INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(user_id, individual_id),
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS media_assets (
@@ -112,6 +132,7 @@ CREATE TABLE IF NOT EXISTS claims (
  occurred_at TEXT,
  status TEXT NOT NULL DEFAULT 'active',
  verification_status TEXT NOT NULL DEFAULT 'positive',
+ admin_verification INTEGER NOT NULL DEFAULT 0,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
  FOREIGN KEY(individual_id) REFERENCES individuals(id) ON DELETE CASCADE,
@@ -180,6 +201,36 @@ CREATE TABLE IF NOT EXISTS claim_evidence (
  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id) ON DELETE CASCADE,
  UNIQUE(claim_id, media_asset_id)
 );
+-- Structured source evidence belongs to a Claim. The existing observations
+-- table remains available for crawl checkpoints and legacy reads during migration.
+CREATE TABLE IF NOT EXISTS claim_source_evidence (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+ evidence_type TEXT NOT NULL CHECK (evidence_type IN ('marketplace_listing', 'acquisition_date')),
+ source_site TEXT,
+ source_listing_id TEXT,
+ source_url TEXT,
+ captured_at TEXT,
+ effective_date TEXT,
+ date_basis TEXT,
+ payload_json TEXT,
+ legacy_observation_id INTEGER UNIQUE,
+ created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_claim_source_listing_unique
+ ON claim_source_evidence(source_site, source_listing_id)
+ WHERE source_site IS NOT NULL AND source_listing_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_claim_source_evidence_claim
+ ON claim_source_evidence(claim_id);
+CREATE TABLE IF NOT EXISTS claim_specification_source (
+ claim_id INTEGER PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ source_url TEXT,
+ captured_at TEXT NOT NULL,
+ extracted_json TEXT NOT NULL,
+ UNIQUE(source_site, source_listing_id, claim_id)
+);
 CREATE TABLE IF NOT EXISTS notifications (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  recipient_user_id INTEGER NOT NULL,
@@ -211,6 +262,26 @@ CREATE TABLE IF NOT EXISTS crawl_listing_cache (
 CREATE INDEX IF NOT EXISTS idx_crawl_listing_cache_recheck_after
 ON crawl_listing_cache(source_site, recheck_after);
 
+CREATE TABLE IF NOT EXISTS crawl_candidates (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ claim_json TEXT NOT NULL,
+ provenance_json TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending',
+ reason TEXT,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, source_listing_id)
+);
+CREATE TABLE IF NOT EXISTS crawl_detail_cache (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ payload_json TEXT NOT NULL,
+ fetched_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, source_listing_id)
+);
+CREATE INDEX IF NOT EXISTS idx_crawl_candidates_status
+ON crawl_candidates(source_site, status);
+
 CREATE TABLE IF NOT EXISTS crawl_runs (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  source_site TEXT NOT NULL,
@@ -220,7 +291,36 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
  pages_fetched INTEGER DEFAULT 0,
  observations_created INTEGER DEFAULT 0,
  status TEXT NOT NULL,
- error_message TEXT
+ error_message TEXT,
+ category TEXT,
+ year_min INTEGER,
+ year_max INTEGER,
+ phase TEXT,
+ counts_json TEXT,
+ updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS crawl_programs (
+ source_site TEXT NOT NULL,
+ category TEXT NOT NULL,
+ year_min INTEGER NOT NULL,
+ year_max INTEGER NOT NULL,
+ page_url TEXT,
+ pending_json TEXT,
+ next_url TEXT,
+ processed INTEGER NOT NULL DEFAULT 0,
+ observations_created INTEGER NOT NULL DEFAULT 0,
+ finished INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(source_site, category, year_min, year_max)
+);
+CREATE TABLE IF NOT EXISTS crawl_listing_checks (
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ api_url TEXT,
+ checked_at TEXT,
+ missing_since TEXT,
+ status TEXT NOT NULL DEFAULT 'unknown',
+ PRIMARY KEY(source_site, source_listing_id)
 );
 CREATE INDEX IF NOT EXISTS idx_observations_individual_id ON observations(individual_id);
 CREATE INDEX IF NOT EXISTS idx_observations_source_url ON observations(source_url);
@@ -239,3 +339,28 @@ CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_i
 CREATE INDEX IF NOT EXISTS idx_claim_spec_items_claim_id ON claim_spec_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_listing_items_claim_id ON claim_listing_items(claim_id);
 CREATE INDEX IF NOT EXISTS idx_claim_identity_items_claim_id ON claim_identity_items(claim_id);
+
+CREATE TABLE IF NOT EXISTS claim_admin_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ claim_id INTEGER NOT NULL,
+ individual_id INTEGER NOT NULL,
+ action TEXT NOT NULL,
+ previous_verification TEXT,
+ actor TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_admin_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ user_id INTEGER NOT NULL,
+ previous_ban_status TEXT NOT NULL,
+ ban_status TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS individual_resolution_actions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ source_id INTEGER NOT NULL,
+ keep_id INTEGER NOT NULL,
+ action TEXT NOT NULL,
+ created_at TEXT NOT NULL
+);

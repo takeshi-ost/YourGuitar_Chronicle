@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,10 +12,31 @@ from ygc.extractors.normalization import (
     normalize_model,
     normalize_serial,
 )
+from ygc.theme_catalog import THEME_IDS
+from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_observation
+from ygc.observation_matrix import build_observation_matrix
+from ygc.specification_extractor import extract_specifications, clean_specification_value
 
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# A linked marketplace relisting is represented by an Automation Acquire.
+# Legacy Listing migration must not create a second Listing for that source.
+_UNMIGRATED_LISTING_OBSERVATIONS = """
+    FROM observations o
+    WHERE o.individual_id IS NOT NULL
+      AND COALESCE(o.event_type, 'listing') = 'listing'
+      AND NOT EXISTS (
+          SELECT 1 FROM claims c
+          WHERE c.observation_id = o.id
+            AND (c.claim_type = 'listing'
+                 OR (c.claim_type = 'ownership'
+                     AND c.ownership_kind = 'acquire'
+                     AND c.ownership_source IN ('automation', 'merged_listing')))
+      )
+"""
 
 
 class Repository:
@@ -34,6 +56,379 @@ class Repository:
             "PRAGMA foreign_keys = ON"
         )
         return con
+
+    @staticmethod
+    def _insert_cached_specification_claim(
+        con: sqlite3.Connection, *, individual_id: int, author_id: int,
+        source_listing_id: str, source_url: str | None, occurred_at: str,
+        captured_at: str, detail: dict, existing_fields: set[str],
+    ) -> tuple[int | None, int]:
+        """Create one sourced Automation Claim in the Listing's transaction."""
+        items = {key: value for key, value in extract_specifications(detail).items()
+                 if key not in existing_fields}
+        if not items:
+            return None, 0
+        now = utcnow()
+        cur = con.execute(
+            """INSERT INTO claims (individual_id, author_user_id, claim_type,
+                  specification_kind, occurred_at, status, verification_status,
+                  created_at, updated_at)
+               VALUES (?, ?, 'specification', 'specification', ?, 'active',
+                       'positive', ?, ?)""",
+            (individual_id, author_id, occurred_at, now, now),
+        )
+        claim_id = int(cur.lastrowid)
+        con.executemany(
+            """INSERT INTO claim_spec_items (claim_id, field_name, value_text, created_at)
+               VALUES (?, ?, ?, ?)""",
+            [(claim_id, key, value, now) for key, value in items.items()],
+        )
+        con.execute(
+            """INSERT INTO claim_specification_source
+               (claim_id, source_site, source_listing_id, source_url,
+                captured_at, extracted_json) VALUES (?, 'reverb', ?, ?, ?, ?)""",
+            (claim_id, source_listing_id, source_url, captured_at,
+             json.dumps(items, ensure_ascii=False)),
+        )
+        existing_fields.update(items)
+        return claim_id, len(items)
+
+    def backfill_cached_specifications(self) -> dict[str, int]:
+        """Add sourced, positive specifications to currently ownerless individuals."""
+        counts = {"ownerless": 0, "with_detail": 0, "created": 0,
+                  "items": 0, "skipped_no_specs": 0, "skipped_existing": 0,
+                  "corrected_items": 0, "corrected_claims": 0, "removed_claims": 0}
+        with self.connect() as con:
+            # Repair only values still identical to this backfill's own recorded
+            # output. Preserve any subsequent manual changes and all user Claims.
+            affected: set[int] = set()
+            for source in con.execute(
+                """SELECT s.*, c.individual_id FROM claim_specification_source s
+                   JOIN claims c ON c.id=s.claim_id JOIN users u ON u.id=c.author_user_id
+                   WHERE c.claim_type='specification' AND c.status='active'
+                     AND c.verification_status='positive'
+                     AND u.account_type='source' AND u.display_name='Automation'"""
+            ).fetchall():
+                try:
+                    original = json.loads(source["extracted_json"])
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(original, dict):
+                    continue
+                changed = False
+                for item in con.execute(
+                    "SELECT id, field_name, value_text FROM claim_spec_items WHERE claim_id=?",
+                    (source["claim_id"],),
+                ).fetchall():
+                    if original.get(item["field_name"]) != item["value_text"]:
+                        continue
+                    if clean_specification_value(item["field_name"], item["value_text"]):
+                        continue
+                    con.execute("DELETE FROM claim_spec_items WHERE id=?", (item["id"],))
+                    counts["corrected_items"] += 1
+                    changed = True
+                if changed:
+                    counts["corrected_claims"] += 1
+                    affected.add(source["individual_id"])
+                    if not con.execute(
+                        "SELECT 1 FROM claim_spec_items WHERE claim_id=? LIMIT 1",
+                        (source["claim_id"],),
+                    ).fetchone():
+                        con.execute("DELETE FROM claims WHERE id=?", (source["claim_id"],))
+                        counts["removed_claims"] += 1
+            for individual_id in affected:
+                self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            individuals = con.execute(
+                "SELECT id FROM individuals WHERE current_owner_user_id IS NULL ORDER BY id"
+            ).fetchall()
+            counts["ownerless"] = len(individuals)
+            automation = self._source_user_id(con, "Automation")
+            for individual in individuals:
+                individual_id = individual["id"]
+                # Only Listing Claims identify the original discovery; later
+                # Automation Acquire listings are outside this backfill's scope.
+                rows = con.execute(
+                    """SELECT c.id AS listing_claim_id, c.occurred_at, d.source_listing_id,
+                              d.payload_json, d.fetched_at, o.source_url
+                       FROM claims c
+                       JOIN observations o ON o.id=c.observation_id
+                       JOIN crawl_detail_cache d ON d.source_site=o.source_site
+                                                AND d.source_listing_id=o.source_listing_id
+                       WHERE c.individual_id=? AND c.claim_type='listing'
+                         AND o.source_site='reverb'
+                       ORDER BY c.id""", (individual_id,),
+                ).fetchall()
+                if not rows:
+                    continue
+                counts["with_detail"] += 1
+                existing = {row["field_name"] for row in con.execute(
+                    """SELECT si.field_name FROM claim_spec_items si
+                       JOIN claims c ON c.id=si.claim_id
+                       JOIN users u ON u.id=c.author_user_id
+                       WHERE c.individual_id=? AND c.claim_type='specification'
+                         AND c.status='active' AND c.verification_status='positive'
+                         AND u.ban_status='normal'""", (individual_id,),
+                )}
+                created_for_individual = False
+                for row in rows:
+                    if con.execute(
+                        """SELECT 1 FROM claim_specification_source s JOIN claims c ON c.id=s.claim_id
+                           WHERE c.individual_id=? AND s.source_site='reverb'
+                             AND s.source_listing_id=?""",
+                        (individual_id, row["source_listing_id"]),
+                    ).fetchone():
+                        counts["skipped_existing"] += 1
+                        continue
+                    try:
+                        detail = json.loads(row["payload_json"])
+                    except (TypeError, ValueError):
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    if not isinstance(detail, dict):
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    spec_id, item_count = self._insert_cached_specification_claim(
+                        con, individual_id=individual_id, author_id=automation,
+                        source_listing_id=row["source_listing_id"],
+                        source_url=row["source_url"],
+                        occurred_at=row["occurred_at"] or row["fetched_at"],
+                        captured_at=row["fetched_at"], detail=detail,
+                        existing_fields=existing,
+                    )
+                    if spec_id is None:
+                        counts["skipped_no_specs"] += 1
+                        continue
+                    created_for_individual = True
+                    counts["created"] += 1
+                    counts["items"] += item_count
+                if created_for_individual:
+                    self._rebuild_individual_snapshot_in_connection(con, individual_id)
+        return counts
+
+    def backfill_claim_source_evidence(self) -> dict[str, int]:
+        """Copy legacy external listing provenance without altering Claims or snapshots.
+
+        A source occurrence belongs to its Listing or relisting Acquire Claim.
+        Unregistered crawl observations deliberately stay outside Individual data.
+        This may be run repeatedly; conflicting links are reported, not overwritten.
+        """
+        created = existing = conflicts = 0
+        with self.connect() as con:
+            rows = con.execute(
+                """SELECT o.id AS legacy_id, o.source_site, o.source_listing_id,
+                          o.source_url, o.observed_at, o.listing_date,
+                          o.owner_name, o.owner_type, o.location_country,
+                          o.location_region, o.raw_text, o.title, o.image_url,
+                          o.serial_confidence, o.extraction_version,
+                          c.id AS claim_id, c.claim_type, c.ownership_kind,
+                          c.occurred_at
+                   FROM observations o
+                   JOIN claims c ON c.observation_id=o.id
+                   WHERE o.source_site <> 'user'
+                     AND o.source_listing_id IS NOT NULL
+                     AND (c.claim_type='listing' OR
+                          (c.claim_type='ownership' AND c.ownership_kind='acquire'))
+                   ORDER BY o.id, CASE c.claim_type WHEN 'listing' THEN 0 ELSE 1 END, c.id"""
+            ).fetchall()
+            for row in rows:
+                prior = con.execute(
+                    """SELECT claim_id FROM claim_source_evidence
+                       WHERE legacy_observation_id=? OR (source_site=? AND source_listing_id=?)""",
+                    (row['legacy_id'], row['source_site'], row['source_listing_id']),
+                ).fetchone()
+                if prior:
+                    if prior['claim_id'] == row['claim_id']:
+                        existing += 1
+                    else:
+                        conflicts += 1
+                    continue
+                detail = con.execute(
+                    """SELECT payload_json FROM crawl_detail_cache
+                       WHERE source_site=? AND source_listing_id=?""",
+                    (row['source_site'], row['source_listing_id']),
+                ).fetchone()
+                claim_payload = {
+                    'legacy_observation_id': row['legacy_id'],
+                    'owner_name': row['owner_name'], 'owner_type': row['owner_type'],
+                    'location_country': row['location_country'],
+                    'location_region': row['location_region'],
+                }
+                source_payload = {
+                    'legacy_observation_id': row['legacy_id'],
+                    'title': row['title'], 'raw_text': row['raw_text'],
+                    'image_url': row['image_url'],
+                    'serial_confidence': row['serial_confidence'],
+                    'extraction_version': row['extraction_version'],
+                }
+                if detail:
+                    source_payload['raw_detail'] = json.loads(detail['payload_json'])
+                payload = json.dumps({'claim': claim_payload, 'source': source_payload},
+                                     ensure_ascii=False)
+                is_acquire = row['claim_type'] == 'ownership'
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,source_site,source_listing_id,
+                        source_url,captured_at,effective_date,date_basis,
+                        payload_json,legacy_observation_id,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (row['claim_id'], 'marketplace_listing', row['source_site'],
+                     row['source_listing_id'], row['source_url'], row['observed_at'],
+                     row['occurred_at'] if is_acquire else row['listing_date'],
+                     'observed_at' if is_acquire else 'listing_date', payload,
+                     row['legacy_id'], utcnow()),
+                )
+                created += 1
+        return {'created': created, 'existing': existing, 'conflicts': conflicts}
+
+    def backfill_acquisition_date_evidence(self) -> dict[str, int]:
+        """Copy explicitly recorded dates on older user Acquire Claims.
+
+        Never infer an acquisition date from submission time or a marketplace
+        observation; those have different meanings and stay distinguishable.
+        """
+        created = existing = missing_date = 0
+        with self.connect() as con:
+            claims = con.execute(
+                """SELECT id,author_user_id,occurred_at FROM claims
+                   WHERE claim_type='ownership' AND ownership_kind='acquire'
+                     AND COALESCE(ownership_source,'user') NOT IN ('automation','merged_listing')
+                   ORDER BY id"""
+            ).fetchall()
+            for claim in claims:
+                if con.execute(
+                    """SELECT 1 FROM claim_source_evidence
+                       WHERE claim_id=? AND evidence_type='acquisition_date'""",
+                    (claim['id'],),
+                ).fetchone():
+                    existing += 1
+                    continue
+                date = str(claim['occurred_at'] or '')
+                try:
+                    if len(date) != 10:
+                        raise ValueError('Incomplete date')
+                    datetime.strptime(date, '%Y-%m-%d')
+                except ValueError:
+                    missing_date += 1
+                    continue
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                       VALUES (?, 'acquisition_date', ?, 'legacy_claim_date', ?, ?)""",
+                    (claim['id'], date,
+                     json.dumps({'reported_by_user_id': claim['author_user_id']}, ensure_ascii=False),
+                     utcnow()),
+                )
+                created += 1
+        return {'created': created, 'existing': existing, 'missing_date': missing_date}
+
+    def observation_diagnostic(self, individual_id: int) -> dict[str, Any]:
+        """Compare a read-only Observation evaluation to the saved Individual."""
+        with self.connect() as con:
+            con.execute('PRAGMA query_only=ON')
+            row = con.execute('SELECT * FROM individuals WHERE id=?',
+                              (individual_id,)).fetchone()
+            if row is None:
+                raise ValueError('Individual not found')
+            evaluated = evaluate_observation(con, individual_id)
+            current = {field: row[field] for field in OBSERVATION_FIELDS}
+            differences = {
+                field: {'saved': current[field], 'evaluated': evaluated.values[field],
+                        'claim_id': evaluated.sources.get(field)}
+                for field in OBSERVATION_FIELDS
+                if (str(current[field]) if current[field] is not None else None) !=
+                   (str(evaluated.values[field]) if evaluated.values[field] is not None else None)
+            }
+            matrix = build_observation_matrix(
+                con, individual_id, evaluated, current,
+                self.list_current_specifications(individual_id),
+            )
+            return {**evaluated.as_dict(), 'saved': current,
+                    'differences': differences, 'matrix': matrix}
+
+    def audit_observation_migration(self, sample_limit: int = 20) -> dict[str, Any]:
+        """Compare every Individual on a consistent, read-only DB snapshot."""
+        if sample_limit < 0 or sample_limit > 100:
+            raise ValueError('sample_limit must be between 0 and 100')
+        if not self.db_path.is_file():
+            raise FileNotFoundError(self.db_path)
+        with self.connect() as con:
+            con.execute('PRAGMA query_only=ON')
+            con.execute('BEGIN')
+            try:
+                ids = [int(row[0]) for row in con.execute('SELECT id FROM individuals ORDER BY id')]
+                mismatched = failed = 0
+                mismatch_fields: dict[str, int] = {}
+                samples: list[dict[str, Any]] = []
+                for individual_id in ids:
+                    try:
+                        individual = con.execute('SELECT * FROM individuals WHERE id=?',
+                                                 (individual_id,)).fetchone()
+                        evaluated = evaluate_observation(con, individual_id)
+                        differing = [field for field in OBSERVATION_FIELDS
+                                     if (str(individual[field]) if individual[field] is not None else None)
+                                     != (str(evaluated.values[field]) if evaluated.values[field] is not None else None)]
+                    except (ValueError, sqlite3.DatabaseError, json.JSONDecodeError) as exc:
+                        failed += 1
+                        if len(samples) < sample_limit:
+                            samples.append({'individual_id': individual_id, 'error': str(exc)})
+                        continue
+                    if differing:
+                        mismatched += 1
+                        for field in differing:
+                            mismatch_fields[field] = mismatch_fields.get(field, 0) + 1
+                        if len(samples) < sample_limit:
+                            samples.append({'individual_id': individual_id, 'fields': differing})
+                source_missing = con.execute(
+                    """SELECT COUNT(*) FROM claims c JOIN observations o ON o.id=c.observation_id
+                       WHERE o.source_site<>'user' AND o.source_listing_id IS NOT NULL
+                         AND (c.claim_type='listing' OR
+                              (c.claim_type='ownership' AND c.ownership_kind='acquire'))
+                         AND NOT EXISTS (SELECT 1 FROM claim_source_evidence e
+                                         WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing')"""
+                ).fetchone()[0]
+                date_missing = con.execute(
+                    """SELECT COUNT(*) FROM claims c
+                       WHERE c.claim_type='ownership' AND c.ownership_kind='acquire'
+                         AND COALESCE(c.ownership_source,'user') NOT IN ('automation','merged_listing')
+                         AND (c.occurred_at IS NULL OR LENGTH(c.occurred_at)<>10 OR
+                              NOT EXISTS (SELECT 1 FROM claim_source_evidence e
+                                          WHERE e.claim_id=c.id AND e.evidence_type='acquisition_date'
+                                            AND e.effective_date=c.occurred_at))"""
+                ).fetchone()[0]
+                result = {
+                    'individuals_checked': len(ids), 'individuals_mismatched': mismatched,
+                    'evaluation_errors': failed, 'mismatch_fields': mismatch_fields,
+                    'samples': samples, 'marketplace_claims_without_evidence': source_missing,
+                    'user_acquires_without_date_evidence': date_missing,
+                    'unregistered_legacy_crawl_rows': con.execute(
+                        'SELECT COUNT(*) FROM observations WHERE individual_id IS NULL'
+                    ).fetchone()[0],
+                }
+                return result
+            finally:
+                con.rollback()
+
+    @staticmethod
+    def _insert_marketplace_evidence(con: sqlite3.Connection, claim_id: int,
+                                     observation_id: int, claim_data: dict,
+                                     provenance: dict, *, acquire: bool) -> None:
+        """Keep the new Evidence and the legacy crawl record in one transaction."""
+        con.execute(
+            """INSERT INTO claim_source_evidence
+               (claim_id,evidence_type,source_site,source_listing_id,
+                source_url,captured_at,effective_date,date_basis,payload_json,
+                legacy_observation_id,created_at)
+               VALUES (?, 'marketplace_listing', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (claim_id, provenance.get('source_site') or 'reverb',
+             str(provenance['source_listing_id']), provenance.get('source_url') or '',
+             provenance.get('observed_at'),
+             (provenance.get('observed_at') if acquire else
+              claim_data.get('listing_date') or provenance.get('listing_date')),
+             'observed_at' if acquire else 'listing_date',
+             json.dumps({'claim': claim_data, 'provenance': provenance},
+                        ensure_ascii=False, default=str),
+             observation_id, utcnow()),
+        )
 
     def init_db(self) -> None:
         schema_path = Path(
@@ -69,6 +464,12 @@ class Repository:
         self,
         con: sqlite3.Connection,
     ) -> None:
+        # This legacy conversion belongs to the schema upgrade only. Running it
+        # on every startup rewrites ordinary Acquire / Release history after a
+        # transfer, including prior owner verification decisions.
+        needs_former_pair_backfill = (
+            'ownership_source' not in self._table_columns(con, 'claims')
+        )
         migrations = {
             "individuals": {
                 "finish": "TEXT",
@@ -82,9 +483,23 @@ class Repository:
                 "representative_media_asset_id": "INTEGER",
             },
             "users": {
+                "ban_status": "TEXT NOT NULL DEFAULT 'normal'",
+                "identity_provider": "TEXT",
+                "identity_subject": "TEXT",
+                "bio": "TEXT",
+                "date_of_birth": "TEXT",
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
                 "avatar_mime_type": "TEXT",
+                "birth_visibility": "TEXT NOT NULL DEFAULT 'Private'",
+                "residence_visibility": "TEXT NOT NULL DEFAULT 'Private'",
+                "bio_visibility": "TEXT NOT NULL DEFAULT 'Public'",
+                "avatar_visibility": "TEXT NOT NULL DEFAULT 'Public'",
+                "signature_individual_id": "INTEGER",
+                "theme": "TEXT NOT NULL DEFAULT 'dark_default'",
+                # Older databases restrict users.theme to the first three choices.
+                # Store curated additions here without rebuilding the referenced users table.
+                "theme_override": "TEXT",
             },
             "user_guitars": {
                 "display_order": "INTEGER",
@@ -96,6 +511,15 @@ class Repository:
                 "ownership_pair_id": "TEXT",
                 "target_claim_id": "INTEGER",
                 "verification_status": "TEXT NOT NULL DEFAULT 'positive'",
+                "admin_verification": "INTEGER NOT NULL DEFAULT 0",
+            },
+            "crawl_runs": {
+                "category": "TEXT",
+                "year_min": "INTEGER",
+                "year_max": "INTEGER",
+                "phase": "TEXT",
+                "counts_json": "TEXT",
+                "updated_at": "TEXT",
             },
             "observations": {
                 "event_type": "TEXT NOT NULL DEFAULT 'listing'",
@@ -136,6 +560,9 @@ class Repository:
                     f"{data_type}"
                 )
 
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_identity_subject "
+                    "ON users(identity_provider, identity_subject) WHERE identity_subject IS NOT NULL")
+
         con.execute(
             """
             CREATE INDEX IF NOT EXISTS
@@ -145,25 +572,22 @@ class Repository:
         )
 
         # Backfill Former Owner pairs created before ownership_source existed.
-        former_links = list(
-            con.execute(
+        former_links = []
+        if needs_former_pair_backfill:
+            former_links = list(con.execute(
                 """
-                SELECT
-                    user_id,
-                    individual_id,
-                    acquired_at,
-                    released_at
+                SELECT user_id, individual_id, acquired_at, released_at
                 FROM user_guitars
                 WHERE ownership_status = 'former_owner'
                   AND acquired_at IS NOT NULL
                   AND released_at IS NOT NULL
+                  AND substr(acquired_at, 1, 10) < substr(released_at, 1, 10)
                 """
-            )
-        )
+            ))
         for link in former_links:
             acquire = con.execute(
                 """
-                SELECT id
+                SELECT id, created_at, verification_status
                 FROM claims
                 WHERE individual_id = ?
                   AND author_user_id = ?
@@ -182,7 +606,7 @@ class Repository:
             ).fetchone()
             release = con.execute(
                 """
-                SELECT id
+                SELECT id, created_at, verification_status
                 FROM claims
                 WHERE individual_id = ?
                   AND author_user_id = ?
@@ -199,14 +623,18 @@ class Repository:
                     link["released_at"],
                 ),
             ).fetchone()
-            if acquire and release:
+            # A genuine Former Owner request creates both Claims together.
+            # Matching a user's independent historical Acquire / Release by
+            # event date alone incorrectly couples their verification states.
+            if (acquire and release
+                    and acquire['created_at'] == release['created_at']
+                    and acquire['verification_status'] == release['verification_status']):
                 pair_id = str(uuid.uuid4())
                 con.execute(
                     """
                     UPDATE claims
                     SET ownership_source = 'former_owner',
-                        ownership_pair_id = ?,
-                        verification_status = 'unverified'
+                        ownership_pair_id = ?
                     WHERE id IN (?, ?)
                     """,
                     (
@@ -215,15 +643,6 @@ class Repository:
                         release["id"],
                     ),
                 )
-
-        con.execute(
-            """
-            UPDATE claims
-            SET verification_status = 'positive'
-            WHERE claim_type = 'listing'
-              AND COALESCE(verification_status, '') <> 'positive'
-            """
-        )
 
         con.execute(
             """
@@ -301,25 +720,7 @@ class Repository:
 
         rows = list(
             con.execute(
-                """
-                SELECT o.*
-                FROM observations o
-                WHERE o.individual_id
-                      IS NOT NULL
-                  AND COALESCE(
-                        o.event_type,
-                        'listing'
-                      ) = 'listing'
-                  AND NOT EXISTS (
-                        SELECT 1
-                        FROM claims c
-                        WHERE c.observation_id
-                              = o.id
-                          AND c.claim_type
-                              = 'listing'
-                  )
-                ORDER BY o.id
-                """
+                'SELECT o.* ' + _UNMIGRATED_LISTING_OBSERVATIONS + ' ORDER BY o.id'
             )
         )
 
@@ -328,12 +729,7 @@ class Repository:
                 row["source_site"]
                 or "source"
             ).strip()
-            source_name = (
-                "Reverb"
-                if source_site.lower()
-                   == "reverb"
-                else source_site
-            )
+            source_name = "Automation"
 
             if source_name not in source_ids:
                 source_ids[
@@ -558,21 +954,7 @@ class Repository:
         with self.connect() as con:
             unmigrated_listing_observations = int(
                 con.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM observations o
-                    WHERE o.individual_id IS NOT NULL
-                      AND COALESCE(
-                            o.event_type,
-                            'listing'
-                          ) = 'listing'
-                      AND NOT EXISTS (
-                            SELECT 1
-                            FROM claims c
-                            WHERE c.observation_id = o.id
-                              AND c.claim_type = 'listing'
-                      )
-                    """
+                    'SELECT COUNT(*) ' + _UNMIGRATED_LISTING_OBSERVATIONS
                 ).fetchone()[0]
             )
 
@@ -827,10 +1209,9 @@ class Repository:
         individual_id: int,
     ) -> dict[str, Any]:
         """
-        Rebuild one Individual's materialized current-state snapshot
-        exclusively from active Claims.
-
-        Observation metadata is intentionally not consulted here.
+        Rebuild one Individual's materialized current state from its logical
+        Observation evaluation of Claims and Evidence. Legacy crawl rows are
+        not an input to the result.
         """
         with self.connect() as con:
             return self._rebuild_individual_snapshot_in_connection(
@@ -856,354 +1237,11 @@ class Repository:
                 "Individual not found"
             )
 
-        state: dict[str, str | None] = {
-            "manufacturer": None,
-            "model": None,
-            "finish": None,
-            "year": None,
-            "serial_number": None,
-            "location_country": None,
-            "location_region": None,
-            "current_owner_name": None,
-            "current_owner_type": None,
-            "current_owner_user_id": None,
-            "current_owner_source_url": None,
-        }
-
-        listing_rows = list(
-            con.execute(
-                """
-                SELECT
-                    c.id AS claim_id,
-                    li.field_name,
-                    li.value_text
-                FROM claims c
-                INNER JOIN claim_listing_items li
-                  ON li.claim_id = c.id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'listing'
-                  AND c.status = 'active'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    li.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        first_listing_id: int | None = None
-        identity_fields = {
-            "manufacturer",
-            "model",
-            "year",
-            "serial_number",
-        }
-        listing_snapshot_fields = {
-            "manufacturer",
-            "model",
-            "finish",
-            "year",
-            "serial_number",
-            "location_country",
-            "location_region",
-        }
-
-        for row in listing_rows:
-            claim_id = int(
-                row["claim_id"]
-            )
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            value = (
-                str(row["value_text"]).strip()
-                if row["value_text"] is not None
-                else None
-            )
-            if (
-                field not in listing_snapshot_fields
-                or not value
-            ):
-                continue
-
-            if first_listing_id is None:
-                first_listing_id = claim_id
-
-            if claim_id == first_listing_id:
-                state[field] = value
-                continue
-
-            if field in (
-                "location_country",
-                "location_region",
-            ):
-                state[field] = value
-            elif (
-                field == "finish"
-                and state["finish"] is None
-            ):
-                state["finish"] = value
-            elif (
-                field in identity_fields
-                and state[field] is None
-            ):
-                state[field] = value
-
-        correction_rows = list(
-            con.execute(
-                """
-                SELECT
-                    ci.field_name,
-                    ci.new_value
-                FROM claims c
-                INNER JOIN claim_identity_items ci
-                  ON ci.claim_id = c.id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'identity_correction'
-                  AND c.status = 'active'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    ci.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for row in correction_rows:
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            if field not in identity_fields:
-                continue
-            value = row["new_value"]
-            state[field] = (
-                str(value).strip()
-                if value is not None
-                and str(value).strip()
-                else None
-            )
-
-        specification_rows = list(
-            con.execute(
-                """
-                SELECT
-                    si.field_name,
-                    si.value_text
-                FROM claims c
-                INNER JOIN claim_spec_items si
-                  ON si.claim_id = c.id
-                WHERE c.individual_id = ?
-                  AND c.claim_type = 'specification'
-                  AND c.status = 'active'
-                  AND COALESCE(c.verification_status, 'positive') = 'positive'
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id,
-                    si.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for row in specification_rows:
-            field = str(
-                row["field_name"]
-                or ""
-            ).strip().lower()
-            value = (
-                str(row["value_text"]).strip()
-                if row["value_text"] is not None
-                else None
-            )
-            if field == "finish" and value:
-                state["finish"] = value
-
-        owner_claims = list(
-            con.execute(
-                """
-                SELECT
-                    c.id,
-                    c.claim_type,
-                    c.value_text,
-                    c.ownership_kind,
-                    c.ownership_source,
-                    c.verification_status,
-                    c.occurred_at,
-                    c.created_at
-                FROM claims c
-                WHERE c.individual_id = ?
-                  AND c.status = 'active'
-                  AND (
-                        c.claim_type <> 'ownership'
-                        OR COALESCE(c.ownership_source, '') <> 'former_owner'
-                        OR COALESCE(c.verification_status, 'positive') = 'positive'
-                  )
-                  AND c.claim_type IN (
-                        'listing',
-                        'ownership'
-                  )
-                ORDER BY
-                    COALESCE(
-                        c.occurred_at,
-                        c.created_at
-                    ),
-                    c.created_at,
-                    c.id
-                """,
-                (individual_id,),
-            )
-        )
-
-        for claim in owner_claims:
-            claim_type = str(
-                claim["claim_type"]
-            )
-            if claim_type == "listing":
-                items = {
-                    str(row["field_name"]): (
-                        str(row["value_text"]).strip()
-                        if row["value_text"] is not None
-                        else None
-                    )
-                    for row
-                    in con.execute(
-                        """
-                        SELECT field_name, value_text
-                        FROM claim_listing_items
-                        WHERE claim_id = ?
-                        """,
-                        (claim["id"],),
-                    )
-                }
-                owner_name = items.get(
-                    "owner_name"
-                )
-                owner_type = items.get(
-                    "owner_type"
-                )
-                owner_user_id = items.get(
-                    "owner_user_id"
-                )
-                owner_user = (
-                    con.execute(
-                        """
-                        SELECT display_name, account_type
-                        FROM users
-                        WHERE id = ?
-                        """,
-                        (owner_user_id,),
-                    ).fetchone()
-                    if owner_user_id
-                    else None
-                )
-                state["current_owner_name"] = (
-                    str(owner_user["display_name"])
-                    if owner_user
-                    else (
-                        owner_name
-                        if owner_name
-                        else None
-                    )
-                )
-                state["current_owner_type"] = (
-                    str(owner_user["account_type"])
-                    if owner_user
-                    else (
-                        owner_type
-                        if owner_type
-                        else None
-                    )
-                )
-                state["current_owner_user_id"] = (
-                    owner_user_id
-                    if owner_user
-                    else None
-                )
-                state["current_owner_source_url"] = (
-                    items.get("source_url")
-                    or None
-                )
-            elif claim_type == "ownership":
-                ownership_kind = (
-                    str(claim["ownership_kind"] or "acquire").strip().lower()
-                    if "ownership_kind" in claim.keys()
-                    else "acquire"
-                )
-                if ownership_kind in ("transfer", "release", "inherit"):
-                    state["current_owner_name"] = "Unknown"
-                    state["current_owner_type"] = "unknown"
-                    state["current_owner_user_id"] = None
-                    state["current_owner_source_url"] = None
-                    state["location_country"] = None
-                    state["location_region"] = None
-                    continue
-                owner_user_id = (
-                    str(claim["value_text"]).strip()
-                    if claim["value_text"] is not None
-                    else ""
-                )
-                user = (
-                    con.execute(
-                        """
-                        SELECT
-                            display_name,
-                            account_type,
-                            location_country,
-                            location_region
-                        FROM users
-                        WHERE id = ?
-                        """,
-                        (owner_user_id,),
-                    ).fetchone()
-                    if owner_user_id
-                    else None
-                )
-                state["current_owner_name"] = (
-                    str(user["display_name"])
-                    if user
-                    else None
-                )
-                state["current_owner_type"] = (
-                    str(user["account_type"])
-                    if user
-                    else None
-                )
-                state["current_owner_user_id"] = (
-                    owner_user_id
-                    if user
-                    else None
-                )
-                state["current_owner_source_url"] = None
-                state["location_country"] = (
-                    str(user["location_country"]).strip()
-                    if user
-                    and user["location_country"]
-                    and str(user["location_country"]).strip()
-                    else None
-                )
-                state["location_region"] = (
-                    str(user["location_region"]).strip()
-                    if user
-                    and user["location_region"]
-                    and str(user["location_region"]).strip()
-                    else None
-                )
+        # One logical Observation evaluates the Claims for this Individual.
+        # Build the candidate without writing; only a valid complete identity
+        # is materialized to Individual and user_guitars below.
+        evaluation = evaluate_observation(con, individual_id)
+        state = evaluation.values
 
         normalized_maker = normalize_manufacturer(
             state["manufacturer"]
@@ -1384,6 +1422,13 @@ class Repository:
         year: str | None = None,
     ) -> None:
         with self.connect() as con:
+            if con.execute(
+                "SELECT 1 FROM claims WHERE individual_id = ? AND status = 'active' LIMIT 1",
+                (individual_id,),
+            ).fetchone():
+                raise ValueError(
+                    "Claim-backed Individuals must be changed through Claims"
+                )
             con.execute(
                 """
                 UPDATE individuals
@@ -1454,6 +1499,20 @@ class Repository:
         )
 
         with self.connect() as con:
+            recorded_source = con.execute(
+                """SELECT o.id AS legacy_observation_id,c.individual_id
+                   FROM claim_source_evidence e JOIN claims c ON c.id=e.claim_id
+                   LEFT JOIN observations o ON o.id=e.legacy_observation_id
+                   WHERE e.source_site=? AND e.source_listing_id=? LIMIT 1""",
+                (source_site, source_listing_id),
+            ).fetchone()
+            if recorded_source:
+                return {
+                    'created': False,
+                    'observation_id': recorded_source['legacy_observation_id'],
+                    'claim_id': None,
+                    'individual_id': int(recorded_source['individual_id']),
+                }
             existing_observation = con.execute(
                 """
                 SELECT
@@ -1491,6 +1550,7 @@ class Repository:
                 }
 
             individual_id: int | None = None
+            existing_individual = None
 
             if (
                 normalized_maker
@@ -1574,6 +1634,10 @@ class Repository:
 
             observation_columns = [
                 "individual_id",
+                "owner_name",
+                "owner_type",
+                "location_country",
+                "location_region",
                 "event_type",
                 "source_site",
                 "source_url",
@@ -1589,6 +1653,10 @@ class Repository:
             ]
             observation_values = {
                 "individual_id": individual_id,
+                "owner_name": claim_data.get("owner_name"),
+                "owner_type": claim_data.get("owner_type"),
+                "location_country": claim_data.get("location_country"),
+                "location_region": claim_data.get("location_region"),
                 "event_type": (
                     provenance.get(
                         "event_type"
@@ -1671,8 +1739,38 @@ class Repository:
 
             author_user_id = self._source_user_id(
                 con,
-                "Reverb",
+                "Automation",
             )
+            if existing_individual is not None:
+                current_owner_user_id = existing_individual["current_owner_user_id"]
+                verification = "unverified" if current_owner_user_id else "positive"
+                occurred_at = provenance.get("observed_at") or utcnow()
+                now = provenance.get("created_at") or utcnow()
+                cur = con.execute(
+                    """
+                    INSERT INTO claims (
+                        individual_id, observation_id, author_user_id,
+                        claim_type, field_name, value_text, ownership_kind,
+                        ownership_source, verification_status, occurred_at,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'ownership', 'owner', ?, 'acquire',
+                              'automation', ?, ?, 'active', ?, ?)
+                    """,
+                    (individual_id, observation_id, author_user_id,
+                     claim_data.get("owner_name"), verification, occurred_at, now, now),
+                )
+                claim_id = int(cur.lastrowid)
+                self._insert_marketplace_evidence(
+                    con, claim_id, observation_id, claim_data, provenance,
+                    acquire=True,
+                )
+                if verification == "positive":
+                    self._rebuild_individual_snapshot_in_connection(con, individual_id)
+                return {
+                    "created": True, "observation_id": observation_id,
+                    "claim_id": claim_id, "individual_id": individual_id,
+                    "verification_status": verification,
+                }
             occurred_at = (
                 claim_data.get(
                     "listing_date"
@@ -1771,6 +1869,32 @@ class Repository:
                     ),
                 )
 
+            self._insert_marketplace_evidence(
+                con, claim_id, observation_id, claim_data, provenance,
+                acquire=False,
+            )
+
+            specification_claim_id = None
+            if source_site == "reverb":
+                cached = con.execute(
+                    """SELECT payload_json, fetched_at FROM crawl_detail_cache
+                       WHERE source_site='reverb' AND source_listing_id=?""",
+                    (source_listing_id,),
+                ).fetchone()
+                if cached:
+                    try:
+                        detail = json.loads(cached["payload_json"])
+                    except (TypeError, ValueError):
+                        detail = None
+                    if isinstance(detail, dict):
+                        specification_claim_id, _ = self._insert_cached_specification_claim(
+                            con, individual_id=individual_id, author_id=author_user_id,
+                            source_listing_id=source_listing_id,
+                            source_url=provenance.get("source_url"),
+                            occurred_at=occurred_at, captured_at=cached["fetched_at"],
+                            detail=detail, existing_fields=set(),
+                        )
+
             self._rebuild_individual_snapshot_in_connection(
                 con,
                 individual_id,
@@ -1780,8 +1904,68 @@ class Repository:
                 "created": True,
                 "observation_id": observation_id,
                 "claim_id": claim_id,
+                "specification_claim_id": specification_claim_id,
                 "individual_id": individual_id,
             }
+
+    def record_reverb_unavailable(self, listing_id: str) -> dict[str, Any]:
+        """Record Automation Lost for the current external listing source."""
+        with self.connect() as con:
+            evidence = con.execute(
+                """SELECT e.claim_id,e.legacy_observation_id,e.source_url,c.individual_id
+                   FROM claim_source_evidence e JOIN claims c ON c.id=e.claim_id
+                   WHERE e.source_site='reverb' AND e.source_listing_id=?
+                   LIMIT 1""",
+                (listing_id,),
+            ).fetchone()
+            observation = evidence or con.execute(
+                "SELECT id, individual_id, source_url FROM observations "
+                "WHERE source_site = 'reverb' AND source_listing_id = ?",
+                (listing_id,),
+            ).fetchone()
+            if not observation or observation["individual_id"] is None:
+                return {"created": False, "reason": "no_individual"}
+            legacy_id = (observation['legacy_observation_id'] if evidence else observation['id'])
+            source_claim_id = evidence['claim_id'] if evidence else None
+            individual_id = int(observation["individual_id"])
+            individual = con.execute(
+                "SELECT current_owner_user_id, current_owner_source_url "
+                "FROM individuals WHERE id = ?", (individual_id,),
+            ).fetchone()
+            reverb_only = bool(
+                individual and individual["current_owner_user_id"] is None
+                and individual["current_owner_source_url"]
+                and individual["current_owner_source_url"] == observation["source_url"]
+            )
+            if con.execute(
+                "SELECT 1 FROM claims WHERE (observation_id = ? OR target_claim_id = ?) AND "
+                "status = 'active' AND ((ownership_source = 'automation' AND ownership_kind IN ('lost', 'release')) "
+                "OR (claim_type = 'event' AND value_text = 'reverb_unavailable'))",
+                (legacy_id, source_claim_id),
+            ).fetchone():
+                return {"created": False, "reason": "already_recorded"}
+            if not reverb_only:
+                return {"created": False, "reason": "not_current_external_source"}
+            author_id = self._source_user_id(con, "Automation")
+            now = utcnow()
+            cur = con.execute(
+                """INSERT INTO claims (
+                    individual_id, observation_id, target_claim_id, author_user_id,
+                    claim_type, field_name, value_text, ownership_kind,
+                    ownership_source, body, occurred_at, status,
+                    verification_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active',
+                          'positive', ?, ?)""",
+                (individual_id, legacy_id if con.execute(
+                    'SELECT 1 FROM observations WHERE id=?', (legacy_id,)).fetchone() else None,
+                 source_claim_id, author_id,
+                 "ownership", "owner", "unknown", "lost", "automation",
+                 "Reverb listing no longer publicly available (confirmed twice).",
+                 now, now, now),
+            )
+            self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            return {"created": True, "claim_id": int(cur.lastrowid),
+                    "owner_lost": True, "individual_id": individual_id}
 
     def upsert_observation(
         self,
@@ -2301,6 +2485,7 @@ class Repository:
                 con.execute(
                     """
                     SELECT
+                        COALESCE(u.theme_override,u.theme) AS theme,
                         u.*,
                         COUNT(
                             CASE
@@ -2329,7 +2514,7 @@ class Repository:
         with self.connect() as con:
             user = con.execute(
                 """
-                SELECT *
+                SELECT COALESCE(theme_override,theme) AS theme, *
                 FROM users
                 WHERE id = ?
                 """,
@@ -2347,11 +2532,42 @@ class Repository:
                         i.model,
                         i.finish,
                         i.year,
-                        i.serial_number
+                        i.serial_number,
+                        (SELECT COUNT(*) FROM claims c
+                         WHERE c.individual_id = i.id
+                           AND c.status = 'active') AS claim_count
                     FROM user_guitars ug
                     INNER JOIN individuals i
                       ON i.id = ug.individual_id
                     WHERE ug.user_id = ?
+                      AND (ug.ownership_status <> 'former_owner'
+                           OR EXISTS (
+                               SELECT 1 FROM claims c
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.author_user_id=ug.user_id
+                                 AND c.claim_type='ownership'
+                                 AND c.ownership_kind='acquire'
+                                 AND c.status='active'
+                                 AND c.verification_status='positive'
+                           )
+                           OR EXISTS (
+                               SELECT 1 FROM claims c
+                               JOIN claim_listing_items li ON li.claim_id=c.id
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.claim_type='listing'
+                                 AND c.status='active'
+                                 AND c.verification_status='positive'
+                                 AND li.field_name='owner_user_id'
+                                 AND li.value_text=CAST(ug.user_id AS TEXT)
+                           )
+                           OR NOT EXISTS (
+                               SELECT 1 FROM claims c
+                               WHERE c.individual_id=ug.individual_id
+                                 AND c.author_user_id=ug.user_id
+                                 AND c.claim_type='ownership'
+                                 AND c.ownership_kind='acquire'
+                                 AND c.ownership_source='former_owner'
+                           ))
                     ORDER BY
                         CASE
                             WHEN ug.ownership_status
@@ -2378,6 +2594,163 @@ class Repository:
                 user,
                 guitars,
             )
+
+    def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
+        with self.connect() as con:
+            return list(con.execute("""
+                SELECT f.individual_id, f.created_at, i.manufacturer, i.model,
+                       i.finish, i.year, i.serial_number,
+                       (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id
+                        AND c.status='active') AS claim_count
+                FROM user_favorites f
+                JOIN individuals i ON i.id=f.individual_id
+                WHERE f.user_id=?
+                ORDER BY f.created_at DESC, f.individual_id DESC
+            """, (user_id,)))
+
+    def set_user_favorite(self, user_id: int, individual_id: int, favorite: bool) -> bool:
+        with self.connect() as con:
+            user = con.execute("SELECT account_type, ban_status FROM users WHERE id=?", (user_id,)).fetchone()
+            if not user or user['account_type'] == 'source' or user['ban_status'] == 'ban':
+                raise ValueError("User not available")
+            if not con.execute("SELECT 1 FROM individuals WHERE id=?", (individual_id,)).fetchone():
+                raise ValueError("Guitar not found")
+            if favorite:
+                con.execute("INSERT OR IGNORE INTO user_favorites (user_id, individual_id, created_at) VALUES (?,?,?)",
+                            (user_id, individual_id, utcnow()))
+            else:
+                con.execute("DELETE FROM user_favorites WHERE user_id=? AND individual_id=?", (user_id, individual_id))
+            return favorite
+
+    def preview_silent_profile(self, user_id: int, individual_id: int | None = None) -> dict:
+        """Show a silent user's own Claim-derived state without persisting it."""
+        with self.connect() as con:
+            user = con.execute("SELECT ban_status FROM users WHERE id=?", (user_id,)).fetchone()
+            if not user or user["ban_status"] != 'silent_ban':
+                return {}
+            con.execute('SAVEPOINT silent_preview')
+            try:
+                con.execute("UPDATE users SET ban_status='normal' WHERE id=?", (user_id,))
+                ids = {r[0] for r in con.execute(
+                    "SELECT DISTINCT individual_id FROM claims WHERE author_user_id=?", (user_id,))}
+                ids.update(r[0] for r in con.execute(
+                    "SELECT DISTINCT c.individual_id FROM claims c JOIN claim_listing_items li "
+                    "ON li.claim_id=c.id WHERE li.field_name='owner_user_id' AND li.value_text=?",
+                    (str(user_id),)))
+                for iid in (ids if individual_id is None else ids & {individual_id}):
+                    self._rebuild_individual_snapshot_in_connection(con, iid)
+                if individual_id is not None:
+                    row = con.execute("SELECT * FROM individuals WHERE id=?", (individual_id,)).fetchone()
+                    return dict(row) if row else {}
+                rows = con.execute("SELECT individual_id,ownership_status FROM user_guitars WHERE user_id=?",
+                                   (user_id,)).fetchall()
+                return {int(r['individual_id']): r['ownership_status'] for r in rows}
+            finally:
+                con.execute('ROLLBACK TO silent_preview')
+                con.execute('RELEASE silent_preview')
+
+    def list_user_chronicle(self, user_id: int, limit: int = 100, viewer_user_id: int | None = None) -> list[dict[str, Any]]:
+        """Visible user milestones and actions, sorted by the time they happened."""
+        entries: list[dict[str, Any]] = []
+
+        def add(category: str, when: str | None, subject: str, message: str,
+                individual_id: int | None = None) -> None:
+            if when:
+                entries.append({
+                    "category": category, "event_at": when,
+                    "subject": subject, "message": message,
+                    "individual_id": individual_id,
+                })
+
+        def product_name(row: sqlite3.Row) -> str:
+            return " ".join(part for part in (row["manufacturer"], row["model"]) if part) \
+                or f"Product #{row['individual_id']}"
+
+        with self.connect() as con:
+            user = con.execute(
+                "SELECT display_name, date_of_birth, birth_visibility, created_at, updated_at, ban_status FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            if not user:
+                return []
+            name = str(user["display_name"])
+            add("User", user["created_at"], name, "joined Your Guitar Chronicle.")
+            member = viewer_user_id is not None and con.execute(
+                "SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'", (viewer_user_id,)
+            ).fetchone() is not None
+            if (user["date_of_birth"] and (viewer_user_id == user_id or
+                    user["birth_visibility"] == "Public" or
+                    (user["birth_visibility"] == "Members" and member))):
+                add("User", user["date_of_birth"], name, "was born.")
+            if user["updated_at"] > user["created_at"]:
+                add("User", user["updated_at"], name, "updated their profile.")
+
+            products = "JOIN individuals i ON i.id = c.individual_id"
+            claims = con.execute(f"""
+                SELECT c.id, c.individual_id, c.claim_type, c.ownership_kind,
+                       c.specification_kind, c.value_text, c.created_at,
+                       i.manufacturer, i.model
+                FROM claims c {products}
+                WHERE c.author_user_id = ? AND c.status = 'active' AND EXISTS (SELECT 1 FROM users actor WHERE actor.id=c.author_user_id AND (actor.ban_status='normal' OR (actor.ban_status='silent_ban' AND actor.id=?)))
+                ORDER BY c.created_at DESC, c.id DESC LIMIT ?
+            """, (user_id, viewer_user_id, limit))
+            for row in claims:
+                kind = str(row["claim_type"])
+                if kind == "ownership":
+                    kind = str(row["ownership_kind"] or "acquire")
+                elif kind == "specification" and row["specification_kind"] == "repair":
+                    kind = "repair"
+                elif kind in ("incident", "event"):
+                    kind = str(row["value_text"] or kind)
+                add("Claim", row["created_at"], product_name(row),
+                    f"has a new {kind.replace('_', ' ').title()} Claim on record.",
+                    int(row["individual_id"]))
+
+            for table, actor, value, action in (
+                ("claim_votes", "user_id", "vote", "voted"),
+                ("claim_responses", "responder_user_id", "stance", "responded"),
+            ):
+                rows = con.execute(f"""
+                    SELECT c.individual_id, i.manufacturer, i.model,
+                           interaction.{value} AS value, interaction.updated_at
+                    FROM {table} interaction
+                    JOIN claims c ON c.id = interaction.claim_id AND c.status = 'active'
+                    JOIN users actor ON actor.id=c.author_user_id AND (actor.ban_status='normal' OR (actor.ban_status='silent_ban' AND actor.id=?) )
+                    JOIN individuals i ON i.id = c.individual_id
+                    WHERE interaction.{actor} = ? AND EXISTS (SELECT 1 FROM users participant WHERE participant.id=interaction.{actor} AND participant.ban_status<>'ban')
+                    ORDER BY interaction.updated_at DESC, interaction.id DESC LIMIT ?
+                """, (viewer_user_id, user_id, limit))
+                for row in rows:
+                    value_text = str(row["value"] or "").replace("_", " ").title()
+                    message = (f"has a Claim with a {value_text} vote from this user."
+                               if action == "voted" else
+                               f"has a Claim with a {value_text} response from this user.")
+                    add("Social", row["updated_at"], product_name(row),
+                        message, int(row["individual_id"]))
+
+            links = con.execute("""
+                SELECT ug.individual_id, ug.created_at, i.manufacturer, i.model
+                FROM user_guitars ug
+                JOIN individuals i ON i.id = ug.individual_id
+                WHERE ug.user_id = ?
+                ORDER BY ug.created_at DESC, ug.id DESC LIMIT ?
+            """, (user_id, limit))
+            for row in links:
+                if user["ban_status"] == 'silent_ban' and viewer_user_id != user_id:
+                    continue
+                add("Product", row["created_at"], product_name(row),
+                    "was added to this user's Chronicle.", int(row["individual_id"]))
+
+        def sort_time(item: dict[str, Any]) -> float:
+            try:
+                timestamp = datetime.fromisoformat(item["event_at"].replace("Z", "+00:00"))
+                return timestamp.replace(tzinfo=timezone.utc).timestamp() \
+                    if timestamp.tzinfo is None else timestamp.timestamp()
+            except ValueError:
+                return 0.0
+
+        entries.sort(key=sort_time, reverse=True)
+        return entries[:limit]
 
     def create_claim_notification(
         self,
@@ -2406,6 +2779,7 @@ class Repository:
                   ON i.id = c.individual_id
                 WHERE c.id = ?
                   AND c.status = 'active'
+                  AND u.ban_status='normal'
                 """,
                 (claim_id,),
             ).fetchone()
@@ -2563,6 +2937,10 @@ class Repository:
                     LEFT JOIN individuals i
                       ON i.id = n.individual_id
                     WHERE n.recipient_user_id = ?
+                      AND (n.actor_user_id IS NULL OR actor.ban_status='normal')
+                      AND (n.claim_id IS NULL OR EXISTS
+                          (SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id
+                           WHERE c.id=n.claim_id AND c.status='active' AND author.ban_status='normal'))
                     ORDER BY n.created_at DESC, n.id DESC
                     LIMIT ?
                     """,
@@ -2582,9 +2960,14 @@ class Repository:
                 con.execute(
                     """
                     SELECT COUNT(*)
-                    FROM notifications
-                    WHERE recipient_user_id = ?
-                      AND is_read = 0
+                    FROM notifications n
+                    LEFT JOIN users actor ON actor.id=n.actor_user_id
+                    WHERE n.recipient_user_id = ?
+                      AND n.is_read = 0
+                      AND (n.actor_user_id IS NULL OR actor.ban_status='normal')
+                      AND (n.claim_id IS NULL OR EXISTS
+                          (SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id
+                           WHERE c.id=n.claim_id AND c.status='active' AND author.ban_status='normal'))
                     """,
                     (user_id,),
                 ).fetchone()[0]
@@ -2637,6 +3020,7 @@ class Repository:
     def get_user_summary(
         self,
         user_id: int,
+        viewer_user_id: int | None = None,
     ) -> dict[str, int]:
         with self.connect() as con:
             row = con.execute(
@@ -2653,18 +3037,46 @@ class Repository:
                         FROM user_guitars
                         WHERE user_id = ?
                           AND ownership_status = 'former_owner'
+                          AND (EXISTS (
+                              SELECT 1 FROM claims c
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.author_user_id=user_guitars.user_id
+                                AND c.claim_type='ownership'
+                                AND c.ownership_kind='acquire'
+                                AND c.status='active'
+                                AND c.verification_status='positive'
+                          ) OR EXISTS (
+                              SELECT 1 FROM claims c
+                              JOIN claim_listing_items li ON li.claim_id=c.id
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.claim_type='listing'
+                                AND c.status='active'
+                                AND c.verification_status='positive'
+                                AND li.field_name='owner_user_id'
+                                AND li.value_text=CAST(user_guitars.user_id AS TEXT)
+                          ) OR NOT EXISTS (
+                              SELECT 1 FROM claims c
+                              WHERE c.individual_id=user_guitars.individual_id
+                                AND c.author_user_id=user_guitars.user_id
+                                AND c.claim_type='ownership'
+                                AND c.ownership_kind='acquire'
+                                AND c.ownership_source='former_owner'
+                          ))
                     ) AS former_count,
                     (
                         SELECT COUNT(*)
-                        FROM claims
-                        WHERE author_user_id = ?
-                          AND status = 'active'
+                        FROM claims c JOIN users u ON u.id=c.author_user_id
+                        WHERE c.author_user_id = ?
+                          AND c.status = 'active'
+                          AND (u.ban_status='normal' OR
+                              (u.ban_status='silent_ban' AND u.id=?))
                     ) AS claim_count
                 """,
                 (
                     user_id,
                     user_id,
                     user_id,
+                    viewer_user_id,
                 ),
             ).fetchone()
             return {
@@ -2672,6 +3084,54 @@ class Repository:
                 "former_count": int(row["former_count"] or 0),
                 "claim_count": int(row["claim_count"] or 0),
             }
+
+    def admin_update_user(self, user_id: int, fields: dict) -> bool:
+        """Edit only supported user fields; moderation is audited and snapshots are rebuilt."""
+        name = str(fields["display_name"]).strip()
+        account = str(fields["account_type"]).strip().lower()
+        status = str(fields["ban_status"]).strip().lower()
+        if not name or account not in ("user", "shop", "builder", "repairer", "organization"):
+            raise ValueError("Invalid display name or account type")
+        if status not in ("normal", "silent_ban", "ban"):
+            raise ValueError("Invalid BAN status")
+        theme = fields.get("theme")
+        if theme is not None and theme not in THEME_IDS:
+            raise ValueError("Invalid theme")
+        for key in ("birth_visibility", "residence_visibility", "bio_visibility", "avatar_visibility"):
+            if fields[key] not in ("Public", "Members", "Followers", "Private"):
+                raise ValueError("Invalid visibility: " + key)
+        signature = fields["signature_individual_id"]
+        with self.connect() as con:
+            user = con.execute("SELECT COALESCE(theme_override,theme) AS theme, * FROM users WHERE id=? AND account_type<>'source'", (user_id,)).fetchone()
+            if not user:
+                return False
+            theme = theme or user["theme"]
+            if signature is not None and signature != user["signature_individual_id"] and not con.execute(
+                "SELECT 1 FROM user_guitars WHERE user_id=? AND individual_id=? AND ownership_status='current_owner'",
+                (user_id, signature)).fetchone():
+                raise ValueError("Signature guitar must be currently owned")
+            profile_changed = any(user[key] != fields[key] for key in
+                ("display_name", "account_type", "location_country", "location_region",
+                 "bio", "birth_visibility", "residence_visibility", "bio_visibility",
+                 "avatar_visibility", "signature_individual_id")) or theme != user["theme"]
+            con.execute("""UPDATE users SET display_name=?,account_type=?,location_country=?,
+                location_region=?,bio=?,birth_visibility=?,residence_visibility=?,
+                bio_visibility=?,avatar_visibility=?,signature_individual_id=?,theme_override=?,ban_status=?,updated_at=?
+                WHERE id=?""", (name, account, fields["location_country"], fields["location_region"],
+                fields["bio"], fields["birth_visibility"], fields["residence_visibility"],
+                fields["bio_visibility"], fields["avatar_visibility"], signature, theme, status,
+                utcnow() if profile_changed else user["updated_at"], user_id))
+            if user["ban_status"] != status:
+                con.execute("INSERT INTO user_admin_actions (user_id,previous_ban_status,ban_status,created_at) "
+                            "VALUES (?,?,?,?)", (user_id,user["ban_status"],status,utcnow()))
+            affected = [r[0] for r in con.execute(
+                "SELECT DISTINCT individual_id FROM claims WHERE author_user_id=?", (user_id,))]
+            affected.extend(r[0] for r in con.execute(
+                "SELECT DISTINCT c.individual_id FROM claims c JOIN claim_listing_items li ON li.claim_id=c.id "
+                "WHERE li.field_name='owner_user_id' AND li.value_text=?", (str(user_id),)))
+            for individual_id in set(affected):
+                self._rebuild_individual_snapshot_in_connection(con, individual_id)
+        return True
 
     def update_user(
         self,
@@ -2681,6 +3141,13 @@ class Repository:
         account_type: str,
         location_country: str | None,
         location_region: str | None,
+        bio: str | None = None,
+        date_of_birth: str | None = None,
+        update_date_of_birth: bool = False,
+        visibility: dict[str, str] | None = None,
+        signature_individual_id: int | None = None,
+        update_signature: bool = False,
+        theme: str | None = None,
     ) -> bool:
         name = display_name.strip()
         account = account_type.strip().lower()
@@ -2691,14 +3158,35 @@ class Repository:
             )
 
         if account not in (
-            "user",
-            "shop",
+            "user", "shop", "builder", "repairer", "organization",
         ):
             raise ValueError(
-                "account_type must be user or shop"
+                "account_type must be user, shop, builder, repairer, or organization"
             )
 
+        visibility = visibility or {}
+        if any(value not in ("Public", "Members", "Followers", "Private")
+               for value in visibility.values()):
+            raise ValueError("Invalid profile visibility")
+        if theme is not None and theme not in THEME_IDS:
+            raise ValueError("Invalid theme")
+        if update_date_of_birth and date_of_birth:
+            try:
+                parsed_birth = date.fromisoformat(date_of_birth)
+            except ValueError as exc:
+                raise ValueError("Date of Birth must be a valid YYYY-MM-DD date") from exc
+            if parsed_birth.isoformat() != date_of_birth or parsed_birth > datetime.now(timezone.utc).date():
+                raise ValueError("Date of Birth must be a valid past or present YYYY-MM-DD date")
+
         with self.connect() as con:
+            if update_signature and signature_individual_id is not None:
+                owned = con.execute(
+                    "SELECT 1 FROM user_guitars WHERE user_id = ? AND individual_id = ? "
+                    "AND ownership_status = 'current_owner'",
+                    (user_id, signature_individual_id),
+                ).fetchone()
+                if not owned:
+                    raise ValueError("Signature guitar must be an owned guitar")
             cur = con.execute(
                 """
                 UPDATE users
@@ -2706,6 +3194,14 @@ class Repository:
                     account_type = ?,
                     location_country = ?,
                     location_region = ?,
+                    bio = COALESCE(?, bio),
+                    date_of_birth = CASE WHEN ? THEN ? ELSE date_of_birth END,
+                    birth_visibility = COALESCE(?, birth_visibility),
+                    residence_visibility = COALESCE(?, residence_visibility),
+                    bio_visibility = COALESCE(?, bio_visibility),
+                    avatar_visibility = COALESCE(?, avatar_visibility),
+                    theme_override = COALESCE(?, theme_override),
+                    signature_individual_id = CASE WHEN ? THEN ? ELSE signature_individual_id END,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -2722,6 +3218,16 @@ class Repository:
                         if location_region
                         else None
                     ),
+                    bio.strip() if bio is not None else None,
+                    update_date_of_birth,
+                    date_of_birth or None,
+                    visibility.get("birth"),
+                    visibility.get("residence"),
+                    visibility.get("bio"),
+                    visibility.get("avatar"),
+                    theme,
+                    update_signature,
+                    signature_individual_id,
                     utcnow(),
                     user_id,
                 ),
@@ -2843,7 +3349,7 @@ class Repository:
 
         with self.connect() as con:
             if not con.execute(
-                "SELECT 1 FROM users WHERE id = ?",
+                "SELECT 1 FROM users WHERE id = ? AND ban_status <> 'ban'",
                 (
                     user_id,
                 ),
@@ -3086,6 +3592,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -3414,6 +3921,16 @@ class Repository:
                 "ownership_kind must be acquire, transfer, release, or inherit"
             )
 
+        if kind == "acquire":
+            if not occurred_at or not occurred_at.strip():
+                raise ValueError("Acquisition Date is required for Acquire")
+            try:
+                datetime.strptime(occurred_at.strip(), "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValueError("Acquisition Date must use YYYY-MM-DD") from exc
+            if len(occurred_at.strip()) != 10:
+                raise ValueError("Acquisition Date must use YYYY-MM-DD")
+
         now = utcnow()
         event_date = (
             occurred_at.strip()
@@ -3429,6 +3946,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -3455,6 +3973,12 @@ class Repository:
                 raise ValueError(
                     "User is not the current owner of this Individual"
                 )
+
+            pending_owner_verification = (
+                kind == "acquire"
+                and individual["current_owner_user_id"] is not None
+                and int(individual["current_owner_user_id"]) != user_id
+            )
 
             owner_name = (
                 "Unknown"
@@ -3536,13 +4060,14 @@ class Repository:
                     body,
                     occurred_at,
                     status,
+                    verification_status,
                     created_at,
                     updated_at
                 )
                 VALUES (
                     ?, ?, ?, 'ownership',
                     'owner_user_id', ?, ?, ?, ?,
-                    'active', ?, ?
+                    'active', ?, ?, ?
                 )
                 """,
                 (
@@ -3557,11 +4082,21 @@ class Repository:
                     kind,
                     note,
                     event_date,
+                    "unverified" if pending_owner_verification else "positive",
                     now,
                     now,
                 ),
             )
             claim_id = int(cur.lastrowid)
+
+            if kind == "acquire":
+                con.execute(
+                    """INSERT INTO claim_source_evidence
+                       (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                       VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                    (claim_id, event_date,
+                     json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                )
 
             if kind in ending_kinds:
                 con.execute(
@@ -3574,7 +4109,7 @@ class Repository:
                     """,
                     (event_date, now, user_id, individual_id),
                 )
-            else:
+            elif not pending_owner_verification:
                 next_order = int(
                     con.execute(
                         """
@@ -3621,6 +4156,37 @@ class Repository:
             )
             return observation_id, claim_id
 
+    @staticmethod
+    def _record_accepted_acquire(con: sqlite3.Connection, claim: sqlite3.Row) -> None:
+        """Add a user guitar only after its Acquire becomes accepted."""
+        if (claim['claim_type'] != 'ownership' or claim['ownership_kind'] != 'acquire'
+                or claim['ownership_source'] not in (None, 'user')):
+            return
+        date_evidence = con.execute(
+            """SELECT 1 FROM claim_source_evidence
+               WHERE claim_id=? AND evidence_type='acquisition_date' AND effective_date=?""",
+            (claim['id'], claim['occurred_at']),
+        ).fetchone()
+        if date_evidence is None:
+            return
+        user_id = claim['value_text']
+        if not user_id or not con.execute('SELECT 1 FROM users WHERE id=?', (user_id,)).fetchone():
+            return
+        now = utcnow()
+        next_order = int(con.execute(
+            'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
+            (user_id,),
+        ).fetchone()[0])
+        con.execute(
+            """INSERT INTO user_guitars
+               (user_id,individual_id,ownership_status,display_order,acquired_at,created_at,updated_at)
+               VALUES (?,?,'current_owner',?,?,?,?)
+               ON CONFLICT(user_id,individual_id) DO UPDATE SET
+                 acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
+                 updated_at=excluded.updated_at""",
+            (user_id, claim['individual_id'], next_order, claim['occurred_at'], now, now),
+        )
+
     def create_former_owner_claims(
         self,
         user_id: int,
@@ -3660,6 +4226,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -3911,7 +4478,16 @@ class Repository:
                         now,
                     ),
                 )
-                return observation_id, int(cur.lastrowid)
+                new_claim_id = int(cur.lastrowid)
+                if kind == "acquire":
+                    con.execute(
+                        """INSERT INTO claim_source_evidence
+                           (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                           VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                        (new_claim_id, event_date,
+                         json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                    )
+                return observation_id, new_claim_id
 
             acquire_observation_id, acquire_claim_id = (
                 insert_ownership_event(
@@ -3938,49 +4514,6 @@ class Repository:
                     acquire_claim_id,
                     release_claim_id,
                 ]
-            )
-
-            next_order = int(
-                con.execute(
-                    """
-                    SELECT COALESCE(MAX(display_order), -1) + 1
-                    FROM user_guitars
-                    WHERE user_id = ?
-                    """,
-                    (user_id,),
-                ).fetchone()[0]
-            )
-            con.execute(
-                """
-                INSERT INTO user_guitars (
-                    user_id,
-                    individual_id,
-                    ownership_status,
-                    display_order,
-                    acquired_at,
-                    released_at,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    ?, ?, 'former_owner', ?, ?, ?, ?, ?
-                )
-                ON CONFLICT(user_id, individual_id)
-                DO UPDATE SET
-                    ownership_status = 'former_owner',
-                    acquired_at = excluded.acquired_at,
-                    released_at = excluded.released_at,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    user_id,
-                    individual_id,
-                    next_order,
-                    acquired,
-                    released,
-                    now,
-                    now,
-                ),
             )
 
             snapshot = self._rebuild_individual_snapshot_in_connection(
@@ -4031,6 +4564,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4196,6 +4730,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4316,7 +4851,13 @@ class Repository:
         event_kind: str,
         occurred_at: str | None = None,
         detail: str | None = None,
+        media_items: list[dict[str, str | None]] | None = None,
     ) -> int:
+        media_items = media_items or []
+        if len(media_items) > 10:
+            raise ValueError("An Event Claim can contain up to 10 images")
+        if any(not str(item.get("storage_path") or "").strip() for item in media_items):
+            raise ValueError("storage_path is required")
         kind = event_kind.strip().lower()
         if kind not in (
             "exhibition",
@@ -4351,6 +4892,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4403,6 +4945,26 @@ class Repository:
                 ),
             )
             claim_id = int(cur.lastrowid)
+
+            for item in media_items:
+                cur = con.execute(
+                    """
+                    INSERT INTO media_assets (
+                        individual_id, uploader_user_id, media_type,
+                        storage_path, original_filename, mime_type,
+                        captured_at, created_at, updated_at
+                    ) VALUES (?, ?, 'image', ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        individual_id, user_id, str(item["storage_path"]).strip(),
+                        item.get("original_filename"), item.get("mime_type"),
+                        event_date, now, now,
+                    ),
+                )
+                con.execute(
+                    "INSERT INTO claim_evidence (claim_id, media_asset_id, created_at) VALUES (?, ?, ?)",
+                    (claim_id, int(cur.lastrowid), now),
+                )
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
@@ -4522,6 +5084,7 @@ class Repository:
                 FROM users
                 WHERE id = ?
                   AND account_type <> 'source'
+                  AND ban_status <> 'ban'
                 """,
                 (user_id,),
             ).fetchone()
@@ -4819,6 +5382,31 @@ class Repository:
                 raise ValueError(
                     "Identity Correction Claims cannot be edited directly"
                 )
+            if claim["claim_type"] == "ownership" and claim["ownership_kind"] == "lost":
+                raise ValueError("Automation Lost Claims cannot be edited by users")
+
+            if claim["claim_type"] == "ownership" and (claim["ownership_kind"] or "acquire") == "acquire":
+                if not event_date:
+                    raise ValueError("Acquisition Date is required for Acquire")
+                try:
+                    datetime.strptime(event_date, "%Y-%m-%d")
+                except ValueError as exc:
+                    raise ValueError("Acquisition Date must use YYYY-MM-DD") from exc
+                if len(event_date) != 10:
+                    raise ValueError("Acquisition Date must use YYYY-MM-DD")
+                updated = con.execute(
+                    """UPDATE claim_source_evidence SET effective_date=?
+                       WHERE claim_id=? AND evidence_type='acquisition_date'""",
+                    (event_date, claim_id),
+                )
+                if not updated.rowcount:
+                    con.execute(
+                        """INSERT INTO claim_source_evidence
+                           (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                           VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                        (claim_id, event_date,
+                         json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+                    )
 
             con.execute(
                 """
@@ -5208,7 +5796,7 @@ class Repository:
                                 AS author_name
                         FROM claims c
                         INNER JOIN users u
-                          ON u.id = c.author_user_id
+                          ON u.id = c.author_user_id AND u.ban_status='normal'
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
@@ -5235,7 +5823,7 @@ class Repository:
                         INNER JOIN claims c
                           ON c.id = si.claim_id
                         INNER JOIN users u
-                          ON u.id = c.author_user_id
+                          ON u.id = c.author_user_id AND u.ban_status='normal'
                         WHERE c.individual_id = ?
                           AND c.claim_type = 'specification'
                           AND c.status = 'active'
@@ -5247,11 +5835,7 @@ class Repository:
                             ROW_NUMBER() OVER (
                                 PARTITION BY field_name
                                 ORDER BY
-                                    COALESCE(
-                                        occurred_at,
-                                        created_at
-                                    ) DESC,
-                                    created_at DESC,
+                                    SUBSTR(COALESCE(occurred_at, created_at), 1, 10) DESC,
                                     claim_id DESC
                             ) AS row_number
                         FROM candidates
@@ -5282,35 +5866,56 @@ class Repository:
                     """
                     SELECT
                         c.*,
+                        CASE WHEN u.ban_status='normal' OR
+                            (u.ban_status='silent_ban' AND u.id=?)
+                            THEN c.status ELSE 'inactive' END AS effective_status,
                         u.display_name
                             AS author_name,
-                        (
+                        COALESCE((
+                            SELECT COALESCE(
+                                json_extract(e.payload_json, '$.provenance.raw_text'),
+                                json_extract(e.payload_json, '$.source.raw_text'))
+                            FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1
+                        ), (
                             SELECT o.raw_text
                             FROM observations o
                             WHERE o.id = c.observation_id
                             LIMIT 1
-                        ) AS observation_raw_text,
-                        (
+                        )) AS observation_raw_text,
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_site'
                             LIMIT 1
-                        ) AS source_site,
-                        (
+                        ), (SELECT s.source_site FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_site FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1), (SELECT o.source_site FROM observations o
+                            WHERE o.id = c.observation_id)) AS source_site,
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_url'
                             LIMIT 1
-                        ) AS source_url,
-                        (
+                        ), (SELECT s.source_url FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_url FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1), (SELECT o.source_url FROM observations o
+                            WHERE o.id = c.observation_id)) AS source_url,
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'image_url'
                             LIMIT 1
-                        ) AS image_url,
+                        ), (SELECT json_extract(e.payload_json, '$.provenance.image_url')
+                            FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1)) AS image_url,
                         (
                             SELECT li.value_text
                             FROM claim_listing_items li
@@ -5406,13 +6011,16 @@ class Repository:
                               AND li.field_name = 'listing_date'
                             LIMIT 1
                         ) AS listing_date,
-                        (
+                        COALESCE((
                             SELECT li.value_text
                             FROM claim_listing_items li
                             WHERE li.claim_id = c.id
                               AND li.field_name = 'source_listing_id'
                             LIMIT 1
-                        ) AS source_listing_id,
+                        ), (SELECT s.source_listing_id FROM claim_specification_source s
+                            WHERE s.claim_id=c.id), (SELECT e.source_listing_id FROM claim_source_evidence e
+                            WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing'
+                            ORDER BY e.id LIMIT 1)) AS source_listing_id,
                         (
                             SELECT ce.media_asset_id
                             FROM claim_evidence ce
@@ -5461,19 +6069,21 @@ class Repository:
                                     ELSE 0
                                 END
                             ) AS bad_count
-                        FROM claim_votes
+                        FROM claim_votes cv
+                        JOIN users voter ON voter.id=cv.user_id AND voter.ban_status<>'ban'
                         GROUP BY claim_id
                     ) v
                       ON v.claim_id = c.id
                     WHERE c.individual_id = ?
                     ORDER BY
-                        COALESCE(
+                        SUBSTR(COALESCE(
                             c.occurred_at,
                             c.created_at
-                        ),
+                        ), 1, 10),
                         c.id
                     """,
                     (
+                        viewer_user_id,
                         viewer_user_id,
                         viewer_user_id,
                         individual_id,
@@ -5500,6 +6110,7 @@ class Repository:
                     INNER JOIN claims c
                       ON c.id = ce.claim_id
                      AND c.status = 'active'
+                     AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                      AND COALESCE(c.verification_status, 'positive') = 'positive'
                     WHERE ma.individual_id = ?
                       AND ma.media_type = 'image'
@@ -5529,6 +6140,7 @@ class Repository:
                       ON ma.id = ce.media_asset_id
                     WHERE c.individual_id = ?
                       AND c.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                       AND ma.media_type = 'image'
                     ORDER BY
                         ce.claim_id,
@@ -5541,17 +6153,123 @@ class Repository:
     def get_media_asset(
         self,
         media_asset_id: int,
+        viewer_user_id: int | None = None,
     ) -> sqlite3.Row | None:
         with self.connect() as con:
             return con.execute(
                 """
-                SELECT *
-                FROM media_assets
-                WHERE id = ?
+                SELECT ma.*
+                FROM media_assets ma JOIN users uploader ON uploader.id=ma.uploader_user_id
+                WHERE ma.id = ? AND (
+                  EXISTS (SELECT 1 FROM claim_evidence ce JOIN claims c ON c.id=ce.claim_id
+                          JOIN users author ON author.id=c.author_user_id
+                          WHERE ce.media_asset_id=ma.id AND c.status='active'
+                            AND c.verification_status='positive'
+                            AND (author.ban_status='normal' OR
+                                (author.ban_status='silent_ban' AND author.id=?)))
+                  OR (uploader.ban_status='normal' AND NOT EXISTS
+                      (SELECT 1 FROM claim_evidence ce WHERE ce.media_asset_id=ma.id))
+                )
                 """,
-                (media_asset_id,),
+                (media_asset_id, viewer_user_id),
             ).fetchone()
 
+
+    @staticmethod
+    def _former_owner_pair(con: sqlite3.Connection, claim: sqlite3.Row) -> list[sqlite3.Row]:
+        """Only Claims created together as a Former Owner request form a pair."""
+        if (claim['claim_type'] != 'ownership'
+                or claim['ownership_source'] != 'former_owner'
+                or not claim['ownership_pair_id']):
+            return []
+        pair = con.execute(
+            """SELECT * FROM claims WHERE individual_id=? AND ownership_pair_id=?
+                 ORDER BY id""",
+            (claim['individual_id'], claim['ownership_pair_id']),
+        ).fetchall()
+        if (len(pair) != 2 or {row['ownership_kind'] for row in pair} != {'acquire', 'release'}
+                or any(row['claim_type'] != 'ownership' or row['ownership_source'] != 'former_owner'
+                       or row['author_user_id'] != claim['author_user_id']
+                       or row['created_at'] != claim['created_at'] for row in pair)):
+            return []
+        dates = {row['ownership_kind']: str(row['occurred_at'] or '')[:10] for row in pair}
+        return pair if dates['acquire'] and dates['acquire'] < dates['release'] else []
+
+    def admin_moderate_claim(self, claim_id: int, action: str, *,
+                             confirm_individual_delete: bool = False) -> dict | None:
+        if action not in ("positive", "negative", "unverified", "delete"):
+            raise ValueError("Invalid admin action")
+        with self.connect() as con:
+            claim = con.execute("SELECT * FROM claims WHERE id=?", (claim_id,)).fetchone()
+            if not claim:
+                return None
+            individual_id = int(claim["individual_id"])
+            targets = [claim]
+            targets = self._former_owner_pair(con, claim) or [claim]
+            delete_individual = False
+            if action == "delete" and claim["claim_type"] == "listing" and claim["status"] == "active":
+                other = con.execute("SELECT 1 FROM claims WHERE individual_id=? AND claim_type='listing' "
+                                    "AND status='active' AND id<>?", (individual_id, claim_id)).fetchone()
+                delete_individual = not other
+                if delete_individual and not confirm_individual_delete:
+                    raise ValueError("Deleting the last Listing also deletes the Individual and its related records. Confirmation required.")
+            for target in targets:
+                con.execute("INSERT INTO claim_admin_actions "
+                            "(claim_id, individual_id, action, previous_verification, actor, created_at) "
+                            "VALUES (?, ?, ?, ?, 'local-console-admin', ?)",
+                            (target["id"], individual_id, action, target["verification_status"], utcnow()))
+            if delete_individual:
+                con.execute("DELETE FROM observations WHERE individual_id=?", (individual_id,))
+                con.execute("DELETE FROM individuals WHERE id=?", (individual_id,))
+                return {"claim_id": claim_id, "individual_id": individual_id, "individual_deleted": True}
+            for target in targets:
+                if action == "delete":
+                    con.execute("DELETE FROM claims WHERE id=?", (target["id"],))
+                else:
+                    con.execute("UPDATE claims SET verification_status=?, admin_verification=1, updated_at=? WHERE id=?",
+                                (action, utcnow(), target["id"]))
+                    if action == 'positive':
+                        self._record_accepted_acquire(con, target)
+            snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
+            return {"claim_id": claim_id, "individual_id": individual_id,
+                    "individual_deleted": False, "snapshot": snapshot}
+
+    @staticmethod
+    def _owner_verification_denial(
+        claim: sqlite3.Row | dict[str, Any],
+        responder_user_id: int,
+        is_current_owner: bool,
+    ) -> str | None:
+        if (claim['claim_type'] in ('listing', 'identity_correction')
+                or (claim['claim_type'] == 'ownership' and claim['ownership_kind'] == 'lost')):
+            return 'This Claim type does not use Owner Verification'
+        if not is_current_owner:
+            if claim['admin_verification']:
+                return 'Only the current owner may change an administrator verification'
+            return 'Only the current owner can verify this Claim'
+        if int(claim['author_user_id']) == int(responder_user_id):
+            return "Owner Verification is only for another user's Claim"
+        return None
+
+    def owner_verifiable_claim_ids(self, individual_id: int, viewer_user_id: int | None) -> set[int]:
+        """Return the same normal-user eligibility used by set_claim_response."""
+        if viewer_user_id is None:
+            return set()
+        with self.connect() as con:
+            owner = con.execute(
+                """SELECT 1 FROM individuals i JOIN users u ON u.id=i.current_owner_user_id
+                   WHERE i.id=? AND i.current_owner_user_id=? AND u.ban_status<>'ban'""",
+                (individual_id, viewer_user_id),
+            ).fetchone()
+            if not owner:
+                return set()
+            claims = con.execute(
+                """SELECT id,claim_type,ownership_kind,author_user_id,admin_verification
+                   FROM claims WHERE individual_id=? AND status='active'""",
+                (individual_id,),
+            )
+            return {int(claim['id']) for claim in claims
+                    if self._owner_verification_denial(claim, viewer_user_id, True) is None}
 
     def set_claim_response(
         self,
@@ -5574,11 +6292,17 @@ class Repository:
             claim = con.execute(
                 """
                 SELECT
+                    id,
                     individual_id,
                     author_user_id,
+                    admin_verification,
                     claim_type,
+                    ownership_kind,
                     ownership_source,
-                    ownership_pair_id
+                    ownership_pair_id,
+                    value_text,
+                    occurred_at,
+                    created_at
                 FROM claims
                 WHERE id = ?
                   AND status = 'active'
@@ -5587,51 +6311,33 @@ class Repository:
             ).fetchone()
             if not claim:
                 return False
-
-            if int(claim["author_user_id"]) == int(responder_user_id):
-                raise ValueError(
-                    "Owner Verification is only for another user's Claim"
-                )
-
+            if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
+                               (responder_user_id,)).fetchone():
+                raise ValueError("Account is banned")
             is_former_owner_claim = (
                 claim["claim_type"] == "ownership"
                 and str(claim["ownership_source"] or "") == "former_owner"
             )
-            if (
-                claim["claim_type"] in (
-                    "ownership",
-                    "listing",
-                    "identity_correction",
-                )
-                and not is_former_owner_claim
-            ):
-                raise ValueError(
-                    "This Claim type does not use Owner Verification"
-                )
+            is_manual_acquire = (
+                claim["claim_type"] == "ownership"
+                and claim["ownership_kind"] == "acquire"
+                and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
+            )
 
             owner = con.execute(
-                """
-                SELECT 1
-                FROM user_guitars
-                WHERE user_id = ?
-                  AND individual_id = ?
-                  AND ownership_status = 'current_owner'
-                """,
-                (
-                    responder_user_id,
-                    claim["individual_id"],
-                ),
+                """SELECT 1 FROM individuals
+                   WHERE id=? AND current_owner_user_id=?""",
+                (claim['individual_id'], responder_user_id),
             ).fetchone()
-            if not owner:
-                raise ValueError(
-                    "Only the current owner can verify another user's Claim"
-                )
+            denial = self._owner_verification_denial(claim, responder_user_id, bool(owner))
+            if denial:
+                raise ValueError(denial)
 
-            if is_former_owner_claim and claim["ownership_pair_id"]:
+            if is_former_owner_claim and self._former_owner_pair(con, claim):
                 con.execute(
                     """
                     UPDATE claims
-                    SET verification_status = ?,
+                    SET verification_status = ?, admin_verification = 0,
                         updated_at = ?
                     WHERE ownership_pair_id = ?
                       AND ownership_source = 'former_owner'
@@ -5643,11 +6349,36 @@ class Repository:
                         claim["ownership_pair_id"],
                     ),
                 )
+                if normalized == 'positive':
+                    pair = con.execute(
+                        """SELECT ownership_kind,occurred_at FROM claims
+                           WHERE ownership_pair_id=? AND ownership_source='former_owner'
+                             AND status='active' AND verification_status='positive'""",
+                        (claim["ownership_pair_id"],),
+                    ).fetchall()
+                    dates = {row['ownership_kind']: row['occurred_at'] for row in pair}
+                    if 'acquire' in dates and 'release' in dates:
+                        next_order = int(con.execute(
+                            'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
+                            (claim['author_user_id'],),
+                        ).fetchone()[0])
+                        con.execute(
+                            """INSERT INTO user_guitars
+                               (user_id,individual_id,ownership_status,display_order,
+                                acquired_at,released_at,created_at,updated_at)
+                               VALUES (?,?,'former_owner',?,?,?,?,?)
+                               ON CONFLICT(user_id,individual_id) DO UPDATE SET
+                                 acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
+                                 released_at=COALESCE(user_guitars.released_at,excluded.released_at),
+                                 updated_at=excluded.updated_at""",
+                            (claim['author_user_id'], claim['individual_id'], next_order,
+                             dates['acquire'], dates['release'], now, now),
+                        )
             else:
                 con.execute(
                     """
                     UPDATE claims
-                    SET verification_status = ?,
+                    SET verification_status = ?, admin_verification = 0,
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -5657,6 +6388,9 @@ class Repository:
                         claim_id,
                     ),
                 )
+
+            if normalized == 'positive' and is_manual_acquire:
+                self._record_accepted_acquire(con, claim)
 
             self._rebuild_individual_snapshot_in_connection(
                 con,
@@ -5687,7 +6421,7 @@ class Repository:
             ).fetchone():
                 return False
             if not con.execute(
-                "SELECT 1 FROM users WHERE id = ?",
+                "SELECT 1 FROM users WHERE id = ? AND ban_status <> 'ban'",
                 (user_id,),
             ).fetchone():
                 return False
@@ -5783,6 +6517,19 @@ class Repository:
                 raise ValueError(
                     "This Claim type cannot be deactivated from Edit"
                 )
+            if claim["claim_type"] == "ownership" and claim["ownership_kind"] == "lost":
+                raise ValueError("Automation Lost Claims cannot be deactivated by users")
+
+            if (claim['claim_type'] == 'ownership'
+                    and (claim['ownership_kind'] or 'acquire') == 'acquire'
+                    and claim['verification_status'] == 'positive'):
+                current_owner = con.execute(
+                    'SELECT current_owner_user_id FROM individuals WHERE id=?',
+                    (claim['individual_id'],),
+                ).fetchone()
+                if (current_owner and current_owner['current_owner_user_id'] is not None
+                        and int(current_owner['current_owner_user_id']) == user_id):
+                    raise ValueError('Current owner cannot deactivate their own accepted Acquire')
 
             individual_id = int(claim["individual_id"])
             con.execute(
@@ -6012,6 +6759,27 @@ class Repository:
                 cur.lastrowid
             )
 
+    def update_crawl_run(self, run_id: int, phase: str, counts: dict,
+                         category: str, year_min: int, year_max: int) -> None:
+        import json
+        with self.connect() as con:
+            con.execute("UPDATE crawl_runs SET phase=?, counts_json=?, category=?, "
+                        "year_min=?, year_max=?, updated_at=? WHERE id=?",
+                        (phase, json.dumps(counts), category, year_min, year_max,
+                         utcnow(), run_id))
+
+    def crawl_run_log(self, category: str, year_min: int, year_max: int,
+                      limit: int = 20) -> list[dict]:
+        import json
+        with self.connect() as con:
+            rows = con.execute("SELECT id,started_at,finished_at,status,phase,counts_json, "
+                               "error_message FROM crawl_runs WHERE source_site='reverb' "
+                               "AND category=? AND year_min=? AND year_max=? "
+                               "ORDER BY id DESC LIMIT ?",
+                               (category, year_min, year_max, limit)).fetchall()
+        return [{**dict(row), "counts": json.loads(row["counts_json"] or "{}")}
+                for row in rows]
+
     def finish_run(
         self,
         run_id: int,
@@ -6074,6 +6842,7 @@ class Repository:
                     LEFT JOIN claims c
                       ON c.individual_id=i.id
                      AND c.status='active'
+                     AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                     GROUP BY i.id
                     ORDER BY
                         claim_count DESC,
@@ -6128,6 +6897,133 @@ class Repository:
                 observations,
             )
 
+    def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
+        """Active pending Acquire claims from both users and Automation."""
+        where = ("c.claim_type='ownership' AND c.ownership_kind='acquire' "
+                 "AND c.status='active' AND c.verification_status='unverified' "
+                 "AND EXISTS (SELECT 1 FROM users author WHERE author.id=c.author_user_id "
+                 "AND author.ban_status='normal')")
+        with self.connect() as con:
+            rows = con.execute(
+                "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, c.ownership_pair_id, "
+                "COALESCE(proposed.display_name, c.value_text) AS proposed_owner, "
+                "c.ownership_source, c.occurred_at, c.created_at, "
+                "u.display_name AS author_name, i.manufacturer, i.model, i.serial_number, "
+                "i.current_owner_name, i.current_owner_user_id, i.current_owner_type, "
+                "o.source_site, o.source_listing_id "
+                "FROM claims c JOIN individuals i ON i.id=c.individual_id "
+                "JOIN users u ON u.id=c.author_user_id "
+                "LEFT JOIN users proposed ON CAST(proposed.id AS TEXT)=c.value_text "
+                "AND COALESCE(c.ownership_source, 'user') <> 'automation' "
+                "LEFT JOIN observations o ON o.id=c.observation_id WHERE " + where +
+                " ORDER BY c.created_at DESC, c.id DESC",
+            ).fetchall()
+            eligible = []
+            def owner_key(row):
+                uid = row["current_owner_user_id"]
+                if uid is not None:
+                    return ("user", str(uid))
+                return ("external", row["current_owner_name"] or "Unknown",
+                        row["current_owner_type"] or "unknown")
+            for row in rows:
+                # Use exactly the same chronological reducer and paired approval
+                # as moderation. Roll back ALL snapshot/user_guitars changes.
+                con.execute("SAVEPOINT acquire_preview")
+                try:
+                    if row["ownership_pair_id"]:
+                        con.execute("UPDATE claims SET verification_status='positive' "
+                                    "WHERE individual_id=? AND ownership_pair_id=?",
+                                    (row["individual_id"], row["ownership_pair_id"]))
+                    else:
+                        con.execute("UPDATE claims SET verification_status='positive' WHERE id=?",
+                                    (row["claim_id"],))
+                    snapshot = self._rebuild_individual_snapshot_in_connection(con, row["individual_id"])
+                    if owner_key(snapshot) != owner_key(row):
+                        item = dict(row)
+                        item["proposed_owner"] = snapshot["current_owner_name"] or "Unknown"
+                        eligible.append(item)
+                finally:
+                    con.execute("ROLLBACK TO acquire_preview")
+                    con.execute("RELEASE acquire_preview")
+        return {"total": len(eligible), "items": eligible[offset:offset + limit],
+                "limit": limit, "offset": offset}
+
+    @staticmethod
+    def _repeated_groups(con) -> list[dict]:
+        rows = con.execute("""
+            SELECT i.*,
+              (SELECT COUNT(*) FROM observations o WHERE o.individual_id=i.id) AS listing_count,
+              (SELECT COUNT(*) FROM claims c WHERE c.individual_id=i.id) AS claim_count
+            FROM individuals i JOIN (
+                SELECT normalized_manufacturer, normalized_serial FROM individuals
+                WHERE NULLIF(TRIM(normalized_manufacturer),'') IS NOT NULL
+                  AND NULLIF(TRIM(normalized_serial),'') IS NOT NULL
+                GROUP BY normalized_manufacturer, normalized_serial HAVING COUNT(*)>1
+            ) d USING(normalized_manufacturer, normalized_serial)
+            ORDER BY normalized_manufacturer, normalized_serial, i.id
+        """).fetchall()
+        groups = {}
+        for row in rows:
+            key = (row["normalized_manufacturer"], row["normalized_serial"])
+            group = groups.setdefault(key, {"manufacturer": key[0], "serial": key[1], "items": []})
+            group["items"].append(dict(row))
+        return list(groups.values())
+
+    def repeated_groups(self) -> dict:
+        with self.connect() as con:
+            groups = self._repeated_groups(con)
+        return {"total": len(groups), "items": groups}
+
+    def resolve_repeated(self, keep_id: int, member_ids: list[int], action: str) -> dict:
+        if action not in ("merge", "delete"):
+            raise ValueError("Invalid resolution action")
+        members = set(member_ids)
+        if len(members) != len(member_ids) or len(members) < 2 or keep_id not in members:
+            raise ValueError("Select one survivor and at least two distinct members")
+        with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            keeper = con.execute("SELECT * FROM individuals WHERE id=?", (keep_id,)).fetchone()
+            if not keeper or not keeper["normalized_manufacturer"] or not keeper["normalized_serial"]:
+                raise ValueError("Duplicate group no longer exists; refresh the list")
+            actual = {r[0] for r in con.execute(
+                "SELECT id FROM individuals WHERE normalized_manufacturer=? AND normalized_serial=?",
+                (keeper["normalized_manufacturer"], keeper["normalized_serial"]))}
+            if actual != members:
+                raise ValueError("Duplicate group changed; refresh before resolving")
+            for source_id in sorted(members - {keep_id}):
+                if action == "merge":
+                    incoming = con.execute("SELECT * FROM claims WHERE individual_id=?", (source_id,)).fetchall()
+                    for claim in incoming:
+                        con.execute("INSERT INTO claim_admin_actions "
+                                    "(claim_id,individual_id,action,previous_verification,actor,created_at) "
+                                    "VALUES (?,?,?,?, 'local-console-admin',?)",
+                                    (claim["id"], source_id, f"merge_into:{keep_id}", claim["verification_status"], utcnow()))
+                        if claim["claim_type"] == "listing":
+                            items = {r[0]: r[1] for r in con.execute(
+                                "SELECT field_name,value_text FROM claim_listing_items WHERE claim_id=?", (claim["id"],))}
+                            con.execute("UPDATE claims SET claim_type='ownership',ownership_kind='acquire', "
+                                        "ownership_source='merged_listing',value_text=? WHERE id=?",
+                                        (items.get("owner_name") or "Unknown", claim["id"]))
+                        if claim["claim_type"] in ("listing", "ownership", "identity_correction", "specification"):
+                            con.execute("UPDATE claims SET verification_status=CASE WHEN verification_status='positive' "
+                                        "THEN 'unverified' ELSE verification_status END WHERE id=?", (claim["id"],))
+                    for table in ("observations", "claims", "media_assets", "notifications"):
+                        con.execute(f"UPDATE {table} SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("UPDATE OR IGNORE user_guitars SET individual_id=? WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("INSERT OR IGNORE INTO user_favorites (user_id,individual_id,created_at) "
+                                "SELECT user_id,?,created_at FROM user_favorites WHERE individual_id=?", (keep_id, source_id))
+                    con.execute("UPDATE users SET signature_individual_id=? WHERE signature_individual_id=?", (keep_id, source_id))
+                else:
+                    con.execute("DELETE FROM observations WHERE individual_id=?", (source_id,))
+                    con.execute("UPDATE users SET signature_individual_id=NULL WHERE signature_individual_id=?", (source_id,))
+                con.execute("INSERT INTO individual_resolution_actions "
+                            "(source_id,keep_id,action,created_at) VALUES (?,?,?,?)",
+                            (source_id, keep_id, action, utcnow()))
+                con.execute("DELETE FROM individuals WHERE id=?", (source_id,))
+            if action == "merge":
+                self._rebuild_individual_snapshot_in_connection(con, keep_id)
+        return {"individual_id": keep_id, "resolved": len(members)-1, "action": action}
+
     def stats(
         self,
     ):
@@ -6139,39 +7035,43 @@ class Repository:
                 """
             ).fetchone()[0]
 
-            serial = con.execute(
+            # Count external listings represented by active Listing/Acquire
+            # claims, not Claim rows: a relisting has an Acquire, not a second
+            # Listing Claim. Ownership verification does not erase its evidence.
+            listing_counts = con.execute(
                 """
-                SELECT COUNT(DISTINCT c.id)
-                FROM claims c
-                INNER JOIN claim_listing_items li
-                  ON li.claim_id = c.id
-                 AND li.field_name = 'serial_number'
-                WHERE c.claim_type = 'listing'
-                  AND c.status = 'active'
-                  AND NULLIF(TRIM(li.value_text), '') IS NOT NULL
-                """
-            ).fetchone()[0]
-
-            individuals = con.execute(
-                """
-                SELECT COUNT(*)
-                FROM individuals
-                """
-            ).fetchone()[0]
-
-            repeated = con.execute(
-                """
-                SELECT COUNT(*)
-                FROM (
-                    SELECT c.individual_id
-                    FROM claims c
-                    WHERE c.claim_type = 'listing'
-                      AND c.status = 'active'
-                    GROUP BY c.individual_id
-                    HAVING COUNT(*) >= 2
+                WITH linked AS (
+                    SELECT DISTINCT o.individual_id, o.source_site, o.source_listing_id
+                    FROM observations o
+                    JOIN individuals i ON i.id = o.individual_id
+                    WHERE NULLIF(TRIM(o.source_site), '') IS NOT NULL
+                      AND o.source_site <> 'user'
+                      AND NULLIF(TRIM(o.source_listing_id), '') IS NOT NULL
+                      AND NULLIF(TRIM(i.serial_number), '') IS NOT NULL
+                      AND EXISTS (
+                        SELECT 1 FROM claims c
+                        WHERE c.observation_id = o.id
+                          AND c.individual_id = o.individual_id
+                          AND c.status = 'active'
+                          AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
+                          AND (c.claim_type = 'listing' OR
+                               (c.claim_type = 'ownership' AND c.ownership_kind = 'acquire'))
+                      )
+                ), repeated AS (
+                    SELECT individual_id FROM linked
+                    GROUP BY individual_id HAVING COUNT(*) >= 2
                 )
+                SELECT (SELECT COUNT(*) FROM
+                    (SELECT DISTINCT source_site, source_listing_id FROM linked)),
+                    (SELECT COUNT(*) FROM repeated)
                 """
-            ).fetchone()[0]
+            ).fetchone()
+            serial, relisted = listing_counts
+            repeated = con.execute("SELECT COUNT(*) FROM (SELECT 1 FROM individuals "
+                                   "WHERE NULLIF(TRIM(normalized_manufacturer),'') IS NOT NULL "
+                                   "AND NULLIF(TRIM(normalized_serial),'') IS NOT NULL "
+                                   "GROUP BY normalized_manufacturer, normalized_serial HAVING COUNT(*)>1)").fetchone()[0]
+            individuals = con.execute("SELECT COUNT(*) FROM individuals").fetchone()[0]
 
             max_observations = con.execute(
                 """

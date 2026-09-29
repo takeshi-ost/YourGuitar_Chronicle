@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Your Guitar Chronicle — Phase 1</title>
 <style>
+.admin-user-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.admin-user-form label{display:grid;gap:4px;font-size:11px;color:var(--muted);min-width:0}.admin-user-form textarea{min-height:90px}.admin-user-form label:has(textarea),.admin-user-form label:has(input[type=file]),.admin-user-form .toolbar{grid-column:1/-1}@media(max-width:600px){.admin-user-form{grid-template-columns:1fr}}
+
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
 :root{color-scheme:dark;--bg:#101214;--panel:#181b1f;--line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;--good:#66c58a;--warn:#e0b65f;--bad:#e07171}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Noto Sans JP",sans-serif}
@@ -32,7 +34,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}
 .claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
 .claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
-.claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
+.claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-badge{display:inline-block;padding:2px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.claim-event-date{margin-left:auto;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}.claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
 .claim-footer{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:10px}.claim-footer-meta{text-align:right}.claim-votes{display:flex;gap:6px}.claim-vote{padding:4px 7px;border-radius:999px;background:#252a2f;color:var(--text);font-size:10px;min-width:54px}.claim-vote.active{outline:1px solid var(--accent)}
 #chronicleEntries{max-height:560px;overflow-y:auto;padding-right:6px}
@@ -40,16 +42,128 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;b
 .claim-card:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:12px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:1000}.modal-backdrop.open{display:flex}.modal{width:min(520px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.45)}.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.crawl-controls>div:last-child{grid-column:1/-1}.crawl-controls button{width:100%}}@media(max-width:520px){.detail-meta-grid{grid-template-columns:1fr}}
+.console-domain{margin-bottom:28px}.domain-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}.domain-heading h2{margin:0;font-size:19px}.domain-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(340px,.85fr);gap:18px;align-items:start}.domain-grid .panel{min-width:0}.domain-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.domain-actions .sub{margin-right:auto}.user-results{max-height:400px}.user-results td{vertical-align:middle}.user-results tr.selected{background:#323025}.user-results .mono{white-space:nowrap}.user-detail-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.user-detail-list .detail-meta-item{min-width:0}.user-guitar-list{max-height:260px;overflow:auto}.user-guitar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}.user-guitar-row a{color:var(--text)}.user-guitar-row .sub{white-space:nowrap}
+.user-detail-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.user-detail-header img{width:58px;height:58px;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:#111418}.user-detail-header strong{overflow-wrap:anywhere}
+.console-domain .cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+#detail .detail-image{height:240px;max-height:none;object-fit:contain;margin-left:auto;margin-right:auto}#detail .detail-image-link{width:75%;margin-left:auto;margin-right:auto}#detail .detail-image-link .detail-image{width:100%}#detail .detail-gallery{margin-left:auto;margin-right:auto}#detail .detail-gallery .detail-image{height:240px}#detail .detail-source{text-align:center}
+@media(max-width:900px){.domain-grid{grid-template-columns:1fr}.console-domain .cards{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.user-detail-list{grid-template-columns:1fr}}
+html{scroll-behavior:smooth}.sticky-header{position:fixed;top:0;left:0;right:0;z-index:900;background:var(--bg);box-shadow:0 8px 24px rgba(0,0,0,.22)}
+.sticky-header header{min-height:47px;padding:8px 22px;justify-content:flex-start;gap:20px}.sticky-header h1{font-size:20px;white-space:nowrap}.sticky-header .page-nav{display:flex;align-items:center;gap:4px;margin-left:auto;overflow-x:auto}.page-nav a{display:block;padding:5px 8px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap}.page-nav a:hover{background:#23282d;color:var(--text)}.sticky-header button{flex:0 0 auto;font-size:11px;padding:5px 8px}
+main{max-width:none;margin:0;padding:calc(var(--header-height,47px) + 14px) calc(clamp(320px,28vw,430px) + 44px) 22px 22px}.console-domain{scroll-margin-top:calc(var(--header-height,47px) + 14px);margin-bottom:24px}.domain-heading{margin-bottom:8px;padding-bottom:6px}.domain-actions.panel{padding:9px 12px;margin-bottom:10px}.console-domain .cards{gap:6px;margin-bottom:10px}.console-domain .card{padding:8px 10px;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:6px}.console-domain .card .num{font-size:17px;line-height:1.2;white-space:nowrap;order:2}.console-domain .card .label{font-size:10px;line-height:1.3;order:1}.console-domain .crawl-query{margin-bottom:8px}.console-domain .crawl-query textarea{min-height:95px}.console-domain .crawl-controls{grid-template-columns:repeat(4,minmax(80px,1fr)) auto;gap:8px}.console-domain .panel{padding:14px}.guitar-content{min-width:0}.guitar-content>.panel{min-width:0}.guitar-content table{min-width:690px}
+.console-domain .domain-actions.panel{padding:9px 12px}.detail-shell{position:fixed;top:calc(var(--header-height,47px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}.detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}.detail-panel #detail{flex:1;min-height:0;min-width:0;overflow-y:auto;padding-right:4px}.detail-panel h2{flex:0 0 auto}
+@media(max-width:1050px){.console-domain .crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.console-domain .crawl-controls>div:last-child{grid-column:1/-1}.console-domain .crawl-controls button{width:100%}}
+@media(max-width:900px){.sticky-header header{flex-wrap:wrap;gap:6px}.sticky-header h1{white-space:normal}.sticky-header .page-nav{margin-left:0;order:3;width:100%}main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{position:static;width:auto;height:520px;margin:0 0 24px}.detail-panel{height:100%}.console-domain .crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.console-domain .cards{grid-template-columns:repeat(2,minmax(0,1fr))}.console-domain .card{display:block}.console-domain .card .num{margin-bottom:3px}.domain-actions select{max-width:100%}}
+/* Browser Console content scrolls as one page; only the header stays fixed. */
+.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}
+.sticky-header .brand-link{display:inline-flex;align-items:center;vertical-align:middle;line-height:0}
+.sticky-header h1{display:flex;align-items:flex-end;gap:8px}
+.sticky-header h1>.sub{font-size:10px;line-height:1.2;margin-bottom:1px}
+.sticky-header .brand-logo{display:block;height:46px;width:auto;max-width:65vw;object-fit:contain;object-position:left center}
+main button:not(.detail-gallery-nav):not(.accordion-toggle){padding:5px 9px;font-size:11px;line-height:1.3;border-radius:6px}
+button.danger{background:#bb202c;color:#fff;border:1px solid #f05b65;font-weight:800}button.danger:hover{background:#d92d39;color:#fff}button.danger:focus-visible{outline:2px solid #ff858c;outline-offset:2px}
+main .panel{padding:10px 12px}.domain-actions{gap:5px}.domain-actions.panel{padding:7px 10px!important}
+main .toolbar{gap:5px;margin-bottom:7px}main input,main select,main textarea{padding:6px 8px;font-size:12px}main .crawl-controls{gap:6px!important}
+.admin-user-form{gap:7px;margin-top:8px}.admin-user-form textarea{min-height:68px}
+#user-db .user-detail-list{grid-template-columns:minmax(0,1fr);gap:0}
+#user-db .user-detail-list .detail-meta-item{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:8px;min-height:26px;padding:3px 5px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+#user-db .user-detail-list .detail-meta-label{margin:0}
+#user-db .user-detail-header{gap:10px;margin-bottom:7px}
+#user-db .user-detail-header img{width:56px;height:56px;flex:0 0 auto}
+#user-db .user-header-text{min-width:0;display:grid;gap:1px;font-size:11px}
+#user-db .user-header-text strong{font-size:13px;color:var(--text)}
+#user-db .user-header-text span{color:var(--muted)}
+#user-db .admin-user-form{grid-template-columns:minmax(0,1fr);gap:0;margin-top:8px}
+#user-db .admin-user-form label{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:8px;min-height:29px;padding:2px 5px;border-bottom:1px solid var(--line)}
+#user-db .admin-user-form input,#user-db .admin-user-form select,#user-db .admin-user-form textarea{margin:0;min-width:0}
+#user-db .admin-user-form textarea{min-height:52px;resize:vertical}
+#user-db .admin-user-form label:has(textarea){align-items:start}
+#user-db .admin-user-form .toolbar{justify-content:flex-end;margin:7px 0 0}
+#user-db .user-detail-title{flex-wrap:wrap}
+#user-db .user-detail-title h2{flex:0 0 auto!important}
+.observation-matrix-scroll{max-height:72vh;overflow:auto;border:1px solid var(--line);border-radius:7px}
+.observation-matrix{border-collapse:separate;border-spacing:1px;table-layout:fixed;background:#555b62;font-size:10px;line-height:1.3}
+.observation-matrix .matrix-claim-col{width:94px}
+.observation-matrix .matrix-value-col{width:60px}
+.observation-matrix th,.observation-matrix td{box-sizing:border-box;padding:4px 5px;vertical-align:top;overflow-wrap:anywhere}
+.observation-matrix thead th{position:sticky;top:0;z-index:2;background:#434950;color:#f1f3f5;text-align:left}
+.observation-matrix thead tr:first-child th{top:0;height:29px;text-align:center}
+.observation-matrix thead tr:nth-child(2) th{top:29px}
+.observation-matrix thead tr:first-child th:first-child{left:0;z-index:4}
+.observation-matrix .matrix-claim{position:sticky;left:0;z-index:1;width:94px;min-width:94px;max-width:94px;background:#252a2f;color:#e7eaec}
+.observation-matrix tbody .matrix-claim,.observation-matrix tfoot .matrix-claim{top:auto}
+.observation-matrix .matrix-claim strong{display:block;font-size:10px}
+.observation-matrix .matrix-claim small{display:block;color:#aeb6be;font-size:9px;overflow-wrap:anywhere}
+.observation-matrix td:not(.matrix-claim){width:60px;min-width:60px;max-width:60px}
+.observation-matrix .matrix-cell-value{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.observation-matrix .matrix-adopted{background:#c4c9ce;color:#171a1c;font-weight:700}
+.observation-matrix .matrix-rejected{background:#40454b;color:#e1e4e7}
+.observation-matrix .matrix-unrelated{background:#292e33;color:#929aa2;text-align:center}
+.observation-matrix tfoot td{position:static;bottom:auto;z-index:auto;background:#dee2e5;color:#171a1c;font-weight:700}
+.observation-matrix tfoot .matrix-claim{top:auto;bottom:auto;z-index:1;background:#dee2e5;color:#171a1c}
+.observation-matrix .matrix-mismatch{outline:2px solid #d87c71;outline-offset:-2px}
+main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14px) 22px 22px}
+.detail-shell{position:static;top:auto;right:auto;bottom:auto;width:auto;height:auto;z-index:auto;min-width:0}
+.detail-panel{height:auto;display:block;box-shadow:none}.detail-panel #detail{overflow:visible;padding:0}
+.crawl-overview{padding:10px 14px!important;margin-bottom:10px}.token-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.token-controls label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}.token-controls input{flex:1 1 240px;width:auto;min-width:160px;padding:6px 8px;font:11px ui-monospace,SFMono-Regular,Consolas,monospace}.token-controls button{padding:6px 10px;font-size:11px}.token-controls #tokenState{white-space:nowrap}
+.crawl-metrics{display:flex;flex-wrap:wrap;gap:0;margin-top:9px;padding-top:7px;border-top:1px solid var(--line)}.crawl-metric{display:inline-flex;gap:7px;align-items:baseline;padding:2px 12px 2px 0;margin-right:12px;border-right:1px solid var(--line);font-size:11px}.crawl-metric:last-child{border-right:0}.crawl-metric .label{color:var(--muted)}.crawl-metric .num{font-size:13px;font-weight:800}
+.backup-actions{margin-bottom:10px}.backup-buttons{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px}.backup-buttons button{flex:0 0 auto;white-space:nowrap}.backup-actions .sub{margin-top:5px}
+.stats-summary{display:flex;flex-wrap:wrap;gap:5px 18px;padding:4px 0 10px;border-bottom:1px solid var(--line);font-size:11px}.stats-summary strong{color:var(--text);margin-left:5px}.stats-columns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}.stat-group{min-width:0;font-size:11px}.stat-group>strong{display:block;margin-bottom:5px}.stat-line{display:flex;justify-content:space-between;gap:6px;color:var(--muted);border-bottom:1px solid var(--line);padding:3px 0}.stat-line span:first-child{min-width:0;overflow-wrap:anywhere}.stat-line span:last-child{color:var(--text)}
+/* Match the internal Product Detail rows and accordions on Top Page. */
+#detail .detail-gallery{grid-template-columns:28px minmax(0,1fr) 28px}#detail .detail-gallery-nav{width:28px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center}#detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}
+#detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}#detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}#detail .catalog-spec{font-size:12px;line-height:1.55}#detail .catalog-spec-row{padding:3px 0}
+#detail .accordion-section{margin-top:10px}#detail .accordion-header{display:flex;align-items:center;gap:8px;min-height:34px;margin:18px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}#detail .accordion-toggle{width:24px;height:24px;min-width:24px;margin-left:auto;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}#detail .accordion-title{font-weight:700;cursor:pointer}#detail .accordion-section.collapsed .accordion-body{display:none}#detail .accordion-section.collapsed .accordion-toggle{transform:rotate(-90deg)}
+#detail .owner-value{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+#detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}#detail .claim-badge{min-height:20px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:2px 8px}#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}#detail .claim-votes{align-items:center}#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}#detail #chronicleEntries{max-height:none;overflow:visible;padding:0}
+.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}
+#detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}#detail .detail-header>.toolbar button{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+#detail .accordion-header{min-width:0;flex-wrap:wrap}#detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap;margin:0 0 0 auto}#detail .accordion-header .toolbar select{height:28px;width:auto;max-width:100%;padding:4px 8px;font-size:11px;background:#111418;color:var(--text);border:1px solid #343b43;border-radius:7px}
+#detail .detail-image-link,#detail .detail-gallery{margin-left:auto;margin-right:auto}#detail .detail-gallery .detail-image{height:240px}#detail .detail-source{overflow-wrap:anywhere}
+#detail .detail-image{width:calc(100% - 72px);height:auto;aspect-ratio:4/3;object-fit:contain}
+#detail .detail-image-link{width:calc(100% - 72px)}#detail .detail-image-link .detail-image{width:100%}
+#detail .detail-gallery{width:100%;grid-template-columns:28px minmax(0,1fr) 28px;gap:8px}
+#detail .detail-gallery .detail-image{width:100%;height:auto;aspect-ratio:4/3}
+.claim-compact-row{display:flex;justify-content:center;align-items:center;min-height:24px;margin:2px 0 4px 22px;position:relative}.claim-compact-row:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:6px;background:#4c5258;pointer-events:none}
+.claim-compact-tag{border:0;border-radius:999px;padding:2px 9px;font-size:9px;font-weight:800;cursor:pointer;background:#3a3f45;color:var(--text)}.claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}.claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}.claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}.claim-compact-tag.claim-type-event{background:#9360b8;color:#120917}.claim-compact-tag.claim-type-media{background:#c68a32;color:#171006}
+#detail .claim-compact-tag{padding:2px 9px;border-radius:999px}
+.claim-negative-dot,.claim-negative-dot:hover{background:transparent!important;color:#929aa2!important;border:0;font-size:20px;line-height:1;cursor:pointer}
+.claim-card.claim-type-ownership{background:#101d16;border-color:#294b37}.claim-card.claim-type-specification{background:#101820;border-color:#29465d}.claim-card.claim-type-incident{background:#211111;border-color:#5a2c2c}.claim-card.claim-type-event{background:#1b1422;border-color:#4d3560}.claim-card.claim-type-media{background:#21190d;border-color:#5b4724}
+.claim-card.claim-type-ownership .claim-badge{background:#4f9a68;color:#08110b}.claim-card.claim-type-specification .claim-badge{background:#4d88b8;color:#071018}.claim-card.claim-type-incident .claim-badge{background:#b85a5a;color:#160808}.claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}.claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
+#adminClaimPopup{position:fixed;inset:0;z-index:1001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}#adminClaimPopup.open{display:flex}#adminClaimPopupContent{width:min(480px,100%);max-height:calc(100vh - 32px);overflow:auto}#adminClaimPopupContent .claim-card{margin:0}
+@media(max-width:900px){main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{height:auto;margin:0}.stats-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats-columns{grid-template-columns:1fr}#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
+<script src="/assets/product-detail.js?v=chronicle-layout-v1" defer></script>
+<script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
-<header><div><h1>Your Guitar Chronicle <span class="sub">Phase 1 Browser Console</span></h1><div class="sub">Reverb収集・Individual確認をブラウザから操作</div></div><div class="toolbar" style="margin:0"><select id="activeUserSelect" style="width:auto;min-width:150px" onchange="setActiveUser(this.value)"><option value="">Guest</option></select><button onclick="createUser()">新規アカウント</button><button class="secondary" onclick="window.open('/user-view','_blank','noopener')">User View</button><div id="tokenState"></div><button class="secondary" onclick="openTokenSettings()">Token設定</button><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div></header>
+<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav></header></div>
 <main>
-<div class="cards" id="cards"></div>
+<section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
+<div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
+<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Enter token"><button onclick="saveToken()">Save</button><button class="danger" onclick="clearToken()">Delete</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
+<div class="panel">
+<h2>Incremental Crawl</h2>
+<div class="sub">Search by manufacture year and category. Each run scans up to 2,000 listings through the end of a page and fetches all matching details. It checks up to five existing listings for availability. Category matching is a prototype using the search query and returned category.</div>
+<div class="crawl-controls" style="margin-top:10px">
+<div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="electric">Electric Guitars</option><option value="acoustic">Acoustic Guitars</option></select></div>
+<div><div class="sub">Year Min</div><input id="programYearMin" type="number" value="1950" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
+<div><div class="sub">Year Max</div><input id="programYearMax" type="number" value="1980" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
+<div><button id="programBtn" onclick="advanceCrawlProgram()">Advance</button></div>
+<div><button class="secondary" onclick="restartCrawlProgram()">Restart Scan</button></div>
+<div><button id="cacheReprocessBtn" class="secondary" onclick="reprocessCachedDetails()">Reprocess saved details</button></div>
+</div>
+<div class="sub">Reprocesses saved details from both crawl modes using the category and manufacture year above. This does not contact Reverb.</div>
+<div id="programState" class="sub" style="margin-top:8px">Checking status</div>
+<div id="programProgress" class="sub" role="status" aria-live="polite"></div>
+<div id="programResult" class="sub"></div>
+<div class="toolbar"><h3 style="flex:1;margin-bottom:0">Crawl Run Log</h3><button class="secondary" onclick="loadCrawlRunLog()">Refresh</button></div>
+<div id="crawlRunLog" class="table-wrap sub"></div>
+<div class="sub" style="margin-top:8px"><button class="secondary" onclick="loadReviewCandidates()">Show candidates for review</button><div id="reviewCandidates"></div></div>
+</div>
 <div class="panel">
 <h2>Batch Crawl</h2>
 <div class="crawl-query">
-<div class="sub">1行につき1クエリ</div>
+<div class="sub">One query per line</div>
 <textarea id="queries">Fender Stratocaster
 Fender Telecaster
 Fender Jazzmaster
@@ -59,58 +173,67 @@ Gibson SG
 Gibson ES-335</textarea>
 </div>
 <div class="crawl-controls">
-<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="なし" min="1800" max="2100"></div>
+<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="None" min="1800" max="2100"></div>
 <div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
 <div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
 <div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
 <div><button id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
 </div>
 <div class="progress"><div class="bar" id="jobBar"></div></div>
-<div id="jobMessage" class="sub">待機中</div>
+<div id="jobMessage" class="sub">Idle</div>
 <div id="jobResults" style="margin-top:12px"></div>
 </div>
+</section>
 
-<div class="grid">
+<section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
+<div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product, Claim, and DB maintenance</span></div>
+<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">Backup</button><button class="secondary" onclick="openDatabaseImport()">Restore backup</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="danger" onclick="resetDatabase()">Reset DB</button></div><div class="sub">Backups include user data. Resetting the DB deletes guitar and user data.</div></div>
+<div class="domain-grid guitar-content">
 <section>
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Clean and add Specifications</button></div><div class="sub">Cleans incorrect automated extractions and duplicate Finish values, then adds explicit specifications from saved Reverb details to guitars without a user owner.</div></div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">既存DBバックフィル（今回のみ）</button><button class="secondary" onclick="loadIndividuals()">更新</button></div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">Backfill existing DB (one time)</button><button class="secondary" onclick="loadIndividuals()">Refresh</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">更新</button></div>
-<div id="statistics" class="sub">集計中...</div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Unverified Acquire <span id="unverifiedAcquireTotal" class="sub"></span></h2><button class="secondary" onclick="loadUnverifiedAcquires(0)">Refresh</button></div>
+<div class="sub">Shows only Unverified Acquire Claims that could change the current owner. Historical Claims and Claims for the same owner are excluded. Select a row to open Product Detail.</div>
+<div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
+<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">Previous</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">Next</button></div>
 </div>
 <div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">User Account</h2><button class="secondary" onclick="loadActiveUser()">更新</button></div>
-<div id="accountPanel" class="sub">上部の「新規アカウント」からアカウントを作成してください。</div>
+<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">Refresh</button></div>
+<div id="statistics" class="sub">Calculating...</div>
 </div>
 </section>
-
-<section>
-<div class="panel">
-<h2>Product Detail</h2>
-<div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div>
+<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation decision</button></div><div id="detail" class="sub">Select a row in Product List to view its history.</div></div></aside>
 </div>
 </section>
+<section class="console-domain" id="user-db" aria-labelledby="userHeading">
+<div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">Search users and inspect account data</span></div>
+<div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">Open Top Page as Guest</button><button onclick="createUser()">Create account</button><button class="secondary" onclick="loadUsers()">Refresh</button></div>
+<div class="domain-grid">
+<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
+<div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
+</section>
 </main>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
-<div class="modal-backdrop" id="tokenModal" onclick="closeTokenSettings(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <h2>Reverb API Token</h2>
-    <div class="sub" style="margin-bottom:10px">TokenはこのブラウザのlocalStorageに保存されます。SQLite DBやGitHubには保存しません。</div>
-    <input id="tokenInput" type="password" autocomplete="off" placeholder="Reverb Personal Access Token">
-    <div class="modal-actions">
-      <button class="secondary bad" onclick="clearToken()">削除</button>
-      <button class="secondary" onclick="closeTokenSettings()">キャンセル</button>
-      <button onclick="saveToken()">保存</button>
-    </div>
-  </div>
-</div>
+<dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
+<div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="document.getElementById('repeatedDialog').close()">Close</button></div>
+<p class="sub">Possible duplicates with the same maker and serial. Check whether they are the same guitar and select the record to keep. Merge retains history and marks source Claims that change state for review. Delete removes related records of the other guitar.</p>
+<div id="repeatedGroups" aria-live="polite"></div>
+</dialog>
+<dialog id="observationDiagnosticDialog" style="width:min(1400px,96vw);max-width:96vw;max-height:91vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
+<div class="toolbar"><h2 style="margin:0;flex:1">Observation decision path</h2><button class="secondary" onclick="document.getElementById('observationDiagnosticDialog').close()">Close</button></div>
+<div id="observationDiagnosticBody" aria-live="polite"></div>
+</dialog>
+<div id="adminClaimPopup" onclick="closeAdminClaim(event)" role="dialog" aria-label="Claim Detail"><div id="adminClaimPopupContent"></div></div>
 <script>
+const CONSOLE_ADMIN_TOKEN="";
 let individuals=[];
 let individualSortKey='id';
-let individualSortDirection=1;
+let individualSortDirection=-1;
 let users=[];
 let activeUser=null;
 let selectedIndividualId=null;
@@ -118,23 +241,96 @@ let productGallery=[];
 let productGalleryIndex=0;
 const TOKEN_KEY='ygc_reverb_api_token';
 const ACTIVE_USER_KEY='ygc_active_user_id';
+if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
+  const previous=localStorage.getItem(ACTIVE_USER_KEY);
+  if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
+}
+localStorage.removeItem(ACTIVE_USER_KEY);
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
-async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
-function statCard(label,value){return '<div class="card"><div class="num">'+esc(value)+'</div><div class="label">'+esc(label)+'</div></div>'}
+async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Observations',s.observations),statCard('Serial Listings',s.serial_observations),statCard('Serial Rate',s.serial_extraction_rate.toFixed(1)+'%'),statCard('Product List',s.individuals),statCard('Repeated',s.repeated_individuals)
-].join('');const source=d.token_source==='browser'?'WebUI保存':(d.token_source==='environment'?'環境変数':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token 未設定</span>'}
-function openTokenSettings(){document.getElementById('tokenInput').value=storedToken();document.getElementById('tokenModal').classList.add('open');setTimeout(()=>document.getElementById('tokenInput').focus(),0)}
-function closeTokenSettings(event){if(event&&event.target&&event.target.id!=='tokenModal')return;document.getElementById('tokenModal').classList.remove('open');document.getElementById('tokenInput').value=''}
-async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Tokenを入力してください。');return}localStorage.setItem(TOKEN_KEY,token);closeTokenSettings();await refreshStatus()}
-async function clearToken(){localStorage.removeItem(TOKEN_KEY);closeTokenSettings();await refreshStatus()}
+statCard('Registered Guitars',s.individuals,'Total guitars in the DB, including user and crawl registrations.'),statCard('Serial Listings',s.serial_observations,'External Listings linked to guitars with serial numbers. Duplicate site and Listing ID pairs are excluded. Includes relistings represented by Acquire and pending owner confirmation.'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'Groups of DB guitars with the same maker and serial. Select to inspect, merge, or delete.')+'</button>'
+].join('');const source=d.token_source==='browser'?'saved in browser':(d.token_source==='environment'?'environment':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token not set</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'Set by environment variable (value hidden)':'Enter token'}}
+let repeatedGroups=[];
+let repeatedBusy=false;
+function renderObservationMatrix(d){
+  const matrix=d.matrix||{columns:[],rows:[],current:{}};
+  const snapshot=matrix.columns.filter(col=>col.group==='individual');
+  const specifications=matrix.columns.filter(col=>col.group==='specification');
+  const fieldLabel=key=>({manufacturer:'Maker',model:'Model',finish:'Finish',year:'Year',serial_number:'Serial',location_country:'Country',location_region:'Region',current_owner_name:'Current Owner',current_owner_type:'Owner Type',current_owner_user_id:'Owner User ID',current_owner_source_url:'Owner Source URL'})[key]||('Spec · '+key.slice(5).replace(/_/g,' '));
+  const formatValue=value=>value===null||value===undefined||value===''?'Blank':String(value);
+  const header='<thead><tr><th rowspan="2" style="text-align:left">Claim (oldest first)</th><th colspan="'+snapshot.length+'">Guitar Individual</th>'+(specifications.length?'<th colspan="'+specifications.length+'">Specification</th>':'')+'</tr><tr>'+matrix.columns.map(col=>'<th scope="col">'+esc(fieldLabel(col.key))+'</th>').join('')+'</tr></thead>';
+  const rows=matrix.rows.map(row=>{
+    const results=[...new Set((row.decisions||[]).map(x=>x.result+(x.reason?' · '+x.reason:'')))].join(' / ');
+    const evidences=[...new Set([...(row.decisions||[]).flatMap(x=>(x.evidence||[]).map(e=>e.source_listing_id?(e.source_site+' #'+e.source_listing_id):e.evidence_type)),...(row.specification_evidence?[row.specification_evidence.source_site+' #'+row.specification_evidence.source_listing_id]:[])])];
+    const claim='<th scope="row" class="matrix-claim"><strong>#'+Number(row.claim_id)+' · '+esc(row.kind||row.type)+'</strong><small>'+esc((row.occurred_at||'Date unknown').slice(0,10))+' · '+esc(row.author_name||'')+'</small><small>'+esc(row.status)+' / '+esc(row.verification_status)+' · '+esc(results||'—')+'</small>'+(evidences.length?'<small>Evidence: '+esc(evidences.join(', '))+'</small>':'')+'</th>';
+    return '<tr>'+claim+matrix.columns.map(col=>{
+      const cell=row.cells[col.key];
+      if(!cell)return '<td class="matrix-unrelated">—</td>';
+      const value=formatValue(cell.value);
+      return '<td class="'+(cell.adopted?'matrix-adopted':'matrix-rejected')+'" title="'+(cell.adopted?'Adopted by Observation':'Not adopted for current value')+' · '+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
+    }).join('')+'</tr>';
+  }).join('');
+  const footer='<tfoot><tr><th scope="row" class="matrix-claim">Current Guitar Individual</th>'+matrix.columns.map(col=>{
+    const mismatch=Object.prototype.hasOwnProperty.call(d.differences||{},col.key);
+    const value=Object.prototype.hasOwnProperty.call(matrix.current,col.key)?formatValue(matrix.current[col.key]):'—';
+    return '<td class="'+(mismatch?'matrix-mismatch':'')+'" title="'+(mismatch?'Saved value differs from Observation result · ':'')+esc(value)+'"><span class="matrix-cell-value">'+esc(value)+'</span></td>';
+  }).join('')+'</tr></tfoot>';
+  const mismatches=Object.entries(d.differences||{});
+  return '<p class="sub">Individual #'+Number(d.individual_id)+' · '+matrix.rows.length+' Claims · Differences from saved Snapshot: '+mismatches.length+' (read only)</p>'+
+    '<p class="sub">Light gray = adopted, dark gray = not adopted, — = not applicable. A blank value proposes clearing a field. The final Specification row shows the current displayed value.</p>'+
+    '<div class="observation-matrix-scroll"><table class="observation-matrix" style="width:'+(94+60*matrix.columns.length+matrix.columns.length+1)+'px"><colgroup><col class="matrix-claim-col">'+matrix.columns.map(()=>'<col class="matrix-value-col">').join('')+'</colgroup>'+header+'<tbody>'+rows+'</tbody>'+footer+'</table></div>'+
+    (mismatches.length?'<p class="sub">Saved values differ from evaluated values: '+mismatches.map(([key,x])=>esc(fieldLabel(key))+' (saved '+esc(x.saved??'—')+' / evaluated '+esc(x.evaluated??'—')+')').join(' / ')+'</p>':'');
+}
+async function openObservationDiagnostic(){
+  if(!selectedIndividualId){alert('Select a guitar first.');return}
+  const dialog=document.getElementById('observationDiagnosticDialog');
+  if(!dialog.open)dialog.showModal();
+  const body=document.getElementById('observationDiagnosticBody');body.textContent='Loading…';
+  try{
+    const d=await jfetch('/api/admin/individuals/'+selectedIndividualId+'/observation-diagnostic');
+    body.innerHTML=renderObservationMatrix(d);
+  }catch(e){body.textContent=e.message}
+}
+async function openRepeated(){
+  const dialog=document.getElementById('repeatedDialog');
+  if(!dialog.open)dialog.showModal();
+  const container=document.getElementById('repeatedGroups');
+  container.textContent='Loading…';
+  try{
+    const d=await jfetch('/api/admin/repeated',{headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
+    repeatedGroups=d.items;
+    container.innerHTML=d.items.length?d.items.map((g,n)=>'<section class="panel"><h3>'+esc(g.manufacturer)+' / '+esc(g.serial)+'</h3><div style="overflow:auto"><table><thead><tr><th>Keep</th><th>ID</th><th>Maker / Model</th><th>Year / Serial</th><th>Owner</th><th>Listings / Claims</th></tr></thead><tbody>'+g.items.map(i=>'<tr><td><input type="radio" name="repeated-'+n+'" value="'+Number(i.id)+'" aria-label="Individual '+Number(i.id)+' to keep"></td><td><button class="secondary" onclick="document.getElementById(\'repeatedDialog\').close();showIndividual('+Number(i.id)+')">#'+Number(i.id)+'</button></td><td>'+esc(i.manufacturer)+' / '+esc(i.model)+'</td><td>'+esc(i.year)+' / '+esc(i.serial_number)+'</td><td>'+esc(i.current_owner_name||'Unknown')+'</td><td>'+Number(i.listing_count)+' / '+Number(i.claim_count)+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button onclick="resolveRepeated('+n+',\'merge\')">Merge</button><button class="danger" onclick="resolveRepeated('+n+',\'delete\')">Delete</button></div></section>').join(''):'No duplicate candidates.';
+  }catch(e){container.textContent=e.message}
+}
+async function resolveRepeated(index,action){
+  if(repeatedBusy)return;
+  const selected=document.querySelector('input[name="repeated-'+index+'"]:checked');
+  if(!selected){alert('Select the guitar to keep.');return}
+  const keepId=Number(selected.value), ids=repeatedGroups[index].items.map(i=>Number(i.id));
+  const removed=ids.filter(id=>id!==keepId);
+  if(!confirm('Keep #'+keepId+' and '+(action==='merge'?'merge the history of ':'permanently delete ')+'#'+removed.join(', #')+(action==='merge'?'. Source Claims that change owner or other state will require review.':'. This also deletes related records and cannot be undone.')+' Continue?'))return;
+  if(action==='delete'&&prompt('Type DELETE to confirm.')!=='DELETE')return;
+  repeatedBusy=true;
+  document.querySelectorAll('#repeatedGroups button').forEach(b=>b.disabled=true);
+  try{
+    await jfetch('/api/admin/repeated/resolve',{method:'POST',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify({keep_id:keepId,member_ids:ids,action})});
+    await loadIndividuals();await loadStatistics();
+    await showIndividual(keepId);
+    if(activeUser&&activeUser.user)await loadActiveUser();
+  }catch(e){alert(e.message)}
+  finally{repeatedBusy=false;await openRepeated()}
+}
+async function saveToken(){const token=document.getElementById('tokenInput').value.trim();if(!token){alert('Enter a token.');return}localStorage.setItem(TOKEN_KEY,token);document.getElementById('tokenInput').blur();await refreshStatus()}
+async function clearToken(){localStorage.removeItem(TOKEN_KEY);const input=document.getElementById('tokenInput');input.value='';input.blur();await refreshStatus()}
 function exportDatabase(){window.location.href='/api/export-db'}
 function openDatabaseImport(){const input=document.getElementById('dbImportInput');input.value='';input.click()}
 async function importDatabaseFile(input){
   const file=input.files&&input.files[0];
   if(!file)return;
-  const message='現在のDBとMediaを選択したバックアップで置き換えます。\n\n'+file.name+'\n\n旧形式の .db も復元できますが、その場合Mediaは含まれません。\n\n実行前に必要であれば現在の状態をバックアップしてください。続行しますか？';
+  const message='Replace the current DB and media with the selected backup.\n\n'+file.name+'\n\nA legacy .db file can also be restored, but it does not include media.\n\nBack up the current state first if needed. Continue?';
   if(!confirm(message)){input.value='';return}
   try{
     const d=await jfetch('/api/import-db',{
@@ -143,19 +339,19 @@ async function importDatabaseFile(input){
       body:file
     });
     individuals=[];
-    document.getElementById('detail').textContent='Product List の行をクリックすると履歴を表示します。';
+    document.getElementById('detail').textContent='Select a row in Product List to view its history.';
     document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='バックアップを復元しました';
+    document.getElementById('jobMessage').textContent='Backup restored';
     document.getElementById('jobBar').style.width='0%';
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
     const imported=d.imported_counts||{};
-    const media=d.legacy_database?'旧DB形式（Mediaなし）':('Media: '+(d.imported_media_count??0));
+    const media=d.legacy_database?'Legacy DB format (no media)':('Media: '+(d.imported_media_count??0));
     const architecture=await jfetch('/api/claim-architecture-status');
-    alert('バックアップを復元しました。\nObservations: '+(imported.observations??'')+'\nProduct List: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media+'\nClaim Migration: '+(architecture.ready?'不要':'必要'));
+    alert('Backup restored.\nObservations: '+(imported.observations??'')+'\nProduct List: '+(imported.individuals??'')+'\nCrawl Runs: '+(imported.crawl_runs??'')+'\n'+media+'\nClaim Migration: '+(architecture.ready?'Not required':'Required'));
   }catch(e){
-    alert('バックアップ復元に失敗しました。\n'+e.message);
+    alert('Could not restore the backup.\n'+e.message);
   }finally{
     input.value='';
   }
@@ -164,10 +360,10 @@ async function runClaimMigration(){
   try{
     const status=await jfetch('/api/claim-architecture-status');
     if(status.ready){
-      alert('このDBはClaim-centered構造で、Snapshotも最新です。');
+      alert('This DB uses the Claim-centered structure and its Snapshot is current.');
       return;
     }
-    const message='旧Observation中心DBをClaim-centered構造へ移行します。\n\n未移行Listing Observation: '+status.unmigrated_listing_observations+'\nClaimなしIndividual: '+status.claimless_individuals+'\n\n既存Claimは重複生成しません。続行しますか？';
+    const message='Migrate the legacy Observation-centered DB to the Claim-centered structure.\n\nUnmigrated Listing Observations: '+status.unmigrated_listing_observations+'\nIndividuals without Claims: '+status.claimless_individuals+'\n\nExisting Claims will not be duplicated. Continue?';
     if(!confirm(message))return;
     const d=await jfetch('/api/migrate-claims',{method:'POST'});
     const m=d.migration||{};
@@ -175,18 +371,29 @@ async function runClaimMigration(){
     await refreshStatus();
     await loadIndividuals();
     const r=d.rebuild||{};
-    alert('Claim Migration / Snapshot Rebuild完了\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nReverb Listing ClaimのLocation等が不足しています。続けて「既存DBバックフィル（今回のみ）」を実行してください。':''));
+    alert('Claim Migration / Snapshot Rebuild complete\nClaims created: '+(m.claims_created??0)+'\nListing items created: '+(m.listing_items_created??0)+'\nMigration snapshots: '+(m.snapshots_rebuilt??0)+'\nAll snapshots rebuilt: '+(r.snapshots_rebuilt??0)+'\nSkipped: '+(r.snapshots_skipped??0)+'\nReady: '+(a.ready?'Yes':'No')+(a.backfill_recommended?'\n\nSome Reverb Listing Claims lack Location data. Next, run "Backfill existing DB (one time)" .':''));
   }catch(e){
-    alert('Claim Migrationに失敗しました。\n'+e.message);
+    alert('Claim Migration failed.\n'+e.message);
   }
 }
 
+async function backfillCachedSpecifications(){
+  if(!confirm('Clean incorrect automated Specifications and duplicate Finish values, then add safe specifications from saved details to guitars without a user owner. Continue?'))return;
+  const button=document.getElementById('backfillSpecificationsButton');button.disabled=true;
+  try{
+    const d=await jfetch('/api/admin/backfill-cached-specifications',{method:'POST'});
+    await loadIndividuals();
+    alert('Specification cleanup and additions complete.\nIncorrect or duplicate Finish fields removed: '+d.corrected_items+'\nClaims cleaned: '+d.corrected_claims+'\nEmpty Claims: '+d.removed_claims+'\nGuitars without a user owner: '+d.ownerless+'\nWith details: '+d.with_detail+'\nClaims created: '+d.created+'\nFields added: '+d.items+'\nNo fields available: '+d.skipped_no_specs+'\nAlready processed: '+d.skipped_existing);
+  }catch(e){alert('Could not add Specifications.\n'+e.message)}
+  finally{button.disabled=false}
+}
+
 async function resetDatabase(){
-  const message='現在のObservation / Individual / Crawl履歴をすべて削除し、空のDBを作り直します。\n\nこの操作は元に戻せません。実行しますか？';
+  const message='Delete all current Observation, Individual, and crawl history and recreate an empty DB.\n\nThis action cannot be undone. Continue?';
   if(!confirm(message))return;
-  const typed=prompt('確認のため RESET と入力してください。');
+  const typed=prompt('Type RESET to confirm.');
   if(typed!=='RESET'){
-    if(typed!==null)alert('入力が一致しないため中止しました。');
+    if(typed!==null)alert('The confirmation did not match; action canceled.');
     return;
   }
   try{
@@ -197,173 +404,183 @@ async function resetDatabase(){
     });
     individuals=[];
     document.getElementById('individualBody').innerHTML='';
-    document.getElementById('detail').textContent='Product List の行をクリックすると履歴を表示します。';
+    document.getElementById('detail').textContent='Select a row in Product List to view its history.';
     document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='DBを初期化しました';
+    document.getElementById('jobMessage').textContent='DB reset complete';
     document.getElementById('jobBar').style.width='0%';
-    localStorage.removeItem(ACTIVE_USER_KEY);
+    sessionStorage.removeItem(ACTIVE_USER_KEY);
     activeUser=null;
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
-    alert('DBを初期化しました。');
+    alert('DB reset complete.');
   }catch(e){
     alert(e.message);
   }
 }
-async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals()}
+async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals();await loadUnverifiedAcquires();await refreshStatus()}
+let unverifiedAcquireOffset=0;
+async function loadUnverifiedAcquires(offset=unverifiedAcquireOffset){
+  try{
+    const d=await jfetch('/api/claims/unverified-acquires?limit=100&offset='+Math.max(0,offset));
+    if(d.total>0&&offset>=d.total)return loadUnverifiedAcquires(Math.floor((d.total-1)/100)*100);
+    unverifiedAcquireOffset=d.offset;
+    document.getElementById('unverifiedAcquireTotal').textContent='('+d.total+')';
+    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">No Unverified Acquire Claims.</td></tr>';
+    document.getElementById('unverifiedAcquirePage').textContent=d.total?(d.offset+1)+'–'+(d.offset+d.items.length)+' / '+d.total:'0 / 0';
+    document.getElementById('unverifiedAcquirePrev').disabled=d.offset===0||!d.total;
+    document.getElementById('unverifiedAcquireNext').disabled=d.offset+d.items.length>=d.total;
+  }catch(e){document.getElementById('unverifiedAcquireBody').innerHTML='<tr><td colspan="7">'+esc(e.message)+'</td></tr>'}
+}
 function countList(title,rows){
-  if(!rows||!rows.length)return '<div><strong>'+esc(title)+'</strong><div class="sub">—</div></div>';
-  return '<div><strong>'+esc(title)+'</strong>'+rows.map(x=>'<div class="sub">'+esc(x.label)+' : '+esc(x.count)+'</div>').join('')+'</div>';
+  return '<div class="stat-group"><strong>'+esc(title)+'</strong>'+((rows&&rows.length)?rows.map(x=>'<div class="stat-line"><span>'+esc(x.label)+'</span><span>'+esc(x.count)+'</span></div>').join(''):'<div class="sub">—</div>')+'</div>';
 }
 async function loadStatistics(){
   try{
     const d=await jfetch('/api/statistics');
     const s=d.summary||{};
-    const summary='<div class="detail-meta-grid" style="margin-bottom:12px">'+[
+    const summary='<div class="stats-summary">'+[
       ['Product List',s.individuals],
       ['Makers',s.makers],
       ['Models',s.models],
       ['Finishes',s.finishes],
       ['Current Location known',s.located_individuals]
-    ].map(x=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(x[0])+'</span><span class="detail-meta-value">'+esc(x[1]??0)+'</span></div>').join('')+'</div>';
-    const lists='<div class="detail-meta-grid">'+[
+    ].map(x=>'<span>'+esc(x[0])+' <strong>'+esc(x[1]??0)+'</strong></span>').join('')+'</div>';
+    const lists='<div class="stats-columns">'+[
       countList('Maker',d.makers),
       countList('Model',d.models),
       countList('Finish',d.finishes),
       countList('Current Country',d.current_countries)
-    ].map(x=>'<div class="detail-meta-item">'+x+'</div>').join('')+'</div>';
+    ].join('')+'</div>';
     document.getElementById('statistics').innerHTML=summary+lists;
   }catch(e){
     document.getElementById('statistics').textContent='Statistics error: '+e.message;
   }
 }
+let selectedUserId=null;
+let themeOptions=[];
 async function loadUsers(){
+  if(!themeOptions.length)themeOptions=await jfetch('/api/themes');
   users=await jfetch('/api/users');
-  const select=document.getElementById('activeUserSelect');
-  const saved=localStorage.getItem(ACTIVE_USER_KEY)||'';
-  select.innerHTML='<option value="">Guest</option>'+users.map(u=>'<option value="'+u.id+'">'+esc(u.display_name)+' (#'+u.id+')</option>').join('');
-  const target=users.some(u=>String(u.id)===String(saved))?saved:'';
-  select.value=target;
-  if(target){
-    localStorage.setItem(ACTIVE_USER_KEY,target);
-    await loadActiveUser();
-  }else{
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    renderAccount();
+  const saved=sessionStorage.getItem(ACTIVE_USER_KEY)||'';
+  renderUserList();
+  if(selectedUserId&&users.some(u=>Number(u.id)===selectedUserId))await showUserRecord(selectedUserId);
+  else if(users.some(u=>String(u.id)===saved))await showUserRecord(Number(saved));
+  else{selectedUserId=null;activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY);updateOpenTopButton();document.getElementById('accountPanel').textContent='Select a user from the list on the left.'}
+}
+function renderUserList(){
+  const filter=document.getElementById('userFilter').value.trim().toLowerCase();
+  const matches=users.filter(u=>[u.id,u.display_name,u.account_type,u.ban_status,u.location_country,u.location_region].some(x=>String(x??'').toLowerCase().includes(filter)));
+  document.getElementById('userBody').innerHTML=matches.map(u=>'<tr class="clickable'+(selectedUserId===Number(u.id)?' selected':'')+'" onclick="showUserRecord('+Number(u.id)+')"><td class="mono">'+Number(u.id)+'</td><td>'+esc(u.display_name)+'</td><td>'+esc(u.account_type)+'</td><td>'+esc([u.location_country,u.location_region].filter(Boolean).join(' / ')||'—')+'</td><td>'+Number(u.current_guitar_count||0)+'</td></tr>').join('')||'<tr><td colspan="5" class="sub">No matching users.</td></tr>';
+  document.getElementById('userCount').textContent=matches.length+' / '+users.length+' users';
+}
+async function showUserRecord(id){
+  selectedUserId=Number(id);
+  renderUserList();
+  updateOpenTopButton();
+  const panel=document.getElementById('accountPanel');
+  panel.textContent='Loading...';
+  try{
+    const data=await jfetch('/api/users/'+selectedUserId);
+    if(selectedUserId!==Number(id))return;
+    const u=data.user,summary=data.summary||{};
+    if(u.ban_status==='ban'){
+      activeUser=null;
+      sessionStorage.removeItem(ACTIVE_USER_KEY);
+    }else{
+      activeUser=data;
+      sessionStorage.setItem(ACTIVE_USER_KEY,String(u.id));
+    }
+    updateOpenTopButton();
+    const meta=[['User ID',u.id],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0]];
+    if(!CONSOLE_ADMIN_TOKEN)meta.push(['Display Name',u.display_name],['Account Type',u.account_type],['BAN Status',u.ban_status||'normal'],['Country',u.location_country||'—'],['City / Region',u.location_region||'—'],['Bio',u.bio||'—'],...['birth','residence','bio','avatar'].map(key=>[key+' Visibility',u[key+'_visibility']||'—']),['Signature Guitar ID',u.signature_individual_id||'—'],['Theme',u.theme||'dark_default']);
+    const guitars=data.guitars||[];
+    panel.className='';
+    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><div class="user-header-text"><strong>'+esc(u.display_name)+'</strong><span>Account Type: '+esc(u.account_type)+'</span><span>BAN Status: '+esc(u.ban_status||'normal')+'</span></div></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
+      (CONSOLE_ADMIN_TOKEN?'<form id="adminUserForm" class="admin-user-form" onsubmit="saveAdminUser(event,'+Number(u.id)+')">'+
+        '<label>Display Name<input name="display_name" maxlength="120" required value="'+esc(u.display_name)+'"></label>'+
+        '<label>Account Type<select name="account_type">'+['user','shop','builder','repairer','organization'].map(x=>'<option value="'+x+'"'+(u.account_type===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
+        '<label>BAN Status<select name="ban_status">'+['normal','silent_ban','ban'].map(x=>'<option value="'+x+'"'+((u.ban_status||'normal')===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
+        '<label>Theme<select name="theme">'+themeOptions.map(theme=>'<option value="'+esc(theme.id)+'"'+((u.theme||'dark_default')===theme.id?' selected':'')+'>'+esc(theme.label)+'</option>').join('')+'</select></label>'+
+        '<label>Country<input name="location_country" maxlength="80" value="'+esc(u.location_country||'')+'"></label>'+
+        '<label>City / Region<input name="location_region" maxlength="120" value="'+esc(u.location_region||'')+'"></label>'+
+        '<label>Bio<textarea name="bio" maxlength="2000">'+esc(u.bio||'')+'</textarea></label>'+
+        ['birth','residence','bio','avatar'].map(key=>'<label>'+esc(key)+' Visibility<select name="'+key+'_visibility">'+['Public','Members','Followers','Private'].map(v=>'<option value="'+v+'"'+((u[key+'_visibility']||'Private')===v?' selected':'')+'>'+v+'</option>').join('')+'</select></label>').join('')+
+        '<label>Signature Guitar<select name="signature_individual_id"><option value="">None</option>'+guitars.filter(g=>g.ownership_status==='current_owner'||Number(g.individual_id)===Number(u.signature_individual_id)).map(g=>'<option value="'+Number(g.individual_id)+'"'+(Number(u.signature_individual_id)===Number(g.individual_id)?' selected':'')+'>'+esc(g.manufacturer+' '+(g.model||'')+' / '+(g.serial_number||''))+'</option>').join('')+'</select></label>'+
+        '<label>Avatar image<input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif"></label>'+
+        '<div class="toolbar"><button type="submit">Save User</button></div></form>':'')+
+      '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'?prototype_user_id='+encodeURIComponent(sessionStorage.getItem(ACTIVE_USER_KEY)||'')+'" target="_blank" rel="noopener">User Profile</a></div>'+
+      '<div class="detail-section">Guitars ('+guitars.length+')</div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">No guitars registered.</div>')+'</div>';
+    if(selectedIndividualId)showIndividual(selectedIndividualId).catch(e=>{
+      document.getElementById('detail').textContent='Product Detail error: '+e.message;
+    });
+  }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
+}
+async function saveAdminUser(event,id){
+  event.preventDefault();const form=event.currentTarget,fields=new FormData(form);
+  const status=String(fields.get('ban_status'));
+  if(status!=='normal'&&!confirm('Set this account to '+status+'? Public Claims and guitar data will be recalculated. Continue?'))return;
+  const body={};for(const key of ['display_name','account_type','ban_status','theme','location_country','location_region','bio','birth_visibility','residence_visibility','bio_visibility','avatar_visibility']){
+    const value=String(fields.get(key)||'').trim();body[key]=value||null;
   }
+  body.signature_individual_id=fields.get('signature_individual_id')?Number(fields.get('signature_individual_id')):null;
+  const file=fields.get('avatar');const btn=form.querySelector('button[type=submit]');btn.disabled=true;
+  try{
+    await jfetch('/api/admin/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify(body)});
+    if(file&&file.size){const avatarData=new FormData();avatarData.set('avatar',file);
+      try{await jfetch('/api/users/'+id+'/avatar',{method:'POST',body:avatarData})}
+      catch(e){alert('User information was saved, but the avatar could not be updated.\n'+e.message)}
+    }
+    await loadUsers();await loadIndividuals();if(selectedIndividualId)await showIndividual(selectedIndividualId);
+  }catch(e){alert('Could not update the user.\n'+e.message);btn.disabled=false}
 }
 async function createUser(){
   try{
-    const d=await jfetch('/api/users',{method:'POST'});
-    const id=String(d.user.id);
-    localStorage.setItem(ACTIVE_USER_KEY,id);
+    const data=await jfetch('/api/users',{method:'POST'});
+    const id=String(data.user.id);
+    selectedUserId=Number(id);
     await loadUsers();
-    document.getElementById('activeUserSelect').value=id;
-    await loadActiveUser();
-  }catch(e){
-    alert('アカウント作成に失敗しました。\n'+e.message);
-  }
+  }catch(e){alert('Could not create the account.\n'+e.message)}
 }
-async function setActiveUser(value){
-  if(!value){
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    renderAccount();
-    if(selectedIndividualId)await showIndividual(selectedIndividualId);
-    return;
-  }
-  localStorage.setItem(ACTIVE_USER_KEY,String(value));
-  await loadActiveUser();
-  if(selectedIndividualId)await showIndividual(selectedIndividualId);
+function updateOpenTopButton(){
+  const selected=users.find(u=>Number(u.id)===selectedUserId);
+  document.getElementById('openUserTopBtn').disabled=!selected||selected.ban_status==='ban';
+}
+function openTopPageAsActiveUser(){
+  const selected=users.find(user=>Number(user.id)===selectedUserId);
+  if(!selected||selected.ban_status==='ban')return;
+  window.open('/user-view?prototype_user_id='+encodeURIComponent(selected.id),'_blank','noopener');
+}
+function openTopPageAsGuest(){
+  window.open('/user-view?prototype_user_id=','_blank','noopener');
 }
 async function loadActiveUser(){
-  const id=localStorage.getItem(ACTIVE_USER_KEY);
-  if(!id){
-    activeUser=null;
-    renderAccount();
-    return;
-  }
-  try{
-    activeUser=await jfetch('/api/users/'+id);
-    renderAccount();
-  }catch(e){
-    activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
-    await loadUsers();
-  }
+  const id=sessionStorage.getItem(ACTIVE_USER_KEY);
+  if(!id){activeUser=null;return}
+  try{activeUser=await jfetch('/api/users/'+encodeURIComponent(id))}
+  catch(e){activeUser=null;sessionStorage.removeItem(ACTIVE_USER_KEY)}
 }
-function renderAccount(){
-  const el=document.getElementById('accountPanel');
-  if(!activeUser||!activeUser.user){
-    el.className='sub';
-    el.textContent='上部の「新規アカウント」からアカウントを作成してください。';
-    return;
-  }
-  const u=activeUser.user;
-  const guitars=activeUser.guitars||[];
-  el.className='';
-  el.innerHTML='<div class="detail-meta-grid">'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Display Name</span><input id="accountName" value="'+esc(u.display_name||'')+'"></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Account Type</span><select id="accountType"><option value="user"'+(u.account_type==='user'?' selected':'')+'>User</option><option value="shop"'+(u.account_type==='shop'?' selected':'')+'>Shop</option></select></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Country</span><input id="accountCountry" placeholder="JP / US / NL ..." value="'+esc(u.location_country||'')+'"></div>'+
-    '<div class="detail-meta-item"><span class="detail-meta-label">Region</span><input id="accountRegion" placeholder="Kyoto / CA / NH ..." value="'+esc(u.location_region||'')+'"></div>'+
-    '</div>'+
-    '<div class="toolbar" style="margin-top:10px"><button onclick="saveUser()">保存</button><span class="sub">認証なしのPhase 1アカウント / ID '+esc(u.id)+'</span></div>'+
-    '<div class="detail-section">Owned Guitars</div>'+
-    (guitars.length?guitars.map(g=>'<div class="observation-card"><div class="observation-card-head"><div class="observation-date">'+esc(g.manufacturer)+' '+esc(g.model||'')+'</div><div class="observation-source">'+esc(g.ownership_status||'')+'</div></div><div class="sub">'+esc(g.year||'')+(g.finish?' / '+esc(g.finish):'')+(g.serial_number?' / '+esc(g.serial_number):'')+'</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="showIndividual('+g.individual_id+')">Detail</button><button class="secondary bad" onclick="unlinkOwnedGuitar('+g.individual_id+')">紐づけ解除</button></div></div>').join(''):'<div class="sub">まだ所有ギターは登録されていません。</div>');
-}
-async function saveUser(){
-  if(!activeUser||!activeUser.user)return;
-  const id=activeUser.user.id;
-  const body={
-    display_name:document.getElementById('accountName').value.trim(),
-    account_type:document.getElementById('accountType').value,
-    location_country:document.getElementById('accountCountry').value.trim()||null,
-    location_region:document.getElementById('accountRegion').value.trim()||null
-  };
-  try{
-    activeUser=await jfetch('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    await loadUsers();
-    document.getElementById('activeUserSelect').value=String(id);
-    await loadActiveUser();
-  }catch(e){
-    alert('アカウント保存に失敗しました。\n'+e.message);
-  }
-}
+function renderAccount(){if(selectedUserId)showUserRecord(selectedUserId)}
 function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
 }
 function ownershipControlsHtml(individualId){
-  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">所有ギターに紐づけるにはUserを選択してください。</div>';
-  if(activeUserOwns(individualId)){
-    return '<div class="toolbar" style="margin-top:10px"><span class="status good">現在のUserが所有中</span><button class="secondary bad" onclick="unlinkOwnedGuitar('+individualId+')">紐づけ解除</button></div>';
-  }
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
+  if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">Select a user to link an owned guitar.</div>';
+  if(activeUserOwns(individualId))return '';
+  return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">Add to owned guitars</button></div>';
 }
 async function linkOwnedGuitar(individualId){
   if(!activeUser||!activeUser.user)return;
   try{
     activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ownership_status:'current_owner'})});
-    renderAccount();
+    await loadUsers();
     await showIndividual(individualId);
   }catch(e){
-    alert('所有ギターの紐づけに失敗しました。\n'+e.message);
-  }
-}
-async function unlinkOwnedGuitar(individualId){
-  if(!activeUser||!activeUser.user)return;
-  try{
-    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'DELETE'});
-    renderAccount();
-    if(selectedIndividualId===Number(individualId))await showIndividual(individualId);
-  }catch(e){
-    alert('所有ギターの紐づけ解除に失敗しました。\n'+e.message);
+    alert('Could not link the owned guitar.\n'+e.message);
   }
 }
 function normalizeSortValue(value,key){if(key==='id'||key==='claim_count')return Number(value||0);return String(value??'').toLowerCase()}
-function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals()}
+function setIndividualSort(key){if(individualSortKey===key){individualSortDirection*=-1}else{individualSortKey=key;individualSortDirection=1}renderIndividuals();document.getElementById('individualBody').closest('.table-wrap').scrollTop=0}
 function updateSortIndicators(){for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){const el=document.getElementById('sort-'+key);if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):''}}
 function renderIndividuals(){const q=document.getElementById('individualFilter').value.toLowerCase();const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{const av=normalizeSortValue(a[individualSortKey],individualSortKey);const bv=normalizeSortValue(b[individualSortKey],individualSortKey);if(av<bv)return-1*individualSortDirection;if(av>bv)return 1*individualSortDirection;return Number(a.id)-Number(b.id)});updateSortIndicators();document.getElementById('individualBody').innerHTML=rows.map(x=>'<tr class="clickable" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>').join('')}
 function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
@@ -377,7 +594,7 @@ function productGalleryHtml(images,model){
   const disabled=productGallery.length<2?' disabled':'';
   const caption=String(item.caption||'').trim();
   const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
-  return '<div class="detail-gallery">'+
+  return '<div class="detail-gallery" tabindex="0" aria-label="Open photo album">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
     '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
@@ -395,11 +612,15 @@ function stepProductGallery(delta){
     source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
   }
 }
+function openProductAlbum(){
+  YGCImageAlbum.open(productGallery,productGalleryIndex,document.getElementById('productGalleryImage'));
+}
 function specificationFieldLabel(value){const labels={body:'Body',bridge:'Bridge',fingerboard:'Fingerboard',frets:'Frets',neck:'Neck',nut:'Nut',pickups:'Pickups',pickguard:'Pickguard',potentiometers:'Potentiometers',tuners:'Tuners',wiring:'Wiring',weight:'Weight',finish:'Finish'};const key=String(value||'').trim();return labels[key]||key.replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
 function identityFieldLabel(value){const labels={manufacturer:'Maker',model:'Model',year:'Year',serial_number:'Serial'};return labels[String(value||'')]||String(value||'').replace(/_/g,' ')}
 function claimTypeLabel(value){return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ')}
-function displayEventDate(value){if(!value)return '日付不明';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function displayInputDate(value){if(!value)return '入力日時不明';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP')}
+function incidentClaimLabel(c){return c.value_text==='lost'?'Incident Lost':claimTypeLabel(c.value_text||'incident')}
+function displayEventDate(value){if(!value)return 'Date unknown';const text=String(value).trim();const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);if(direct)return direct[1];const d=new Date(text);if(Number.isNaN(d.getTime()))return text;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function displayInputDate(value){if(!value)return 'Input date unknown';const d=new Date(String(value));return Number.isNaN(d.getTime())?String(value):d.toLocaleString('en-US')}
 function claimHeaderHtml(c,type,eventDate){return '<span class="claim-badge">'+esc(type)+'</span><span class="claim-event-date">'+esc(eventDate)+'</span>'}
 function claimVisualTypeClass(c){
   if(c.claim_type==='ownership')return ' claim-type-ownership';
@@ -410,19 +631,23 @@ function claimVisualTypeClass(c){
   return '';
 }
 function claimCard(c){
-  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
+  const type=c.claim_type==='specification'?(c.specification_kind==='repair'?'Repair':'Specification'):(c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?incidentClaimLabel(c):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.author_name||'User').trim()||'User';
+    const owner=String(['automation','merged_listing'].includes(c.ownership_source)?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')
       ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
       : 'Unknown';
-    if(kind==='release'){
-      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    if(kind==='lost'){
+      body='<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>';
+    }else if(kind==='release'){
+      body=c.ownership_source==='automation'
+        ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
+        : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -465,105 +690,155 @@ function claimCard(c){
     if(specs)details.push(specs);
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
     if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
-    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
+  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership'||c.claim_type==='specification')){
+    const id='Reverb ID #'+esc(c.source_listing_id);
+    body+='<div class="claim-memo">Evidence: '+(c.source_url?'<a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+id+'</a>':id)+'</div>';
+  }else if(c.claim_type==='listing'&&c.source_url){
+    body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
+  }
   if(c.evidence_media_id&&c.claim_type!=='media')body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
-  const votes='<div class="claim-votes"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span><button class="claim-vote bad" onclick="deleteClaim('+c.id+')">Delete</button></div>';
+  const verification=String(c.verification_status||'positive');
+  const moderation='<label>Verification <select aria-label="Claim Verification" style="width:auto" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onchange="moderateClaim('+Number(c.id)+',this.value)">'+[['positive','Positive / Approve'],['negative','Negative / Reject'],['unverified','Unverified / Unverified']].map(x=>'<option value="'+x[0]+'" '+(verification===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>';
+  const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote danger" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
-function renderAdminChronicle(claims){
-  const sorted=(claims||[]).slice().sort((a,b)=>{const av=String(a.occurred_at||a.created_at||'');const bv=String(b.occurred_at||b.created_at||'');if(av<bv)return 1;if(av>bv)return-1;return Number(b.id)-Number(a.id)});
-  const correctionsByTarget=new Map();const roots=[];
-  for(const claim of sorted){if(claim.claim_type==='identity_correction'&&claim.target_claim_id){const key=Number(claim.target_claim_id);if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);correctionsByTarget.get(key).push(claim)}else roots.push(claim)}
-  const ordered=[];for(const claim of roots){ordered.push(claim);const corrections=correctionsByTarget.get(Number(claim.id))||[];corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));ordered.push(...corrections);correctionsByTarget.delete(Number(claim.id))}
-  for(const corrections of correctionsByTarget.values())ordered.push(...corrections);
-  return ordered.length?ordered.map(claimCard).join(''):'<div class="sub">Claimはまだありません。</div>';
+let currentAdminClaims=[];
+function renderAdminChronicle(){
+  const ordered=YGCProductDetail.orderedClaims(currentAdminClaims);
+  const target=document.getElementById('chronicleEntries');
+  if(target)target.innerHTML=ordered.length?ordered.map(adminClaimCard).join(''):'<div class="sub">No Claims yet.</div>';
 }
+function adminClaimCard(c){
+  const status=String(c.verification_status||'positive').toLowerCase();
+  if(status==='positive')return claimCard(c);
+  const label=c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):claimTypeLabel(c.claim_type);
+  return '<div class="claim-compact-row">'+(status==='negative'
+    ? '<button type="button" class="claim-negative-dot" title="Negative Claim" onclick="openAdminClaim('+Number(c.id)+')">◉</button>'
+    : '<button type="button" class="claim-compact-tag'+claimVisualTypeClass(c)+'" onclick="openAdminClaim('+Number(c.id)+')">'+esc(label)+'</button>')+'</div>';
+}
+function openAdminClaim(id){
+  const claim=currentAdminClaims.find(c=>Number(c.id)===Number(id));
+  const content=document.getElementById('adminClaimPopupContent');
+  if(claim&&content)content.innerHTML=claimCard(claim);
+  document.getElementById('adminClaimPopup').classList.add('open');
+}
+function closeAdminClaim(event){
+  if(event&&event.target.id!=='adminClaimPopup')return;
+  document.getElementById('adminClaimPopup').classList.remove('open');
+}
+function toggleDetailAccordion(id){
+  const section=document.getElementById(id);
+  if(section)section.classList.toggle('collapsed');
+}
+let individualLoadSequence=0;
 async function showIndividual(id){
+  const sequence=++individualLoadSequence;
+  const changedIndividual=selectedIndividualId!==Number(id);
   selectedIndividualId=Number(id);
+  renderIndividuals();
+  if(changedIndividual)document.getElementById('detail').scrollTop=0;
   const [d,claims,currentSpecifications]=await Promise.all([
     jfetch('/api/individuals/'+id),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
+  if(sequence!==individualLoadSequence)return;
   const i=d.individual;
-  const observations=d.observations||[];
-  const listing=d.current_listing||null;
-  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const listing=d.current_source||d.current_listing||null;
   const galleryImages=d.gallery_images||[];
   let out='';
   if(galleryImages.length){
     out+=productGalleryHtml(galleryImages,i.model||'Guitar');
   }else if(i.representative_image_url){
-    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" role="button" tabindex="0" aria-label="Open photo album" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(listing&&listing.image_url){
     const listingUrl=String(listing.source_url||'');
     const image='<img class="detail-image" src="'+esc(listing.image_url)+'" alt="'+esc(listing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(listingUrl)out+='<a class="detail-image-link" href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(listing.source_site||'Source'))+'</a></span>';
     else out+=image+'<span class="detail-source">Listing Claim</span>';
-  }else if(imageObservation){
-    const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: Reverb image (provenance)</span>';
-    else out+=image+'<span class="detail-source">Source: Reverb image (provenance)</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
 
-  const specMap={};for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
-  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
-  const fixedSpecRows=[['Maker',i.manufacturer||'—'],['Model',i.model||'—'],['Finish',finishValue||'—'],['Year',i.year||'—'],['Serial',i.serial_number||'—']];
-  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
-  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
-  const dynamicSpecs=(currentSpecifications||[]).filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase())).slice().sort((a,b)=>{const ak=String(a.field_name||'').toLowerCase();const bk=String(b.field_name||'').toLowerCase();const ai=preferredOrder.indexOf(ak);const bi=preferredOrder.indexOf(bk);if(ai>=0||bi>=0){if(ai<0)return 1;if(bi<0)return-1;if(ai!==bi)return ai-bi}return ak.localeCompare(bk)});
-
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i.id)+
-    '<div class="toolbar" style="margin-top:8px"><button class="secondary bad" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div></div>';
-  out+='<div class="chronicle-toolbar"><strong>Specification</strong></div><div class="catalog-spec">'+
-    fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
-    dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
-    '</div>';
-  out+='<div class="chronicle-toolbar"><strong>Chronicle</strong></div><div id="chronicleEntries">'+renderAdminChronicle(claims)+'</div>';
+  currentAdminClaims=claims||[];
+  out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
+    owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i.id),
+    headerAction:'<div class="toolbar admin-detail-actions"><button class="danger" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
+    fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
+  renderAdminChronicle();
 }
-async function deleteClaim(claimId){
-  if(!confirm('Claim #'+claimId+' を完全に削除します。\nこの操作は元に戻せません。続行しますか？'))return;
+async function moderateClaim(claimId,action,isListing=false){
+  closeAdminClaim();
+  const message=action==='delete'?(isListing?'Delete this Listing Claim? If it is the last Listing, the guitar and all related records will also be deleted. Continue?':'Delete this Claim and any paired ownership history? Continue?'):'Claim #'+claimId+' will be set to '+action+' by the administrator, and guitar data will be recalculated. Continue?';
+  if(!confirm(message)){if(selectedIndividualId)await showIndividual(selectedIndividualId);return}
   try{
-    const d=await jfetch('/api/claims/'+claimId,{method:'DELETE'});
-    if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
+    const d=await jfetch('/api/admin/claims/'+claimId+'/moderate',{method:'POST',headers:{'Content-Type':'application/json','X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},body:JSON.stringify({action,confirm_individual_delete:action==='delete'&&isListing})});
+    if(d.individual_deleted){selectedIndividualId=null;document.getElementById('detail').textContent='Individual deleted.'}else if(selectedIndividualId===Number(d.individual_id))await showIndividual(d.individual_id);
     await loadIndividuals();
+    await loadStatistics();
   }catch(e){
-    alert('Claim削除に失敗しました。\n'+e.message);
+    alert('Admin action failed.\n'+e.message);
+    if(selectedIndividualId)await showIndividual(selectedIndividualId);
   }
 }
 async function deleteIndividual(individualId){
   const individual=individuals.find(x=>Number(x.id)===Number(individualId));
   const label=individual?(individual.manufacturer+' '+(individual.model||'')+' / '+(individual.serial_number||'')):('Individual #'+individualId);
-  if(!confirm(label+' を関連するClaim・Observation・所有紐づけを含め完全に削除します。\n\nこの操作は元に戻せません。続行しますか？'))return;
-  const typed=prompt('確認のため DELETE と入力してください。');
+  if(!confirm(label+' and all related Claims, Observations, and ownership links will be permanently deleted.\n\nThis action cannot be undone. Continue?'))return;
+  const typed=prompt('Type DELETE to confirm.');
   if(typed!=='DELETE')return;
   try{
-    await jfetch('/api/individuals/'+individualId,{method:'DELETE'});
+    await jfetch('/api/individuals/'+individualId,{method:'DELETE',headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
     if(selectedIndividualId===Number(individualId))selectedIndividualId=null;
-    document.getElementById('detail').textContent='Individualを削除しました。';
+    document.getElementById('detail').textContent='Individual deleted.';
     await loadIndividuals();
     await loadStatistics();
     if(activeUser&&activeUser.user)await loadActiveUser();
   }catch(e){
-    alert('Individual削除に失敗しました。\n'+e.message);
+    alert('Could not delete the Individual.\n'+e.message);
   }
 }
-async function startBackfill(){if(!confirm('既存Reverb Listingを再取得して不足しているListing Claim情報を補完します。Observationは変更しません。実行しますか？'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function startBackfill(){if(!confirm('Fetch existing Reverb Listings again to fill missing Listing Claim details. Observations will not change. Continue?'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
 async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new '+x.new_observations+', detail '+x.details_fetched+', existing '+x.skipped_existing+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers()})()
+function programRequest(){return {category:document.getElementById('programCategory').value,year_min:Number(document.getElementById('programYearMin').value),year_max:Number(document.getElementById('programYearMax').value)}}
+function crawlStageSummary(c){
+  const n=key=>Number(c[key]||0);
+  return [
+    ['Listing review',n('summaries_processed')+' / 2000','Known IDs '+n('skipped_existing')+' / Wrong category '+n('skipped_category')+' / Outside year range '+n('skipped_year')+' / No detail URL '+n('missing_detail_url')],
+    ['Detail fetch',n('details_fetched'),'Category and year matched '+n('detail_scope_matched')+' / Detail unavailable '+n('detail_unavailable')],
+    ['Maker and serial extraction',n('serial_candidates'),'Serial or maker unknown '+n('missing_identity')],
+    ['Match existing guitars',n('candidate_checked')+' / '+n('candidate_total'),'Needs review '+n('ambiguous_matches')],
+    ['DB registration',n('new_individuals')+' new / '+n('existing_individuals_extended')+' history updated','Create Listing Claim for new guitars']
+  ];
+}
+function renderCrawlStage(c){
+  return '<table><tbody>'+crawlStageSummary(c).map(row=>'<tr><th>'+esc(row[0])+'</th><td>'+esc(row[1])+'</td><td class="sub">'+esc(row[2])+'</td></tr>').join('')+'</tbody></table>';
+}
+async function loadCrawlRunLog(){
+  const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max)return;
+  const el=document.getElementById('crawlRunLog');
+  try{
+    const runs=await jfetch('/api/crawl/program/runs?'+new URLSearchParams(q));
+    el.innerHTML=runs.length?runs.map(r=>'<div class="panel"><strong>#'+Number(r.id)+' '+esc(r.started_at)+' / '+esc(r.status)+' / '+esc(r.phase||'legacy')+'</strong><div>'+esc(crawlStageSummary(r.counts||{}).map(row=>row.join(': ')).join(' · '))+'</div>'+(r.error_message?'<div class="status bad">'+esc(r.error_message)+'</div>':'')+'</div>').join(''):'No run log for this search range.';
+  }catch(e){el.textContent=e.message}
+}
+async function loadCrawlProgram(){const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max){document.getElementById('programState').textContent='Check the manufacture year range';return}try{const d=await jfetch('/api/crawl/program?'+new URLSearchParams(q));document.getElementById('programState').textContent='Listings processed '+d.processed+'  / '+(d.finished?'End of pages for this range':'Can resume')+(d.updated_at?' / Last run '+d.updated_at:'');await loadCrawlRunLog()}catch(e){document.getElementById('programState').textContent=e.message}}
+async function advanceCrawlProgram(){const q=programRequest();const btn=document.getElementById('programBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});pollCrawlProgram(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function restartCrawlProgram(){try{await jfetch('/api/crawl/program/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});document.getElementById('programResult').textContent='The range can be scanned again from the beginning. Existing Observations and Claims are preserved.';await loadCrawlProgram()}catch(e){alert(e.message)}}
+async function pollCrawlProgram(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programState').textContent=d.message||d.status;document.getElementById('programProgress').innerHTML='<strong>'+esc(d.message||'Processing')+'</strong>'+renderCrawlStage(d.stage_counts||d.aggregate||{});if(d.status==='running'){setTimeout(()=>pollCrawlProgram(id),1000);return}document.getElementById('programBtn').disabled=false;if(d.status==='error'){await loadCrawlProgram();alert(d.error||'crawl error');return}const s=d.aggregate||{};const samples=(s.rejected_samples||[]).map(x=>'#'+x.listing_id+' '+x.reason+' (Listing year '+x.summary_year+' / Detail year '+x.detail_year+' / Product Type '+x.product_type+' / Category '+x.category+')').join(' | ');document.getElementById('programResult').textContent='This run: listings '+s.summaries_processed+'  / details '+s.details_fetched+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / serial candidates '+s.serial_candidates+'  / Serial or maker unknown '+s.missing_identity+'  / known '+s.skipped_existing+'  / availability checked '+s.rechecked+'  / unavailable confirmed '+s.confirmed_missing+'  / Lost '+s.unavailable_claims+'  / Owner Unknown '+s.owners_unknown+' .Skipped: Outside year range '+s.skipped_year+' / year unknown '+s.missing_year+' / wrong category '+s.skipped_category+' / category unknown '+s.missing_category+' / Detail unavailable '+s.detail_unavailable+(samples?'. Examples: '+samples:'');await loadCrawlProgram();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('programBtn').disabled=false;alert(e.message)}}
+async function loadReviewCandidates(){try{const rows=await jfetch('/api/crawl/candidates/review');document.getElementById('reviewCandidates').innerHTML=rows.length?rows.map(x=>'<div>'+esc(x.manufacturer)+' '+esc(x.model)+' / '+esc(x.serial_number)+' / Listing #'+esc(x.listing_id)+' / '+esc(x.reason)+'</div>').join(''):'No candidates for review'}catch(e){document.getElementById('reviewCandidates').textContent=e.message}}
+async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new guitars '+x.new_individuals+', history updated '+x.existing_individuals_extended+', Needs review '+x.ambiguous_matches+', details '+x.details_fetched+', Serial or maker unknown '+x.missing_identity+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
+async function reprocessCachedDetails(){const btn=document.getElementById('cacheReprocessBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/cache/reprocess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});pollCachedDetails(d.job_id)}catch(e){btn.disabled=false;alert(e.message)}}
+async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programResult').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCachedDetails(id),1000);return}document.getElementById('cacheReprocessBtn').disabled=false;if(d.status==='error'){alert(d.error||'Reprocessing failed');return}const s=d.aggregate||{};document.getElementById('programResult').textContent='Saved details '+s.cached_processed+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / already registered '+s.skipped_existing+'  / outside or unknown range '+s.skipped_scope+'  / Serial or maker unknown '+s.missing_identity+' ';await refreshStatus();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('cacheReprocessBtn').disabled=false;alert(e.message)}}
+const header=document.querySelector('.sticky-header');
+new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram()})()
 </script>
 </body></html>

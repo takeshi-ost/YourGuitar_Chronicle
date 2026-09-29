@@ -1,250 +1,39 @@
-# YGC Capabilities
+# 現行機能と試作上の制約
 
-Your Guitar Chronicle で現在できることを、**一般ユーザー**と**管理者（Browser Console）**に分けて簡潔にまとめます。
+対象は現在のローカル試作 (`feature/user-profile-top-page`)。UIとAPIの機能を分けて記載する。新機能を追加・削除するときは本書も更新する。実際の本人確認や公開サーバー運用の保証は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に記した通り未実装。
 
-> **更新ルール**
-> Project paths and identifiers are phase-neutral. Phase labels are used only in UI text, documentation prose, and comments.
-> このドキュメントは現行機能の一覧です。機能の追加・削除・仕様変更を行う場合は、同じ変更セットでこの文書も更新します。
+## Top PageとUser Profile
 
-## ユーザーとしてできること
+- `/user-view` はGuestも閲覧できるTop Page。Product Listの検索・ソート、Product Detail、Specification、Claim Chronicle、新着順のNew Discovery（最大200個体）、統計と地図を表示する。GuestはClaimや投票など参加操作を利用できない。
+- Top Page、User Profile、Browser Consoleのクリック可能な一覧では、行をクリックした後に上下キーで同じ一覧の前後項目を選べる。入力欄やモーダルのキー操作は優先し、一覧以外をクリックすると解除する。
+- ローカル操作用ユーザーはアカウント欄から選択する。本人の通知一覧、既読操作、プロフィール、Claim参加を使える。通知はアプリ内のみ。Messages、Sign In / Create Accountの実際の認証処理は未実装。
+- `/users/{user_id}` のUser ProfileはUser Profile、Owned Guitars、Formerly Owned Guitars、Favorite Guitars、User Chronicleを表示する。リストはProduct List形式。Owned / Formerly Owned / Favoriteには表示高さの上限があり、超えた部分は枠内をスクロールする。所有・過去所有の個体はFavorite欄より前者を優先する。
+- Product ListとProduct Detailの♡／♥からお気に入りを追加・解除し、DBに保存する。User ChronicleはUser / Social / Product / Claim / Otherのタグ付き時系列表示。プロフィールの初期Product Detailには本人が指定したSignature Guitarを使用する。
+- User ProfileでClaimの追加・判定・投票を行うと、選択中のギターを維持してプロフィールの件数、Owned / Formerly Ownedなどの一覧、User Chronicleも再取得する。
+- Guestにはプロフィール画面でMembers onlyを表示する。これは現段階の画面上の挙動で、公開サーバー上での情報保護はまだ保証しない。
+- User SettingsはDisplay Name、Account Type、Residence、Bio、Avatar、Signature Guitar、Themeと項目別公開範囲を保存する。Display NameとAccount TypeはPublic固定、UserName、Email、Date of Birth、Preferred Languageは表示用のダミー欄で保存されない。試作中は入力の必須制約を課さない。
+- 項目別公開範囲はPublic / Members / Followers / Private。Followersはフォロー関係未実装のためPrivateと同じ表示範囲。選択した公開範囲はDBに保存するが、ブラウザ指定の閲覧者IDと一部直接API・画像URLの制約があるため機密情報のアクセス制御とは扱えない。
+- 運営提供の13種類のテーマを設定できる。Top Page / Settingsには操作用ユーザー、User Profileにはプロフィールの持ち主のテーマを使う。管理用Browser Consoleはコンパクトな文字ヘッダー。詳細は [USER_THEMES.md](USER_THEMES.md)。
 
-### アカウント
-- User / Shop アカウントを作成する
-- Display Name、Account Type、Country、Regionを編集する
-- アバター画像を登録する
-- 自分に紐づくギターを確認する
+## IndividualとClaim
 
-### ギターを探す・見る
-- 登録済みIndividualを一覧・検索する
-- Maker / Model / Finish / Year / Serialなどの現在値を見る
-- Current Owner / Locationを見る
-- 現在のSpecificationを見る
-- ChronicleとしてClaim履歴を見る
-- Chronicleを出来事順 / 入力順で切り替える
+- 新しいギターを登録できる。手動登録も外部収集も、Listing Claimを起点とする同じ個体作成パイプラインを通る。個体の現在のMaker / Model / Finish / Year / Serial、Owner / LocationはClaimから作るSnapshotを表示する。
+- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。現時点ではAcquireがOwnerとLocationを設定し、Transfer / Inherit / ReleaseはOwnerとLocationを空欄に戻す。関係者への所有権移転を自動で確定する処理はない。
+- Specification / Repair / Incident（Damage / Lost / Theft）/ Event（Exhibition / Performance / Recording / Auction / Other）/ Media（画像）Claimを追加できる。本人が現在Ownerなら本人のClaimをPositiveにし、第三者の対象ClaimはUnverifiedから開始する。OwnerはPositive / Negative / Unverifiedに変更できる。Identity CorrectionはListingの訂正入口から作り、重複を検査する。
+- 元Ownerを主張するFormer Owner操作はAcquire / Releaseのペアを作り、Owner Verificationに従う。Claimの無効化は来歴を残すソフト削除。通常の表示とSnapshot評価から除外する。Listingは通常編集しない。
+- ClaimにGood / Bad投票とResponseを記録できる。画像Media Claimは一つに最大10枚、JPEG / PNG / WebP / GIF、画像ごと最大12MB。ギャラリーに反映する条件はClaimの有効性と承認状態に従う。
+- 所有権や個体照合に争いがある場合、現在値が履歴そのものを消すことはない。詳しい規則は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md)。
 
-### 自分のギターを登録する
-- 新しいギターを登録する
-  - Maker / Model / Finish / Year / Serial
-  - 代表画像
-  - Claim memo
-- 最初のListing Claimを作成し、自分を初期Ownerとして登録する
-- 同一Maker / Model / SerialのIndividualが既に存在する場合は重複作成を防止する
+## Browser Console（ローカル管理）
 
-### 既存Individualを自分のChronicleへ追加する
-- 「Add to Your Chronicle」からOwnership Claimを作成する
-- Ownership Tagとして Acquire / Transfer / Inherit を選択する
-- 日付、以前の所有者・入手元、メモを記録する
+- Web Crawl / Guitar DB Management / User DB Managementを固定ヘッダーから移動する。Product DetailとUser Detailはページとともにスクロールする。
+- User DBのUsers一覧で選んだユーザーがBrowser Consoleの操作対象になり、User Detail見出し横からそのユーザーのTop Pageを開ける。GuestでのTop Page表示は別ボタンから開く。User Detailの編集欄は1行1項目とし、アイコン横に名前・アカウント種別・BAN状態を表示する。
+- Batch CrawlとIncremental Crawl、保存済み詳細の再判定、進捗・実行ログ、Claim migration / backfill、DB統計、バックアップ・復元・初期化を操作する。
+- 未承認Acquire欄は**承認するとCurrent Ownerが変わる可能性がある**Claimだけを列挙する。Repeated欄は**同じ正規化メーカーとシリアルを持つ複数のDB個体**の候補を表示し、残す個体を指定してMerge／Deleteする。
+- ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
 
-### Claimを追加・編集する
-- Specification Claimを追加する
-- Repair Claimを追加する
-- 自分が現在OwnerのギターをOwnership / ReleaseとしてReleaseする
-- 自分が作成した編集可能なClaimを編集する
-- Listing Claimを直接編集せず、Identity Correctionとして訂正する
-- Identity Correction時はMaker / Model / Serialの重複を再チェックする
+## 未完成・サーバー移行前の要件
 
-### Claimへの参加
-- ClaimへVoteする
-- ClaimのEvidenceや出典を確認する
-
-## 管理者としてできること
-
-管理者操作はローカルの **Phase 1 Browser Console** を前提とします。
-
-### Reverb収集
-- Reverb API Tokenを設定する
-- 複数クエリをBatch Crawlする
-- Year Min / Year Max / Limit / Workersを指定する
-- 取得済みListing IDをスキップする
-- Detail判定済みの対象外Listingを期限付きキャッシュして再取得を抑制する
-- Crawl進行状況・query別結果を確認する
-
-### Individual / Claim確認
-- 全Individualを一覧・検索・ソートする
-- Current Snapshot、Specification、Chronicleを確認する
-- Reverb由来・ユーザー由来を同じClaim-centered構造で確認する
-
-### 管理用削除
-- Claimをハード削除する
-  - 削除後はIndividual Snapshotを再構築する
-  - 最後のactive Listing Claim単体は削除不可
-- Individualをハード削除する
-  - 関連Claim、Observation、User link、Media DB recordなども削除する
-  - 実験データのSerial重複を解消できる
-
-### DB管理
-- SQLite DBをバックアップする
-- バックアップからDBを復元する
-- DBを初期化する
-- Claim Migration / Snapshot Rebuildを実行する
-- 既存Reverb Listing Claimの不足項目をBackfillする
-- Claim-centered構造のreadinessを確認する
-- StatisticsはClaim-centered基準で集計し、Serial Listingsはactive Listing ClaimのSerialを数える
-
-### ユーザー管理
-- アカウントを作成・選択する
-- User Account情報を確認・編集する
-- 所有ギターとの紐づきを確認する
-
-## 共通のデータ構造
-
-Reverbからの自動登録とユーザーによる手動登録は、入口だけが異なり、どちらも基本的に同じ流れを通ります。
-
-```text
-入力
-  ↓
-Listing Claim用データへ正規化
-  ↓
-Individual照合 / 作成
-  ↓
-Claim保存
-  ↓
-必要なProvenance保存
-  ↓
-Individual Snapshot再構築
-```
-
-- **Claim**: 履歴・意味情報のSource of Truth
-  - 所有権の変化は **Ownership** Typeと`ownership_kind`（Acquire / Transfer / Inherit / Release）で表す。旧Owner Change / ReleaseのClaim種別と作成APIは扱わない
-- **Individual**: active Claimから作られる現在状態のSnapshot
-- **Observation**: Reverb等の取得元・証拠・provenance
-
-## 収集の実行経路
-- Browser ConsoleとCLIのCrawlは共通の`crawl_service.crawl_query`を使う
-- 取得済みListing IDと期限内の対象外判定は両方の入口でスキップする
-- 収集結果・失敗は`crawl_runs`に記録する
-- DB初期化と互換列の補正はWebアプリ起動時に一度実行する
-- New DiscoveryはDBで最新24個体を選んでから画面に返す
-
-このため、入力元が増えても同じClaim-centeredパイプラインへ接続できます。
-
-
-- UI表記では `Individuals` を `Product List`、`Individual Detail` を `Product Detail` とする。内部データ名・API・実装名は従来どおり `individual` / `individuals` を使用する。
-
-
-- Ownership ClaimはWebUIでも単一の共通モーダルと単一のsubmit処理を使用し、Tag (`acquire` / `transfer` / `inherit` / `release`) をバックエンドの `/ownership-claim` に渡す
-- Add to Your Chronicle は共通Ownership UIをAcquire固定で開く。Formerly Ownedも現在非所有として扱い、Product Detailでは通常の非所有Productと同じAdd to Your Chronicle導線を表示する
-- Product Detailの Add Claim → Ownership では Transfer / Release / Inherit をTagとして選択できる
-- 現時点ではAcquireだけが所有開始し、SnapshotのCurrent OwnerとLocationをUser情報で上書きする。Transfer / Release / Inheritはすべて所有終了として共通処理し、Current OwnerとLocationを空欄へ戻す。Owned Guitars / Formerly Owned Guitars の分類も操作順ではなく、Claimの日付順で再構築したSnapshotのCurrent Ownerを基準に同期する。User Location変更時はOwnership Claimを持つProductのSnapshotも再構築する。将来は譲渡先Location等を含むTag別処理や必須入力を追加する
-- Chronicle上のOwnership Claimバッジは Ownership / Acquire のようにType名を重ねず、Acquire / Release等のTag名だけを表示する
-
-- Ownership Claimカードの主文はTag別に表示する: Acquire=`A became the owner of this product.` / Release=`A released this product.` / Transfer=`B acquired this product from A.` / Inherit=`B inherited this product from A.`。AはClaim作成者、BはOwnership入力の関係者。
-
-
-- Incident ClaimはProduct Detailの Add Claim → Incident から作成する
-- Incident Tagは Damage / Lost / Theft。DateとDetailを記録する
-- Incidentは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
-- Chronicle上のIncident ClaimバッジはIncidentというType名ではなくDamage / Lost / TheftのTag名を表示する
-
-
-- Event ClaimはProduct Detailの Add Claim → Event から作成する
-- Event Tagは Exhibition / Performance / Recording / Auction / Other。DateとDetailを記録する
-- Eventは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
-- Chronicle上のEvent ClaimバッジはEventというType名ではなく各Tag名を表示する
-- Event Claimカードは暗い紫、Tagバッジは同系統の明るい紫で表示する
-
-
-- Media ClaimはProduct Detailの Add Claim → Media から作成する
-- 初期版は画像のみ対応し、JPEG / PNG / WebP / GIF、最大12MBとする
-- Media Claimは1 Claimにつき画像を最大10枚まで追加でき、Date / Captionを共通情報として記録する
-- 画像選択欄は1枚選択すると次の欄が表示される方式とし、Chronicleカード内では全画像を小さなサムネイル列として表示する
-- Media Claimは所有状態に関係なく追加でき、Current Owner / Location / SpecificationのSnapshot値は変更しない
-- Media Claimカードは暗いアンバー系、Tagバッジは同系統の明るい色で表示する
-- 将来の動画・音声対応を見据え、media_assetsのmedia_typeを利用して拡張可能な構造を維持する
-
-
-- Product Detail上部ではアップロード済み画像をギャラリー表示し、代表画像を先頭に左右の三角ボタンで循環閲覧できる
-- ギャラリー対象はYGC内に保存された画像（初期登録の代表画像およびMedia Claim画像）で、外部Listing画像は含めない
-- Media Claimカード内の画像は履歴確認用の小さなサムネイル表示とする
-
-- Product Detail上部の代表画像ギャラリーは、画像の左右に小さく控えめな三角ボタンを固定配置して切り替える
-
-
-- UserがEdit可能なClaimの編集画面には Delete Claim を表示する
-- Delete Claimは物理削除ではなくDeactivateであり、claims.statusをinactiveに変更する
-- DeactivateされたClaimは通常のChronicle、Snapshot計算、Product ListのClaims件数から除外する
-- Media ClaimをDeactivateした場合、そのClaimに紐づく画像はProduct Detail上部の画像ギャラリーからも除外する
-- Listing / Identity Correctionは従来通り通常Edit対象外のため、このDelete Claim操作の対象外とする
-
-
-- Add Claimは現在Owner / 非Ownerのどちらにも表示し、非Ownerは Specification/Repair / Incident / Event / Media を追加できる
-- Ownership Claimは現在Ownerのみ追加できる
-- Specification/Repair / Incident / Event / Media には Owner Verification を適用する
-- 現在Owner本人が作成したClaimは作成時から verification_status='positive' とし、Owner Verification UIは表示しない
-- 非Ownerが作成したClaimは必ず verification_status='unverified' で開始する
-- 現在Ownerだけが第三者Claimを Positive / Negative / Unverified に変更できる
-- Third-party Specification/RepairはPositiveのときだけSnapshot / Current Specificationへ反映する
-- Third-party MediaはPositiveのときだけProduct Detail上部の画像ギャラリーへ反映する
-- Negative / Unverified ClaimもChronicle上の記録としては表示する
-- Listing / Ownership / Identity CorrectionはこのOwner Verificationフローの対象外とする
-
-
-- Owner VerificationによるChronicle表示:
-  - Positive: 通常のClaimカードを表示
-  - Unverified: Claimタグだけを表示し、クリックでClaim全文をポップアップ表示
-  - Negative: ◉だけを表示し、クリックでClaim全文をポップアップ表示
-- ポップアップ内には通常カードと同じ内容を表示し、現在OwnerはそこでPositive / Negative / Unverifiedを変更できる
-
-
-- 非OwnerのAdd Claimには Former Owner を表示する
-- Former OwnerはAcquisition Date / Release Dateを必須、Detailを任意とする
-- Acquisition DateはRelease Dateより前でなければならない
-- Current Ownerが存在する場合、Former OwnerのRelease DateはCurrent Ownerを成立させた最新のOwner設定Claimの日付より前でなければならない
-- Former Owner登録はAcquire / Releaseの2件のOwnership Claimを1トランザクションで作成する
-- AcquireのDetailに入力Detailを保存し、Releaseは通常主文のみとする
-- Claimのauthorは入力Userとなるため、主文の名前も入力Userになる
-- 登録Userのuser_guitarsはformer_ownerとして追加・更新し、Formerly Owned Guitarsに表示する
-- Former Owner ClaimはOwnership系のためOwner Verification対象外
-
-
-- Former Owner由来のOwnership Claimは通常Ownershipと明示的に区別し、ownership_source='former_owner' と共通 ownership_pair_id を持つ
-- Former OwnerのAcquire / Releaseペアは作成時に verification_status='unverified' とする
-- Current Owner本人が作成する通常Ownership Claimは従来どおりPositive扱いで、Owner Verification UIを表示しない
-- Current OwnerだけがFormer Ownerペアを Positive / Negative / Unverified に変更でき、片方を変更すると同一ownership_pair_idの2 Claimを同時更新する
-- Former Owner OwnershipはPositiveの場合だけOwnership Snapshot再生に参加する
-- Current Owner不在時はFormer Owner ClaimをVerificationできるUserがいないため、第三者申告だけでは最後のOwner情報を書き換えられない
-- 既存DBで旧Former Ownerフローから作成済みのAcquire / Releaseペアは、former_ownerのuser_guitars日付と一致する場合にUnverifiedペアへ移行する
-
-
-- Listing Claimは常に verification_status='positive' とし、Owner Verification対象外
-- 既存DBのListing Claimも起動時マイグレーションでPositiveへ補正する
-
-
-- User View上部のアカウントハブは本人向けのホームヘッダーとして表示する
-- 実データ表示: Avatar / Display Name / You / Location / Owned / Formerly Owned / Claims
-- Notifications / Messages / View Profile は将来機能へのダミー入口として表示し、現時点では無反応
-- Edit Your Chronicle は既存の /user-view/edit への実動入口
-
-
-## In-app Notifications
-- User ViewのNotificationsはYGC内部通知として実装する
-- Owned Guitarに他UserがClaimを追加した場合、Current Ownerへ claim_added 通知を作成する
-- Former OwnerのAcquire/Releaseペアは1件の通知として扱う
-- Owner VerificationでClaimの状態が変更された場合、Claim authorへ claim_verified 通知を作成する
-- 自分自身がOwned Guitarへ追加したClaimでは通知を作成しない
-- Current OwnerがYGC Userでない場合はアプリ内通知のrecipientが存在しないため通知を作成しない
-- User Viewでは未読件数、通知一覧、個別既読、全件既読を提供する
-- 通知クリックで対象IndividualのProduct Detailへ移動する
-- Push通知は未実装。将来の外部Push配信層とは分離する
-
-
-## User Profile Page
-- /users/{user_id} で本人・他User共通のプロフィールページを表示する
-- 実データ: Avatar / Display Name / Account Type / Location / Member Since / Owned / Formerly Owned / Claims / Owned Guitars / Formerly Owned Guitars
-- Followers / Following は現時点では 0 のダミー表示
-- Bio / Recent Activity は将来機能のプレースホルダー
-- 他User閲覧時の Follow / Message は現時点では無反応のダミー
-- 本人閲覧時は You 表示と Edit Your Chronicle への入口を表示する
-- User ViewのView Profile、Claim author、YGC UserのCurrent OwnerからUser Profileへ遷移できる
-- User Profileのギターカードから対象IndividualをUser Viewで直接開ける
-
-
-## Top Page / Guest Mode
-- 従来の /user-view は公開Top Pageとして扱う
-- Guestでも Product List / Product Detail / Chronicle Claim を閲覧できる
-- Guest時のアカウント欄は Sign In / Create Account の導線に差し替える
-- Guestが Add to Your Chronicle / Add Claim / Good / Bad など参加操作を行うとアカウント導線へ移動する
-- Guestには User Profileへのリンクを表示せず、Current Owner / Claim authorは名前のみ表示する
-- User ProfileはYGCメンバーのみ閲覧可能とし、Guestが直接URLへアクセスした場合はMembers only表示にする
-- Logged-in Userでは従来どおりNotifications / Messages / View Profile / Edit Your Chronicle等を表示する
-- 開発中の互換性のためURLは当面 /user-view のまま維持する
+- Identity Platformへの接続、サーバー側の本人確認、全APIの認可、管理者ロール、実際のログイン・アカウント作成。
+- SQLiteからPostgreSQLへの移植、複数インスタンス間のClaim更新とCrawlカーソル排他、画像の永続保存、トークンの安全な保管、再試行可能なジョブ実行。
+- フォロー関係、ユーザー間メッセージ、日英UI切替、生年月日の保存・検証、定期自動クロール。収集の実データでの網羅性・誤照合検証も継続課題。

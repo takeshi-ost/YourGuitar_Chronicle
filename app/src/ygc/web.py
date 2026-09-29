@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
+import secrets
 import json
 import re
 import shutil
@@ -23,9 +25,36 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from ygc import config
+
+CONSOLE_ADMIN_TOKEN = secrets.token_urlsafe(32)
+
+
+def _local_console_request(request: Request) -> bool:
+    try:
+        return bool(request.client and ipaddress.ip_address(request.client.host).is_loopback
+                    and (request.url.hostname == "localhost" or
+                         ipaddress.ip_address(request.url.hostname or "").is_loopback))
+    except ValueError:
+        return False
+
+
+def _console_admin_authorized(request: Request) -> bool:
+    token = request.headers.get("X-YGC-Console-Admin", "")
+    return bool(_local_console_request(request) and secrets.compare_digest(token, CONSOLE_ADMIN_TOKEN))
+
+
+def _require_console_admin(request: Request) -> None:
+    if not _console_admin_authorized(request):
+        raise HTTPException(status_code=403, detail="Local Browser Console administrator access required")
 from ygc.collectors.reverb import ReverbAPICollector
 from ygc.crawl_service import crawl_query
+from ygc.crawl_detail_cache import reprocess_details
+from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
+from ygc.theme_catalog import THEMES
+from ygc.platform_boundaries import (CrawlStep, LocalCrawlRunner, PrototypeIdentity,
+                                     local_repository, require_local_platform,
+                                     PlatformAdapterRequired)
 from ygc.extractors.serial import extract_serial_candidates
 from ygc.reverb_adapter import (
     classify_vintage_listing,
@@ -36,7 +65,8 @@ from ygc.reverb_adapter import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    Repository(config.DB_PATH).init_db()
+    require_local_platform()
+    local_repository(config.DB_PATH).init_db()
     yield
 
 
@@ -78,8 +108,17 @@ NO_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" r
 
 
 def repo() -> Repository:
-    repository = Repository(config.DB_PATH)
-    return repository
+    return local_repository(config.DB_PATH)
+
+
+def prototype_viewer(request: Request, claimed_id: int | None) -> int | None:
+    bearer = request.headers.get("Authorization", "")
+    try:
+        actor = PrototypeIdentity().resolve(
+            bearer_token=bearer if bearer else None, prototype_user_id=claimed_id)
+    except PlatformAdapterRequired as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return actor.user_id
 
 
 def _row_dict(row: Any) -> dict[str, Any]:
@@ -292,6 +331,12 @@ class CrawlRequest(BaseModel):
     year_max: int | None = Field(default=1980, ge=1800, le=2100)
 
 
+class CrawlAdvanceRequest(BaseModel):
+    category: str
+    year_min: int = Field(ge=1800, le=2100)
+    year_max: int = Field(ge=1800, le=2100)
+
+
 class VintageAuditRequest(BaseModel):
     query: str
     limit: int = Field(default=100, ge=1, le=500)
@@ -320,6 +365,29 @@ class UserUpdateRequest(BaseModel):
         default=None,
         max_length=120,
     )
+    bio: str | None = Field(default=None, max_length=2000)
+    date_of_birth: str | None = None
+    birth_visibility: str | None = None
+    residence_visibility: str | None = None
+    bio_visibility: str | None = None
+    avatar_visibility: str | None = None
+    signature_individual_id: int | None = None
+    theme: str | None = None
+
+
+class AdminUserUpdateRequest(BaseModel):
+    display_name: str = Field(min_length=1,max_length=120)
+    account_type: str
+    location_country: str | None = Field(default=None,max_length=80)
+    location_region: str | None = Field(default=None,max_length=120)
+    bio: str | None = Field(default=None,max_length=2000)
+    birth_visibility: str
+    residence_visibility: str
+    bio_visibility: str
+    avatar_visibility: str
+    signature_individual_id: int | None = None
+    ban_status: str
+    theme: str = 'dark_default'
 
 
 class UserGuitarLinkRequest(BaseModel):
@@ -483,11 +551,15 @@ def _run_batch(
         "summaries_fetched": 0,
         "detail_candidates": 0,
         "details_fetched": 0,
-        "skipped_modern": 0,
         "skipped_non_target": 0,
-        "skipped_unknown": 0,
         "skipped_existing": 0,
         "new_observations": 0,
+        "missing_identity": 0,
+        "serial_candidates": 0,
+        "new_individuals": 0,
+        "existing_individuals_extended": 0,
+        "ambiguous_matches": 0,
+        "detail_unavailable": 0,
     }
 
     try:
@@ -522,7 +594,7 @@ def _run_batch(
         _set_job(
             job_id,
             status="done",
-            message="完了",
+            message="Complete",
             progress=1.0,
             aggregate=aggregate,
             finished_at=time.time(),
@@ -560,7 +632,7 @@ def _run_metadata_backfill(
                 job_id,
                 status="done",
                 message=(
-                    "バックフィル対象はありません"
+                    "No Claims need backfilling"
                 ),
                 progress=1.0,
                 aggregate={
@@ -670,7 +742,7 @@ def _run_metadata_backfill(
                     _set_job(
                         job_id,
                         message=(
-                            "Listing Claimをバックフィル中 "
+                            "Backfilling Listing Claims "
                             f"{processed}/{total}"
                         ),
                         progress=(
@@ -686,7 +758,7 @@ def _run_metadata_backfill(
             job_id,
             status="done",
             message=(
-                "Listing Claimバックフィル完了"
+                "Listing Claim backfill complete"
             ),
             progress=1.0,
             aggregate={
@@ -954,25 +1026,71 @@ def _validate_backup_media_references(
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
-    return HTMLResponse(INDEX_HTML)
+def index(request: Request) -> HTMLResponse:
+    token = CONSOLE_ADMIN_TOKEN if _local_console_request(request) else ""
+    return HTMLResponse(INDEX_HTML.replace('const CONSOLE_ADMIN_TOKEN="";',
+                        'const CONSOLE_ADMIN_TOKEN=' + json.dumps(token) + ';'),
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/user-view", response_class=HTMLResponse)
 def user_view() -> HTMLResponse:
-    return HTMLResponse(USER_VIEW_HTML)
+    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/assets/themes.css")
+def theme_stylesheet() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "themes.css", media_type="text/css", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/assets/list-navigation.js")
+def list_navigation_script() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript")
+
+
+@app.get("/assets/product-detail.js")
+def product_detail_script() -> FileResponse:
+    return FileResponse(
+        Path(__file__).with_name("static") / "product-detail.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/assets/logos/{filename}")
+def theme_logo(filename: str) -> FileResponse:
+    if filename not in {"script.png", "block.png", "badge.png"}:
+        raise HTTPException(status_code=404, detail="Logo asset not found")
+    return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/assets/sunburst-wood.webp")
+def sunburst_background() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "sunburst-wood.webp", media_type="image/webp")
+
+
+@app.get("/assets/theme-textures/{filename}")
+def theme_texture(filename: str) -> FileResponse:
+    if filename not in {"butterscotch-wood.webp", "cherry-wood.webp", "white-pearl.webp"}:
+        raise HTTPException(status_code=404, detail="Theme asset not found")
+    return FileResponse(Path(__file__).with_name("static") / filename, media_type="image/webp")
+
+
+@app.get("/api/themes")
+def api_themes() -> list[dict[str, str]]:
+    return [{"id": key, "label": label} for key, label in THEMES]
 
 
 @app.get("/user-view/edit", response_class=HTMLResponse)
 def user_edit() -> HTMLResponse:
-    return HTMLResponse(USER_EDIT_HTML)
+    return HTMLResponse(USER_EDIT_HTML, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/users/{user_id}", response_class=HTMLResponse)
 def user_profile(
     user_id: int,
 ) -> HTMLResponse:
-    return HTMLResponse(USER_PROFILE_HTML)
+    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status")
@@ -1006,6 +1124,13 @@ def api_status(
 @app.get("/api/statistics")
 def api_statistics() -> dict[str, Any]:
     return repo().statistics()
+
+
+@app.get("/api/claims/unverified-acquires")
+def api_unverified_acquires(limit: int = 100, offset: int = 0) -> dict:
+    if not 1 <= limit <= 200 or offset < 0:
+        raise HTTPException(status_code=400, detail="Invalid pagination")
+    return repo().unverified_acquires(limit, offset)
 
 
 @app.get("/api/top-page-charts")
@@ -1652,7 +1777,7 @@ def api_user_avatar(
     user, _guitars = repository.get_user(
         user_id
     )
-    if not user:
+    if not user or user["ban_status"] == "ban":
         raise HTTPException(
             status_code=404,
             detail="User not found",
@@ -1695,11 +1820,8 @@ async def api_update_user_avatar(
     user, _guitars = repository.get_user(
         user_id
     )
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+    if not user or user["ban_status"] == "ban":
+        raise HTTPException(status_code=403, detail="Account is banned")
 
     content_type = (
         avatar.content_type
@@ -1809,8 +1931,10 @@ async def api_update_user_avatar(
 
 
 @app.get("/api/individuals")
-def api_individuals() -> list[dict[str, Any]]:
-    return [_row_dict(row) for row in repo().list_individuals()]
+def api_individuals(request: Request) -> list[dict[str, Any]]:
+    rows = repo().list_individuals()
+    return [_row_dict(row) for row in rows
+            if _console_admin_authorized(request) or row["claim_count"] > 0]
 
 
 @app.get("/api/new-discoveries")
@@ -1831,12 +1955,14 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                     FROM claims c
                     WHERE c.individual_id = i.id
                       AND c.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
                 ) AS latest_claim_at,
                 (
                     SELECT c2.claim_type
                     FROM claims c2
                     WHERE c2.individual_id = i.id
                       AND c2.status = 'active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c2.author_user_id AND u.ban_status='normal')
                     ORDER BY c2.created_at DESC, c2.id DESC
                     LIMIT 1
                 ) AS latest_claim_type,
@@ -1848,11 +1974,14 @@ def api_new_discoveries() -> list[dict[str, Any]]:
             FROM individuals i
             ORDER BY MAX(
                 COALESCE((SELECT MAX(c.created_at) FROM claims c
-                          WHERE c.individual_id = i.id AND c.status = 'active'), ''),
+                          WHERE c.individual_id = i.id AND c.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')), ''),
                 COALESCE((SELECT MAX(o.observed_at) FROM observations o
-                          WHERE o.individual_id = i.id), '')
+                          WHERE o.individual_id = i.id AND NOT EXISTS
+                          (SELECT 1 FROM claims blocked JOIN users actor
+                           ON actor.id=blocked.author_user_id AND actor.ban_status<>'normal'
+                           WHERE blocked.observation_id=o.id)), '')
             ) DESC, i.id DESC
-            LIMIT 24
+            LIMIT 200
             """
         ).fetchall()
 
@@ -1887,13 +2016,30 @@ def api_new_discoveries() -> list[dict[str, Any]]:
 
 
 @app.get("/api/individuals/{individual_id}")
-def api_individual(individual_id: int) -> dict[str, Any]:
-    individual, observations = repo().get_individual(individual_id)
+def api_individual(individual_id: int, request: Request,
+                   viewer_user_id: int | None = None) -> dict[str, Any]:
+    viewer_user_id = prototype_viewer(request, viewer_user_id)
+    repository = repo()
+    individual, observations = repository.get_individual(individual_id)
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
-    individual_data = _row_dict(
-        individual
-    )
+    admin = _console_admin_authorized(request)
+    with repository.connect() as con:
+        visible = con.execute("SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id "
+                              "WHERE c.individual_id=? AND c.status='active' AND "
+                              "(author.ban_status='normal' OR "
+                              "(author.ban_status='silent_ban' AND author.id=?)) LIMIT 1",
+                              (individual_id, viewer_user_id)).fetchone()
+        if not admin and not visible:
+            raise HTTPException(status_code=404, detail="Individual not found")
+        observations = [o for o in observations if admin or not con.execute(
+            "SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id "
+            "WHERE c.observation_id=? AND author.ban_status<>'normal' "
+            "AND NOT (author.ban_status='silent_ban' AND author.id=?) LIMIT 1",
+            (o['id'],viewer_user_id)).fetchone()]
+    individual_data = _row_dict(individual)
+    if viewer_user_id is not None:
+        individual_data.update(repo().preview_silent_profile(viewer_user_id, individual_id))
     representative_media_id = (
         individual_data.get(
             "representative_media_asset_id"
@@ -1926,50 +2072,57 @@ def api_individual(individual_id: int) -> dict[str, Any]:
                 representative_media_id and media_id == int(representative_media_id)
             ),
         })
+    if representative_media_id and not any(img["id"] == representative_media_id for img in gallery_images):
+        individual_data["representative_image_url"] = None
     gallery_images.sort(key=lambda item: (
         0 if item["is_representative"] else 1,
         str(item["occurred_at"]),
         int(item["id"]),
     ))
 
-    listing_claims = [
-        _row_dict(row)
-        for row
-        in repo().list_claims(
-            individual_id
-        )
-        if row["claim_type"] == "listing"
-        and row["status"] == "active"
-    ]
+    visible_claims = [_row_dict(row) for row in repository.list_claims(
+        individual_id, viewer_user_id=viewer_user_id)]
+    listing_claims = [row for row in visible_claims
+                      if row['claim_type'] == 'listing' and row['effective_status'] == 'active']
     current_listing = (
         listing_claims[-1]
         if listing_claims
         else None
     )
+    image_sources = [row for row in visible_claims
+                     if row['claim_type'] in ('listing', 'ownership')
+                     and row['effective_status'] == 'active'
+                     and row['verification_status'] == 'positive'
+                     and row['image_url']]
 
     return {
         "individual": individual_data,
         "observations": [_row_dict(row) for row in observations],
         "current_listing": current_listing,
+        "current_source": image_sources[-1] if image_sources else None,
         "gallery_images": gallery_images,
     }
 
 
 @app.get("/api/individuals/{individual_id}/claims")
 def api_individual_claims(
-    individual_id: int,
+    individual_id: int, request: Request,
     viewer_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
+    viewer_user_id = prototype_viewer(request, viewer_user_id)
     repository = repo()
     claims = [
-        _row_dict(row)
+        {**_row_dict(row), "status": row["effective_status"]}
         for row
         in repository.list_claims(
             individual_id,
             viewer_user_id=viewer_user_id,
         )
-        if row["status"] == "active"
+        if row["effective_status"] == "active"
     ]
+    verifiable_ids = repository.owner_verifiable_claim_ids(individual_id, viewer_user_id)
+    for claim in claims:
+        claim['can_verify'] = int(claim['id']) in verifiable_ids
 
     items_by_claim: dict[
         int,
@@ -2024,7 +2177,7 @@ def api_individual_claims(
         ).append(
             {
                 "id": int(item["id"]),
-                "url": f"/api/media/{int(item['id'])}",
+                "url": f"/api/media/{int(item['id'])}" + (f"?viewer_user_id={viewer_user_id}" if viewer_user_id is not None else ""),
                 "original_filename": item.get("original_filename"),
             }
         )
@@ -2189,7 +2342,9 @@ async def api_create_new_guitar(
 @app.delete("/api/claims/{claim_id}")
 def api_delete_claim(
     claim_id: int,
+    request: Request,
 ) -> dict[str, Any]:
+    _require_console_admin(request)
     repository = repo()
     try:
         result = repository.delete_claim(
@@ -2208,10 +2363,60 @@ def api_delete_claim(
     return result
 
 
+class ResolveRepeatedRequest(BaseModel):
+    keep_id: int
+    member_ids: list[int]
+    action: str = Field(pattern="^(merge|delete)$")
+
+
+@app.get("/api/admin/repeated")
+def api_repeated(request: Request) -> dict:
+    _require_console_admin(request)
+    return repo().repeated_groups()
+
+
+@app.get("/api/admin/individuals/{individual_id}/observation-diagnostic")
+def api_observation_diagnostic(individual_id: int, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        return repo().observation_diagnostic(individual_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/repeated/resolve")
+def api_resolve_repeated(body: ResolveRepeatedRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        return repo().resolve_repeated(body.keep_id, body.member_ids, body.action)
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+class AdminClaimRequest(BaseModel):
+    action: str = Field(pattern="^(positive|negative|unverified|delete)$")
+    confirm_individual_delete: bool = False
+
+
+@app.post("/api/admin/claims/{claim_id}/moderate")
+def api_admin_moderate_claim(claim_id: int, body: AdminClaimRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    try:
+        result = repo().admin_moderate_claim(
+            claim_id, body.action, confirm_individual_delete=body.confirm_individual_delete)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    return result
+
+
 @app.delete("/api/individuals/{individual_id}")
 def api_delete_individual(
     individual_id: int,
+    request: Request,
 ) -> dict[str, Any]:
+    _require_console_admin(request)
     deleted = repo().delete_individual(
         individual_id
     )
@@ -2228,11 +2433,9 @@ def api_delete_individual(
 
 @app.get("/api/media/{media_asset_id}")
 def api_media(
-    media_asset_id: int,
+    media_asset_id: int, viewer_user_id: int | None = None,
 ) -> FileResponse:
-    media = repo().get_media_asset(
-        media_asset_id
-    )
+    media = repo().get_media_asset(media_asset_id, viewer_user_id)
     if not media:
         raise HTTPException(
             status_code=404,
@@ -2401,6 +2604,60 @@ def api_event_claim(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     repository.create_claim_notification(claim_id)
+    return {"claim_id": claim_id}
+
+
+@app.post("/api/individuals/{individual_id}/event-claim-with-media")
+async def api_event_claim_with_media(
+    individual_id: int,
+    user_id: int = Form(...),
+    event_kind: str = Form(...),
+    occurred_at: str | None = Form(None),
+    detail: str = Form(...),
+    images: list[UploadFile] = File(...),
+) -> dict[str, Any]:
+    if not images or len(images) > 10:
+        raise HTTPException(status_code=400, detail="Select 1 to 10 images")
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    stored_paths: list[Path] = []
+    media_items: list[dict[str, str | None]] = []
+    try:
+        for image in images:
+            content_type = (image.content_type or "").lower()
+            extension = ALLOWED_IMAGE_TYPES.get(content_type)
+            if not extension:
+                raise HTTPException(status_code=400, detail="Images must be JPEG, PNG, WebP, or GIF")
+            image_bytes = await image.read(MAX_IMAGE_BYTES + 1)
+            if not image_bytes:
+                raise HTTPException(status_code=400, detail="Image is empty")
+            if len(image_bytes) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="Each image must be 12 MB or smaller")
+            stored_name = uuid.uuid4().hex + extension
+            stored_path = MEDIA_DIR / stored_name
+            try:
+                stored_path.write_bytes(image_bytes)
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail="Could not save image") from exc
+            stored_paths.append(stored_path)
+            media_items.append({
+                "storage_path": (Path("media") / stored_name).as_posix(),
+                "original_filename": image.filename,
+                "mime_type": content_type,
+            })
+        repository = repo()
+        claim_id = repository.create_event_claim(
+            user_id, individual_id, event_kind=event_kind,
+            occurred_at=occurred_at, detail=detail, media_items=media_items,
+        )
+        repository.create_claim_notification(claim_id)
+    except ValueError as exc:
+        for path in stored_paths:
+            _safe_unlink(path)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        for path in stored_paths:
+            _safe_unlink(path)
+        raise
     return {"claim_id": claim_id}
 
 
@@ -2772,12 +3029,11 @@ def api_read_notification(
 
 
 @app.get("/api/users")
-def api_users() -> list[dict[str, Any]]:
-    return [
-        _row_dict(row)
-        for row
-        in repo().list_users()
-    ]
+def api_users(request: Request) -> list[dict[str, Any]]:
+    admin = _console_admin_authorized(request)
+    return [{**{key: value for key, value in _row_dict(row).items() if key != "date_of_birth" or admin},
+             "ban_status": row["ban_status"] if admin else "normal"}
+            for row in repo().list_users() if row["ban_status"] != "ban" or admin]
 
 
 @app.post("/api/users")
@@ -2798,29 +3054,120 @@ def api_create_user() -> dict[str, Any]:
     }
 
 
+@app.patch("/api/admin/users/{user_id}")
+def api_admin_update_user(user_id: int, body: AdminUserUpdateRequest, request: Request) -> dict:
+    _require_console_admin(request)
+    repository = repo()
+    try:
+        updated = repository.admin_update_user(user_id, body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    user, guitars = repository.get_user(user_id)
+    return {"user": _row_dict(user), "guitars": [_row_dict(row) for row in guitars],
+            "summary": repository.get_user_summary(user_id)}
+
+
 @app.get("/api/users/{user_id}")
 def api_user(
-    user_id: int,
+    user_id: int, request: Request,
 ) -> dict[str, Any]:
     user, guitars = repo().get_user(
         user_id
     )
 
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+    if not user or (user["ban_status"] == "ban" and not _console_admin_authorized(request)):
+        raise HTTPException(status_code=404, detail="User not found")
 
     return {
-        "user": _row_dict(user),
-        "guitars": [
-            _row_dict(row)
-            for row
-            in guitars
-        ],
+        "user": {**_row_dict(user), "ban_status": user["ban_status"] if _console_admin_authorized(request) else "normal"},
+        "guitars": [_row_dict(row) for row in guitars],
         "summary": repo().get_user_summary(user_id),
     }
+
+
+@app.get("/api/users/{user_id}/profile")
+def api_user_profile(user_id: int, request: Request, viewer_id: int | None = None) -> dict[str, Any]:
+    viewer_id = prototype_viewer(request, viewer_id)
+    repository = repo()
+    user, guitars = repository.get_user(user_id)
+    if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
+        raise HTTPException(status_code=404, detail="User not found")
+    own = viewer_id == user_id
+    if user["ban_status"] == 'silent_ban' and not own:
+        guitars = []
+    if own and user["ban_status"] == 'silent_ban':
+        ownership = repository.preview_silent_profile(user_id)
+        guitars = [{**_row_dict(g), "ownership_status": ownership.get(g["individual_id"], g["ownership_status"])}
+                   for g in guitars]
+    owned_ids = {int(g['individual_id']) for g in guitars}
+    favorites = ([] if user['ban_status'] == 'silent_ban' and not own else
+                 [_row_dict(g) for g in repository.get_user_favorites(user_id)
+                  if int(g['individual_id']) not in owned_ids])
+    member = own or (viewer_id is not None and
+                     repository.get_user(viewer_id)[0] is not None)
+
+    def visible(setting: str) -> bool:
+        level = user[setting]
+        return own or level == "Public" or (level == "Members" and member)
+
+    public_user = _row_dict(user)
+    public_user["ban_status"] = "normal"
+    if not visible("birth_visibility"):
+        public_user["date_of_birth"] = None
+    if not visible("residence_visibility"):
+        public_user["location_country"] = None
+        public_user["location_region"] = None
+    if not visible("bio_visibility"):
+        public_user["bio"] = None
+    public_user["avatar_visible"] = visible("avatar_visibility")
+    for field in ("avatar_storage_path", "avatar_original_filename", "avatar_mime_type"):
+        public_user.pop(field, None)
+    return {
+        "user": public_user,
+        "guitars": [_row_dict(row) for row in guitars],
+        "favorites": favorites,
+        "summary": ({**repository.get_user_summary(user_id, viewer_id),
+                     "owned_count": sum(g["ownership_status"] == 'current_owner' for g in guitars),
+                     "former_count": sum(g["ownership_status"] == 'former_owner' for g in guitars)}
+                    if user["ban_status"] == 'silent_ban'
+                    else repository.get_user_summary(user_id, viewer_id)),
+    }
+
+
+@app.get("/api/users/{user_id}/favorites")
+def api_user_favorites(user_id: int) -> list[int]:
+    user, _ = repo().get_user(user_id)
+    if not user or user['account_type'] == 'source' or user['ban_status'] == 'ban':
+        raise HTTPException(status_code=404, detail="User not found")
+    return [int(row['individual_id']) for row in repo().get_user_favorites(user_id)]
+
+
+@app.put("/api/users/{user_id}/favorites/{individual_id}")
+def api_add_user_favorite(user_id: int, individual_id: int) -> dict[str, bool]:
+    try:
+        return {"favorite": repo().set_user_favorite(user_id, individual_id, True)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/users/{user_id}/favorites/{individual_id}")
+def api_remove_user_favorite(user_id: int, individual_id: int) -> dict[str, bool]:
+    try:
+        return {"favorite": repo().set_user_favorite(user_id, individual_id, False)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/users/{user_id}/chronicle")
+def api_user_chronicle(user_id: int, request: Request, viewer_id: int | None = None) -> list[dict[str, Any]]:
+    viewer_id = prototype_viewer(request, viewer_id)
+    repository = repo()
+    user, _guitars = repository.get_user(user_id)
+    if not user or user["account_type"] == "source" or user["ban_status"] == "ban":
+        raise HTTPException(status_code=404, detail="User not found")
+    return repository.list_user_chronicle(user_id, viewer_user_id=viewer_id)
 
 
 @app.patch("/api/users/{user_id}")
@@ -2829,6 +3176,9 @@ def api_update_user(
     request: UserUpdateRequest,
 ) -> dict[str, Any]:
     repository = repo()
+    existing, _ = repository.get_user(user_id)
+    if existing and existing["ban_status"] == "ban":
+        raise HTTPException(status_code=403, detail="Account is banned")
 
     try:
         updated = repository.update_user(
@@ -2845,6 +3195,20 @@ def api_update_user(
             location_region=(
                 request.location_region
             ),
+            bio=request.bio,
+            date_of_birth=request.date_of_birth,
+            update_date_of_birth="date_of_birth" in request.model_fields_set,
+            visibility={
+                name: value for name, value in {
+                    "birth": request.birth_visibility,
+                    "residence": request.residence_visibility,
+                    "bio": request.bio_visibility,
+                    "avatar": request.avatar_visibility,
+                }.items() if value is not None
+            },
+            signature_individual_id=request.signature_individual_id,
+            update_signature="signature_individual_id" in request.model_fields_set,
+            theme=request.theme,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -3123,6 +3487,146 @@ def api_migrate_claims() -> dict[str, Any]:
     }
 
 
+@app.post("/api/admin/backfill-cached-specifications")
+def api_backfill_cached_specifications(request: Request) -> dict[str, int]:
+    _require_console_admin(request)
+    return repo().backfill_cached_specifications()
+
+
+def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> None:
+    global _active_job_id
+    try:
+        with ReverbAPICollector(
+            token=token, api_base=config.REVERB_API_BASE,
+            timeout=config.REQUEST_TIMEOUT, delay=0.5,
+            max_workers=1,
+        ) as collector:
+            result = LocalCrawlRunner().run(
+                CrawlStep(request.category, request.year_min, request.year_max),
+                repo(), collector,
+                progress_callback=lambda counts: _set_job(
+                    job_id,
+                    message={"listing": "Reviewing listings and fetching details",
+                             "matching": "Matching candidates and registering guitars",
+                             "availability": "Checking existing listing availability",
+                             "done": "Processing complete", "error": "Processing failed"}.get(
+                                 counts["phase"], counts["phase"]),
+                    progress=min(0.95, counts["summaries_processed"] / 2000),
+                    stage_counts=counts,
+                ),
+            )
+        _set_job(job_id, status="done", message="This crawl run is complete",
+                 progress=1.0, aggregate=result, finished_at=time.time())
+    except Exception as exc:
+        _set_job(job_id, status="error", message=str(exc), error=str(exc),
+                 finished_at=time.time())
+    finally:
+        with _jobs_lock:
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+
+@app.get("/api/crawl/program")
+def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
+    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    return program_status(repo(), category, year_min, year_max)
+
+
+@app.get("/api/crawl/program/runs")
+def api_crawl_program_runs(category: str, year_min: int, year_max: int) -> list[dict]:
+    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    return repo().crawl_run_log(category, year_min, year_max)
+
+
+@app.get("/api/crawl/candidates/review")
+def api_crawl_candidates_review() -> list[dict]:
+    with repo().connect() as con:
+        rows = con.execute(
+            "SELECT source_listing_id, claim_json, reason FROM crawl_candidates "
+            "WHERE source_site='reverb' AND status='review' ORDER BY updated_at DESC LIMIT 100"
+        ).fetchall()
+    return [{"listing_id": row["source_listing_id"],
+             "manufacturer": json.loads(row["claim_json"]).get("manufacturer"),
+             "model": json.loads(row["claim_json"]).get("model"),
+             "serial_number": json.loads(row["claim_json"]).get("serial_number"),
+             "reason": row["reason"]} for row in rows]
+
+
+@app.post("/api/crawl/program/restart")
+def api_crawl_program_restart(request: CrawlAdvanceRequest) -> dict:
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        try:
+            return restart_program(repo(), request.category,
+                                   request.year_min, request.year_max)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/crawl/advance")
+def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> dict:
+    global _active_job_id
+    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    token, _source = _request_token(http_request)
+    if not token:
+        raise HTTPException(status_code=400, detail="Reverb API Token is not configured")
+    if not repo().claim_architecture_status()["ready"]:
+        raise HTTPException(status_code=409, detail="Run Claim migration before crawling")
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {"id": job_id, "status": "running",
+                         "message": "Running incremental crawl", "progress": 0.0,
+                         "query_results": [], "started_at": time.time()}
+        _active_job_id = job_id
+    threading.Thread(target=_run_incremental,
+                     args=(job_id, request, token), daemon=True).start()
+    return {"job_id": job_id}
+
+
+def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
+    global _active_job_id
+    try:
+        result = reprocess_details(
+            repo(), request.category, request.year_min, request.year_max,
+            progress_callback=lambda counts: _set_job(
+                job_id, message=f"Reprocessing saved details {counts['cached_processed']}/{counts['cached_total']}",
+                progress=min(0.95, counts["cached_processed"] / max(counts["cached_total"], 1)),
+            ),
+        )
+        _set_job(job_id, status="done", message="Saved details reprocessed",
+                 progress=1.0, aggregate=result, finished_at=time.time())
+    except Exception as exc:
+        _set_job(job_id, status="error", error=str(exc), message=str(exc), finished_at=time.time())
+    finally:
+        with _jobs_lock:
+            if _active_job_id == job_id:
+                _active_job_id = None
+
+
+@app.post("/api/crawl/cache/reprocess")
+def api_reprocess_cached_details(request: CrawlAdvanceRequest) -> dict:
+    global _active_job_id
+    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+        raise HTTPException(status_code=400, detail="Invalid category or year range")
+    if not repo().claim_architecture_status()["ready"]:
+        raise HTTPException(status_code=409, detail="Run Claim migration before reprocessing")
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id, {}).get("status") == "running":
+            raise HTTPException(status_code=409, detail="A crawl job is already running")
+        job_id = uuid.uuid4().hex[:12]
+        _jobs[job_id] = {"id": job_id, "status": "running", "progress": 0.0,
+                         "message": "Reprocessing saved details", "started_at": time.time()}
+        _active_job_id = job_id
+    threading.Thread(target=_run_cached_reprocess, args=(job_id, request), daemon=True).start()
+    return {"job_id": job_id}
+
+
 @app.post("/api/crawl")
 def api_crawl(
     request: CrawlRequest,
@@ -3166,7 +3670,7 @@ def api_crawl(
         _jobs[job_id] = {
             "id": job_id,
             "status": "running",
-            "message": "開始しています",
+            "message": "Starting",
             "progress": 0.0,
             "queries": queries,
             "query_results": [],
@@ -3239,7 +3743,7 @@ def api_backfill_metadata(
             "id": job_id,
             "status": "running",
             "message": (
-                "既存DBのバックフィルを開始します"
+                "Starting existing DB backfill"
             ),
             "progress": 0.0,
             "query_results": [],
@@ -3279,7 +3783,6 @@ INDEX_HTML = (Path(__file__).with_name("static") / "index_html.html").read_text(
 
 
 
-USER_PROFILE_HTML = (Path(__file__).with_name("static") / "user_profile_html.html").read_text(encoding="utf-8")
 
 
 USER_VIEW_HTML = (Path(__file__).with_name("static") / "user_view_html.html").read_text(encoding="utf-8")

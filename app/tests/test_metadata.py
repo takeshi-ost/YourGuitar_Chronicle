@@ -513,6 +513,11 @@ def test_ownership_acquire_and_vote(
         owner_id
     )
     assert user is not None
+    assert guitars == []
+    individual, _ = repository.get_individual(individual_id)
+    assert int(individual["current_owner_user_id"]) == initial_owner_id
+    assert repository.set_claim_response(claim_id, initial_owner_id, "positive")
+    user, guitars = repository.get_user(owner_id)
     assert guitars[0]["individual_id"] == (
         individual_id
     )
@@ -568,8 +573,11 @@ def test_ownership_acquire_and_vote(
     )
     assert individual is not None
     assert individual["current_owner_name"] == (
-        "Other User"
+        "Owner"
     )
+    assert repository.set_claim_response(other_claim_id, owner_id, "positive")
+    individual, _observations = repository.get_individual(individual_id)
+    assert individual["current_owner_name"] == "Other User"
 
     assert repository.set_claim_vote(
         claim_id,
@@ -665,7 +673,7 @@ def test_listing_observation_is_backfilled_as_claim(
     assert claim["observation_id"] == (
         observation_id
     )
-    assert claim["author_name"] == "Reverb"
+    assert claim["author_name"] == "Automation"
     assert claim["listing_title"] == (
         "1965 Fender Jazzmaster"
     )

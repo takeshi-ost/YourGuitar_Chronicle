@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -17,7 +17,7 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .page-nav{display:flex;align-items:center;gap:4px;margin-left:auto;overflow-x:auto}
 .page-nav a{display:block;padding:5px 8px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:700;white-space:nowrap}
 .page-nav a:hover{background:#23282d;color:var(--text)}
-.page-section{scroll-margin-top:108px}
+.page-section{scroll-margin-top:calc(var(--header-height,108px) + 14px)}
 .section-stack{margin-top:16px}
 .content-frame{width:960px;max-width:100%;margin-left:auto;margin-right:auto}
 .dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
@@ -36,9 +36,9 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .world-map-legend{position:absolute;right:10px;bottom:9px;display:flex;align-items:center;gap:5px;padding:5px 7px;border-radius:7px;background:rgba(13,15,17,.86);font-size:9px;color:var(--muted)}
 .world-map-swatch{width:18px;height:7px;border-radius:2px}
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
-main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
+main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
 .grid{display:block}
-.left-column{display:grid;grid-template-rows:150px minmax(0,1fr);gap:12px;min-height:0}
+.left-column{display:flex;flex-direction:column;gap:12px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
 .discovery-panel{min-height:0;overflow:hidden}
 .discovery-list{height:98px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
@@ -48,7 +48,7 @@ main{max-width:none;margin:0;padding:108px calc(clamp(320px,28vw,430px) + 44px) 
 .discovery-story{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px}
 .discovery-story strong{color:var(--text);font-weight:800}
 .product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
-.detail-shell{position:fixed;top:108px;right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
+.detail-shell{position:fixed;top:calc(var(--header-height,108px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
 .detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}
 .product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
 .detail-panel #detail{flex:1;min-height:0;overflow-y:auto;padding-right:4px}
@@ -61,6 +61,7 @@ button{border:0;border-radius:8px;padding:9px 13px;background:var(--accent);colo
 button.secondary{background:#2a3036;color:var(--text)}
 .account-hub{width:100%;height:47px;display:grid;grid-template-columns:minmax(220px,1.05fr) auto minmax(280px,1fr);gap:10px;align-items:center;padding:4px 22px;background:#15181b;color:var(--text);border-bottom:1px solid var(--line);overflow:hidden}
 .account-hub-user{display:flex;align-items:center;gap:8px;min-width:0}
+.account-hub-user-link{color:var(--text);text-decoration:none;border-radius:7px;cursor:pointer}.account-hub-user-link:hover{background:#242a2f}.account-hub-user-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .account-hub-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:#111418;border:1px solid var(--line);flex:0 0 auto}
 .account-hub-user-copy{min-width:0;display:flex;align-items:center;gap:8px}.account-hub-name-row{display:flex;align-items:center;gap:6px;min-width:0}.account-hub-name{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-hub-you{display:inline-block;padding:1px 5px;border-radius:999px;background:#2a3036;color:var(--muted);font-size:8px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
 .account-hub-location{font-size:9px;color:var(--muted);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -73,19 +74,20 @@ button.secondary{background:#2a3036;color:var(--text)}
 .notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
 .notification-panel-title{font-size:13px;font-weight:800}.notification-panel-actions{display:flex;gap:6px}.notification-panel-actions button{padding:5px 8px;font-size:10px;background:#252a2f;color:var(--text)}
 .notification-list{max-height:300px;overflow-y:auto}.notification-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:#171a1e;color:var(--text);padding:11px 14px}.notification-item:last-child{border-bottom:0}.notification-item:hover{background:#20252a}.notification-item.unread{background:#1d211e}.notification-item-title{font-size:11px;font-weight:800}.notification-item-body{font-size:11px;color:var(--muted);margin-top:3px}.notification-item-time{font-size:9px;color:#737d86;margin-top:4px}.notification-empty{padding:18px 14px;color:var(--muted);font-size:11px;text-align:center}
-@media(max-width:1050px){.account-hub{grid-template-columns:minmax(230px,1fr) auto}.account-hub-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:1050px){.account-hub{height:auto;min-height:47px;overflow:visible;grid-template-columns:minmax(180px,1fr) auto}.account-hub-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(max-width:650px){.account-hub{grid-template-columns:1fr}.account-hub-summary{width:100%}.account-hub-stat{flex:1;min-width:0}.account-hub-actions{grid-column:auto}}
 .table-wrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
 th,td{text-align:left;border-bottom:1px solid var(--line);padding:5px 7px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:28px}
 th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel);z-index:2}
 .product-list-panel th:nth-child(1),.product-list-panel td:nth-child(1){width:52px}
-.product-list-panel th:nth-child(2),.product-list-panel td:nth-child(2){width:120px}
-.product-list-panel th:nth-child(3),.product-list-panel td:nth-child(3){width:190px}
-.product-list-panel th:nth-child(4),.product-list-panel td:nth-child(4){width:120px}
-.product-list-panel th:nth-child(5),.product-list-panel td:nth-child(5){width:72px}
-.product-list-panel th:nth-child(6),.product-list-panel td:nth-child(6){width:145px}
-.product-list-panel th:nth-child(7),.product-list-panel td:nth-child(7){width:64px}
+.product-list-panel th:nth-child(2),.product-list-panel td:nth-child(2){width:36px}
+.product-list-panel th:nth-child(3),.product-list-panel td:nth-child(3){width:120px}
+.product-list-panel th:nth-child(4),.product-list-panel td:nth-child(4){width:190px}
+.product-list-panel th:nth-child(5),.product-list-panel td:nth-child(5){width:120px}
+.product-list-panel th:nth-child(6),.product-list-panel td:nth-child(6){width:72px}
+.product-list-panel th:nth-child(7),.product-list-panel td:nth-child(7){width:120px}
+.product-list-panel th:nth-child(8),.product-list-panel td:nth-child(8){width:64px}
 th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margin-left:4px}
 .clickable{cursor:pointer}.clickable:hover{background:#20252a}.clickable.selected{background:#3a3326}.clickable.selected:hover{background:#463c2c}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
@@ -125,7 +127,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .claim-card.claim-type-event .claim-badge{background:#9360b8;color:#120917}
 .claim-card.claim-type-media .claim-badge{background:#c68a32;color:#171006}.identity-correction-card{margin-left:42px;border-style:dashed}
 .claim-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.claim-event-date{margin-left:auto;text-align:right}
-.claim-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.claim-badge{display:inline-block;padding:2px 7px;border-radius:999px;background:var(--accent);color:#18130c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
 .claim-event-date{font-size:11px;color:var(--muted);white-space:nowrap}
 .claim-body{font-size:12px;line-height:1.5}
 .claim-memo{margin-top:8px;white-space:pre-wrap}.claim-card img.claim-evidence-image{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px;margin-top:6px}.claim-media-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.claim-media-thumbs img{display:block!important;width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;object-fit:cover;border:1px solid var(--line);border-radius:6px}.claim-card img.claim-media-image{display:block;width:min(320px,100%);height:auto;max-height:240px;object-fit:contain;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#0f1114}
@@ -134,6 +136,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .accordion-section{margin-top:10px}
 .accordion-header{display:flex;align-items:center;gap:8px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .accordion-toggle{width:24px;height:24px;min-width:24px;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}
+.accordion-header .accordion-toggle{margin-left:auto}
 .accordion-title{font-weight:700;cursor:pointer}
 .accordion-header .toolbar{margin:0 0 0 auto}
 .accordion-body{display:block}
@@ -151,7 +154,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 .claim-compact-row{display:flex;justify-content:center;align-items:center;min-height:24px;margin:2px 0 4px 22px;position:relative}
 .claim-compact-row:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:6px;background:#4c5258;pointer-events:none;transform:translateX(-.5px)}
-.claim-compact-tag{border:0;border-radius:999px;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;background:#3a3f45;color:var(--text)}
+.claim-compact-tag{border:0;border-radius:999px;padding:2px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;background:#3a3f45;color:var(--text)}
 .claim-compact-tag.claim-type-ownership{background:#4f9a68;color:#08110b}
 .claim-compact-tag.claim-type-specification{background:#4d88b8;color:#071018}
 .claim-compact-tag.claim-type-incident{background:#b85a5a;color:#160808}
@@ -168,21 +171,129 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .page-nav{margin-left:0;width:100%}
   .account-hub{grid-template-columns:1fr;gap:8px;height:auto}
   main{padding:14px 14px 22px}
-  .left-column{grid-template-rows:150px 520px}
+  .left-column{gap:12px}
   .product-list-panel{height:520px}
-  .detail-shell{position:static;width:auto;height:520px;margin-top:14px}
+  .detail-shell{display:none;position:fixed;top:auto;right:14px;bottom:14px;width:min(320px,calc(100vw - 28px));height:min(720px,calc(100dvh - var(--header-height,108px) - 28px));margin:0;z-index:950}
+  .detail-shell.compact-open{display:block}
   .detail-panel{height:100%}
   .content-frame{width:100%;max-width:none}
   .dashboard-grid{grid-template-columns:1fr}
   .page-bottom-space{height:24px}
   .page-section{scroll-margin-top:12px}
 }
+.detail-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.detail-panel-heading h2{margin:0 0 8px}
+.compact-detail-close{display:none}
+@media(max-width:900px){.compact-detail-close{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;margin-bottom:8px;background:#2a3036;color:var(--text);font-size:18px}}
+.profile-mode .left-column{gap:14px}
+.profile-mode .profile-panel{min-width:0}
+.profile-mode .profile-hero{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;align-items:start}
+.profile-mode .profile-avatar{width:96px;height:96px;object-fit:cover;border-radius:50%;border:1px solid var(--line);background:#111418}
+.profile-mode .profile-identity{min-width:0}
+.profile-mode .profile-name{font-size:22px;font-weight:800;overflow-wrap:anywhere;line-height:1.25}
+.profile-mode .profile-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin-top:15px}
+.profile-mode .profile-meta-item{display:flex;gap:8px;align-items:baseline;min-width:0;font-size:11px;line-height:1.4}
+.profile-mode .profile-meta-label{flex:0 0 88px;color:var(--muted)}
+.profile-mode .profile-meta-value{min-width:0;overflow-wrap:anywhere}
+.profile-mode .profile-bio{margin-top:15px;padding-top:12px;border-top:1px solid var(--line);white-space:pre-wrap;font-size:12px;line-height:1.5}
+.profile-mode .profile-stats{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.profile-mode .profile-stat{background:#14171a;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:10px}
+.profile-mode .profile-stat strong{color:var(--text)}
+.profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.profile-mode .profile-list-panel{max-height:370px;display:flex;flex-direction:column}
+.profile-mode .profile-list-panel .table-wrap{flex:0 1 auto;min-height:0;max-height:310px;overflow:auto}
+.profile-mode .new-guitar-action{display:block;width:100%;margin-top:10px;padding:10px 12px;text-align:center;white-space:normal}
+.profile-mode .profile-favorites-panel{max-height:370px;overflow:auto}
+.profile-mode .profile-list-panel th:nth-child(1),.profile-mode .profile-list-panel td:nth-child(1){width:52px}
+.profile-mode .profile-list-panel th:nth-child(2),.profile-mode .profile-list-panel td:nth-child(2){width:36px}
+.profile-mode .profile-list-panel th:nth-child(3),.profile-mode .profile-list-panel td:nth-child(3){width:120px}
+.profile-mode .profile-list-panel th:nth-child(4),.profile-mode .profile-list-panel td:nth-child(4){width:190px}
+.profile-mode .profile-list-panel th:nth-child(5),.profile-mode .profile-list-panel td:nth-child(5){width:120px}
+.profile-mode .profile-list-panel th:nth-child(6),.profile-mode .profile-list-panel td:nth-child(6){width:72px}
+.profile-mode .profile-list-panel th:nth-child(7),.profile-mode .profile-list-panel td:nth-child(7){width:120px}
+.profile-mode .profile-list-panel th:nth-child(8),.profile-mode .profile-list-panel td:nth-child(8){width:64px}
+.profile-mode .profile-list-panel input{max-width:280px}
+.profile-mode .profile-placeholder{border:1px dashed #394047;border-radius:8px;padding:15px;color:var(--muted);font-size:11px}
+.profile-mode .profile-activity-list{max-height:580px;overflow-y:auto;padding:2px 5px 2px 0}
+.profile-chronicle-row{display:grid;grid-template-columns:62px 18px 145px minmax(0,1fr);align-items:center;gap:7px;min-height:34px;border-bottom:1px solid var(--line);font-size:11px}
+.profile-chronicle-row:last-child{border-bottom:0}
+.profile-chronicle-row.clickable:hover{background:#20252a}
+.profile-chronicle-tag{display:inline-block;text-align:center;padding:3px 5px;border-radius:5px;background:#343941;color:var(--text);font-size:9px;font-weight:800;text-transform:uppercase}
+.profile-chronicle-tag.user{background:#515d6c}.profile-chronicle-tag.social{background:#614d70}.profile-chronicle-tag.product{background:#6c5638}.profile-chronicle-tag.claim{background:#355b46}.profile-chronicle-tag.other{background:#464a50}
+.profile-chronicle-line{position:relative;height:100%;display:flex;align-items:center;justify-content:center}
+.profile-chronicle-line::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:#56616b}
+.profile-chronicle-line::after{content:"";position:relative;width:7px;height:7px;border-radius:50%;background:var(--accent);border:1px solid #171a1e}
+.profile-chronicle-row:first-child .profile-chronicle-line::before{top:50%}
+.profile-chronicle-row:last-child .profile-chronicle-line::before{bottom:50%}
+.profile-chronicle-time{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted);white-space:nowrap}
+.profile-chronicle-story{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-chronicle-story strong{color:var(--text);font-weight:800}
+@media(max-width:650px){.profile-chronicle-row{grid-template-columns:55px 14px 108px minmax(0,1fr);gap:4px}.profile-chronicle-time{font-size:9px;overflow:hidden;text-overflow:ellipsis}}
+.profile-mode [hidden]{display:none!important}
+@media(max-width:800px){.profile-mode .profile-hero{grid-template-columns:80px minmax(0,1fr)}.profile-mode .profile-avatar{width:80px;height:80px}.profile-mode .profile-actions{grid-column:2;justify-content:flex-start}}
+@media(max-width:650px){.profile-mode .profile-hero{grid-template-columns:70px minmax(0,1fr);gap:12px}.profile-mode .profile-avatar{width:70px;height:70px}.profile-mode .profile-meta{grid-template-columns:minmax(0,1fr);gap:6px}.profile-mode .profile-actions{grid-column:1/-1}}
+
+/* Product Detail: consistent alignment and control heights across its rows. */
+.detail-panel #detail{min-width:0}
+#detail .detail-image,#detail .detail-gallery,#detail .detail-image-link{margin-left:auto;margin-right:auto}
+#detail .detail-image{height:240px;max-height:none;object-fit:contain}
+#detail .detail-image-link{width:75%}#detail .detail-image-link .detail-image{width:100%}
+#detail .detail-gallery{grid-template-columns:28px minmax(0,1fr) 28px}
+#detail .detail-gallery .detail-image{height:240px}
+#detail .detail-gallery-nav{width:28px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+#detail .detail-image{width:calc(100% - 72px);height:auto;aspect-ratio:4/3;object-fit:contain}
+#detail .detail-image-link{width:calc(100% - 72px)}#detail .detail-image-link .detail-image{width:100%}
+#detail .detail-gallery{width:100%;grid-template-columns:28px minmax(0,1fr) 28px;gap:8px}
+#detail .detail-gallery .detail-image{width:100%;height:auto;aspect-ratio:4/3}
+#detail .detail-source{text-align:center;overflow-wrap:anywhere}
+#detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}
+#detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}
+#detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}
+#detail .owner-value{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+#detail .catalog-spec{font-size:12px;line-height:1.55}
+#detail .catalog-spec-row{padding:3px 0}
+#detail .catalog-spec-label{text-align:left}
+#detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}
+#detail .detail-header>.toolbar button,#detail .detail-header>.toolbar .status{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+#detail .owner-claim-card{display:block;width:100%;margin-top:12px;padding:14px 16px;text-align:left;white-space:normal;line-height:1.5;font-size:12px;font-weight:600;background:var(--surface,#24282c);color:var(--text);border:1px solid var(--accent);border-radius:9px}
+#detail .owner-claim-card:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface,#24282c));color:var(--text)}
+#detail .owner-claim-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#detail .accordion-header{min-width:0;flex-wrap:wrap;min-height:34px}
+#detail .chronicle-toolbar{margin:0 0 10px;padding:0 0 8px;justify-content:flex-start}
+#detail .chronicle-toolbar .claim-menu-wrap{display:block;width:calc(100% - 22px);margin-left:22px}
+#detail .chronicle-toolbar .add-claim-action{display:block;width:100%;padding:10px 12px;text-align:center;white-space:normal}
+#detail .chronicle-toolbar .claim-menu{left:0;right:0}
+.new-guitar-modal{max-height:calc(100dvh - 32px);overflow:auto}
+.new-guitar-modal .modal-grid label{display:block;color:var(--muted);font-size:11px}
+.new-guitar-modal .modal-grid label.full{grid-column:1/-1}
+.new-guitar-modal .modal-grid input,.new-guitar-modal .modal-grid textarea{display:block;width:100%;margin-top:4px}
+.new-guitar-modal .sub{display:block;margin:0 0 14px}
+.new-guitar-modal #guitarStatus{margin:12px 0 0}
+@media(max-width:560px){.new-guitar-modal .modal-grid label.full{grid-column:auto}}
+#detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
+#detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
+#detail .accordion-header .toolbar select{width:auto;max-width:100%;border:1px solid #343b43;border-radius:7px;background:#111418;color:var(--text)}
+#detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}
+#detail .claim-badge{min-height:20px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:2px 8px}
+#detail .claim-response-select{height:26px;min-height:26px;max-width:100%;padding:3px 6px;line-height:1.2}
+#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}
+#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}
+#detail .claim-votes{align-items:center;flex:0 0 auto}
+#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
+#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}
+#detail .claim-footer-meta a{color:inherit}
+@media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
+<style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
+<style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
+<link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
+<script src="/assets/product-detail.js?v=chronicle-layout-v1" defer></script>
+<script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
 <div class="sticky-header">
   <header>
-    <h1>Your Guitar Chronicle <span class="sub">Top Page</span></h1>
+    <h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo brand-logo-script" src="/assets/logos/script.png?v=2" alt="Your Guitar Chronicle"><img class="brand-logo brand-logo-block" src="/assets/logos/block.png?v=2" alt=""><img class="brand-logo brand-logo-badge" src="/assets/logos/badge.png?v=2" alt=""></a> <span class="sub">Top Page</span></h1>
     <nav class="page-nav" aria-label="Top Page sections">
       <a href="#discovery">New Discovery</a>
       <a href="#products">Products</a>
@@ -191,7 +302,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     </nav>
   </header>
   <div class="account-hub" id="accountHub">
-    <div class="account-hub-empty">User情報を読み込み中...</div>
+    <div class="account-hub-empty">Loading user information...</div>
   </div>
 </div>
 <main>
@@ -209,7 +320,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <section class="left-column content-frame">
   <div class="panel discovery-panel page-section" id="discovery">
     <div class="toolbar"><h2>New discovery</h2></div>
-    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">最近の更新を読み込み中...</div></div>
+    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">Loading recent activity...</div></div>
   </div>
   <div class="panel product-list-panel page-section" id="products">
     <div class="toolbar">
@@ -220,6 +331,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <table>
         <thead><tr>
           <th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th>
+          <th class="favorite-cell" aria-label="Favorite">♡</th>
           <th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th>
           <th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th>
           <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
@@ -235,10 +347,10 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 
 </div>
 
-<aside class="detail-shell">
+<aside class="detail-shell" id="productDetailShell" aria-label="Product Detail">
   <div class="panel detail-panel">
-    <h2>Product Detail</h2>
-    <div id="detail" class="sub">Product List の行をクリックすると履歴を表示します。</div>
+    <div class="detail-panel-heading"><h2>Product Detail</h2><button type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()">×</button></div>
+    <div id="detail" class="sub">Select a row in Product List to view its history.</div>
   </div>
 </aside>
 
@@ -285,7 +397,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="sub" id="mediaClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row full">
-        <label class="form-label">Images <span class="sub">最大10枚</span></label>
+        <label class="form-label">Images <span class="sub">up to 10</span></label>
         <div class="media-image-inputs" id="mediaClaimImages"><div class="media-image-slot visible" id="mediaImageSlot0"><input class="media-image-input" data-index="0" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot1"><input class="media-image-input" data-index="1" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot2"><input class="media-image-input" data-index="2" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot3"><input class="media-image-input" data-index="3" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot4"><input class="media-image-input" data-index="4" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot5"><input class="media-image-input" data-index="5" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot6"><input class="media-image-input" data-index="6" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot7"><input class="media-image-input" data-index="7" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot8"><input class="media-image-input" data-index="8" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot9"><input class="media-image-input" data-index="9" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div></div>
       </div>
       <div class="form-row">
@@ -298,8 +410,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeMediaClaim()">キャンセル</button>
-      <button id="mediaClaimSubmit" onclick="submitMediaClaim()">Claimを追加</button>
+      <button class="secondary" onclick="closeMediaClaim()">Cancel</button>
+      <button id="mediaClaimSubmit" onclick="submitMediaClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -327,10 +439,14 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <label class="form-label" for="eventClaimDetail">Detail</label>
         <textarea id="eventClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
       </div>
+      <div class="form-row full">
+        <label class="form-label" for="eventClaimImages">Images (optional, up to 10)</label>
+        <input id="eventClaimImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+      </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeEventClaim()">キャンセル</button>
-      <button id="eventClaimSubmit" onclick="submitEventClaim()">Claimを追加</button>
+      <button class="secondary" onclick="closeEventClaim()">Cancel</button>
+      <button id="eventClaimSubmit" onclick="submitEventClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -344,7 +460,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <label class="form-label" for="incidentClaimKind">Tag</label>
         <select id="incidentClaimKind">
           <option value="damage">Damage</option>
-          <option value="lost">Lost</option>
+          <option value="lost">Incident Lost</option>
           <option value="theft">Theft</option>
         </select>
       </div>
@@ -358,8 +474,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeIncidentClaim()">キャンセル</button>
-      <button id="incidentClaimSubmit" onclick="submitIncidentClaim()">Claimを追加</button>
+      <button class="secondary" onclick="closeIncidentClaim()">Cancel</button>
+      <button id="incidentClaimSubmit" onclick="submitIncidentClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -378,7 +494,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <button type="button" class="spec-add-button" onclick="toggleSpecItemMenu(event)">＋</button>
       <div class="claim-menu spec-item-menu" id="specItemMenu"></div>
     </div>
-    <span class="sub" style="margin-left:8px">項目を追加</span>
+    <span class="sub" style="margin-left:8px">Add field</span>
 
     <div class="spec-items" id="specClaimItems"></div>
 
@@ -388,15 +504,15 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <input id="specClaimDate" type="date">
       </div>
       <div class="form-row full">
-        <label class="form-label" for="specClaimBody">Memo（任意）</label>
-        <textarea id="specClaimBody" maxlength="2000" placeholder="仕様、交換、調整、修理内容などの補足"></textarea>
+        <label class="form-label" for="specClaimBody">Memo (optional)</label>
+        <textarea id="specClaimBody" maxlength="2000" placeholder="Specifications, replacements, adjustments, or repair details"></textarea>
       </div>
     </div>
 
-    <div class="sub">追加した各項目は、この1件のClaimとして保存されます。Specificationには各項目の最新値が表示されます。</div>
+    <div class="sub">All added fields are saved in one Claim. The latest value for each field appears in Specification.</div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeSpecificationClaim()">キャンセル</button>
-      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Claimを追加</button>
+      <button class="secondary" onclick="closeSpecificationClaim()">Cancel</button>
+      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -415,13 +531,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
         <input id="formerOwnerReleaseDate" type="date" required>
       </div>
       <div class="form-row full">
-        <label class="form-label" for="formerOwnerDetail">Detail（任意）</label>
+        <label class="form-label" for="formerOwnerDetail">Detail (optional)</label>
         <textarea id="formerOwnerDetail" maxlength="2000" placeholder="Ownership history detail"></textarea>
       </div>
     </div>
-    <div class="sub">Acquire / Release Claimを2件作成し、このUserのFormerly Owned Guitarsへ追加します。</div>
+    <div class="sub">Creates an Acquire and a Release Claim. Once approved, the guitar appears in Formerly Owned Guitars.</div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeFormerOwnerClaim()">キャンセル</button>
+      <button class="secondary" onclick="closeFormerOwnerClaim()">Cancel</button>
       <button id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
     </div>
   </div>
@@ -446,16 +562,16 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <input id="ownershipClaimDate" type="date">
     </div>
     <div class="form-row" id="ownershipClaimPreviousRow">
-      <label class="form-label" for="ownershipClaimPrevious">相手先・関係者（任意）</label>
+      <label class="form-label" for="ownershipClaimPrevious">Counterparty / related person (optional)</label>
       <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
     </div>
     <div class="form-row">
-      <label class="form-label" for="ownershipClaimBody">Memo（任意）</label>
-      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Ownershipに関する補足"></textarea>
+      <label class="form-label" for="ownershipClaimBody">Memo (optional)</label>
+      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Additional ownership details"></textarea>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeOwnershipClaim()">キャンセル</button>
-      <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Claimを追加</button>
+      <button class="secondary" onclick="closeOwnershipClaim()">Cancel</button>
+      <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -463,12 +579,27 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <div class="modal-backdrop" id="accountRequiredModal" onclick="closeAccountRequired(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Join Your Guitar Chronicle</h2>
-    <div class="sub" style="margin-bottom:14px">この操作にはアカウントが必要です。既存アカウントでログインするか、新しいアカウントを作成してください。</div>
+    <div class="sub" style="margin-bottom:14px">This action requires an account. Sign in or create an account to continue.</div>
     <div class="modal-actions">
-      <button class="secondary" type="button" onclick="closeAccountRequired()">キャンセル</button>
+      <button class="secondary" type="button" onclick="closeAccountRequired()">Cancel</button>
       <button class="secondary" type="button" onclick="window.location.href='/user-view/edit'">Sign In</button>
       <button type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="newGuitarModal" onclick="if(event.target===this)closeNewGuitar()">
+  <div class="modal new-guitar-modal" role="dialog" aria-modal="true" aria-labelledby="newGuitarTitle">
+    <h2 id="newGuitarTitle">Add Guitar</h2>
+    <p class="sub">Creates the first Listing Claim and registers this user as the initial owner.</p>
+    <div class="modal-grid">
+      <label>Maker *<input id="guitarMaker" maxlength="120"></label><label>Model<input id="guitarModel" maxlength="160"></label>
+      <label>Year<input id="guitarYear" maxlength="40"></label><label>Finish<input id="guitarFinish" maxlength="160"></label>
+      <label>Serial *<input id="guitarSerial" maxlength="160"></label><label>Listing Date<input id="guitarDate" type="date"></label>
+      <label class="full">Representative Image *<input id="guitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+      <label class="full">Claim memo<textarea id="guitarMemo" maxlength="2000"></textarea></label>
+    </div><p class="sub" id="guitarStatus" role="status"></p>
+    <div class="modal-actions"><button class="secondary" type="button" onclick="closeNewGuitar()">Cancel</button><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Add Guitar</button></div>
   </div>
 </div>
 
@@ -487,13 +618,39 @@ let productGallery=[];
 let productGalleryIndex=0;
 let currentObservations=[];
 let currentClaims=[];
-let chronicleSort='event';
 let notificationData={unread_count:0,notifications:[]};
 let pendingOwnershipClaimIndividualId=null;
 let ownershipClaimMode='acquire';
 let individualSortKey='id';
-let individualSortDirection=1;
+let individualSortDirection=-1;
 const ACTIVE_USER_KEY='ygc_active_user_id';
+// Prototype login belongs to this tab. Another console tab must not change
+// the viewer of an already open profile or its Verification controls.
+const launchUserId=new URLSearchParams(location.search).get('prototype_user_id');
+if(launchUserId!==null){
+  if(/^\d+$/.test(launchUserId)&&Number(launchUserId)>0)sessionStorage.setItem(ACTIVE_USER_KEY,launchUserId);
+  else sessionStorage.removeItem(ACTIVE_USER_KEY);
+  const cleaned=new URL(location.href);
+  cleaned.searchParams.delete('prototype_user_id');
+  history.replaceState(null,'',cleaned.pathname+cleaned.search+cleaned.hash);
+}else if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
+  const previous=localStorage.getItem(ACTIVE_USER_KEY);
+  if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
+}
+localStorage.removeItem(ACTIVE_USER_KEY);
+function syncHeaderHeight(){
+  const header=document.querySelector('.sticky-header');
+  if(header)document.documentElement.style.setProperty('--header-height',Math.ceil(header.getBoundingClientRect().height)+'px');
+}
+if(typeof ResizeObserver==='function')new ResizeObserver(syncHeaderHeight).observe(document.querySelector('.sticky-header'));
+window.addEventListener('resize',syncHeaderHeight);
+syncHeaderHeight();
+const PROFILE_USER_ID=Number((location.pathname.match(/^\/users\/(\d+)$/)||[])[1]||0);
+let profileGuitars=[];
+let profileFavorites=[];
+let favoriteIds=new Set();
+const profileSort={owned:{key:'id',direction:1},former:{key:'id',direction:1},favorites:{key:'id',direction:1}};
+function applyTheme(theme){document.documentElement.dataset.theme=theme||'dark_default'}
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
@@ -501,6 +658,36 @@ async function jfetch(url,opt={}){
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.detail||r.statusText);
   return d;
+}
+function favoriteButton(id){
+  if(!activeUser||!activeUser.user)return '';
+  const selected=favoriteIds.has(Number(id));
+  return '<button type="button" class="favorite-button'+(selected?' is-favorite':'')+'" aria-label="'+(selected?'Remove from favorites':'Add to favorites')+'" aria-pressed="'+selected+'" title="'+(selected?'Remove from favorites':'Add to favorites')+'" onclick="toggleFavorite(event,'+Number(id)+')">'+(selected?'♥':'♡')+'</button>';
+}
+async function toggleFavorite(event,id){
+  event.stopPropagation();
+  if(!activeUser||!activeUser.user)return;
+  const wasFavorite=favoriteIds.has(Number(id));
+  try{
+    await jfetch('/api/users/'+activeUser.user.id+'/favorites/'+id,{method:wasFavorite?'DELETE':'PUT'});
+    if(wasFavorite)favoriteIds.delete(Number(id));else favoriteIds.add(Number(id));
+    renderIndividuals();
+    if(PROFILE_USER_ID){
+      if(Number(activeUser.user.id)===PROFILE_USER_ID){
+        const profile=await jfetch('/api/users/'+PROFILE_USER_ID+'/profile?viewer_id='+Number(activeUser.user.id));
+        profileFavorites=profile.favorites||[];
+      }
+      for(const section of ['owned','former','favorites'])renderProfileGuitars(section);
+    }
+    document.querySelectorAll('#detail .favorite-button').forEach(button=>{
+      if(Number(selectedIndividualId)!==Number(id))return;
+      const selected=favoriteIds.has(Number(id));
+      button.textContent=selected?'♥':'♡';button.classList.toggle('is-favorite',selected);
+      button.setAttribute('aria-pressed',String(selected));
+      button.setAttribute('aria-label',selected?'Remove from favorites':'Add to favorites');
+      button.title=button.getAttribute('aria-label');
+    });
+  }catch(e){alert('Favorite could not be updated.\n'+e.message)}
 }
 function renderAccountHub(){
   const hub=document.getElementById('accountHub');
@@ -511,7 +698,7 @@ function renderAccountHub(){
         '<div class="account-hub-guest-mark">YGC</div>'+
         '<div class="account-hub-user-copy">'+
           '<div class="account-hub-guest-title">Explore guitar histories. Add yours when you are ready.</div>'+
-          '<div class="account-hub-guest-copy">Product ListとChronicleはGuestでも閲覧できます。自分に関係するギターを見つけたら、アカウントを作成してその履歴に参加できます。</div>'+
+          '<div class="account-hub-guest-copy">Guests can browse the Product List and Chronicle. Create an account to contribute to the history of a guitar that matters to you.</div>'+
         '</div>'+
       '</div>'+
       '<div></div>'+
@@ -529,13 +716,13 @@ function renderAccountHub(){
   const claims=summary.claim_count??0;
   const location=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
   hub.innerHTML=
-    '<div class="account-hub-user">'+
+    '<a class="account-hub-user account-hub-user-link" href="/users/'+Number(u.id)+'" aria-label="View '+esc(u.display_name||'User')+' profile">'+
       '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="account-hub-user-copy">'+
         '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span><span class="account-hub-you">You</span></div>'+
         '<div class="account-hub-location">'+esc(location)+'</div>'+
       '</div>'+
-    '</div>'+
+    '</a>'+
     '<div class="account-hub-summary">'+
       '<div class="account-hub-stat"><span class="account-hub-stat-value">'+owned+'</span><span class="account-hub-stat-label">Owned</span></div>'+
       '<div class="account-hub-stat"><span class="account-hub-stat-value">'+former+'</span><span class="account-hub-stat-label">Formerly Owned</span></div>'+
@@ -544,8 +731,6 @@ function renderAccountHub(){
     '<div class="account-hub-actions">'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
       '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
-      '<button class="account-hub-action" type="button" onclick="window.location.href=\'/users/'+u.id+'\'">View Profile</button>'+
-      '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Edit Your Chronicle</button>'+
     '</div>';
 }
 
@@ -561,7 +746,7 @@ function renderNotificationPanel(){
           '<div class="notification-item-time">'+esc(displayInputDate(n.created_at))+'</div>'+
         '</button>'
       ).join('')
-    : '<div class="notification-empty">通知はありません。</div>';
+    : '<div class="notification-empty">No notifications.</div>';
   const count=document.getElementById('notificationCount');
   if(count)count.textContent=String(Number(notificationData.unread_count||0));
 }
@@ -595,7 +780,7 @@ async function openNotification(notificationId,individualId){
   await loadNotifications();
   const panel=document.getElementById('notificationPanel');
   if(panel)panel.classList.remove('open');
-  if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId));
+  if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId),true);
 }
 async function markAllNotificationsRead(){
   if(!activeUser||!activeUser.user)return;
@@ -603,14 +788,16 @@ async function markAllNotificationsRead(){
     await jfetch('/api/users/'+activeUser.user.id+'/notifications/read-all',{method:'POST'});
     await loadNotifications();
   }catch(e){
-    alert('通知の既読化に失敗しました。\n'+e.message);
+    alert('Could not mark the notification as read.\n'+e.message);
   }
 }
 
 async function loadActiveUser(){
-  const id=localStorage.getItem(ACTIVE_USER_KEY);
+  const id=sessionStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
+    if(!PROFILE_USER_ID)applyTheme('dark_default');
+    favoriteIds=new Set();
     notificationData={unread_count:0,notifications:[]};
     renderAccountHub();
     renderNotificationPanel();
@@ -618,9 +805,13 @@ async function loadActiveUser(){
   }
   try{
     activeUser=await jfetch('/api/users/'+id);
+    if(!PROFILE_USER_ID)applyTheme(activeUser.user.theme);
+    favoriteIds=new Set(await jfetch('/api/users/'+id+'/favorites'));
   }catch(e){
     activeUser=null;
-    localStorage.removeItem(ACTIVE_USER_KEY);
+    if(!PROFILE_USER_ID)applyTheme('dark_default');
+    favoriteIds=new Set();
+    sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
   renderAccountHub();
@@ -657,14 +848,14 @@ function renderNewDiscoveries(){
   const root=document.getElementById('newDiscoveryList');
   if(!root)return;
   if(!newDiscoveries.length){
-    root.innerHTML='<div class="sub" style="padding:10px">最近の更新はありません。</div>';
+    root.innerHTML='<div class="sub" style="padding:10px">No recent activity.</div>';
     return;
   }
   root.innerHTML=newDiscoveries.map(item=>{
     const when=displayDiscoveryDateTime(item.activity_at||'');
     const product=discoveryProductName(item);
     const message=discoveryMessage(item);
-    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+')" title="'+esc(when+' '+product+' '+message)+'">'+
+    return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+',true)" title="'+esc(when+' '+product+' '+message)+'">'+
       '<span class="discovery-time">'+esc(when)+'</span>'+
       '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
     '</div>';
@@ -683,6 +874,7 @@ function setIndividualSort(key){
   if(individualSortKey===key)individualSortDirection*=-1;
   else{individualSortKey=key;individualSortDirection=1}
   renderIndividuals();
+  document.getElementById('individualBody').closest('.table-wrap').scrollTop=0;
 }
 function updateSortIndicators(){
   for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
@@ -691,6 +883,7 @@ function updateSortIndicators(){
   }
 }
 function renderIndividuals(){
+  if(PROFILE_USER_ID)return;
   const q=document.getElementById('individualFilter').value.toLowerCase();
   const rows=individuals.filter(x=>[x.manufacturer,x.model,x.finish,x.year,x.serial_number].join(' ').toLowerCase().includes(q)).slice().sort((a,b)=>{
     const av=normalizeSortValue(a[individualSortKey],individualSortKey);
@@ -701,7 +894,7 @@ function renderIndividuals(){
   });
   updateSortIndicators();
   document.getElementById('individualBody').innerHTML=rows.map(x=>
-    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+')"><td>'+x.id+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
+    '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+',true)"><td>'+x.id+'</td><td class="favorite-cell">'+favoriteButton(x.id)+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
   ).join('');
 }
 
@@ -729,7 +922,10 @@ function currentSnapshotOwnerHtml(i){
   const type=String(i.current_owner_type||'').trim();
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
-  if(i.current_owner_user_id&&activeUser&&activeUser.user)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
+  if(i.current_owner_user_id&&activeUser&&activeUser.user){
+    const you=Number(i.current_owner_user_id)===Number(activeUser.user.id)?'<span class="account-hub-you">You</span>':'';
+    return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>'+you;
+  }
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
@@ -769,14 +965,18 @@ function closeAccountRequired(event){
   const modal=document.getElementById('accountRequiredModal');
   if(modal)modal.classList.remove('open');
 }
-function ownershipControlsHtml(individualId){
-  if(activeUser&&activeUser.user&&activeUserOwns(individualId)){
-    return '<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
+function ownershipControlsHtml(individual){
+  const individualId=Number(individual.id);
+  const actorNote=PROFILE_USER_ID&&activeUser&&activeUser.user
+    && PROFILE_USER_ID!==Number(activeUser.user.id)
+    ? '<div class="sub">Signed in as '+esc(activeUser.user.display_name||('User #'+activeUser.user.id))+'</div>'
+    : '';
+  if(activeUser&&activeUser.user&&individual.current_owner_user_id!==null
+     && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
+    return actorNote;
   }
-  if(!activeUser||!activeUser.user){
-    return '<div class="toolbar" style="margin-top:10px"><button onclick="requireAccount()">Add to Your Chronicle</button></div>';
-  }
-  return '<div class="toolbar" style="margin-top:10px"><button onclick="openOwnerClaim('+individualId+')">Add to Your Chronicle</button></div>';
+  const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
+  return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
 }
 
 function productGalleryHtml(images,model){
@@ -787,7 +987,7 @@ function productGalleryHtml(images,model){
   const disabled=productGallery.length<2?' disabled':'';
   const caption=String(item.caption||'').trim();
   const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
-  return '<div class="detail-gallery">'+
+  return '<div class="detail-gallery" tabindex="0" aria-label="Open photo album">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
     '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
     '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
@@ -804,6 +1004,9 @@ function stepProductGallery(delta){
     const caption=String(item.caption||'').trim();
     source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
   }
+}
+function openProductAlbum(){
+  YGCImageAlbum.open(productGallery,productGalleryIndex,document.getElementById('productGalleryImage'));
 }
 function specificationFieldLabel(value){
   const labels={
@@ -836,8 +1039,9 @@ function identityFieldLabel(value){
 function claimTypeLabel(value){
   return String(value||'claim').split('_').map(x=>x?x[0].toUpperCase()+x.slice(1):'').join(' ');
 }
+function incidentClaimLabel(c){return c.value_text==='lost'?'Incident Lost':claimTypeLabel(c.value_text||'incident')}
 function displayEventDate(value){
-  if(!value)return '日付不明';
+  if(!value)return 'Date unknown';
   const text=String(value).trim();
   const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);
   if(direct)return direct[1];
@@ -849,9 +1053,9 @@ function displayEventDate(value){
   return year+'-'+month+'-'+day;
 }
 function displayInputDate(value){
-  if(!value)return '入力日時不明';
+  if(!value)return 'Input date unknown';
   const d=new Date(String(value));
-  return Number.isNaN(d.getTime())?String(value):d.toLocaleString('ja-JP');
+  return Number.isNaN(d.getTime())?String(value):d.toLocaleString('en-US');
 }
 function displayDiscoveryDateTime(value){
   const raw=String(value||'').trim();
@@ -865,14 +1069,7 @@ function displayDiscoveryDateTime(value){
 }
 function claimHeaderHtml(c,type,eventDate){
   let response='';
-  const isOwner=activeUser&&activeUser.user&&activeUserOwns(selectedIndividualId);
-  const isOtherUser=isOwner&&Number(c.author_user_id)!==Number(activeUser.user.id);
-  const verifiableTypes=new Set(['specification','incident','event','media']);
-  const isFormerOwnerOwnership=(
-    c.claim_type==='ownership'
-    && String(c.ownership_source||'')==='former_owner'
-  );
-  if(isOtherUser&&(verifiableTypes.has(String(c.claim_type||''))||isFormerOwnerOwnership)){
+  if(c.can_verify){
     const current=String(c.verification_status||'unverified').toLowerCase();
     response='<select class="claim-response-select" onchange="setClaimResponse('+c.id+',this.value)">'+
       '<option value="positive"'+(current==='positive'?' selected':'')+'>Positive</option>'+
@@ -893,19 +1090,23 @@ function claimVisualTypeClass(c){
 function claimCardFull(c){
   const type=c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
-    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident'):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
+    : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire'):(c.claim_type==='incident'?incidentClaimLabel(c):(c.claim_type==='event'?claimTypeLabel(c.value_text||'event'):claimTypeLabel(c.claim_type))));
   const eventDate=displayEventDate(c.occurred_at);
   let body='';
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
-    const owner=String(c.author_name||'User').trim()||'User';
+    const owner=String(['automation','merged_listing'].includes(c.ownership_source)?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')
       ? (firstLine.slice('Previous owner:'.length).trim()||'Unknown')
       : 'Unknown';
-    if(kind==='release'){
-      body='<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    if(kind==='lost'){
+      body='<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>';
+    }else if(kind==='release'){
+      body=c.ownership_source==='automation'
+        ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
+        : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -958,10 +1159,15 @@ function claimCardFull(c){
     if(specs)details.push(specs);
     if(details.length)body+='<div class="claim-memo">'+details.map(esc).join('<br>')+'</div>';
     if(c.body&&c.body!==title)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
-    if(c.source_url)body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }else{
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
+  }
+  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership'||c.claim_type==='specification')){
+    const id='Reverb ID #'+esc(c.source_listing_id);
+    body+='<div class="claim-memo">Evidence: '+(c.source_url?'<a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+id+'</a>':id)+'</div>';
+  }else if(c.claim_type==='listing'&&c.source_url){
+    body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
   }
   if(c.evidence_media_id&&c.claim_type!=='media'){
     body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
@@ -982,7 +1188,7 @@ function compactClaimType(c){
   return c.claim_type==='specification'
     ? (c.specification_kind==='repair'?'Repair':'Specification')
     : (c.claim_type==='ownership'?claimTypeLabel(c.ownership_kind||'acquire')
-      :(c.claim_type==='incident'?claimTypeLabel(c.value_text||'incident')
+      :(c.claim_type==='incident'?incidentClaimLabel(c)
       :(c.claim_type==='event'?claimTypeLabel(c.value_text||'event')
       :claimTypeLabel(c.claim_type))));
 }
@@ -1057,46 +1263,19 @@ function toggleDetailAccordion(id){
   if(section)section.classList.toggle('collapsed');
 }
 
-function chronologyValue(c,mode){
-  if(mode==='input')return String(c.created_at||'');
-  return String(c.occurred_at||c.created_at||'');
-}
 function renderChronicle(){
-  const sorted=currentClaims.slice().sort((a,b)=>{
-    const av=chronologyValue(a,chronicleSort);
-    const bv=chronologyValue(b,chronicleSort);
-    if(av<bv)return 1;
-    if(av>bv)return -1;
-    return Number(b.id)-Number(a.id);
-  });
-  const correctionsByTarget=new Map();
-  const roots=[];
-  for(const claim of sorted){
-    if(claim.claim_type==='identity_correction'&&claim.target_claim_id){
-      const key=Number(claim.target_claim_id);
-      if(!correctionsByTarget.has(key))correctionsByTarget.set(key,[]);
-      correctionsByTarget.get(key).push(claim);
-    }else{
-      roots.push(claim);
-    }
-  }
-  const claims=[];
-  for(const claim of roots){
-    claims.push(claim);
-    const corrections=correctionsByTarget.get(Number(claim.id))||[];
-    corrections.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    claims.push(...corrections);
-    correctionsByTarget.delete(Number(claim.id));
-  }
-  for(const corrections of correctionsByTarget.values())claims.push(...corrections);
+  const claims=YGCProductDetail.orderedClaims(currentClaims);
   const el=document.getElementById('chronicleEntries');
-  if(el)el.innerHTML=claims.length
-    ? claims.map(claimCard).join('')
-    : '<div class="sub">Claimはまだありません。</div>';
+  if(el)el.innerHTML=claims.length?claims.map(claimCard).join(''):'<div class="sub">No Claims yet.</div>';
 }
-function setChronicleSort(value){
-  chronicleSort=value==='input'?'input':'event';
-  renderChronicle();
+
+async function refreshClaimViews(individualId){
+  if(PROFILE_USER_ID){
+    await loadActiveUser();
+    await loadProfilePage(individualId);
+  }else if(individualId!==null){
+    await showIndividual(individualId);
+  }
 }
 
 async function setClaimResponse(claimId,stance){
@@ -1111,9 +1290,9 @@ async function setClaimResponse(claimId,stance){
       })
     });
     closeClaimPopup();
-    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await refreshClaimViews(selectedIndividualId);
   }catch(e){
-    alert('Owner Verificationの更新に失敗しました。\n'+e.message);
+    alert('Owner Verification could not be updated.\n'+e.message);
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
   }
 }
@@ -1129,13 +1308,41 @@ async function voteClaim(claimId,vote){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user_id:Number(activeUser.user.id),vote})
     });
-    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await refreshClaimViews(selectedIndividualId);
   }catch(e){
-    alert('Voteの更新に失敗しました。\n'+e.message);
+    alert('Vote could not be updated.\n'+e.message);
   }
 }
 
-async function showIndividual(id){
+let individualLoadSequence=0;
+function closeCompactDetail(){
+  document.getElementById('productDetailShell').classList.remove('compact-open');
+}
+function openCompactDetail(){
+  if(window.matchMedia('(max-width: 900px)').matches){
+    document.getElementById('productDetailShell').classList.add('compact-open');
+  }
+}
+document.addEventListener('pointerdown',event=>{
+  const shell=document.getElementById('productDetailShell');
+  if(!shell.classList.contains('compact-open')||shell.contains(event.target))return;
+  if(event.target instanceof Element&&event.target.closest('.modal-backdrop.open, dialog[open]'))return;
+  closeCompactDetail();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!document.querySelector('.modal-backdrop.open, dialog[open]'))closeCompactDetail();
+});
+window.addEventListener('resize',()=>{
+  if(!window.matchMedia('(max-width: 900px)').matches)closeCompactDetail();
+});
+async function showIndividual(id,fromList=false){
+  if(fromList){
+    openCompactDetail();
+    if(Number(selectedIndividualId)!==Number(id))document.getElementById('detail').textContent='Loading...';
+  }
+  const sequence=++individualLoadSequence;
+  await loadActiveUser();
+  if(sequence!==individualLoadSequence)return;
   const nextIndividualId=Number(id);
   const changedIndividual=Number(selectedIndividualId)!==nextIndividualId;
   selectedIndividualId=nextIndividualId;
@@ -1144,84 +1351,37 @@ async function showIndividual(id){
     if(detail)detail.scrollTop=0;
   }
   if(typeof renderIndividuals==='function')renderIndividuals();
+  if(PROFILE_USER_ID){for(const section of ['owned','former','favorites'])renderProfileGuitars(section)}
   const [d,claims,currentSpecifications]=await Promise.all([
-    jfetch('/api/individuals/'+id),
+    jfetch('/api/individuals/'+id+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/claims'+(activeUser&&activeUser.user?'?viewer_user_id='+encodeURIComponent(activeUser.user.id):'')),
     jfetch('/api/individuals/'+id+'/current-specifications')
   ]);
+  if(sequence!==individualLoadSequence)return;
   const i=d.individual;
   const observations=d.observations||[];
   currentObservations=observations;
   currentClaims=claims||[];
   const latest=observations.length?observations[observations.length-1]:null;
-  const imageListing=(claims||[]).slice().reverse().find(c=>c.claim_type==='listing'&&c.status==='active'&&c.image_url)||null;
-  const imageObservation=observations.slice().reverse().find(o=>o.image_url)||null;
+  const imageListing=d.current_source||null;
   const galleryImages=d.gallery_images||[];
   let out='';
   if(galleryImages.length){
     out+=productGalleryHtml(galleryImages,i.model||'Guitar');
   }else if(i.representative_image_url){
-    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
+    out+='<img class="detail-image" src="'+esc(i.representative_image_url)+'" alt="'+esc(i.model||'Guitar')+'" role="button" tabindex="0" aria-label="Open photo album" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"><span class="detail-source">Representative Image</span>';
   }else if(imageListing){
     const imageUrl=String(imageListing.source_url||'');
     const image='<img class="detail-image" src="'+esc(imageListing.image_url)+'" alt="'+esc(imageListing.listing_title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
     if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: <a href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(String(imageListing.source_site||'Source'))+'</a></span>';
     else out+=image+'<span class="detail-source">Listing Claim</span>';
-  }else if(imageObservation){
-    const imageUrl=String(imageObservation.source_url||'');
-    const image='<img class="detail-image" src="'+esc(imageObservation.image_url)+'" alt="'+esc(imageObservation.title||i.model||'Guitar')+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">';
-    if(imageUrl)out+='<a class="detail-image-link" href="'+esc(imageUrl)+'" target="_blank" rel="noopener noreferrer">'+image+'</a><span class="detail-source">Source: Reverb image (provenance)</span>';
-    else out+=image+'<span class="detail-source">Source: Reverb image (provenance)</span>';
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
-  const specMap={};
-  for(const s of (currentSpecifications||[]))specMap[String(s.field_name||'')]=s;
-  const finishValue=specMap.finish?specMap.finish.value_text:(i.finish||'—');
-  const fixedSpecRows=[
-    ['Maker',i.manufacturer||'—'],
-    ['Model',i.model||'—'],
-    ['Finish',finishValue||'—'],
-    ['Year',i.year||'—'],
-    ['Serial',i.serial_number||'—']
-  ];
-  const hiddenFields=new Set(['maker','manufacturer','model','finish','year','serial','serial_number']);
-  const preferredOrder=['body','bridge','fingerboard','frets','neck','nut','pickups','pickguard','potentiometers','tuners','wiring','weight'];
-  const dynamicSpecs=(currentSpecifications||[])
-    .filter(s=>!hiddenFields.has(String(s.field_name||'').toLowerCase()))
-    .slice()
-    .sort((a,b)=>{
-      const ak=String(a.field_name||'').toLowerCase();
-      const bk=String(b.field_name||'').toLowerCase();
-      const ai=preferredOrder.indexOf(ak);
-      const bi=preferredOrder.indexOf(bk);
-      if(ai>=0||bi>=0){
-        if(ai<0)return 1;
-        if(bi<0)return-1;
-        if(ai!==bi)return ai-bi;
-      }
-      return ak.localeCompare(bk);
-    });
-  out+='<div class="detail-header"><div class="detail-header-title">'+esc(i.manufacturer)+' '+esc(i.model||'')+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> '+currentSnapshotOwnerHtml(i)+'</div>'+
-    '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> '+currentLocationHtml(i)+'</div>'+
-    ownershipControlsHtml(i.id)+'</div>';
-  out+='<section class="accordion-section" id="specificationAccordion">'+
-    '<div class="accordion-header">'+
-      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button>'+
-      '<span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span>'+
-    '</div>'+
-    '<div class="accordion-body"><div class="catalog-spec">'+
-      fixedSpecRows.map(row=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(row[0])+':</span> '+esc(row[1])+'</div>').join('')+
-      dynamicSpecs.map(s=>'<div class="catalog-spec-row"><span class="catalog-spec-label">'+esc(specificationFieldLabel(s.field_name))+':</span> '+esc(s.value_text||'—')+'</div>').join('')+
-    '</div></div></section>';
-  out+='<section class="accordion-section" id="chronicleAccordion">'+
-    '<div class="accordion-header">'+
-      '<button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button>'+
-      '<span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span>'+
-      '<div class="toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>'+
-    '</div>'+
-    '<div class="accordion-body"><div id="chronicleEntries"></div></div></section>';
+  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button class="add-claim-action" onclick="toggleAddClaimMenu(event,'+i.id+')">Let\'s add your Claim !!</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div></div>';
+  out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
+    owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i),
+    titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
   if(changedIndividual){
@@ -1299,10 +1459,10 @@ function closeMediaClaim(event){
 async function submitMediaClaim(){
   if(!activeUser||!activeUser.user||selectedIndividualId===null)return;
   const images=mediaImageInputs().map(input=>input.files&&input.files[0]).filter(Boolean);
-  if(!images.length){alert('画像ファイルを1枚以上選択してください。');return;}
+  if(!images.length){alert('Select at least one image.');return;}
   for(const image of images){
-    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){alert('JPEG / PNG / WebP / GIF画像を選択してください。');return;}
-    if(image.size>12*1024*1024){alert('画像は1枚12MB以下にしてください。');return;}
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){alert('Choose a JPEG, PNG, WebP, or GIF image.');return;}
+    if(image.size>12*1024*1024){alert('Each image must be 12 MB or less.');return;}
   }
   const form=new FormData();
   form.append('user_id',String(activeUser.user.id));
@@ -1316,8 +1476,8 @@ async function submitMediaClaim(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.detail||response.statusText);
     closeMediaClaim();
-    await showIndividual(selectedIndividualId);
-  }catch(e){alert('Media Claimの登録に失敗しました。\n'+e.message);}
+    await refreshClaimViews(selectedIndividualId);
+  }catch(e){alert('Media Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
 
@@ -1329,6 +1489,7 @@ function openEventClaim(individualId){
   document.getElementById('eventClaimKind').value='exhibition';
   document.getElementById('eventClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('eventClaimDetail').value='';
+  document.getElementById('eventClaimImages').value='';
   document.getElementById('eventClaimModal').classList.add('open');
 }
 function closeEventClaim(event){
@@ -1337,12 +1498,28 @@ function closeEventClaim(event){
 }
 async function submitEventClaim(){
   const detail=document.getElementById('eventClaimDetail').value.trim();
-  if(!detail){alert('Detailを入力してください。');return;}
+  if(!detail){alert('Enter a detail.');return;}
+  const images=Array.from(document.getElementById('eventClaimImages').files||[]);
+  if(images.length>10){alert('Choose up to 10 images.');return;}
+  for(const image of images){
+    if(!['image/jpeg','image/png','image/webp','image/gif'].includes(image.type)){alert('Choose a JPEG, PNG, WebP, or GIF image.');return;}
+    if(image.size>12*1024*1024){alert('Each image must be 12 MB or less.');return;}
+  }
   const button=document.getElementById('eventClaimSubmit');button.disabled=true;
   try{
-    await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
-    closeEventClaim();await showIndividual(selectedIndividualId);
-  }catch(e){alert('Event Claimの登録に失敗しました。\n'+e.message);}
+    if(images.length){
+      const form=new FormData();
+      form.append('user_id',String(activeUser.user.id));
+      form.append('event_kind',document.getElementById('eventClaimKind').value);
+      form.append('occurred_at',document.getElementById('eventClaimDate').value||'');
+      form.append('detail',detail);
+      images.forEach(image=>form.append('images',image));
+      await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim-with-media',{method:'POST',body:form});
+    }else{
+      await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
+    }
+    closeEventClaim();await refreshClaimViews(selectedIndividualId);
+  }catch(e){alert('Event Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
 
@@ -1362,12 +1539,12 @@ function closeIncidentClaim(event){
 }
 async function submitIncidentClaim(){
   const detail=document.getElementById('incidentClaimDetail').value.trim();
-  if(!detail){alert('Detailを入力してください。');return;}
+  if(!detail){alert('Enter a detail.');return;}
   const button=document.getElementById('incidentClaimSubmit');button.disabled=true;
   try{
     await jfetch('/api/individuals/'+selectedIndividualId+'/incident-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),incident_kind:document.getElementById('incidentClaimKind').value,occurred_at:document.getElementById('incidentClaimDate').value||null,detail})});
-    closeIncidentClaim();await showIndividual(selectedIndividualId);
-  }catch(e){alert('Incident Claimの登録に失敗しました。\n'+e.message);}
+    closeIncidentClaim();await refreshClaimViews(selectedIndividualId);
+  }catch(e){alert('Incident Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
 
@@ -1383,7 +1560,7 @@ function openSpecificationClaim(individualId){
   document.getElementById('specClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
   editingSpecificationClaimId=null;specificationItems=[];setSpecificationKind('specification');
   document.getElementById('specClaimTitle').textContent='Specification/Repair Claim';
-  document.getElementById('specClaimSubmit').textContent='Claimを追加';
+  document.getElementById('specClaimSubmit').textContent='Add Claim';
   document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
   document.getElementById('specClaimBody').value='';
   renderSpecificationItems();renderSpecItemMenu();
@@ -1409,26 +1586,26 @@ function addSpecificationItem(fieldName,label){
   document.getElementById('specItemMenu').classList.remove('open');renderSpecificationItems();
 }
 function addCustomSpecificationItem(){
-  const raw=prompt('Specification項目名を入力してください。');if(!raw)return;
+  const raw=prompt('Enter a Specification field name.');if(!raw)return;
   const fieldName=raw.trim().toLowerCase().replace(/\s+/g,'_');if(!fieldName)return;
-  if(specificationItems.some(x=>x.field_name===fieldName)){alert('同じ項目はすでに追加されています。');return;}
+  if(specificationItems.some(x=>x.field_name===fieldName)){alert('That field has already been added.');return;}
   addSpecificationItem(fieldName,raw.trim());
 }
 function removeSpecificationItem(index){specificationItems.splice(index,1);renderSpecificationItems();renderSpecItemMenu();}
 function updateSpecificationItem(index,value){if(specificationItems[index])specificationItems[index].value_text=value;}
 function renderSpecificationItems(){
   const el=document.getElementById('specClaimItems');if(!el)return;
-  el.innerHTML=specificationItems.length?specificationItems.map((item,index)=>'<div class="spec-item-row"><div class="spec-item-label">'+esc(item.label)+'</div><input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value"><button type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button></div>').join(''):'<div class="sub">＋から入力したい項目を追加してください。</div>';
+  el.innerHTML=specificationItems.length?specificationItems.map((item,index)=>'<div class="spec-item-row"><div class="spec-item-label">'+esc(item.label)+'</div><input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value"><button type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button></div>').join(''):'<div class="sub">Use + to add a field.</div>';
 }
 async function submitSpecificationClaim(){
   const items=specificationItems.map(item=>({field_name:item.field_name,value_text:String(item.value_text||'').trim()})).filter(item=>item.value_text);
-  if(!items.length){alert('少なくとも1つの項目とValueを入力してください。');return;}
-  if(items.length!==specificationItems.length){alert('追加した項目のValueをすべて入力してください。');return;}
+  if(!items.length){alert('Add at least one field and value.');return;}
+  if(items.length!==specificationItems.length){alert('Enter a value for every added field.');return;}
   const button=document.getElementById('specClaimSubmit');button.disabled=true;
   try{
     await jfetch('/api/individuals/'+selectedIndividualId+'/specification-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),specification_kind:specificationKind,items,occurred_at:document.getElementById('specClaimDate').value||null,body:document.getElementById('specClaimBody').value.trim()||null})});
-    closeSpecificationClaim();await showIndividual(selectedIndividualId);
-  }catch(e){alert('Specification/Repair Claimの登録に失敗しました。\n'+e.message);}
+    closeSpecificationClaim();await refreshClaimViews(selectedIndividualId);
+  }catch(e){alert('Specification/Repair Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
 
@@ -1439,11 +1616,11 @@ document.addEventListener('click',()=>{
 
 function openFormerOwnerClaim(individualId){
   if(!activeUser||!activeUser.user){
-    alert('先にUserを選択してください。');
+    alert('Select a user first.');
     return;
   }
   if(activeUserOwns(individualId)){
-    alert('現在OwnerはFormer Owner Claimを追加できません。');
+    alert('The current owner cannot add a Former Owner Claim.');
     return;
   }
   selectedIndividualId=Number(individualId);
@@ -1467,11 +1644,11 @@ async function submitFormerOwnerClaim(){
   const acquisitionDate=document.getElementById('formerOwnerAcquisitionDate').value;
   const releaseDate=document.getElementById('formerOwnerReleaseDate').value;
   if(!acquisitionDate||!releaseDate){
-    alert('Acquisition DateとRelease Dateは必須です。');
+    alert('Acquisition Date and Release Date are required.');
     return;
   }
   if(acquisitionDate>=releaseDate){
-    alert('Acquisition DateはRelease Dateより前の日付にしてください。');
+    alert('Acquisition Date must be earlier than Release Date.');
     return;
   }
   const button=document.getElementById('formerOwnerClaimSubmit');
@@ -1491,9 +1668,9 @@ async function submitFormerOwnerClaim(){
     activeUser={user:d.user,guitars:d.guitars};
     closeFormerOwnerClaim();
     if(typeof renderAccount==='function')renderAccount();
-    await showIndividual(individualId);
+    await refreshClaimViews(individualId);
   }catch(e){
-    alert('Former Owner Claimの登録に失敗しました。\n'+e.message);
+    alert('Former Owner Claim could not be added.\n'+e.message);
   }finally{
     button.disabled=false;
   }
@@ -1505,6 +1682,7 @@ function configureOwnershipClaim(mode){
   const fixed=document.getElementById('ownershipClaimFixedTag');
   const previousRow=document.getElementById('ownershipClaimPreviousRow');
   if(ownershipClaimMode==='acquire'){
+    kind.innerHTML='<option value="acquire">Acquire</option>';
     kind.value='acquire';
     kind.style.display='none';
     fixed.style.display='block';
@@ -1524,7 +1702,7 @@ function openOwnershipClaim(individualId,mode='acquire'){
     return;
   }
   if(mode==='add_claim'&&!activeUserOwns(individualId)){
-    alert('現在のUserが所有中のギターだけOwnership Claimを追加できます。');
+    alert('Only the current owner can add this Ownership Claim.');
     return;
   }
   pendingOwnershipClaimIndividualId=Number(individualId);
@@ -1537,7 +1715,7 @@ function openOwnershipClaim(individualId,mode='acquire'){
   document.getElementById('ownershipClaimDate').value='';
   document.getElementById('ownershipClaimPrevious').value='';
   document.getElementById('ownershipClaimBody').value='';
-  document.getElementById('ownershipClaimSubmit').textContent=mode==='acquire'?'Add to Your Chronicle':'Claimを追加';
+  document.getElementById('ownershipClaimSubmit').textContent=mode==='acquire'?'Submit Ownership Claim':'Add Claim';
   document.getElementById('ownershipClaimModal').classList.add('open');
 }
 function openOwnerClaim(individualId){
@@ -1552,10 +1730,15 @@ async function submitOwnershipClaim(){
   if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
   const button=document.getElementById('ownershipClaimSubmit');
   const kind=document.getElementById('ownershipClaimKind').value;
+  if(kind==='acquire'&&!document.getElementById('ownershipClaimDate').value){
+    alert('Acquire requires an acquisition date.');
+    document.getElementById('ownershipClaimDate').focus();
+    return;
+  }
   if(kind==='release'){
     const guitar=individuals.find(x=>Number(x.id)===Number(pendingOwnershipClaimIndividualId));
-    const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'このギター';
-    if(!confirm(label+' の所有紐づけを解除し、Current OwnerをUnknownに変更します。\n\nこの内容でReleaseしますか？'))return;
+    const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'this guitar';
+    if(!confirm(label+' will be released and Current Owner will become Unknown.\n\nContinue?'))return;
   }
   button.disabled=true;
   try{
@@ -1575,9 +1758,9 @@ async function submitOwnershipClaim(){
     activeUser={user:d.user,guitars:d.guitars};
     closeOwnershipClaim();
     if(typeof renderAccount==='function')renderAccount();
-    await showIndividual(individualId);
+    await refreshClaimViews(individualId);
   }catch(e){
-    alert('Ownership Claimの登録に失敗しました.\n'+e.message);
+    alert('Could not add the Ownership Claim.\n'+e.message);
   }finally{
     button.disabled=false;
   }
@@ -1880,8 +2063,156 @@ async function loadTopPageCharts(){
   }
 }
 
+function profileGuitarTable(section,title){
+  const columns=[['id','ID'],['favorite','♡'],['manufacturer','Maker'],['model','Model'],['finish','Finish'],['year','Year'],['serial_number','Serial'],['claim_count','Claims']];
+  return '<section class="panel profile-panel profile-list-panel page-section" data-profile-section="'+section+'" id="profile-'+section+'">'+
+    '<div class="toolbar"><h2>'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
+    '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>key==='favorite'?'<th class="favorite-cell" aria-label="Favorite">'+label+'</th>':'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
+    '<tbody id="profileRows-'+section+'"></tbody></table></div>'+
+    (section==='owned'?'<button id="newGuitarAction" class="new-guitar-action" type="button" onclick="openNewGuitar()" hidden>Let\'s add your undiscovered new guitar!</button>':'')+'</section>';
+}
+function openNewGuitar(){
+  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
+  document.getElementById('guitarStatus').textContent='';
+  document.getElementById('newGuitarModal').classList.add('open');
+  document.getElementById('guitarMaker').focus();
+}
+function closeNewGuitar(){document.getElementById('newGuitarModal').classList.remove('open')}
+async function submitNewGuitar(){
+  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
+  const field=id=>document.getElementById(id);
+  const maker=field('guitarMaker').value.trim(),serial=field('guitarSerial').value.trim(),image=field('guitarImage').files[0];
+  if(!maker||!serial||!image){field('guitarStatus').textContent='Maker, Serial, and Representative Image are required.';return}
+  const button=field('guitarSubmit');button.disabled=true;field('guitarStatus').textContent='Saving...';
+  try{
+    const data=new FormData();
+    for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'guitarDate',body:'guitarMemo'}))data.append(key,field(id).value.trim());
+    data.append('representative_image',image);
+    const result=await jfetch('/api/users/'+PROFILE_USER_ID+'/new-guitar',{method:'POST',body:data});
+    window.location.href='/users/'+PROFILE_USER_ID+'?individual_id='+encodeURIComponent(result.individual_id);
+  }catch(error){field('guitarStatus').textContent=error.message;button.disabled=false}
+}
+function setProfileSort(section,key){
+  const state=profileSort[section];
+  if(state.key===key)state.direction*=-1;
+  else{state.key=key;state.direction=1}
+  renderProfileGuitars(section);
+  document.getElementById('profileRows-'+section).closest('.table-wrap').scrollTop=0;
+}
+function renderProfileGuitars(section){
+  const root=document.getElementById('profileRows-'+section);
+  if(!root)return;
+  const filter=document.getElementById('profileFilter-'+section).value.trim().toLowerCase();
+  const status=section==='owned'?'current_owner':'former_owner';
+  const state=profileSort[section];
+  const rows=(section==='favorites'?profileFavorites:profileGuitars.filter(g=>g.ownership_status===status)).filter(g=>
+    [g.manufacturer,g.model,g.finish,g.year,g.serial_number].join(' ').toLowerCase().includes(filter)).sort((a,b)=>{
+      const av=normalizeSortValue(state.key==='id'?a.individual_id:a[state.key],state.key);
+      const bv=normalizeSortValue(state.key==='id'?b.individual_id:b[state.key],state.key);
+      if(av<bv)return -state.direction;
+      if(av>bv)return state.direction;
+      return Number(a.individual_id)-Number(b.individual_id);
+    });
+  for(const key of ['id','manufacturer','model','finish','year','serial_number','claim_count']){
+    const el=document.getElementById('profileSort-'+section+'-'+key);
+    if(el)el.textContent=state.key===key?(state.direction===1?'▲':'▼'):'';
+  }
+  root.innerHTML=rows.length?rows.map(g=>
+    '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+',true)">'+
+      '<td>'+Number(g.individual_id)+'</td><td class="favorite-cell">'+favoriteButton(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
+  ).join(''):'<tr><td colspan="8" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
+}
+function renderUserChronicle(items){
+  const root=document.getElementById('userChronicleList');
+  if(!root)return;
+  root.innerHTML=items.length?items.map(item=>{
+    const category=['User','Social','Product','Claim','Other'].includes(item.category)?item.category:'Other';
+    const id=Number(item.individual_id||0);
+    const clickable=id>0;
+    const interaction=clickable?' onclick="showIndividual('+id+',true)" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showIndividual('+id+',true)}"':'';
+    const story=String(item.subject||'')+' '+String(item.message||'');
+    return '<div class="profile-chronicle-row'+(clickable?' clickable':'')+'"'+interaction+' title="'+esc(story)+'">'+
+      '<span class="profile-chronicle-tag '+category.toLowerCase()+'">'+category+'</span>'+
+      '<span class="profile-chronicle-line" aria-hidden="true"></span>'+
+      '<span class="profile-chronicle-time">'+esc(displayDiscoveryDateTime(item.event_at))+'</span>'+
+      '<span class="profile-chronicle-story"><strong>'+esc(item.subject||'')+'</strong> '+esc(item.message||'')+'</span></div>';
+  }).join(''):'<div class="profile-placeholder">No Chronicle entries yet.</div>';
+}
+function setupProfileShell(){
+  document.body.classList.add('profile-mode');
+  document.querySelector('header .sub').textContent='User Profile';
+  const nav=document.querySelector('.page-nav');
+  nav.innerHTML='<a href="/user-view">Top Page</a><a href="#profile-user">User Profile</a><a href="#profile-owned">Owned Guitars</a><a href="#profile-former">Formerly Owned Guitars</a><a href="#profile-favorites">Favorite Guitars</a><a href="#profile-chronicle">User Chronicle</a>';
+  document.querySelector('.left-column').innerHTML=
+    '<section class="panel profile-panel page-section" data-profile-section="user" id="profile-user"><h2>User Profile</h2><div id="profileHero" class="sub">Loading...</div></section>'+
+    profileGuitarTable('owned','Owned Guitars')+
+    profileGuitarTable('former','Formerly Owned Guitars')+
+    profileGuitarTable('favorites','Favorite Guitars')+
+    '<section class="panel profile-panel page-section" data-profile-section="chronicle" id="profile-chronicle"><h2>User Chronicle</h2><div class="profile-activity-list" id="userChronicleList"><div class="sub">Loading...</div></div></section>';
+  for(const selector of ['#statistics','#world-map','.page-bottom-space']){
+    const el=document.querySelector(selector);
+    if(el)el.remove();
+  }
+  document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
+}
+async function loadProfilePage(preferredIndividualId=null){
+  const hero=document.getElementById('profileHero');
+  if(!activeUser||!activeUser.user){
+    applyTheme('dark_default');
+    hero.innerHTML='<div class="profile-name">Members only</div><div class="profile-meta">Sign in to view member profiles.</div><div class="profile-actions"><button onclick="location.href=\'/user-view/edit\'">Sign In / Create Account</button></div>';
+    for(const section of ['owned','former','favorites','chronicle'])document.getElementById('profile-'+section).hidden=true;
+    document.getElementById('detail').textContent='User Profile is available to members.';
+    return;
+  }
+  try{
+    const [data,chronicle]=await Promise.all([
+      jfetch('/api/users/'+PROFILE_USER_ID+'/profile?viewer_id='+Number(activeUser.user.id)),
+      jfetch('/api/users/'+PROFILE_USER_ID+'/chronicle?viewer_id='+Number(activeUser.user.id))
+    ]);
+    const u=data.user, summary=data.summary||{};
+    applyTheme(u.theme);
+    profileGuitars=data.guitars||[];
+    profileFavorites=data.favorites||[];
+    const own=Number(activeUser.user.id)===Number(u.id);
+    document.getElementById('newGuitarAction').hidden=!own;
+    const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ');
+    const profileMeta=[
+      ['Account Type',u.account_type||'user'],
+      ['Member since',String(u.created_at||'').slice(0,10)],
+      ...(locationText?[['Location',locationText]]:[]),
+      ...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])
+    ].map(([label,value])=>'<div class="profile-meta-item"><span class="profile-meta-label">'+esc(label)+'</span><span class="profile-meta-value">'+esc(value)+'</span></div>').join('');
+    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
+    hero.innerHTML='<div class="profile-hero">'+
+      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
+      '<div class="profile-meta">'+profileMeta+'</div>'+
+      '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
+      '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'')+'</div></div>';
+    document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
+    renderProfileGuitars('owned');
+    renderProfileGuitars('former');
+    renderProfileGuitars('favorites');
+    renderUserChronicle(chronicle);
+    const requested=Number(new URLSearchParams(location.search).get('individual_id')||0);
+    const signature=profileGuitars.find(g=>g.ownership_status==='current_owner'&&Number(g.individual_id)===Number(u.signature_individual_id));
+    const selected=[...profileGuitars,...profileFavorites].find(g=>Number(g.individual_id)===requested)||signature||profileGuitars[0]||profileFavorites[0];
+    if(preferredIndividualId!==null)await showIndividual(Number(preferredIndividualId));
+    else if(selected)await showIndividual(Number(selected.individual_id));
+  }catch(e){
+    applyTheme('dark_default');
+    hero.innerHTML='<div class="profile-placeholder">User Profile could not be loaded. '+esc(e.message)+'</div>';
+  }
+}
+
 (async()=>{
   await loadActiveUser();
+  if(PROFILE_USER_ID){
+    setupProfileShell();
+    await loadProfilePage();
+    return;
+  }
   await loadNewDiscoveries();
   await loadIndividuals();
   await Promise.all([loadTopPageCharts(),loadWorldMap()]);
@@ -1907,7 +2238,7 @@ async function loadTopPageCharts(){
   if(selectedIndividualId!==null){
     await showIndividual(selectedIndividualId);
   }else{
-    document.getElementById('detail').textContent='表示できるIndividualがありません。';
+    document.getElementById('detail').textContent='No Individual to display.';
   }
 })()
 </script>

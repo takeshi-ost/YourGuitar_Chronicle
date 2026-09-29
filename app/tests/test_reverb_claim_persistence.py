@@ -118,8 +118,8 @@ def test_reverb_listing_creates_claim_and_snapshot(
     assert observation["finish"] is None
     assert observation["year"] is None
     assert observation["serial_number"] is None
-    assert observation["owner_name"] is None
-    assert observation["location_country"] is None
+    assert observation["owner_name"] == "Vintage Shop"
+    assert observation["location_country"] == "US"
 
     claims = repository.list_claims(
         individual_id
@@ -130,6 +130,14 @@ def test_reverb_listing_creates_claim_and_snapshot(
     assert claims[0]["observed_serial_number"] == "524436"
     assert claims[0]["observed_owner_name"] == "Vintage Shop"
     assert claims[0]["location_region"] == "CA"
+    with repository.connect() as con:
+        author = con.execute(
+            "SELECT display_name, account_type FROM users WHERE id = ?",
+            (claims[0]["author_user_id"],),
+        ).fetchone()
+    assert tuple(author) == ("Automation", "source")
+    with pytest.raises(ValueError, match="through Claims"):
+        repository.update_individual_metadata(individual_id, finish="Red")
 
 
 def test_second_reverb_listing_reuses_individual_and_rebuilds_location(
@@ -181,13 +189,11 @@ def test_second_reverb_listing_reuses_individual_and_rebuilds_location(
     claims = repository.list_claims(
         int(first["individual_id"])
     )
-    assert len(
-        [
-            row
-            for row in claims
-            if row["claim_type"] == "listing"
-        ]
-    ) == 2
+    assert [row["claim_type"] for row in claims].count("listing") == 1
+    acquire = [row for row in claims if row["claim_type"] == "ownership"]
+    assert len(acquire) == 1
+    assert acquire[0]["ownership_kind"] == "acquire"
+    assert acquire[0]["verification_status"] == "positive"
 
 
 def test_reverb_external_duplicate_does_not_create_second_claim(
@@ -221,15 +227,82 @@ def test_reverb_external_duplicate_does_not_create_second_claim(
                 """
             ).fetchone()[0]
         ) == 1
+
         assert int(
             con.execute(
-                """
-                SELECT COUNT(*)
-                FROM claims
-                WHERE claim_type = 'listing'
-                """
+                "SELECT COUNT(*) FROM claims WHERE claim_type = 'listing'"
             ).fetchone()[0]
         ) == 1
+
+
+def test_relisted_guitar_owned_by_user_waits_for_owner_confirmation(tmp_path: Path):
+    repository = Repository(tmp_path / "chronicle.db")
+    repository.init_db()
+    first = repository.persist_reverb_listing_claim(
+        _claim_data(listing_id="1"), _provenance(listing_id="1"),
+    )
+    user_id = repository.create_user("Current owner")
+    repository.create_ownership_claim(
+        user_id, first["individual_id"], ownership_kind="acquire",
+        occurred_at="2026-09-25",
+    )
+    second = repository.persist_reverb_listing_claim(
+        _claim_data(listing_id="2", region="NY"),
+        _provenance(listing_id="2"),
+    )
+    assert second["verification_status"] == "unverified"
+    assert repository.claim_architecture_status()['ready'] is True
+    assert repository.migrate_legacy_observations_to_claims()['claims_created'] == 0
+    with repository.connect() as con:
+        individual = con.execute(
+            "SELECT current_owner_user_id, location_region FROM individuals WHERE id = ?",
+            (first["individual_id"],),
+        ).fetchone()
+    assert int(individual["current_owner_user_id"]) == user_id
+    assert individual["location_region"] is None
+    repository.init_db()
+    with repository.connect() as con:
+        status = con.execute(
+            "SELECT verification_status FROM claims WHERE id = ?",
+            (second["claim_id"],),
+        ).fetchone()[0]
+    assert status == "unverified"
+    assert repository.set_claim_response(second["claim_id"], user_id, "positive")
+    with repository.connect() as con:
+        approved = con.execute(
+            "SELECT current_owner_name, current_owner_user_id, location_region "
+            "FROM individuals WHERE id = ?", (first["individual_id"],),
+        ).fetchone()
+    assert approved["current_owner_name"] == "Vintage Shop"
+    assert approved["current_owner_user_id"] is None
+    assert approved["location_region"] == "NY"
+
+
+def test_relist_acquires_are_ready_for_crawl_and_not_migrated_into_listings(tmp_path: Path):
+    repository = Repository(tmp_path / 'relist-readiness.db')
+    repository.init_db()
+    first = repository.persist_reverb_listing_claim(
+        _claim_data(listing_id='1'), _provenance(listing_id='1'))
+    for listing_id in ('2', '3'):
+        relisted = repository.persist_reverb_listing_claim(
+            _claim_data(listing_id=listing_id), _provenance(listing_id=listing_id))
+        assert relisted['individual_id'] == first['individual_id']
+        assert relisted['claim_id'] is not None
+
+    status = repository.claim_architecture_status()
+    assert status['ready'] is True
+    assert status['migration_required'] is False
+    assert status['unmigrated_listing_observations'] == 0
+    assert repository.migrate_legacy_observations_to_claims()['claims_created'] == 0
+    with repository.connect() as con:
+        claims = con.execute(
+            "SELECT claim_type, ownership_kind FROM claims WHERE individual_id=? ORDER BY id",
+            (first['individual_id'],),
+        ).fetchall()
+    assert [(c['claim_type'], c['ownership_kind']) for c in claims] == [
+        ('listing', None), ('ownership', 'acquire'), ('ownership', 'acquire'),
+    ]
+    assert repository.audit_observation_migration()['individuals_mismatched'] == 0
 
 
 def test_reverb_listing_without_identity_stores_provenance_only(
