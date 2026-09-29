@@ -1058,9 +1058,9 @@ def product_detail_script() -> FileResponse:
 
 @app.get("/assets/logos/{filename}")
 def theme_logo(filename: str) -> FileResponse:
-    if filename not in {"script.svg", "block.svg", "badge.svg"}:
+    if filename not in {"your-guitar-chronicle.png"}:
         raise HTTPException(status_code=404, detail="Logo asset not found")
-    return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/svg+xml")
+    return FileResponse(Path(__file__).with_name("static") / "logos" / filename, media_type="image/png")
 
 
 @app.get("/assets/sunburst-wood.webp")
