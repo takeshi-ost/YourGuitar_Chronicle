@@ -136,6 +136,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .accordion-section{margin-top:10px}
 .accordion-header{display:flex;align-items:center;gap:8px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .accordion-toggle{width:24px;height:24px;min-width:24px;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}
+.accordion-header .accordion-toggle{margin-left:auto}
 .accordion-title{font-weight:700;cursor:pointer}
 .accordion-header .toolbar{margin:0 0 0 auto}
 .accordion-body{display:block}
@@ -242,6 +243,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}
 #detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}
 #detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}
+#detail .owner-value{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .catalog-spec{font-size:12px;line-height:1.55}
 #detail .catalog-spec-row{padding:3px 0}
 #detail .catalog-spec-label{text-align:left}
@@ -251,6 +253,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .owner-claim-card:hover{background:color-mix(in srgb,var(--accent) 18%,var(--surface,#24282c));color:var(--text)}
 #detail .owner-claim-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #detail .accordion-header{min-width:0;flex-wrap:wrap;min-height:34px}
+#detail .chronicle-toolbar{margin:0 0 10px;padding:0 0 8px;justify-content:flex-start}
 #detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
 #detail .accordion-header .toolbar select{width:auto;max-width:100%;border:1px solid #343b43;border-radius:7px;background:#111418;color:var(--text)}
@@ -263,12 +266,12 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}
 #detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}
 #detail .claim-footer-meta a{color:inherit}
-@media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}#detail .accordion-header .toolbar{width:100%;justify-content:flex-start;margin:3px 0 0 32px}}
+@media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
 <link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
-<script src="/assets/product-detail.js?v=album-reverb-link" defer></script>
+<script src="/assets/product-detail.js?v=chronicle-layout-v1" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -584,7 +587,6 @@ let productGallery=[];
 let productGalleryIndex=0;
 let currentObservations=[];
 let currentClaims=[];
-let chronicleSort='event';
 let notificationData={unread_count:0,notifications:[]};
 let pendingOwnershipClaimIndividualId=null;
 let ownershipClaimMode='acquire';
@@ -889,7 +891,10 @@ function currentSnapshotOwnerHtml(i){
   const type=String(i.current_owner_type||'').trim();
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
-  if(i.current_owner_user_id&&activeUser&&activeUser.user)return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>';
+  if(i.current_owner_user_id&&activeUser&&activeUser.user){
+    const you=Number(i.current_owner_user_id)===Number(activeUser.user.id)?'<span class="account-hub-you">You</span>':'';
+    return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>'+you;
+  }
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
   return esc(label);
 }
@@ -937,7 +942,7 @@ function ownershipControlsHtml(individual){
     : '';
   if(activeUser&&activeUser.user&&individual.current_owner_user_id!==null
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
-    return actorNote+'<div class="toolbar" style="margin-top:10px"><span class="status good">Your Guitar</span></div>';
+    return actorNote;
   }
   const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
   return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
@@ -1228,15 +1233,9 @@ function toggleDetailAccordion(id){
 }
 
 function renderChronicle(){
-  const claims=YGCProductDetail.orderedClaims(currentClaims,chronicleSort);
+  const claims=YGCProductDetail.orderedClaims(currentClaims);
   const el=document.getElementById('chronicleEntries');
   if(el)el.innerHTML=claims.length?claims.map(claimCard).join(''):'<div class="sub">No Claims yet.</div>';
-}
-function setChronicleSort(value){
-  chronicleSort=value==='input'?'input':'event';
-  renderChronicle();
-  const list=document.getElementById('chronicleEntries');
-  if(list)list.scrollTop=0;
 }
 
 async function setClaimResponse(claimId,stance){
@@ -1341,7 +1340,7 @@ async function showIndividual(id,fromList=false){
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
-  const chronicleAction='<div class="toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div><select onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>Event date</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>Entry date</option></select></div>';
+  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i),
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});

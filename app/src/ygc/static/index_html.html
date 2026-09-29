@@ -112,7 +112,8 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 /* Match the internal Product Detail rows and accordions on Top Page. */
 #detail .detail-gallery{grid-template-columns:28px minmax(0,1fr) 28px}#detail .detail-gallery-nav{width:28px;min-width:28px;height:28px;display:flex;align-items:center;justify-content:center}#detail .detail-header-title{line-height:1.4;overflow-wrap:anywhere}
 #detail .current-owner-line,#detail .catalog-spec-row{display:grid;grid-template-columns:94px minmax(0,1fr);gap:8px;align-items:start;min-width:0;overflow-wrap:anywhere}#detail .current-owner-line{margin:6px 0;font-size:12px;line-height:1.55}#detail .catalog-spec{font-size:12px;line-height:1.55}#detail .catalog-spec-row{padding:3px 0}
-#detail .accordion-section{margin-top:10px}#detail .accordion-header{display:flex;align-items:center;gap:8px;min-height:34px;margin:18px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}#detail .accordion-toggle{width:24px;height:24px;min-width:24px;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}#detail .accordion-title{font-weight:700;cursor:pointer}#detail .accordion-section.collapsed .accordion-body{display:none}#detail .accordion-section.collapsed .accordion-toggle{transform:rotate(-90deg)}
+#detail .accordion-section{margin-top:10px}#detail .accordion-header{display:flex;align-items:center;gap:8px;min-height:34px;margin:18px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}#detail .accordion-toggle{width:24px;height:24px;min-width:24px;margin-left:auto;padding:0;border-radius:6px;background:#252a2f;color:var(--text);font-size:12px;line-height:24px;text-align:center}#detail .accordion-title{font-weight:700;cursor:pointer}#detail .accordion-section.collapsed .accordion-body{display:none}#detail .accordion-section.collapsed .accordion-toggle{transform:rotate(-90deg)}
+#detail .owner-value{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .claim-head{min-width:0;min-height:28px;align-items:center;gap:6px;flex-wrap:wrap}#detail .claim-badge{min-height:20px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2;padding:2px 8px}#detail .claim-event-date{display:inline-flex;align-items:center;min-height:26px;line-height:1.2}#detail .claim-footer{min-width:0;min-height:30px;flex-wrap:wrap;align-items:center;row-gap:6px}#detail .claim-votes{align-items:center}#detail .claim-vote{height:26px;min-height:26px;display:inline-flex;align-items:center;justify-content:center;line-height:1.2}#detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}#detail #chronicleEntries{max-height:none;overflow:visible;padding:0}
 .detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}
 #detail .detail-header>.toolbar{margin:12px 0 0;min-height:28px}#detail .detail-header>.toolbar button{min-height:28px;display:inline-flex;align-items:center;justify-content:center}
@@ -131,7 +132,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 #adminClaimPopup{position:fixed;inset:0;z-index:1001;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}#adminClaimPopup.open{display:flex}#adminClaimPopupContent{width:min(480px,100%);max-height:calc(100vh - 32px);overflow:auto}#adminClaimPopupContent .claim-card{margin:0}
 @media(max-width:900px){main{padding:calc(var(--header-height,47px) + 14px) 14px 22px}.detail-shell{height:auto;margin:0}.stats-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats-columns{grid-template-columns:1fr}#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 </style>
-<script src="/assets/product-detail.js?v=album-reverb-link" defer></script>
+<script src="/assets/product-detail.js?v=chronicle-layout-v1" defer></script>
 <script src="/assets/list-navigation.js" defer></script>
 </head>
 <body>
@@ -707,18 +708,11 @@ function claimCard(c){
   const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote danger" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
-let chronicleSort='event';
 let currentAdminClaims=[];
 function renderAdminChronicle(){
-  const ordered=YGCProductDetail.orderedClaims(currentAdminClaims,chronicleSort);
+  const ordered=YGCProductDetail.orderedClaims(currentAdminClaims);
   const target=document.getElementById('chronicleEntries');
   if(target)target.innerHTML=ordered.length?ordered.map(adminClaimCard).join(''):'<div class="sub">No Claims yet.</div>';
-}
-function setChronicleSort(value){
-  chronicleSort=value==='input'?'input':'event';
-  renderAdminChronicle();
-  const list=document.getElementById('chronicleEntries');
-  if(list)list.scrollTop=0;
 }
 function adminClaimCard(c){
   const status=String(c.verification_status||'positive').toLowerCase();
@@ -773,11 +767,10 @@ async function showIndividual(id){
   }
 
   currentAdminClaims=claims||[];
-  const chronicleAction='<div class="toolbar"><select aria-label="Chronicle sort" onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>Event date</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>Entry date</option></select></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i.id),
     headerAction:'<div class="toolbar admin-detail-actions"><button class="danger" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
-    chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
+    fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderAdminChronicle();
 }

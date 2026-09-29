@@ -1,8 +1,8 @@
 /* Shared Product Detail layout. Page-specific actions and Claim cards are extensions. */
 window.YGCProductDetail = (() => {
-  function orderedClaims(source, mode = 'event') {
+  function orderedClaims(source) {
     const sorted = (source || []).slice().sort((a, b) => {
-      const value = c => mode === 'input' ? String(c.created_at || '') : String(c.occurred_at || c.created_at || '').slice(0, 10);
+      const value = c => String(c.occurred_at || c.created_at || '').slice(0, 10);
       const av = value(a), bv = value(b);
       return av < bv ? 1 : av > bv ? -1 : Number(b.id) - Number(a.id);
     });
@@ -50,15 +50,15 @@ window.YGCProductDetail = (() => {
     const row = (label, value) => '<div class="catalog-spec-row"><span class="catalog-spec-label">' + escape(label) + ':</span> ' + escape(value) + '</div>';
     return image +
       '<div class="detail-header"><div class="detail-title-row"><div class="detail-header-title">' + escape(i.manufacturer) + ' ' + escape(i.model || '') + '</div>' + titleAction + '</div>' +
-      '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span> ' + owner + '</div>' +
+      '<div class="current-owner-line"><span class="catalog-spec-label">Current Owner:</span><span class="owner-value">' + owner + '</span></div>' +
       '<div class="current-owner-line"><span class="catalog-spec-label">Location:</span> ' + location + '</div>' +
       ownership + headerAction + '</div>' +
-      '<section class="accordion-section" id="specificationAccordion"><div class="accordion-header"><button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button><span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span></div><div class="accordion-body"><div class="catalog-spec">' +
+      '<section class="accordion-section" id="specificationAccordion"><div class="accordion-header"><span class="accordion-title" onclick="toggleDetailAccordion(\'specificationAccordion\')">Specification</span><button type="button" class="accordion-toggle" aria-label="Toggle Specification" onclick="toggleDetailAccordion(\'specificationAccordion\')">▼</button></div><div class="accordion-body"><div class="catalog-spec">' +
       fixed.map(([label, value]) => row(label, value)).join('') +
       dynamic.map(s => row(fieldLabel(s.field_name), s.value_text || '—')).join('') +
       '</div></div></section>' +
-      '<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><button type="button" class="accordion-toggle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span>' + chronicleAction +
-      '</div><div class="accordion-body"><div id="chronicleEntries"></div></div></section>';
+      '<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span><button type="button" class="accordion-toggle" aria-label="Toggle Chronicle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button></div>' +
+      '<div class="accordion-body">' + chronicleAction + '<div id="chronicleEntries"></div></div></section>';
   }
   return {render, orderedClaims};
 })();
