@@ -177,7 +177,7 @@
 
 /* Curated wordmarks match the selected guitar color theme. */
 .sticky-header .brand-link{display:inline-flex;vertical-align:middle;align-items:center;line-height:0}
-.sticky-header .brand-logo{display:none;width:min(270px,65vw);height:90px;object-fit:contain}
+.sticky-header .brand-logo{display:none;width:min(270px,65vw);height:46px;object-fit:contain}
 .sticky-header .brand-logo-script{display:block}
 :root[data-theme="dark_default"] .brand-logo-script,
 :root[data-theme="black_pearl"] .brand-logo-script,
@@ -188,8 +188,12 @@
 :root[data-theme="goldtop_cream"] .brand-logo-block,
 :root[data-theme="cherry_red_black"] .brand-logo-block{display:block}
 :root[data-theme="butterscotch_black"] .brand-logo-script,
+:root[data-theme="olympic_white_mint"] .brand-logo-script,
+:root[data-theme="surf_green_white"] .brand-logo-script,
 :root[data-theme="vintage_white_gold"] .brand-logo-script,
 :root[data-theme="lake_blue_pearl"] .brand-logo-script{display:none}
 :root[data-theme="butterscotch_black"] .brand-logo-badge,
+:root[data-theme="olympic_white_mint"] .brand-logo-badge,
+:root[data-theme="surf_green_white"] .brand-logo-badge,
 :root[data-theme="vintage_white_gold"] .brand-logo-badge,
 :root[data-theme="lake_blue_pearl"] .brand-logo-badge{display:block}
