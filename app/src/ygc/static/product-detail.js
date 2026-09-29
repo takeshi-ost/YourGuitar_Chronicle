@@ -138,8 +138,9 @@ window.YGCImageAlbum = (() => {
 
   const style = document.createElement('style');
   style.textContent = `
-    .detail-image.album-trigger{cursor:zoom-in}
-    .detail-image.album-trigger:focus-visible{outline:2px solid var(--accent,#d0a45d);outline-offset:3px}
+    #detail .detail-gallery,#detail .detail-image-link,#detail .detail-image:not(.detail-gallery .detail-image):not(.detail-image-link .detail-image){cursor:zoom-in}
+    #detail .detail-gallery-nav{cursor:pointer}
+    #detail .detail-gallery:focus-visible,#detail .detail-image-link:focus-visible,#detail .detail-image:focus-visible{outline:2px solid var(--accent,#d0a45d);outline-offset:3px}
     .ygc-album-backdrop{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:clamp(12px,2.5vw,32px);background:rgba(0,0,0,.88)}
     .ygc-album-panel{box-sizing:border-box;width:min(1600px,100%);height:min(1000px,100%);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;padding:12px 16px;background:#111418;color:#f0f0ed;border:1px solid #5a626a;border-radius:12px;box-shadow:0 20px 70px #000b}
     .ygc-album-header{display:flex;align-items:center;justify-content:space-between;min-height:36px;font-size:13px;color:#c6cbd0}
@@ -158,5 +159,31 @@ window.YGCImageAlbum = (() => {
   function openRepresentative(image) {
     open([{url: image.currentSrc || image.src, label: 'Representative Image'}], 0, image);
   }
+
+  function openFromFrame(event) {
+    if (event.target.closest('.detail-gallery-nav')) return false;
+    const detail = event.target.closest('#detail');
+    if (!detail) return false;
+    const gallery = event.target.closest('.detail-gallery');
+    if (gallery) {
+      if (typeof window.openProductAlbum === 'function') window.openProductAlbum();
+      return true;
+    }
+    const frame = event.target.closest('.detail-image-link, .detail-image');
+    if (!frame) return false;
+    const image = frame.matches('img') ? frame : frame.querySelector('img');
+    if (!image) return false;
+    const source = frame.closest('.detail-image-link') ? 'Listing Image' : (image.alt || 'Guitar image');
+    open([{url: image.currentSrc || image.src, label: source}], 0, frame);
+    return true;
+  }
+  document.addEventListener('click', event => {
+    if (openFromFrame(event)) event.preventDefault();
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.target.closest('.detail-gallery-nav')) return;
+    if (openFromFrame(event)) event.preventDefault();
+  });
   return {open, openRepresentative, close, step};
 })();

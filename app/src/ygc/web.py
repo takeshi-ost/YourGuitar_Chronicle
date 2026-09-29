@@ -1049,7 +1049,11 @@ def list_navigation_script() -> FileResponse:
 
 @app.get("/assets/product-detail.js")
 def product_detail_script() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("static") / "product-detail.js", media_type="text/javascript")
+    return FileResponse(
+        Path(__file__).with_name("static") / "product-detail.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/assets/logos/{filename}")
