@@ -242,7 +242,17 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         page = client.get("/user-view/edit")
         assert page.status_code == 200
         assert '<h2 id="profileHeading">User Profile</h2>' in page.text
-        assert 'id="newGuitarModal"' in page.text
+        assert 'id="newGuitarModal"' not in page.text
+        assert 'onclick="openNewGuitar()"' not in page.text
+        assert 'window.location.href=\'/users/\'+id' in page.text
+        assert 'onclick="saveSettings()">Save</button><button type="button" class="secondary"' in page.text
+        assert '>Cancel</button>' in page.text
+        profile = client.get(f"/users/{user_id}")
+        assert profile.status_code == 200
+        assert 'id="newGuitarModal"' in profile.text
+        assert "Let\\'s add your undiscovered new guitar!" in profile.text
+        assert "Let\\'s add your Claim !!" in profile.text
+        assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in profile.text
         assert 'Product Detail' not in page.text
         assert 'data-field="residence"' in page.text
         assert 'type="email"' in page.text

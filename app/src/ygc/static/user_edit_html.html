@@ -20,10 +20,8 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 .settings-row{display:grid;grid-template-columns:minmax(155px,1fr) minmax(220px,1.65fr) minmax(145px,.8fr);gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}.settings-row:last-of-type{border-bottom:0}
 .field-name{font-size:12px;font-weight:800}.field-note{font-size:10px;color:var(--muted);margin-top:3px}.field-value{min-width:0}.field-value .sub{display:block;margin-top:4px}.visibility-fixed{display:inline-block;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#14171a;font-size:11px;color:var(--muted)}
 .avatar-input{display:flex;align-items:center;gap:12px}.avatar-input img{width:64px;height:64px;object-fit:cover;border-radius:50%;background:#111418;border:1px solid var(--line);flex:0 0 auto}.avatar-input input{font-size:11px}
-.settings-actions{display:flex;align-items:center;gap:10px;padding-top:16px}.settings-actions .sub{min-width:0}#status[data-error="true"]{color:#e07171}#status[data-error="false"]{color:#66c58a}.back-actions{display:flex;justify-content:center;margin:20px auto 0}
-.modal-backdrop{display:none;position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.modal-grid label{font-size:11px;color:var(--muted)}.modal-grid label.full{grid-column:1/-1}.modal-grid input,.modal-grid textarea{display:block;margin-top:4px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.settings-actions{display:flex;align-items:center;justify-content:center;gap:10px;padding-top:16px}.settings-actions .sub{min-width:0}#status[data-error="true"]{color:#e07171}#status[data-error="false"]{color:#66c58a}
 @media(max-width:680px){header{flex-wrap:wrap;gap:4px}.page-nav{margin-left:0}.account-hub{flex-wrap:wrap}.settings-row{grid-template-columns:1fr;gap:6px}.settings-actions{flex-wrap:wrap}}
-@media(max-width:520px){.modal-grid{grid-template-columns:1fr}.modal-grid label.full{grid-column:auto}}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
@@ -49,19 +47,9 @@ input,select,textarea{width:100%;min-width:0;background:#111418;color:var(--text
 <div class="settings-row"><div><div class="field-name">Your signature guitar</div><div class="field-note">Optional · Guitar initially shown on your profile</div></div><div class="field-value"><select id="signatureGuitar" aria-label="Your signature guitar"><option value="">Select an owned guitar</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">Color theme · Header remains consistent</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"></select><span class="sub">Preview the selected theme. Select Save to apply it.</span></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Preferred Language</div><div class="field-note">Required · UI language</div></div><div class="field-value"><select id="language" disabled aria-label="Preferred Language"><option value="en">English</option><option value="ja">Japanese</option></select><span class="sub">Available when multiple UI languages are supported.</span></div><div class="visibility-fixed">Private · Fixed</div></div>
-<div class="settings-actions"><button id="saveButton" onclick="saveSettings()">Save</button><button type="button" class="secondary" onclick="openNewGuitar()">Add Guitar</button><span class="sub" id="status" role="status"></span></div>
+<div class="settings-actions"><button id="saveButton" onclick="saveSettings()">Save</button><button type="button" class="secondary" onclick="window.location.href=activeUser?'/users/'+activeUser.user.id:'/user-view'">Cancel</button><span class="sub" id="status" role="status"></span></div>
 </div><div id="emptyState" class="sub">Select a user to edit settings.</div>
-</section><div class="back-actions"><button class="secondary" onclick="window.location.href=activeUser?'/users/'+activeUser.user.id:'/user-view'">Back</button></div></main>
-<div class="modal-backdrop" id="newGuitarModal" onclick="if(event.target===this)closeNewGuitar()"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="newGuitarTitle">
-<h2 id="newGuitarTitle">Add Guitar</h2><p class="sub">Creates the first Listing Claim and registers this user as the initial owner.</p>
-<div class="modal-grid">
-<label>Maker *<input id="guitarMaker" maxlength="120"></label><label>Model<input id="guitarModel" maxlength="160"></label>
-<label>Year<input id="guitarYear" maxlength="40"></label><label>Finish<input id="guitarFinish" maxlength="160"></label>
-<label>Serial *<input id="guitarSerial" maxlength="160"></label><label>Listing Date<input id="guitarDate" type="date"></label>
-<label class="full">Representative Image *<input id="guitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-<label class="full">Claim memo<textarea id="guitarMemo" maxlength="2000"></textarea></label>
-</div><p class="sub" id="guitarStatus" role="status"></p><div class="modal-actions"><button class="secondary" onclick="closeNewGuitar()">Cancel</button><button id="guitarSubmit" onclick="submitNewGuitar()">Add Guitar</button></div>
-</div></div>
+</section></main>
 <script>
 const ACTIVE_USER_KEY='ygc_active_user_id';
 if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
@@ -125,23 +113,8 @@ async function saveSettings(){
   const result=await request('/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({display_name:field('displayName').value.trim()||activeUser.user.display_name,account_type:field('accountType').value,location_country:field('country').value.trim()||null,location_region:field('city').value.trim()||null,bio:field('bio').value.trim(),date_of_birth:birthInput.value||null,signature_individual_id:field('signatureGuitar').value?Number(field('signatureGuitar').value):null,theme:field('theme').value,...visibility})});
   const image=field('avatar').files[0];
   if(image){const data=new FormData();data.append('avatar',image);await request('/api/users/'+id+'/avatar',{method:'POST',body:data})}
-  await loadUser();setStatus('Saved.');
+  window.location.href='/users/'+id;
  }catch(error){setStatus(error.message,true)}finally{button.disabled=false}
-}
-function openNewGuitar(){if(!activeUser)return;field('newGuitarModal').classList.add('open');field('guitarStatus').textContent='';field('guitarMaker').focus()}
-function closeNewGuitar(){field('newGuitarModal').classList.remove('open')}
-async function submitNewGuitar(){
- if(!activeUser)return;
- const maker=field('guitarMaker').value.trim(),serial=field('guitarSerial').value.trim(),image=field('guitarImage').files[0];
- if(!maker||!serial||!image){field('guitarStatus').textContent='Maker, Serial, and Representative Image are required.';return}
- const button=field('guitarSubmit');button.disabled=true;field('guitarStatus').textContent='Saving...';
- try{
-  const data=new FormData();
-  for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'guitarDate',body:'guitarMemo'}))data.append(key,field(id).value.trim());
-  data.append('representative_image',image);
-  const result=await request('/api/users/'+activeUser.user.id+'/new-guitar',{method:'POST',body:data});
-  window.location.href='/users/'+activeUser.user.id+'?individual_id='+encodeURIComponent(result.individual_id);
- }catch(error){field('guitarStatus').textContent=error.message;button.disabled=false}
 }
 function measureHeader(){document.documentElement.style.setProperty('--header-height',document.querySelector('.sticky-header').offsetHeight+'px')}
 window.addEventListener('resize',measureHeader);

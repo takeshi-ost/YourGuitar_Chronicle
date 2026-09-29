@@ -202,6 +202,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .profile-mode .profile-list-panel{max-height:370px;display:flex;flex-direction:column}
 .profile-mode .profile-list-panel .table-wrap{flex:0 1 auto;min-height:0;max-height:310px;overflow:auto}
+.profile-mode .new-guitar-action{display:block;width:100%;margin-top:10px;padding:10px 12px;text-align:center;white-space:normal}
 .profile-mode .profile-favorites-panel{max-height:370px;overflow:auto}
 .profile-mode .profile-list-panel th:nth-child(1),.profile-mode .profile-list-panel td:nth-child(1){width:52px}
 .profile-mode .profile-list-panel th:nth-child(2),.profile-mode .profile-list-panel td:nth-child(2){width:36px}
@@ -259,6 +260,16 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .owner-claim-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #detail .accordion-header{min-width:0;flex-wrap:wrap;min-height:34px}
 #detail .chronicle-toolbar{margin:0 0 10px;padding:0 0 8px;justify-content:flex-start}
+#detail .chronicle-toolbar .claim-menu-wrap{display:block;width:calc(100% - 22px);margin-left:22px}
+#detail .chronicle-toolbar .add-claim-action{display:block;width:100%;padding:10px 12px;text-align:center;white-space:normal}
+#detail .chronicle-toolbar .claim-menu{left:0;right:0}
+.new-guitar-modal{max-height:calc(100dvh - 32px);overflow:auto}
+.new-guitar-modal .modal-grid label{display:block;color:var(--muted);font-size:11px}
+.new-guitar-modal .modal-grid label.full{grid-column:1/-1}
+.new-guitar-modal .modal-grid input,.new-guitar-modal .modal-grid textarea{display:block;width:100%;margin-top:4px}
+.new-guitar-modal .sub{display:block;margin:0 0 14px}
+.new-guitar-modal #guitarStatus{margin:12px 0 0}
+@media(max-width:560px){.new-guitar-modal .modal-grid label.full{grid-column:auto}}
 #detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
 #detail .accordion-header .toolbar select{width:auto;max-width:100%;border:1px solid #343b43;border-radius:7px;background:#111418;color:var(--text)}
@@ -574,6 +585,21 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
       <button class="secondary" type="button" onclick="window.location.href='/user-view/edit'">Sign In</button>
       <button type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="newGuitarModal" onclick="if(event.target===this)closeNewGuitar()">
+  <div class="modal new-guitar-modal" role="dialog" aria-modal="true" aria-labelledby="newGuitarTitle">
+    <h2 id="newGuitarTitle">Add Guitar</h2>
+    <p class="sub">Creates the first Listing Claim and registers this user as the initial owner.</p>
+    <div class="modal-grid">
+      <label>Maker *<input id="guitarMaker" maxlength="120"></label><label>Model<input id="guitarModel" maxlength="160"></label>
+      <label>Year<input id="guitarYear" maxlength="40"></label><label>Finish<input id="guitarFinish" maxlength="160"></label>
+      <label>Serial *<input id="guitarSerial" maxlength="160"></label><label>Listing Date<input id="guitarDate" type="date"></label>
+      <label class="full">Representative Image *<input id="guitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+      <label class="full">Claim memo<textarea id="guitarMemo" maxlength="2000"></textarea></label>
+    </div><p class="sub" id="guitarStatus" role="status"></p>
+    <div class="modal-actions"><button class="secondary" type="button" onclick="closeNewGuitar()">Cancel</button><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Add Guitar</button></div>
   </div>
 </div>
 
@@ -1345,7 +1371,7 @@ async function showIndividual(id,fromList=false){
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
-  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button onclick="toggleAddClaimMenu(event,'+i.id+')">Add Claim</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div></div>';
+  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button class="add-claim-action" onclick="toggleAddClaimMenu(event,'+i.id+')">Let\'s add your Claim !!</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i),
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
@@ -2035,7 +2061,29 @@ function profileGuitarTable(section,title){
   return '<section class="panel profile-panel profile-list-panel page-section" data-profile-section="'+section+'" id="profile-'+section+'">'+
     '<div class="toolbar"><h2>'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
     '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>key==='favorite'?'<th class="favorite-cell" aria-label="Favorite">'+label+'</th>':'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
-    '<tbody id="profileRows-'+section+'"></tbody></table></div></section>';
+    '<tbody id="profileRows-'+section+'"></tbody></table></div>'+
+    (section==='owned'?'<button id="newGuitarAction" class="new-guitar-action" type="button" onclick="openNewGuitar()" hidden>Let\'s add your undiscovered new guitar!</button>':'')+'</section>';
+}
+function openNewGuitar(){
+  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
+  document.getElementById('guitarStatus').textContent='';
+  document.getElementById('newGuitarModal').classList.add('open');
+  document.getElementById('guitarMaker').focus();
+}
+function closeNewGuitar(){document.getElementById('newGuitarModal').classList.remove('open')}
+async function submitNewGuitar(){
+  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
+  const field=id=>document.getElementById(id);
+  const maker=field('guitarMaker').value.trim(),serial=field('guitarSerial').value.trim(),image=field('guitarImage').files[0];
+  if(!maker||!serial||!image){field('guitarStatus').textContent='Maker, Serial, and Representative Image are required.';return}
+  const button=field('guitarSubmit');button.disabled=true;field('guitarStatus').textContent='Saving...';
+  try{
+    const data=new FormData();
+    for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'guitarDate',body:'guitarMemo'}))data.append(key,field(id).value.trim());
+    data.append('representative_image',image);
+    const result=await jfetch('/api/users/'+PROFILE_USER_ID+'/new-guitar',{method:'POST',body:data});
+    window.location.href='/users/'+PROFILE_USER_ID+'?individual_id='+encodeURIComponent(result.individual_id);
+  }catch(error){field('guitarStatus').textContent=error.message;button.disabled=false}
 }
 function setProfileSort(section,key){
   const state=profileSort[section];
@@ -2119,6 +2167,7 @@ async function loadProfilePage(preferredIndividualId=null){
     profileGuitars=data.guitars||[];
     profileFavorites=data.favorites||[];
     const own=Number(activeUser.user.id)===Number(u.id);
+    document.getElementById('newGuitarAction').hidden=!own;
     const locationText=[u.location_country,u.location_region].filter(Boolean).join(' / ');
     const profileMeta=[
       ['Account Type',u.account_type||'user'],
