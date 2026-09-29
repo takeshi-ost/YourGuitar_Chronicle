@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -487,6 +487,7 @@ class Repository:
                 "identity_provider": "TEXT",
                 "identity_subject": "TEXT",
                 "bio": "TEXT",
+                "date_of_birth": "TEXT",
                 "avatar_storage_path": "TEXT",
                 "avatar_original_filename": "TEXT",
                 "avatar_mime_type": "TEXT",
@@ -2667,13 +2668,20 @@ class Repository:
 
         with self.connect() as con:
             user = con.execute(
-                "SELECT display_name, created_at, updated_at, ban_status FROM users WHERE id = ?",
+                "SELECT display_name, date_of_birth, birth_visibility, created_at, updated_at, ban_status FROM users WHERE id = ?",
                 (user_id,),
             ).fetchone()
             if not user:
                 return []
             name = str(user["display_name"])
             add("User", user["created_at"], name, "joined Your Guitar Chronicle.")
+            member = viewer_user_id is not None and con.execute(
+                "SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'", (viewer_user_id,)
+            ).fetchone() is not None
+            if (user["date_of_birth"] and (viewer_user_id == user_id or
+                    user["birth_visibility"] == "Public" or
+                    (user["birth_visibility"] == "Members" and member))):
+                add("User", user["date_of_birth"], name, "was born.")
             if user["updated_at"] > user["created_at"]:
                 add("User", user["updated_at"], name, "updated their profile.")
 
@@ -3134,6 +3142,8 @@ class Repository:
         location_country: str | None,
         location_region: str | None,
         bio: str | None = None,
+        date_of_birth: str | None = None,
+        update_date_of_birth: bool = False,
         visibility: dict[str, str] | None = None,
         signature_individual_id: int | None = None,
         update_signature: bool = False,
@@ -3160,6 +3170,13 @@ class Repository:
             raise ValueError("Invalid profile visibility")
         if theme is not None and theme not in THEME_IDS:
             raise ValueError("Invalid theme")
+        if update_date_of_birth and date_of_birth:
+            try:
+                parsed_birth = date.fromisoformat(date_of_birth)
+            except ValueError as exc:
+                raise ValueError("Date of Birth must be a valid YYYY-MM-DD date") from exc
+            if parsed_birth.isoformat() != date_of_birth or parsed_birth > datetime.now(timezone.utc).date():
+                raise ValueError("Date of Birth must be a valid past or present YYYY-MM-DD date")
 
         with self.connect() as con:
             if update_signature and signature_individual_id is not None:
@@ -3178,6 +3195,7 @@ class Repository:
                     location_country = ?,
                     location_region = ?,
                     bio = COALESCE(?, bio),
+                    date_of_birth = CASE WHEN ? THEN ? ELSE date_of_birth END,
                     birth_visibility = COALESCE(?, birth_visibility),
                     residence_visibility = COALESCE(?, residence_visibility),
                     bio_visibility = COALESCE(?, bio_visibility),
@@ -3201,6 +3219,8 @@ class Repository:
                         else None
                     ),
                     bio.strip() if bio is not None else None,
+                    update_date_of_birth,
+                    date_of_birth or None,
                     visibility.get("birth"),
                     visibility.get("residence"),
                     visibility.get("bio"),

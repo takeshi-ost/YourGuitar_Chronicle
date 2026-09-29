@@ -366,6 +366,7 @@ class UserUpdateRequest(BaseModel):
         max_length=120,
     )
     bio: str | None = Field(default=None, max_length=2000)
+    date_of_birth: str | None = None
     birth_visibility: str | None = None
     residence_visibility: str | None = None
     bio_visibility: str | None = None
@@ -3030,7 +3031,8 @@ def api_read_notification(
 @app.get("/api/users")
 def api_users(request: Request) -> list[dict[str, Any]]:
     admin = _console_admin_authorized(request)
-    return [{**_row_dict(row), "ban_status": row["ban_status"] if admin else "normal"}
+    return [{**{key: value for key, value in _row_dict(row).items() if key != "date_of_birth" or admin},
+             "ban_status": row["ban_status"] if admin else "normal"}
             for row in repo().list_users() if row["ban_status"] != "ban" or admin]
 
 
@@ -3112,6 +3114,8 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
 
     public_user = _row_dict(user)
     public_user["ban_status"] = "normal"
+    if not visible("birth_visibility"):
+        public_user["date_of_birth"] = None
     if not visible("residence_visibility"):
         public_user["location_country"] = None
         public_user["location_region"] = None
@@ -3192,6 +3196,8 @@ def api_update_user(
                 request.location_region
             ),
             bio=request.bio,
+            date_of_birth=request.date_of_birth,
+            update_date_of_birth="date_of_birth" in request.model_fields_set,
             visibility={
                 name: value for name, value in {
                     "birth": request.birth_visibility,

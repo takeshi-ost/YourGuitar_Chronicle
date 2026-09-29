@@ -8,6 +8,39 @@ from ygc.theme_catalog import THEMES
 from ygc.web import app
 
 
+def test_date_of_birth_validation_chronicle_and_visibility(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "birth.db")
+    repository = Repository(config.DB_PATH)
+    repository.init_db()
+    owner = repository.create_user("Owner")
+    member = repository.create_user("Member")
+    url = f"/api/users/{owner}"
+    payload = {"display_name": "Owner", "account_type": "user"}
+    with TestClient(app) as client:
+        assert client.patch(url, json={**payload, "date_of_birth": "2000-02-30"}).status_code == 400
+        assert client.patch(url, json={**payload, "date_of_birth": "2999-01-01"}).status_code == 400
+        assert repository.get_user(owner)[0]["date_of_birth"] is None
+        response = client.patch(url, json={**payload, "date_of_birth": "2000-02-29"})
+        assert response.status_code == 200
+        assert repository.get_user(owner)[0]["date_of_birth"] == "2000-02-29"
+        assert "date_of_birth" not in client.get("/api/users").json()[0]
+        assert client.get(f"{url}/profile").json()["user"]["date_of_birth"] is None
+        assert client.get(f"{url}/profile?viewer_id={owner}").json()["user"]["date_of_birth"] == "2000-02-29"
+        def births(viewer=""):
+            return [item for item in client.get(f"{url}/chronicle{viewer}").json()
+                    if item["category"] == "User" and item["message"] == "was born."]
+        assert births() == []
+        assert births(f"?viewer_id={owner}")[0]["event_at"] == "2000-02-29"
+        assert births(f"?viewer_id={member}") == []
+        assert client.patch(url, json={**payload, "birth_visibility": "Members"}).status_code == 200
+        assert births(f"?viewer_id={member}")
+        assert births() == []
+        assert client.patch(url, json={**payload, "birth_visibility": "Followers"}).status_code == 200
+        assert births(f"?viewer_id={member}") == []
+        assert client.patch(url, json={**payload, "date_of_birth": None}).status_code == 200
+        assert births(f"?viewer_id={owner}") == []
+
+
 def test_curated_themes_persist_and_are_exposed_to_profile_viewers(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "themes.db")
     repo = Repository(config.DB_PATH)

@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS users (
  location_country TEXT,
  location_region TEXT,
  bio TEXT,
+ date_of_birth TEXT,
  avatar_storage_path TEXT,
  avatar_original_filename TEXT,
  avatar_mime_type TEXT,
