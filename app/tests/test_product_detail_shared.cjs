@@ -28,8 +28,8 @@ for (const page of ['index_html', 'user_view_html']) {
   assert.match(markup, /<script src="\/assets\/product-detail\.js" defer><\/script>/);
   assert.match(markup, /YGCProductDetail\.render\(/);
   assert.match(markup, /YGCProductDetail\.orderedClaims\(/);
-  assert.match(markup, /#detail \.detail-image\{width:min\(200px,100%\);height:240px;object-fit:contain\}/);
-  assert.match(markup, /#detail \.detail-gallery\{width:100%;grid-template-columns:28px minmax\(0,200px\) 28px;justify-content:center;gap:8px\}/);
+  assert.match(markup, /#detail \.detail-image\{width:calc\(100% - 72px\);height:auto;aspect-ratio:3\/4;object-fit:contain\}/);
+  assert.match(markup, /#detail \.detail-gallery\{width:100%;grid-template-columns:28px minmax\(0,1fr\) 28px;gap:8px\}/);
   for (const match of markup.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g)) {
     if (match[1].trim()) new Function(match[1]);
   }
