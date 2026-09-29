@@ -60,15 +60,13 @@ window.YGCProductDetail = (() => {
       '<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span><button type="button" class="accordion-toggle" aria-label="Toggle Chronicle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button></div>' +
       '<div class="accordion-body">' + chronicleAction + '<div id="chronicleEntries"></div></div></section>';
   }
-  return {render, orderedClaims};
+  return {render, orderedClaims, toggleAccordion: id => document.getElementById(id)?.classList.toggle('collapsed')};
 })();
 
 /* The same album is used by Top Page, User Profile, and Browser Console. */
 window.YGCImageAlbum = (() => {
   let items = [];
   let index = 0;
-  let opener = null;
-  let previousOverflow = '';
   let overlay = null;
 
   function caption(item) {
@@ -95,17 +93,11 @@ window.YGCImageAlbum = (() => {
 
   function close() {
     if (!overlay) return;
-    overlay.remove();
-    overlay = null;
-    document.body.style.overflow = previousOverflow;
-    if (opener && opener.isConnected) opener.focus();
-    opener = null;
-    items = [];
+    window.YGCOverlays.close(overlay);
   }
 
   function onKeydown(event) {
     if (!overlay) return;
-    if (event.key === 'Escape') { event.preventDefault(); close(); }
     if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
     if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
   }
@@ -117,8 +109,6 @@ window.YGCImageAlbum = (() => {
     close();
     items = valid;
     index = Math.max(0, Math.min(Number(selectedIndex) || 0, items.length - 1));
-    opener = trigger || document.activeElement;
-    previousOverflow = document.body.style.overflow;
     overlay = document.createElement('div');
     overlay.className = 'ygc-album-backdrop';
     overlay.innerHTML = '<div class="ygc-album-panel" role="dialog" aria-modal="true" aria-label="Guitar photo album">' +
@@ -131,32 +121,12 @@ window.YGCImageAlbum = (() => {
     overlay.querySelector('.ygc-album-prev').addEventListener('click', () => step(-1));
     overlay.querySelector('.ygc-album-next').addEventListener('click', () => step(1));
     document.body.append(overlay);
-    document.body.style.overflow = 'hidden';
     render();
-    overlay.querySelector('.ygc-album-close').focus();
+    const current = overlay;
+    window.YGCOverlays.open(current, {opener: trigger || document.activeElement,
+      onClose: () => { current.remove(); overlay = null; items = []; }});
   }
 
-  const style = document.createElement('style');
-  style.textContent = `
-    #detail .detail-gallery,#detail .detail-image:not(.detail-gallery .detail-image):not(.detail-image-link .detail-image){cursor:zoom-in}
-    #detail .detail-image-link{cursor:pointer}
-    #detail .detail-gallery-nav{cursor:pointer}
-    #detail .detail-gallery:focus-visible,#detail .detail-image-link:focus-visible,#detail .detail-image:focus-visible{outline:2px solid var(--accent,#d0a45d);outline-offset:3px}
-    .ygc-album-backdrop{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:clamp(12px,2.5vw,32px);background:rgba(0,0,0,.88)}
-    .ygc-album-panel{box-sizing:border-box;width:min(1600px,100%);height:min(1000px,100%);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;padding:12px 16px;background:#111418;color:#f0f0ed;border:1px solid #5a626a;border-radius:12px;box-shadow:0 20px 70px #000b}
-    .ygc-album-header{display:flex;align-items:center;justify-content:space-between;min-height:36px;font-size:13px;color:#c6cbd0}
-    .ygc-album-panel button{border:1px solid #66707a;border-radius:7px;background:#252b31;color:#fff;cursor:pointer}
-    .ygc-album-close{min-height:34px;padding:6px 14px;font-size:13px}
-    .ygc-album-panel button:hover{background:#3a434b}
-    .ygc-album-panel button:focus-visible{outline:2px solid #d0a45d;outline-offset:2px}
-    .ygc-album-stage{min-height:0;display:grid;grid-template-columns:42px minmax(0,1fr) 42px;grid-template-rows:minmax(0,1fr);align-items:center;gap:10px;overflow:hidden}
-    .ygc-album-image{display:block;min-width:0;min-height:0;max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain}
-    .ygc-album-nav{width:42px;height:52px;font-size:32px;line-height:1}
-    .ygc-album-nav[hidden]{visibility:hidden}
-    .ygc-album-caption{min-height:24px;text-align:center;font-size:13px;color:#c6cbd0;overflow-wrap:anywhere}
-    @media(max-width:600px){.ygc-album-panel{padding:8px}.ygc-album-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:2px}.ygc-album-nav{width:30px;height:44px}}
-  `;
-  document.head.append(style);
   function openRepresentative(image) {
     open([{url: image.currentSrc || image.src, label: 'Representative Image'}], 0, image);
   }
@@ -185,4 +155,40 @@ window.YGCImageAlbum = (() => {
     if (openFromFrame(event)) event.preventDefault();
   });
   return {open, openRepresentative, close, step};
+})();
+
+
+/* One gallery per Product Detail; shared by Console, Top and Profile. */
+window.YGCProductGallery = (() => {
+let productGallery=[], productGalleryIndex=0;
+function render(images,model,esc){
+  productGallery=(images||[]).slice();
+  productGalleryIndex=0;
+  if(!productGallery.length)return '';
+  const item=productGallery[0];
+  const disabled=productGallery.length<2?' disabled':'';
+  const caption=String(item.caption||'').trim();
+  const source=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' (1/'+productGallery.length+')';
+  return '<div class="detail-gallery" tabindex="0" aria-label="Open photo album">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(-1)"'+disabled+'>◀</button>'+
+    '<img class="detail-image" id="productGalleryImage" src="'+esc(item.url)+'" alt="'+esc(model||'Guitar')+'" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'">'+
+    '<button class="detail-gallery-nav" onclick="stepProductGallery(1)"'+disabled+'>▶</button>'+
+    '</div><span class="detail-source" id="productGallerySource">'+esc(source)+'</span>';
+}
+function step(delta){
+  if(productGallery.length<2)return;
+  productGalleryIndex=(productGalleryIndex+delta+productGallery.length)%productGallery.length;
+  const item=productGallery[productGalleryIndex];
+  const image=document.getElementById('productGalleryImage');
+  const source=document.getElementById('productGallerySource');
+  if(image)image.src=item.url;
+  if(source){
+    const caption=String(item.caption||'').trim();
+    source.textContent=String(item.label||'Uploaded Image')+(caption?' — '+caption:'')+' ('+(productGalleryIndex+1)+'/'+productGallery.length+')';
+  }
+}
+function open(){
+  YGCImageAlbum.open(productGallery,productGalleryIndex,document.querySelector('#detail .detail-gallery'));
+}
+return {render, step, open};
 })();

@@ -1049,6 +1049,26 @@ def list_navigation_script() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript")
 
 
+@app.get("/assets/overlays.js")
+def overlays_script() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "overlays.js", media_type="text/javascript")
+
+
+@app.get("/assets/ui-components.css")
+def ui_components_stylesheet() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "ui-components.css", media_type="text/css")
+
+
+@app.get("/assets/pages/{filename}")
+def page_asset(filename: str) -> FileResponse:
+    allowed = {f'{page}.{extension}' for page in ('console', 'user-view', 'user-edit')
+               for extension in ('js', 'css')}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(Path(__file__).with_name("static") / "pages" / filename,
+                        media_type="text/javascript" if filename.endswith('.js') else "text/css")
+
+
 @app.get("/assets/product-detail.js")
 def product_detail_script() -> FileResponse:
     return FileResponse(

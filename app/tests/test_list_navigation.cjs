@@ -58,7 +58,7 @@ const document = {
   head: {append(style) { selectionStyle = style.textContent; }},
 };
 vm.runInNewContext(fs.readFileSync('app/src/ygc/static/list-navigation.js', 'utf8'),
-  {document, Element, requestAnimationFrame: callback => frames.push(callback)});
+  {window: {}, document, Element, requestAnimationFrame: callback => frames.push(callback)});
 const arrow = key => {
   let prevented = false;
   handlers.keydown({key, defaultPrevented: false, preventDefault: () => { prevented = true; }});

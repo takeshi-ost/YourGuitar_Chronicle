@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const html = fs.readFileSync('app/src/ygc/static/user_view_html.html', 'utf8');
+const html = require('./page_source.cjs')('app/src/ygc/static/user_view_html.html');
 const start = html.indexOf('function closeCompactDetail(){');
 const end = html.indexOf('async function showIndividual(', start);
 assert.ok(start > 0 && end > start);

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const page = fs.readFileSync('app/src/ygc/static/index_html.html', 'utf8');
+const page = require('./page_source.cjs')('app/src/ygc/static/index_html.html');
 const start = page.indexOf('function renderObservationMatrix(d){');
 const end = page.indexOf('async function openObservationDiagnostic(){', start);
 assert.ok(start > 0 && end > start);

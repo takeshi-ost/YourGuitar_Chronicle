@@ -10,6 +10,7 @@
 | 収集・再判定・統計 | [incremental-crawl.md](incremental-crawl.md) |
 | 管理者操作とBAN | [console-claim-administration.md](console-claim-administration.md) |
 | テーマ・ロゴ | [USER_THEMES.md](USER_THEMES.md) |
+| ページ・モーダル・共通UIの構造 | [UI_STRUCTURE.md](UI_STRUCTURE.md) |
 | GCP移行時の交換箇所 | [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) |
 | Observation移行の完了範囲・互換処理の残存箇所・撤去条件 | [TEMP_OBSERVATION_MIGRATION_PLAN.md](TEMP_OBSERVATION_MIGRATION_PLAN.md) |
 

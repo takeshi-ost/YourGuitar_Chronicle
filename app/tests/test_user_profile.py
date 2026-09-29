@@ -77,7 +77,7 @@ def test_profile_birth_and_location_visibility_for_each_viewer(tmp_path, monkeyp
         assert profile(member)["date_of_birth"] is None
         assert profile(member)["location_region"] is None
         assert profile(owner)["location_region"] == "Tokyo"
-        html = client.get(f"/users/{owner}").text
+        html = client.get("/assets/pages/user-view.js").text
         assert "...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])" in html
         assert "...(locationText?[['Location',locationText]]:[])" in html
         assert 'class="profile-meta-label"' in html
@@ -212,7 +212,7 @@ def test_profile_uses_top_page_shell_and_chronicle_is_user_scoped(tmp_path, monk
         assert page.status_code == 200
         assert 'id="accountHub"' in page.text
         assert 'class="detail-shell"' in page.text
-        assert "setupProfileShell" in page.text
+        assert "setupProfileShell" in client.get("/assets/pages/user-view.js").text
         assert client.get(f"/api/users/{owner_id}").json()["user"]["bio"] == "My guitars."
 
         owner_entries = client.get(f"/api/users/{owner_id}/chronicle").json()
@@ -244,15 +244,15 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         assert '<h2 id="profileHeading">User Profile</h2>' in page.text
         assert 'id="newGuitarModal"' not in page.text
         assert 'onclick="openNewGuitar()"' not in page.text
-        assert 'window.location.href=\'/users/\'+id' in page.text
+        assert 'window.location.href=\'/users/\'+id' in client.get("/assets/pages/user-edit.js").text
         assert 'onclick="saveSettings()">Save</button><button type="button" class="secondary"' in page.text
         assert '>Cancel</button>' in page.text
         profile = client.get(f"/users/{user_id}")
         assert profile.status_code == 200
         assert 'id="newGuitarModal"' in profile.text
-        assert "Let\\'s add your undiscovered new guitar!" in profile.text
-        assert "Let\\'s add your Claim !!" in profile.text
-        assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in profile.text
+        assert "Let\\'s add your undiscovered new guitar!" in client.get("/assets/pages/user-view.js").text
+        assert "Let\\'s add your Claim !!" in client.get("/assets/pages/user-view.js").text
+        assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in client.get("/assets/pages/user-view.js").text
         assert 'Product Detail' not in page.text
         assert 'data-field="residence"' in page.text
         assert 'type="email"' in page.text
