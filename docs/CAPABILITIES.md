@@ -9,6 +9,7 @@
 - ローカル操作用ユーザーはアカウント欄から選択する。本人の通知一覧、既読操作、プロフィール、Claim参加を使える。通知はアプリ内のみ。Messages、Sign In / Create Accountの実際の認証処理は未実装。
 - `/users/{user_id}` のUser ProfileはUser Profile、Owned Guitars、Formerly Owned Guitars、Favorite Guitars、User Chronicleを表示する。リストはProduct List形式。Owned / Formerly Owned / Favoriteには表示高さの上限があり、超えた部分は枠内をスクロールする。所有・過去所有の個体はFavorite欄より前者を優先する。
 - Product ListとProduct Detailの♡／♥からお気に入りを追加・解除し、DBに保存する。User ChronicleはUser / Social / Product / Claim / Otherのタグ付き時系列表示。プロフィールの初期Product Detailには本人が指定したSignature Guitarを使用する。
+- User ProfileでClaimの追加・判定・投票を行うと、選択中のギターを維持してプロフィールの件数、Owned / Formerly Ownedなどの一覧、User Chronicleも再取得する。
 - Guestにはプロフィール画面でMembers onlyを表示する。これは現段階の画面上の挙動で、公開サーバー上での情報保護はまだ保証しない。
 - User SettingsはDisplay Name、Account Type、Residence、Bio、Avatar、Signature Guitar、Themeと項目別公開範囲を保存する。Display NameとAccount TypeはPublic固定、UserName、Email、Date of Birth、Preferred Languageは表示用のダミー欄で保存されない。試作中は入力の必須制約を課さない。
 - 項目別公開範囲はPublic / Members / Followers / Private。Followersはフォロー関係未実装のためPrivateと同じ表示範囲。選択した公開範囲はDBに保存するが、ブラウザ指定の閲覧者IDと一部直接API・画像URLの制約があるため機密情報のアクセス制御とは扱えない。

@@ -405,7 +405,11 @@ def test_relisting_after_unavailable_uses_acquire_claim(tmp_path):
         ).fetchone()[0] == 1
 
 
-def test_lost_is_automation_only_and_admin_can_redecide(tmp_path):
+@pytest.mark.parametrize('event_date', ['2026-09-28', '2030-01-01'])
+def test_lost_is_automation_only_and_admin_can_redecide(tmp_path, monkeypatch, event_date):
+    # Lost records a timestamp while manual Acquire records only a date.
+    # Freeze the clock so they stay on the same day regardless of the test date.
+    monkeypatch.setattr('ygc.db.repository.utcnow', lambda: event_date + 'T23:59:59Z')
     repo = Repository(tmp_path / 'lost.db')
     repo.init_db()
     individual_id = _seed(repo, '11', '524436')
@@ -415,9 +419,16 @@ def test_lost_is_automation_only_and_admin_can_redecide(tmp_path):
     user_id = repo.create_user('Owner')
     with pytest.raises(ValueError, match='ownership_kind'):
         repo.create_ownership_claim(user_id, individual_id,
-                                    ownership_kind='lost', occurred_at='2026-09-28')
-    repo.create_ownership_claim(user_id, individual_id,
-                                ownership_kind='acquire', occurred_at='2026-09-28')
+                                    ownership_kind='lost', occurred_at=event_date)
+    _, acquire_id = repo.create_ownership_claim(user_id, individual_id,
+                                ownership_kind='acquire', occurred_at=event_date)
+    assert lost_id < acquire_id
+    claims = repo.list_claims(individual_id)
+    assert [c['id'] for c in claims if c['id'] in (lost_id, acquire_id)] == [lost_id, acquire_id]
+    diagnostic = repo.observation_diagnostic(individual_id)
+    assert [r['claim_id'] for r in diagnostic['matrix']['rows']
+            if r['claim_id'] in (lost_id, acquire_id)] == [lost_id, acquire_id]
+    assert diagnostic['differences'] == {}
     assert lost_id not in repo.owner_verifiable_claim_ids(individual_id, user_id)
     with pytest.raises(ValueError, match='Verification'):
         repo.set_claim_response(lost_id, user_id, 'negative')
@@ -427,6 +438,7 @@ def test_lost_is_automation_only_and_admin_can_redecide(tmp_path):
         repo.deactivate_claim(lost_id, automation_id)
     assert repo.get_individual(individual_id)[0]['current_owner_user_id'] == user_id
     repo.admin_moderate_claim(lost_id, 'negative')
+    assert repo.get_individual(individual_id)[0]['current_owner_user_id'] == user_id
     assert repo.observation_diagnostic(individual_id)['differences'] == {}
 
 

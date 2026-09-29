@@ -6076,10 +6076,10 @@ class Repository:
                       ON v.claim_id = c.id
                     WHERE c.individual_id = ?
                     ORDER BY
-                        COALESCE(
+                        SUBSTR(COALESCE(
                             c.occurred_at,
                             c.created_at
-                        ),
+                        ), 1, 10),
                         c.id
                     """,
                     (

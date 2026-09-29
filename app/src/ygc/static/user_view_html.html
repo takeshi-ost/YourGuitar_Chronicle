@@ -1269,6 +1269,15 @@ function renderChronicle(){
   if(el)el.innerHTML=claims.length?claims.map(claimCard).join(''):'<div class="sub">No Claims yet.</div>';
 }
 
+async function refreshClaimViews(individualId){
+  if(PROFILE_USER_ID){
+    await loadActiveUser();
+    await loadProfilePage(individualId);
+  }else if(individualId!==null){
+    await showIndividual(individualId);
+  }
+}
+
 async function setClaimResponse(claimId,stance){
   if(!activeUser||!activeUser.user)return;
   try{
@@ -1281,9 +1290,7 @@ async function setClaimResponse(claimId,stance){
       })
     });
     closeClaimPopup();
-    await loadActiveUser();
-    if(PROFILE_USER_ID)await loadProfilePage(selectedIndividualId);
-    else if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await refreshClaimViews(selectedIndividualId);
   }catch(e){
     alert('Owner Verification could not be updated.\n'+e.message);
     if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
@@ -1301,7 +1308,7 @@ async function voteClaim(claimId,vote){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user_id:Number(activeUser.user.id),vote})
     });
-    if(selectedIndividualId!==null)await showIndividual(selectedIndividualId);
+    await refreshClaimViews(selectedIndividualId);
   }catch(e){
     alert('Vote could not be updated.\n'+e.message);
   }
@@ -1469,7 +1476,7 @@ async function submitMediaClaim(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.detail||response.statusText);
     closeMediaClaim();
-    await showIndividual(selectedIndividualId);
+    await refreshClaimViews(selectedIndividualId);
   }catch(e){alert('Media Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
@@ -1511,7 +1518,7 @@ async function submitEventClaim(){
     }else{
       await jfetch('/api/individuals/'+selectedIndividualId+'/event-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),event_kind:document.getElementById('eventClaimKind').value,occurred_at:document.getElementById('eventClaimDate').value||null,detail})});
     }
-    closeEventClaim();await showIndividual(selectedIndividualId);
+    closeEventClaim();await refreshClaimViews(selectedIndividualId);
   }catch(e){alert('Event Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
@@ -1536,7 +1543,7 @@ async function submitIncidentClaim(){
   const button=document.getElementById('incidentClaimSubmit');button.disabled=true;
   try{
     await jfetch('/api/individuals/'+selectedIndividualId+'/incident-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),incident_kind:document.getElementById('incidentClaimKind').value,occurred_at:document.getElementById('incidentClaimDate').value||null,detail})});
-    closeIncidentClaim();await showIndividual(selectedIndividualId);
+    closeIncidentClaim();await refreshClaimViews(selectedIndividualId);
   }catch(e){alert('Incident Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
@@ -1597,7 +1604,7 @@ async function submitSpecificationClaim(){
   const button=document.getElementById('specClaimSubmit');button.disabled=true;
   try{
     await jfetch('/api/individuals/'+selectedIndividualId+'/specification-claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:Number(activeUser.user.id),specification_kind:specificationKind,items,occurred_at:document.getElementById('specClaimDate').value||null,body:document.getElementById('specClaimBody').value.trim()||null})});
-    closeSpecificationClaim();await showIndividual(selectedIndividualId);
+    closeSpecificationClaim();await refreshClaimViews(selectedIndividualId);
   }catch(e){alert('Specification/Repair Claim could not be added.\n'+e.message);}
   finally{button.disabled=false;}
 }
@@ -1661,7 +1668,7 @@ async function submitFormerOwnerClaim(){
     activeUser={user:d.user,guitars:d.guitars};
     closeFormerOwnerClaim();
     if(typeof renderAccount==='function')renderAccount();
-    await showIndividual(individualId);
+    await refreshClaimViews(individualId);
   }catch(e){
     alert('Former Owner Claim could not be added.\n'+e.message);
   }finally{
@@ -1751,7 +1758,7 @@ async function submitOwnershipClaim(){
     activeUser={user:d.user,guitars:d.guitars};
     closeOwnershipClaim();
     if(typeof renderAccount==='function')renderAccount();
-    await showIndividual(individualId);
+    await refreshClaimViews(individualId);
   }catch(e){
     alert('Could not add the Ownership Claim.\n'+e.message);
   }finally{
