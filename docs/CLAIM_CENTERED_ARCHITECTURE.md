@@ -7,6 +7,8 @@
 - **Observation:** 一個体につき一つの論理的なClaim調停機構。Claimの発生日・同日のClaim ID、承認・BAN、必須Evidenceから候補値と採否理由を計算し、Individualに現在値を反映する。過去の判定結果そのものは保存しない。
 - **Evidence:** Claimに紐付く根拠。外部掲載のListing ID、URL、取得日時、Owner / LocationなどはListingまたは再掲載AcquireのEvidence。ユーザーAcquireには取得日Evidenceを必須とする。旧`observations`テーブルは移行中のクロール記録・互換参照として残るが、現在値の判定元ではない。
 
+共通評価器への切替は`main`に統合済み。個体に登録する外部掲載と手動Listing・Ownership・Former OwnerはClaimと必要なEvidence・画像を保存し、旧行を新設しない。Claim編集も旧行へ同期しない。新しい未登録クロール記録は `crawl_unregistered_records` に入力全体を保持する。旧テーブルはAPI、移行・復元処理の互換参照として残る。残存箇所と撤去条件は [Observation移行の残作業](TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照。
+
 手動登録も外部収集も、入力正規化 → 外部Listing IDの重複確認 → Individual照合または作成 → ClaimとEvidenceの保存 → 個体単位Observationの判定 → Individual Snapshotへの反映の流れに従う。同じ外部Listingの判定と、別IDで見つけた**同一の物理個体**の判定は別の問題である。
 
 Browser Consoleの「Observation判定」は読み取り専用のClaim×項目マトリクスで、発生日・同日のClaim ID順にClaimを並べる。各セルにはClaimが提案した値を示し、現在採用中の項目だけ明るく表示する。最下段は保存済みIndividual Snapshotで、Specification列のみProduct Detailで現在表示する仕様値を示す。採用元は共通Observation評価器（Specification列は現行仕様表示の判定）を参照し、マトリクス自体はSnapshotを書き換えない。

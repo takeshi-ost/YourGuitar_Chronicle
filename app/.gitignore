@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 data/*.db
 data/media/
+data/migration-backups/
 logs/*.log
 .env
 .DS_Store

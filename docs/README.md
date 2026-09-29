@@ -1,6 +1,6 @@
 # Your Guitar Chronicle — 現行ドキュメント
 
-このディレクトリは `feature/observation-redesign` のローカル試作の**現行実装**を説明する。実行方法は [app/README.md](../app/README.md)。過去の設計案と実装の差分はGit履歴で参照できる。
+このディレクトリは `main` に統合済みのローカル試作を基準に、**現行実装**を説明する。実行方法は [app/README.md](../app/README.md)。過去の設計案と実装の差分はGit履歴で参照できる。
 
 | 読む目的 | 文書 |
 | --- | --- |
@@ -11,7 +11,7 @@
 | 管理者操作とBAN | [console-claim-administration.md](console-claim-administration.md) |
 | テーマ・ロゴ | [USER_THEMES.md](USER_THEMES.md) |
 | GCP移行時の交換箇所 | [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) |
-| **一時作業計画（未実装の改修案）** | [TEMP_OBSERVATION_MIGRATION_PLAN.md](TEMP_OBSERVATION_MIGRATION_PLAN.md) |
+| Observation移行の完了範囲・互換処理の残存箇所・撤去条件 | [TEMP_OBSERVATION_MIGRATION_PLAN.md](TEMP_OBSERVATION_MIGRATION_PLAN.md) |
 
 `docs/Your_Guitar_Chronicle_実装仕様書.md`、`BROWSER_GUI.md`、`REVERB_SETUP.md`、`DATABASE_UPDATE_POLICY.md` は初期のObservation中心・Phase 1向け資料だったため削除した。初期企画書も現行の企画概要に集約した。これらの履歴はGitに残る。現行仕様の根拠は実装とテストであり、本書群はその案内である。
 

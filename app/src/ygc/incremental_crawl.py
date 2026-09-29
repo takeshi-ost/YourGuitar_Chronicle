@@ -13,6 +13,7 @@ from ygc import config
 from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
+from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
 from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provenance_observation
 
 
@@ -97,13 +98,7 @@ def _known_listing_ids(repository: Repository, collector: Any, summaries: list[d
     found = candidate_ids(repository, ids)
     found.update(repository.active_cached_listing_ids("reverb", ids))
     with repository.connect() as con:
-        for start in range(0, len(ids), 500):
-            chunk = ids[start:start + 500]
-            if chunk:
-                marks = ",".join("?" for _ in chunk)
-                found.update(str(row[0]) for row in con.execute(
-                    "SELECT source_listing_id FROM observations WHERE source_site='reverb' "
-                    f"AND source_listing_id IN ({marks})", chunk))
+        found.update(known_listing_ids(con, 'reverb', ids))
     return found
 
 
@@ -169,8 +164,9 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
     now = datetime.now(timezone.utc)
     with repository.connect() as con:
         candidates = list(con.execute(
-            """SELECT o.source_listing_id, c.api_url, c.missing_since
-               FROM observations o LEFT JOIN crawl_listing_checks c
+            f"""WITH sources AS ({MARKETPLACE_SOURCES_SQL})
+               SELECT o.source_listing_id, c.api_url, c.missing_since
+               FROM sources o LEFT JOIN crawl_listing_checks c
                  ON c.source_site = 'reverb'
                 AND c.source_listing_id = o.source_listing_id
                WHERE o.source_site = 'reverb'
@@ -181,7 +177,7 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
                        AND c.checked_at <= ?) OR
                       (c.status = 'unavailable' AND c.checked_at <= ?))
                ORDER BY CASE WHEN c.missing_since IS NOT NULL THEN 0 ELSE 1 END,
-                        COALESCE(c.checked_at, ''), o.id LIMIT ?""",
+                        COALESCE(c.checked_at, ''), o.sort_id, o.source_listing_id LIMIT ?""",
             ((now - timedelta(days=7)).isoformat(),
              (now - timedelta(days=1)).isoformat(),
              (now - timedelta(days=30)).isoformat(), MAX_RECHECKS),

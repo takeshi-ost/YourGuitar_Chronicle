@@ -2,6 +2,10 @@
 
 目的は指定した範囲から**メーカーと有効なシリアル番号を判別できるギター**を抽出し、個体を新規登録するか、既存個体に掲載来歴を追加すること。Vintage判定やObservation総数を登録条件・成果指標にしない。検索語とAPIの順位のため、検索結果が全掲載を網羅する保証はない。
 
+個体に登録する外部掲載はClaimとEvidenceを保存し、旧 `observations` 行は新設しない。進捗の `observations_created` / `new_observations` は互換名で、新たに保存した掲載の件数を示す。既知Listingと公開状態確認はEvidenceを優先し、未移行・個体未登録の旧記録も参照する。
+
+保存処理へ直接渡された入力が個体識別条件を満たさない場合は、入力全体を `crawl_unregistered_records` に期限なしで保持し、Individual・Claimは作成しない。通常の増分クロールにおける期限付きの見送り記録・詳細キャッシュとは別の保存先である。
+
 ## 手動実行の2つの入口
 
 | 入口 | 範囲指定 | 実行 |
@@ -31,6 +35,6 @@ Incremental Crawlは一覧を最大2000件処理し、既存Listingの公開状�
 | Serial Listings | シリアルを持つ個体の有効な外部Listing証跡のユニーク件数。Listing / Acquireの由来を数え、同一source + Listing IDは重複除外。Unverifiedも含む |
 | Repeated | 同一の正規化メーカーとシリアルを持つ**異なるIndividual群**の数。複数Listingを持つ一個体の数ではない |
 | Unverified Acquire | 承認すると現在の所有者が変わり得る、有効な承認待ちAcquire Claim。承認前後のOwnerをSnapshot評価して判定 |
-| New Discovery | 最終ClaimまたはObservationによる更新が新しい個体を最大200件表示。Crawlの新規登録件数とは別 |
+| New Discovery | 有効かつBANされていない作成者のClaimの作成日時、またはその掲載Evidenceの取得日時が新しい個体を最大200件表示（未移行掲載は旧記録を参照）。Crawlの新規登録件数とは別 |
 
 データの意味・判定の管理操作は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) と [console-claim-administration.md](console-claim-administration.md)。実Reverbトークンを使った現行パイプラインの総合検証、取りこぼし・誤照合の標本評価は引き続き必要。

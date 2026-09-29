@@ -1,4 +1,23 @@
 PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS crawl_unregistered_records (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ source_site TEXT NOT NULL,
+ source_listing_id TEXT NOT NULL,
+ source_url TEXT NOT NULL,
+ observed_at TEXT NOT NULL,
+ reason TEXT NOT NULL,
+ payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+ created_at TEXT NOT NULL,
+ UNIQUE(source_site, source_listing_id)
+);
+-- Full legacy rows, including extraction data and provenance. No expiry or
+-- cascading foreign key: preserved records must survive legacy row removal.
+CREATE TABLE IF NOT EXISTS legacy_crawl_archive (
+ legacy_observation_id INTEGER PRIMARY KEY,
+ payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+ payload_sha256 TEXT NOT NULL,
+ archived_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS individuals (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  manufacturer TEXT NOT NULL,
@@ -127,6 +146,7 @@ CREATE TABLE IF NOT EXISTS claims (
  ownership_kind TEXT,
  ownership_source TEXT,
  ownership_pair_id TEXT,
+ previous_owner_text TEXT,
  body TEXT,
  target_claim_id INTEGER,
  occurred_at TEXT,

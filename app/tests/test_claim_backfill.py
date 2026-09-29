@@ -7,6 +7,7 @@ from ygc.db.repository import Repository
 
 def test_listing_claim_backfill_supplements_claim_only(
     tmp_path: Path,
+    legacy_marketplace_row,
 ):
     repository = Repository(
         tmp_path / "chronicle.db"
@@ -52,7 +53,7 @@ def test_listing_claim_backfill_supplements_claim_only(
     )
     claim_id = int(result["claim_id"])
     individual_id = int(result["individual_id"])
-    observation_id = int(result["observation_id"])
+    observation_id = legacy_marketplace_row(repository, result, claim_data, provenance)
 
     with repository.connect() as con:
         con.execute(

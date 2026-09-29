@@ -45,7 +45,8 @@ def test_rejected_serial_can_be_reextracted_offline_and_is_idempotent(tmp_path, 
     assert again["new_individuals"] == 0
     assert again["skipped_existing"] == 1
     with repo.connect() as con:
-        assert con.execute("SELECT observed_at FROM observations").fetchone()[0] == '2026-01-01T00:00:00+00:00'
+        assert con.execute("SELECT COUNT(*) FROM observations").fetchone()[0] == 0
+        assert con.execute("SELECT captured_at FROM claim_source_evidence").fetchone()[0] == '2026-01-01T00:00:00+00:00'
         assert con.execute("SELECT COUNT(*) FROM claims WHERE claim_type='listing'").fetchone()[0] == 1
 
 

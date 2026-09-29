@@ -106,12 +106,6 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .detail-meta-label{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}
 .detail-meta-value{display:block;color:var(--text);font-size:12px;overflow-wrap:anywhere}.detail-meta-value a{color:var(--text)}
 .detail-section{margin:18px 0 8px;font-size:13px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:6px}
-.observation-card{border:1px solid var(--line);border-radius:10px;background:#14171a;padding:12px 13px;margin:0 0 10px}
-.observation-card.latest{border-color:#5c513d;background:#181713}
-.observation-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
-.observation-date{font-weight:700}.observation-source{font-size:11px;color:var(--muted);white-space:nowrap}.observation-source a{color:var(--muted)}
-.observation-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;margin:4px 0}
-.observation-label{color:var(--muted);font-size:11px}.observation-value{min-width:0;overflow-wrap:anywhere}.observation-title{font-weight:600}
 #detail{white-space:normal}
 .chronicle-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px;border-bottom:1px solid var(--line);padding-bottom:8px}
 .chronicle-toolbar select{width:auto;min-width:130px}
@@ -616,7 +610,6 @@ let activeUser=null;
 let selectedIndividualId=null;
 let productGallery=[];
 let productGalleryIndex=0;
-let currentObservations=[];
 let currentClaims=[];
 let notificationData={unread_count:0,notifications:[]};
 let pendingOwnershipClaimIndividualId=null;
@@ -898,23 +891,6 @@ function renderIndividuals(){
   ).join('');
 }
 
-function sourceName(o){return String(o.source_site||'').toLowerCase()==='reverb'?'Reverb':String(o.source_site||'Source')}
-function ownerLabel(o){
-  const name=String(o.owner_user_name||o.owner_name||o.seller||'').trim();
-  if(!name)return '';
-  const type=String(o.owner_type||'').trim();
-  return type==='shop'?name+' (Shop)':(type==='user'?name+' (User)':name);
-}
-function currentOwnerHtml(o){
-  if(!o)return '—';
-  const name=String(o.owner_user_name||o.owner_name||o.seller||'').trim();
-  if(!name)return '—';
-  const type=String(o.owner_type||'').trim();
-  const listingUrl=String(o.source_url||'').trim();
-  const label=type==='shop'?name+' (Shop)':name;
-  if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
-  return esc(label);
-}
 function currentSnapshotOwnerHtml(i){
   if(!i)return '—';
   const name=String(i.current_owner_name||'').trim();
@@ -935,23 +911,6 @@ function currentLocationHtml(o){
   const region=String(o.location_region||'').trim();
   const value=[country,region].filter(Boolean).join(' / ');
   return value?esc(value):'—';
-}
-function observationCard(o,isLatest){
-  const url=String(o.source_url||'');
-  const source=sourceName(o);
-  const sourceHtml=url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(source)+'</a>':esc(source);
-  const owner=ownerLabel(o);
-  const seller=String(o.seller||'').trim();
-  let rows='';
-  if(owner)rows+='<div class="observation-row"><div class="observation-label">Owner</div><div class="observation-value">'+esc(owner)+'</div></div>';
-  if(seller&&seller!==String(o.owner_user_name||o.owner_name||'').trim())rows+='<div class="observation-row"><div class="observation-label">Shop</div><div class="observation-value">'+esc(seller)+'</div></div>';
-  const location=[o.location_country,o.location_region].filter(Boolean).join(' / ');
-  if(location)rows+='<div class="observation-row"><div class="observation-label">Location</div><div class="observation-value">'+esc(location)+'</div></div>';
-  if(o.title)rows+='<div class="observation-row"><div class="observation-label">Listing</div><div class="observation-value observation-title">'+esc(o.title)+'</div></div>';
-  const specs=[o.model&&('Model: '+o.model),o.finish&&('Finish: '+o.finish),o.year&&('Year: '+o.year)].filter(Boolean).join(' / ');
-  if(specs)rows+='<div class="observation-row"><div class="observation-label">Info</div><div class="observation-value">'+esc(specs)+'</div></div>';
-  if(url)rows+='<div class="observation-row"><div class="observation-label">URL</div><div class="observation-value"><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div></div>';
-  return '<div class="observation-card'+(isLatest?' latest':'')+'"><div class="observation-card-head"><div class="observation-date">'+esc(o.listing_date||o.observed_at||'')+'</div><div class="observation-source">Source: '+sourceHtml+'</div></div>'+rows+'</div>';
 }
 function activeUserOwns(individualId){
   return !!(activeUser&&(activeUser.guitars||[]).some(g=>Number(g.individual_id)===Number(individualId)&&g.ownership_status==='current_owner'));
@@ -1359,10 +1318,7 @@ async function showIndividual(id,fromList=false){
   ]);
   if(sequence!==individualLoadSequence)return;
   const i=d.individual;
-  const observations=d.observations||[];
-  currentObservations=observations;
   currentClaims=claims||[];
-  const latest=observations.length?observations[observations.length-1]:null;
   const imageListing=d.current_source||null;
   const galleryImages=d.gallery_images||[];
   let out='';
