@@ -57,6 +57,7 @@ main{max-width:none;margin:0;padding:calc(var(--header-height,47px) + 14px) calc
 /* Browser Console content scrolls as one page; only the header stays fixed. */
 .brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}
 main button:not(.detail-gallery-nav):not(.accordion-toggle){padding:5px 9px;font-size:11px;line-height:1.3;border-radius:6px}
+button.danger{background:#bb202c;color:#fff;border:1px solid #f05b65;font-weight:800}button.danger:hover{background:#d92d39;color:#fff}button.danger:focus-visible{outline:2px solid #ff858c;outline-offset:2px}
 main .panel{padding:10px 12px}.domain-actions{gap:5px}.domain-actions.panel{padding:7px 10px!important}
 main .toolbar{gap:5px;margin-bottom:7px}main input,main select,main textarea{padding:6px 8px;font-size:12px}main .crawl-controls{gap:6px!important}
 .admin-user-form{gap:7px;margin-top:8px}.admin-user-form textarea{min-height:68px}
@@ -129,7 +130,7 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 <main>
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb収集と実行状況</span></div>
-<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Tokenを入力"><button onclick="saveToken()">保存</button><button class="secondary" onclick="clearToken()">削除</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
+<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Tokenを入力"><button onclick="saveToken()">保存</button><button class="danger" onclick="clearToken()">削除</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
 <div class="panel">
 <h2>Incremental Crawl</h2>
 <div class="sub">製造年と分野で検索。1クリックで一覧最大2000件をページ末尾まで走査し、該当候補の詳細を件数制限なく取得します。既存Listingの公開確認は最大5件です。カテゴリ検索は検索語と取得結果のカテゴリ確認による試作です。</div>
@@ -176,7 +177,7 @@ Gibson ES-335</textarea>
 
 <section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
 <div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product / Claim / DBメンテナンス</span></div>
-<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary bad" onclick="resetDatabase()">DB初期化</button></div><div class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</div></div>
+<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">バックアップ</button><button class="secondary" onclick="openDatabaseImport()">バックアップ復元</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="danger" onclick="resetDatabase()">DB初期化</button></div><div class="sub">バックアップにはユーザーDBも含まれます。DB初期化は両方のデータを削除します。</div></div>
 <div class="domain-grid guitar-content">
 <section>
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Specificationを整理・追加</button></div><div class="sub">自動生成済みClaimの誤抽出と重複するFinishを整理し、ユーザーOwnerのいない個体には保存済みReverb Detailの明示的な仕様項目を追加します。</div></div>
@@ -555,9 +556,7 @@ function activeUserOwns(individualId){
 }
 function ownershipControlsHtml(individualId){
   if(!activeUser||!activeUser.user)return '<div class="sub" style="margin-top:10px">所有ギターに紐づけるにはUserを選択してください。</div>';
-  if(activeUserOwns(individualId)){
-    return '<div class="toolbar" style="margin-top:10px"><span class="status good">現在のUserが所有中</span><button class="secondary bad" onclick="unlinkOwnedGuitar('+individualId+')">紐づけ解除</button></div>';
-  }
+  if(activeUserOwns(individualId))return '';
   return '<div class="toolbar" style="margin-top:10px"><button onclick="linkOwnedGuitar('+individualId+')">所有ギターに追加</button></div>';
 }
 async function linkOwnedGuitar(individualId){
@@ -568,16 +567,6 @@ async function linkOwnedGuitar(individualId){
     await showIndividual(individualId);
   }catch(e){
     alert('所有ギターの紐づけに失敗しました。\n'+e.message);
-  }
-}
-async function unlinkOwnedGuitar(individualId){
-  if(!activeUser||!activeUser.user)return;
-  try{
-    activeUser=await jfetch('/api/users/'+activeUser.user.id+'/guitars/'+individualId,{method:'DELETE'});
-    await loadUsers();
-    if(selectedIndividualId===Number(individualId))await showIndividual(individualId);
-  }catch(e){
-    alert('所有ギターの紐づけ解除に失敗しました。\n'+e.message);
   }
 }
 function normalizeSortValue(value,key){if(key==='id'||key==='claim_count')return Number(value||0);return String(value??'').toLowerCase()}
@@ -703,7 +692,7 @@ function claimCard(c){
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
   const verification=String(c.verification_status||'positive');
   const moderation='<label>Verification <select aria-label="Claim Verification" style="width:auto" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onchange="moderateClaim('+Number(c.id)+',this.value)">'+[['positive','Positive / 許可'],['negative','Negative / 不許可'],['unverified','Unverified / 未確認']].map(x=>'<option value="'+x[0]+'" '+(verification===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>';
-  const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote bad" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
+  const votes='<div class="claim-votes" style="flex-wrap:wrap"><span class="claim-vote">👍 '+good+'</span><span class="claim-vote">👎 '+bad+'</span>'+moderation+'<button class="claim-vote danger" '+(!CONSOLE_ADMIN_TOKEN?'disabled ':'')+'onclick="moderateClaim('+Number(c.id)+',\'delete\','+(c.claim_type==='listing')+')">Delete</button></div>';
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'"><div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div><div class="claim-body">'+body+'</div><div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+esc(c.author_name||('User #'+c.author_user_id))+'</div></div></div>';
 }
 let chronicleSort='event';
@@ -775,7 +764,7 @@ async function showIndividual(id){
   const chronicleAction='<div class="toolbar"><select aria-label="Chronicle sort" onchange="setChronicleSort(this.value)"><option value="event"'+(chronicleSort==='event'?' selected':'')+'>出来事順</option><option value="input"'+(chronicleSort==='input'?' selected':'')+'>入力順</option></select></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i.id),
-    headerAction:'<div class="toolbar admin-detail-actions"><button class="secondary bad" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
+    headerAction:'<div class="toolbar admin-detail-actions"><button class="danger" onclick="deleteIndividual('+i.id+')">Delete Individual</button></div>',
     chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderAdminChronicle();
