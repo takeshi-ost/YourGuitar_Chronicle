@@ -46,6 +46,7 @@ main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) cal
 .discovery-item:hover{background:#20252a}
 .discovery-time{flex:0 0 auto;color:var(--muted);font-size:10px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .discovery-story{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.discovery-owner{flex:0 0 auto;display:flex;align-items:center;gap:5px;font-size:10px;margin-left:auto}.discovery-owner a{color:var(--text);max-width:140px;overflow:hidden;text-overflow:ellipsis}.discovery-following{font-size:9px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .discovery-story strong{color:var(--text);font-weight:800}
 .product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
 .detail-shell{position:fixed;top:calc(var(--header-height,108px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
@@ -826,7 +827,8 @@ async function loadActiveUser(){
 
 async function loadNewDiscoveries(){
   try{
-    newDiscoveries=await jfetch('/api/new-discoveries');
+    const viewer=activeUser?.user?.id;
+    newDiscoveries=await jfetch('/api/new-discoveries'+(viewer?'?viewer_id='+Number(viewer):''));
   }catch(e){
     newDiscoveries=[];
   }
@@ -850,6 +852,12 @@ function discoveryProductName(item){
   const finish=item.finish?' '+item.finish:'';
   return base+year+finish;
 }
+function discoveryOwnerHtml(item){
+  const owner=Number(item.current_owner_user_id);
+  if(!owner||!item.current_owner_name)return '';
+  return '<span class="discovery-owner"><a href="/users/'+owner+'" onclick="event.stopPropagation()">'+esc(item.current_owner_name)+'</a>'+
+    (item.current_owner_following?'<span class="discovery-following">Following</span>':'')+'</span>';
+}
 function renderNewDiscoveries(){
   const root=document.getElementById('newDiscoveryList');
   if(!root)return;
@@ -864,6 +872,7 @@ function renderNewDiscoveries(){
     return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+',true)" title="'+esc(when+' '+product+' '+message)+'">'+
       '<span class="discovery-time">'+esc(when)+'</span>'+
       '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
+      discoveryOwnerHtml(item)+
     '</div>';
   }).join('');
 }

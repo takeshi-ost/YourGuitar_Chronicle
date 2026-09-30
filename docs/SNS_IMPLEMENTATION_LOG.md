@@ -58,3 +58,23 @@ GCP移行時はIdentity Platformで検証したprincipalからuser_idを決定�
 ## 次段階の未実装項目
 
 フィード・Follow通知・ユーザー検索拡張・接触設定・Block / Mute / Report・DMは未実装。フォロー一覧の公開範囲選択、非公開アカウントのフォロー承認、解除時の確認、ユーザー削除・BAN解除後の関係復帰方針も今後の検討対象。現段階では関係一覧は公開用情報として返す。
+
+## 第2段階：New DiscoveryのCurrent Owner表示（2026-09-30）
+
+### 目論見と決定
+
+専用のFollowingフィードは現時点では作らず、既存New Discoveryからユーザーの関係を把握できるようにする。表示対象はListing作成者や最新Claimの作成者ではなく、Observation結果を反映したCurrent Owner。操作ユーザーからCurrent OwnerへのFollowが存在する場合だけFollowingを表示する。逆向きのFollows youは表示しない。
+
+### 実装
+
+`GET /api/new-discoveries?viewer_id=…`で仮認証境界を通して操作ユーザーを解決し、現在Ownerの公開用ユーザーID・Display Name・Following真偽を返す。既存の最大200個体、並び順、活動の選出規則は維持する。取得SQL内でOwnerとFollow関係を照合し、個体ごとの追加問い合わせを避ける。Individual/Claim/Ownershipの更新は行わない。
+
+New Discoveryの各行にCurrent Owner名へのUser Profileリンクと、該当する場合のみFollowingタグを追加する。Owner名のクリックは行の個体選択に伝播させず、プロフィールへ移動する。個体名など他の部分のクリックは従来通りProduct Detailを開く。長い個体名は省略し、Ownerとタグのスペースを確保する。テキストはHTML escapeする。
+
+Guestでも実ユーザーのOwnerリンクは表示し、Followingは表示しない。プロフィール訪問は既存のMembers only規則に従う。Seller / Unknownなど実ユーザーでないOwner、source、BAN・Silent BANのOwnerにはSNSリンクを付けない。無効化された閲覧者のFollow関係も表示判定に使わない。未承認Acquireの申請者には切り替えず、承認による所有者移行後に新Ownerへ切り替える。
+
+### 検証
+
+`test_discovery_following.py`で逆向きFollow、閲覧者ごとの結果、Guest、未承認Acquire、譲渡承認、Follow解除、Release後のUnknownを確認する。`test_discovery_owner_ui.cjs`でOwnerリンク、HTML escape、Following条件、行クリックの伝播防止を確認する。実ブラウザでOwnerリンクと個体選択の分離を検証する。検証結果：Python全体194件通過・2件スキップ（画像認証の追加依存関係がないため）。JavaScript検証と共通Product Detail検証が通過。隔離DBのChromiumでFollowing表示、Owner名クリックの実プロフィール遷移、行クリックの個体選択との分離、Guestでのタグ非表示を確認。JavaScript例外は0件。
+
+Follow先の更新フィード・通知は引き続き未実装。viewer_idは引き続きローカル試作の識別入力であり、本認証ではない。GCP移行時の境界は第1段階と同じ。

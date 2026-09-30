@@ -1996,7 +1996,8 @@ def api_individuals(request: Request) -> list[dict[str, Any]]:
 
 
 @app.get("/api/new-discoveries")
-def api_new_discoveries() -> list[dict[str, Any]]:
+def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[dict[str, Any]]:
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     with repository.connect() as con:
         rows = con.execute(
@@ -2008,6 +2009,14 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                 i.year,
                 i.finish,
                 i.serial_number,
+                owner.id AS current_owner_user_id,
+                owner.display_name AS current_owner_name,
+                EXISTS (
+                    SELECT 1 FROM user_follows f
+                    JOIN users viewer ON viewer.id = f.follower_user_id
+                    WHERE f.follower_user_id = ? AND f.followed_user_id = owner.id
+                      AND viewer.ban_status <> 'ban' AND viewer.account_type <> 'source'
+                ) AS current_owner_following,
                 (
                     SELECT MAX(c.created_at)
                     FROM claims c
@@ -2030,6 +2039,8 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                     WHERE o.individual_id = i.id
                 ) AS latest_observation_at
             FROM individuals i
+            LEFT JOIN users owner ON owner.id = i.current_owner_user_id
+              AND owner.ban_status = 'normal' AND owner.account_type <> 'source'
             ORDER BY MAX(
                 COALESCE((SELECT MAX(c.created_at) FROM claims c
                           WHERE c.individual_id = i.id AND c.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')), ''),
@@ -2040,12 +2051,14 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                            WHERE blocked.observation_id=o.id)), '')
             ) DESC, i.id DESC
             LIMIT 200
-            """
+            """,
+            (viewer_id,),
         ).fetchall()
 
     result: list[dict[str, Any]] = []
     for row in rows:
         item = _row_dict(row)
+        item["current_owner_following"] = bool(item["current_owner_following"])
         claim_at = str(item.get("latest_claim_at") or "")
         observation_at = str(item.get("latest_observation_at") or "")
         if claim_at >= observation_at and claim_at:
