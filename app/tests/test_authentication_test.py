@@ -42,6 +42,7 @@ def test_flat_image_and_duplicate_measurements():
 
 def test_admin_endpoint_is_read_only_and_handles_unavailable_ocr(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr("ygc.authentication_test.shutil.which", lambda _: None)
     repository = Repository(config.DB_PATH)
     repository.init_db()
@@ -59,7 +60,7 @@ def test_admin_endpoint_is_read_only_and_handles_unavailable_ocr(tmp_path, monke
         result = response.json()
         assert result["mode"] == "test_only"
         assert result["images"][0]["challenge"]["status"] == "unavailable"
-        assert result["guitar_identity"]["status"] == "not_implemented"
+        assert result["guitar_analysis"]["status"] == "unavailable"
         assert repository.stats() == before
         invalid = {**files, "serial_closeup": ("bad.png", b"invalid", "image/png")}
         assert client.post("/api/admin/authentication-test", data=payload, files=invalid, headers=headers).status_code == 400

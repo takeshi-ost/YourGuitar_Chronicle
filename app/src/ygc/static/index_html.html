@@ -236,6 +236,7 @@ Gibson ES-335</textarea>
 </section>
 </main>
 <style>
+.auth-guitar-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:12px 0}.auth-guitar-previews img{display:block;width:100%;height:220px;object-fit:contain;background:var(--bg);margin-top:6px;border:1px solid var(--line);border-radius:8px}
 .auth-test-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.auth-test-fields label,.auth-test-images label{font-size:11px;color:var(--muted);min-width:0}.auth-test-fields input,.auth-test-images input{display:block;width:100%;margin-top:5px}.auth-test-inline{display:flex;align-items:center;gap:6px}.auth-test-inline input{min-width:0;flex:1}.auth-test-inline button{flex-shrink:0}.auth-test-images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.auth-test-images img{display:block;width:100%;height:230px;object-fit:contain;margin:8px 0;background:var(--bg);border:1px solid var(--line);border-radius:8px}.auth-test-images img[hidden]{display:none}#authTestResults pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px}#authTestResults td{white-space:normal;overflow-wrap:anywhere}#authTestResults .table-wrap{max-height:none}
 @media(max-width:800px){.auth-test-fields{grid-template-columns:1fr}}@media(max-width:560px){.auth-test-images{grid-template-columns:1fr}}
 </style>
@@ -303,8 +304,15 @@ async function runAuthenticationTest(){
     const comparison=(label,c)=>row(label,'Photo hash similarity: '+percentage(c.phash_similarity_percent),'Feature support: '+percentage(c.feature_support_percent)+' / Geometric matches: '+c.geometric_inliers+' / '+c.status);
     rows+=comparison('Between submitted images',result.between_submitted_images);
     for(const reference of result.reference_comparisons){rows+=reference.overview?comparison(reference.reference+' vs overview',reference.overview)+comparison(reference.reference+' vs close-up',reference.closeup):row(reference.reference,reference.status,'')}
-    rows+=row('Individual identity',result.guitar_identity.status,result.guitar_identity.reason)+row('Forgery detection',result.forgery_detection.status,result.forgery_detection.reason);
-    output.innerHTML='<div class="table-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Details</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="sub">'+esc(result.reference_note)+' '+esc(result.decision)+' Whole-image feature scores can include the paper, text, and background.</p><details><summary>Raw diagnostic data</summary><pre>'+esc(JSON.stringify(result,null,2))+'</pre></details>';
+    rows+=row('Forgery detection',result.forgery_detection.status,result.forgery_detection.reason);
+    const guitar=result.guitar_analysis;
+    let guitarHtml='<h3>Guitar Region Detection and Similarity</h3>';
+    if(guitar.status!=='completed')guitarHtml+='<p class="sub">'+esc(guitar.status)+': '+esc(guitar.reason)+'</p>';
+    else{
+      guitarHtml+='<div class="auth-guitar-previews">'+guitar.detections.map(d=>'<div><strong>'+esc(d.image)+'</strong><div class="sub">'+esc(d.status)+(d.box?' / Region: '+esc(d.region_area_percent)+'% / Box: '+esc(d.box.join(', ')):'')+(d.reason?' / '+esc(d.reason):'')+'</div>'+(d.preview?'<img src="'+esc(d.preview)+'" alt="Detected guitar region">':'')+'</div>').join('')+'</div>';
+      guitarHtml+='<div class="table-wrap"><table><thead><tr><th>Guitar regions compared</th><th>Appearance similarity</th><th>Local feature support</th><th>Status</th></tr></thead><tbody>'+guitar.comparisons.map(c=>'<tr><td>'+esc(c.pair)+'</td><td>'+esc(percentage(c.appearance_similarity_percent))+'</td><td>'+esc(percentage(c.local_feature_support_percent))+' / '+esc(c.geometric_inliers??0)+' geometric matches</td><td>'+esc(c.status)+(c.reason?' / '+esc(c.reason):'')+'</td></tr>').join('')+'</tbody></table></div><p class="sub">'+esc(guitar.note)+'</p>';
+    }
+    output.innerHTML='<h3>OCR and Whole-image Diagnostics</h3><div class="table-wrap"><table><thead><tr><th>Check</th><th>Result</th><th>Details</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="sub">'+esc(result.reference_note)+' '+esc(result.decision)+' Whole-image feature scores can include the paper, text, and background.</p>'+guitarHtml+'<details><summary>Raw diagnostic data</summary><pre>'+esc(JSON.stringify(result,(key,value)=>key==='preview'?'[preview image]':value,2))+'</pre></details>';
     status.textContent='Analysis complete. No data was registered.';
   }catch(error){status.textContent=error.message}finally{button.disabled=false}
 }

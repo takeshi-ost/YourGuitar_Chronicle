@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
 authentication-test = ["Pillow>=11,<13", "numpy>=2,<3", "opencv-python-headless>=4.10,<5"]
+guitar-detection = ["torch>=2.6,<3", "transformers>=4.46,<5"]
 
 [project.scripts]
 ygc = "ygc.cli:app"

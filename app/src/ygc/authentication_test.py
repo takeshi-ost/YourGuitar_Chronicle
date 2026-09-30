@@ -21,7 +21,7 @@ def _libraries():
     return cv2, np, Image, ImageOps
 
 
-def decode_image(content: bytes):
+def decode_image(content: bytes, *, color: bool = False):
     cv2, np, Image, ImageOps = _libraries()
     try:
         with warnings.catch_warnings():
@@ -33,7 +33,8 @@ def decode_image(content: bytes):
                     raise ValueError("Image exceeds 20 megapixels")
                 image = ImageOps.exif_transpose(image).convert("RGB")
                 image.thumbnail((2000, 2000))
-                return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
+                pixels = np.asarray(image)
+                return pixels if color else cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise ValueError("Image exceeds the safe decoding limit") from exc
     except (OSError, SyntaxError) as exc:
@@ -137,6 +138,7 @@ def compare_images(first, second) -> dict:
 
 def analyze_images(closeup: bytes, overview: bytes, challenge: str, serial: str,
                    references: list[tuple[str, bytes]] | None = None) -> dict:
+    from ygc.guitar_image_analysis import analyze_guitars
     images = [decode_image(closeup), decode_image(overview)]
     results = []
     for name, gray in zip(("serial_closeup", "guitar_overview"), images):
@@ -156,6 +158,6 @@ def analyze_images(closeup: bytes, overview: bytes, challenge: str, serial: str,
     return {"mode": "test_only", "images": results,
             "between_submitted_images": compare_images(*images),
             "reference_comparisons": compared,
-            "guitar_identity": {"status": "not_implemented", "reason": "Object isolation and calibrated individual matching require evaluation data"},
+            "guitar_analysis": analyze_guitars(closeup, overview, references or []),
             "forgery_detection": {"status": "not_implemented", "reason": "No TruFor or generated-image detector is installed"},
             "decision": "No approval or ownership change; these are uncalibrated diagnostic measurements."}

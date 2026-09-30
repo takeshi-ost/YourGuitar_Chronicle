@@ -25,6 +25,25 @@ Restart the local Web UI after installing. Without the Python extra the endpoint
 returns an installation instruction; without Tesseract other image measurements
 still run and OCR is explicitly unavailable. There is no cloud API or API key.
 
+### Guitar-region detection and similarity
+
+Install the additional local model runtime from `app`:
+
+```sh
+python -m pip install -e '.[authentication-test,guitar-detection]'
+python -m ygc.guitar_image_analysis --download-model
+```
+
+The second command downloads the official `CIDAS/clipseg-rd64-refined` model at pinned
+revision `999e0328d9e10b484360c477313983f9afdd7050`, using safetensors rather than pickle
+weights. It saves model files under `YGC_DATA_DIR/models/clipseg-guitar` (default:
+`app/data/models/clipseg-guitar`). Prepare with the same `YGC_DATA_DIR` as the Web UI.
+The download requires internet access; uploaded photographs are never sent to the
+model provider. Subsequent detection runs on CPU and loads local files only.
+Missing runtime or weights yields an explicit unavailable result without affecting
+the original OCR/photo checks. Allow several hundred MB for model weights, plus the
+PyTorch runtime. Model loading is cached and inference is serialized locally.
+
 ## Measurements and limits
 
 - Tesseract sparse-text OCR supplies recognized words, coordinates and OCR confidence.
@@ -41,8 +60,23 @@ still run and OCR is explicitly unavailable. There is no cloud API or API key.
 - Optional Reference guitar ID compares up to five readable, locally stored positive
   Claim images. Remote Reverb images are not fetched. No reference means no existing
   guitar comparison. Upload-to-upload comparison alone cannot prove individual identity.
-- Automatic guitar isolation, calibrated individual identification and TruFor/AI
-  forgery detection are not implemented; their results explicitly say so.
+- A separate Guitar Region Detection and Similarity result segments the largest
+  guitar candidate with CLIPSeg, shows its masked preview, coordinates and area,
+  and compares only detected guitar regions. Candidate masks use response >= 0.5
+  and exclude implausibly small/whole-image regions. This is a segmentation heuristic,
+  not proof that a guitar exists, and can miss a partial guitar or include background.
+- Appearance similarity is cosine similarity of CLIP image embeddings of masked crops,
+  displayed as a percentage. Same-model guitars can score highly. Local feature support
+  uses masked SIFT features with one-to-one matches and RANSAC homography, helping inspect
+  details such as wood grain or scratches. Feature scarcity is reported as insufficient.
+  These percentages are neither calibrated identity probabilities nor approval thresholds.
+- Compare the close-up and overview separately from comparisons of the overview against
+  optional locally stored reference images. No detected guitar means no similarity score;
+  there is no fallback to the whole-image diagnostics. Without references the result cannot
+  assess a match to an existing guitar. A single mask is used: photos containing several
+  guitars require special review. 3D viewpoint changes, low resolution and modifications
+  can prevent useful correspondence.
+- Calibrated individual identification and TruFor/AI forgery detection remain unimplemented.
 
 Both uploads are limited to 12 MB and 20 megapixels. Images are resized to at most
 2000 pixels per side for bounded processing. Tesseract has a 20-second per-image timeout.
