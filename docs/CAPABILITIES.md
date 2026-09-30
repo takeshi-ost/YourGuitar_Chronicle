@@ -31,7 +31,7 @@
 - Batch CrawlとIncremental Crawl、保存済み詳細の再判定、進捗・実行ログ、Claim migration / backfill、DB統計、バックアップ・復元・初期化を操作する。
 - 未承認Acquire欄は**承認するとCurrent Ownerが変わる可能性がある**Claimだけを列挙する。Repeated欄は**同じ正規化メーカーとシリアルを持つ複数のDB個体**の候補を表示し、残す個体を指定してMerge／Deleteする。
 - ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
-- Authentication Testで接写・全体写真の2枚を一時アップロードし、ローカルOCR、単純画像の質感検査、知覚ハッシュ・局所特徴点照合を試せる。任意の個体IDのローカル保存画像とも比較する。別欄でCLIPSegによるギター領域検出、領域のプレビュー、背景を除いた外観類似度・局所特徴一致を表示する（追加ランタイム・モデルの事前導入が必要）。スコアは同一個体の確率ではなく、Claimや所有状態には反映しない。高度な加工検出は未搭載。追加依存関係と制約は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
+- Authentication Testで接写・全体写真の2枚を一時アップロードし、ローカルOCR、単純画像の質感検査、知覚ハッシュ・局所特徴点照合を試せる。任意の目標画像を追加アップロードでき、個体IDのローカル保存画像とも比較する。別欄でCLIPSegによるギター領域検出、領域のプレビュー、背景を除いた外観類似度・局所特徴一致を表示する（追加ランタイム・モデルの事前導入が必要）。スコアは同一個体の確率ではなく、Claimや所有状態には反映しない。高度な加工検出は未搭載。追加依存関係と制約は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
 
 ## 未完成・サーバー移行前の要件
 

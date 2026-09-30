@@ -96,9 +96,10 @@ async def api_authentication_test(
     challenge: str = Form(..., min_length=4, max_length=40),
     serial: str = Form(..., min_length=1, max_length=160),
     reference_individual_id: int | None = Form(None),
+    target_image: UploadFile | None = File(None),
 ) -> dict[str, Any]:
     _require_console_admin(request)
-    from ygc.authentication_test import analyze_images, normalized
+    from ygc.authentication_test import analyze_images, decode_image, normalized
     if len(normalized(challenge)) < 4 or not normalized(serial):
         raise HTTPException(status_code=400, detail="Enter an alphanumeric challenge and serial")
     contents = []
@@ -124,6 +125,13 @@ async def api_authentication_test(
         reference_note = ("Comparing up to five locally stored images; remote Reverb images are not downloaded."
                           if references else "This guitar has no readable local images. Remote Reverb images are not downloaded.")
     try:
+        if target_image is not None:
+            target_content = await target_image.read(MAX_IMAGE_BYTES + 1)
+            if not target_content or len(target_content) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=400, detail="Each image must be nonempty and 12 MB or smaller")
+            await run_in_threadpool(decode_image, target_content)
+            references.insert(0, ("Uploaded target", target_content))
+            reference_note = "Comparing the uploaded target image. " + (reference_note if reference_individual_id is not None else "")
         result = await run_in_threadpool(analyze_images, *contents, challenge, serial, references)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

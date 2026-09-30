@@ -229,6 +229,7 @@ Gibson ES-335</textarea>
 <div class="auth-test-images">
 <label>1. Serial close-up + paper<input id="authCloseup" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewAuthenticationImage(this,'authCloseupPreview')"><img id="authCloseupPreview" alt="Serial close-up preview" hidden></label>
 <label>2. Guitar overview + paper<input id="authOverview" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewAuthenticationImage(this,'authOverviewPreview')"><img id="authOverviewPreview" alt="Guitar overview preview" hidden></label>
+<label>3. Target image (optional)<input id="authTarget" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewAuthenticationImage(this,'authTargetPreview')"><img id="authTargetPreview" alt="Target image preview" hidden></label>
 </div>
 <div class="toolbar"><button id="authAnalyzeButton" type="button" onclick="runAuthenticationTest()">Analyze images</button><span id="authTestStatus" class="sub" role="status"></span></div>
 <div id="authTestResults" aria-live="polite"></div>
@@ -237,7 +238,7 @@ Gibson ES-335</textarea>
 </main>
 <style>
 .auth-guitar-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:12px 0}.auth-guitar-previews img{display:block;width:100%;height:220px;object-fit:contain;background:var(--bg);margin-top:6px;border:1px solid var(--line);border-radius:8px}
-.auth-test-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.auth-test-fields label,.auth-test-images label{font-size:11px;color:var(--muted);min-width:0}.auth-test-fields input,.auth-test-images input{display:block;width:100%;margin-top:5px}.auth-test-inline{display:flex;align-items:center;gap:6px}.auth-test-inline input{min-width:0;flex:1}.auth-test-inline button{flex-shrink:0}.auth-test-images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.auth-test-images img{display:block;width:100%;height:230px;object-fit:contain;margin:8px 0;background:var(--bg);border:1px solid var(--line);border-radius:8px}.auth-test-images img[hidden]{display:none}#authTestResults pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px}#authTestResults td{white-space:normal;overflow-wrap:anywhere}#authTestResults .table-wrap{max-height:none}
+.auth-test-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.auth-test-fields label,.auth-test-images label{font-size:11px;color:var(--muted);min-width:0}.auth-test-fields input,.auth-test-images input{display:block;width:100%;margin-top:5px}.auth-test-inline{display:flex;align-items:center;gap:6px}.auth-test-inline input{min-width:0;flex:1}.auth-test-inline button{flex-shrink:0}.auth-test-images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.auth-test-images img{display:block;width:100%;height:230px;object-fit:contain;margin:8px 0;background:var(--bg);border:1px solid var(--line);border-radius:8px}.auth-test-images img[hidden]{display:none}#authTestResults pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:11px}#authTestResults td{white-space:normal;overflow-wrap:anywhere}#authTestResults .table-wrap{max-height:none}
 @media(max-width:800px){.auth-test-fields{grid-template-columns:1fr}}@media(max-width:560px){.auth-test-images{grid-template-columns:1fr}}
 </style>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
@@ -289,13 +290,14 @@ function previewAuthenticationImage(input,targetId){
 }
 async function runAuthenticationTest(){
   const button=document.getElementById('authAnalyzeButton'),status=document.getElementById('authTestStatus'),output=document.getElementById('authTestResults');
-  const closeup=document.getElementById('authCloseup').files[0],overview=document.getElementById('authOverview').files[0];
+  const closeup=document.getElementById('authCloseup').files[0],overview=document.getElementById('authOverview').files[0],target=document.getElementById('authTarget').files[0];
   const challenge=document.getElementById('authChallenge').value.trim(),serial=document.getElementById('authSerial').value.trim();
   if(!closeup||!overview||!challenge||!serial){status.textContent='Select both images and enter the challenge text and serial.';return}
-  if([closeup,overview].some(image=>image.size>12*1024*1024)){status.textContent='Each image must be 12 MB or smaller.';return}
+  if([closeup,overview,target].filter(Boolean).some(image=>image.size>12*1024*1024)){status.textContent='Each image must be 12 MB or smaller.';return}
   button.disabled=true;status.textContent='Analyzing images...';output.innerHTML='';
   try{
     const data=new FormData();data.append('serial_closeup',closeup);data.append('guitar_overview',overview);data.append('challenge',challenge);data.append('serial',serial);
+    if(target)data.append('target_image',target);
     const reference=document.getElementById('authReferenceId').value;if(reference)data.append('reference_individual_id',reference);
     const result=await jfetch('/api/admin/authentication-test',{method:'POST',body:data});
     const row=(a,b,c)=>'<tr><td>'+esc(a)+'</td><td>'+esc(b)+'</td><td>'+esc(c)+'</td></tr>';

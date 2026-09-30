@@ -57,8 +57,11 @@ PyTorch runtime. Model loading is cached and inference is serialized locally.
   percentage of keypoints geometrically supported. These are whole-image diagnostics:
   paper, text and backgrounds can match. They are not calibrated individual identity
   probabilities. Low feature counts are reported as insufficient.
+- Optional Target image upload supplies an existing photograph for comparison, without
+  requiring a DB record. It does not need challenge text. It is included in both
+  whole-image diagnostics and the separate guitar-region comparisons.
 - Optional Reference guitar ID compares up to five readable, locally stored positive
-  Claim images. Remote Reverb images are not fetched. No reference means no existing
+  Claim images. Remote Reverb images are not fetched. Without a target upload or reference ID there is no existing
   guitar comparison. Upload-to-upload comparison alone cannot prove individual identity.
 - A separate Guitar Region Detection and Similarity result segments the largest
   guitar candidate with CLIPSeg, shows its masked preview, coordinates and area,
@@ -78,7 +81,7 @@ PyTorch runtime. Model loading is cached and inference is serialized locally.
   can prevent useful correspondence.
 - Calibrated individual identification and TruFor/AI forgery detection remain unimplemented.
 
-Both uploads are limited to 12 MB and 20 megapixels. Images are resized to at most
+Each upload is limited to 12 MB and 20 megapixels. Images are resized to at most
 2000 pixels per side for bounded processing. Tesseract has a 20-second per-image timeout.
 The administrator-only endpoint uses the existing local Browser Console token.
 Upload bytes are held for the request; OCR uses a temporary directory deleted afterward.

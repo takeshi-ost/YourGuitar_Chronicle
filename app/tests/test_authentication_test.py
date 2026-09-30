@@ -62,6 +62,13 @@ def test_admin_endpoint_is_read_only_and_handles_unavailable_ocr(tmp_path, monke
         assert result["images"][0]["challenge"]["status"] == "unavailable"
         assert result["guitar_analysis"]["status"] == "unavailable"
         assert repository.stats() == before
+        targeted = {**files, "target_image": ("target.png", image, "image/png")}
+        target_response = client.post("/api/admin/authentication-test", data=payload, files=targeted, headers=headers)
+        assert target_response.status_code == 200
+        assert target_response.json()["reference_comparisons"][0]["reference"] == "Uploaded target"
+        assert repository.stats() == before
+        bad_target = {**files, "target_image": ("bad.png", b"invalid", "image/png")}
+        assert client.post("/api/admin/authentication-test", data=payload, files=bad_target, headers=headers).status_code == 400
         invalid = {**files, "serial_closeup": ("bad.png", b"invalid", "image/png")}
         assert client.post("/api/admin/authentication-test", data=payload, files=invalid, headers=headers).status_code == 400
         assert client.get("/").status_code == 200
