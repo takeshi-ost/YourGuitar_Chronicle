@@ -2663,6 +2663,41 @@ class Repository:
                           "WHERE f.follower_user_id=? AND f.followed_user_id=? AND u.ban_status<>'ban' AND u.account_type<>'source'",
                           (viewer_id, user_id)).fetchone())}
 
+    def list_following_activity(self, viewer_id: int | None, limit: int = 200) -> list[dict]:
+        """Public actions by followed users, independent of the guitar's Owner."""
+        if viewer_id is None:
+            return []
+        with self.connect() as con:
+            if con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban' AND account_type<>'source'",
+                           (viewer_id,)).fetchone() is None:
+                return []
+            queries = []
+            for kind, table, actor, value in (
+                ("claim", "claims", "author_user_id", "NULL"),
+                ("vote", "claim_votes", "user_id", "e.vote"),
+            ):
+                claim_join = "" if kind == "claim" else "JOIN claims c ON c.id=e.claim_id"
+                claim_alias = "e" if kind == "claim" else "c"
+                when = "e.created_at" if kind == "claim" else "e.updated_at"
+                queries.append(f"""SELECT * FROM (
+                    SELECT i.id, i.manufacturer, i.model, i.year, i.finish, i.serial_number,
+                        {when} AS activity_at, 'following' AS activity_type,
+                        '{kind}' AS action_kind, e.id AS action_id, {value} AS action_value,
+                        {claim_alias}.id AS claim_id, {claim_alias}.claim_type,
+                        {claim_alias}.ownership_kind, {claim_alias}.specification_kind,
+                        u.id AS actor_user_id, u.display_name AS actor_name
+                    FROM {table} e {claim_join}
+                    JOIN users u ON u.id=e.{actor} AND u.ban_status='normal' AND u.account_type<>'source'
+                    JOIN user_follows f ON f.followed_user_id=u.id AND f.follower_user_id=?
+                    JOIN individuals i ON i.id={claim_alias}.individual_id
+                    JOIN users author ON author.id={claim_alias}.author_user_id AND author.ban_status='normal'
+                    WHERE {claim_alias}.status='active'
+                    ORDER BY {when} DESC, e.id DESC LIMIT ?
+                )""")
+            return [dict(row) for row in con.execute(
+                " UNION ALL ".join(queries) + " ORDER BY activity_at DESC, action_id DESC, action_kind DESC LIMIT ?",
+                (viewer_id, limit, viewer_id, limit, limit))]
+
     def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
         with self.connect() as con:
             return list(con.execute("""

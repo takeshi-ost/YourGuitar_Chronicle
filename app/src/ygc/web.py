@@ -2009,14 +2009,12 @@ def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[
                 i.year,
                 i.finish,
                 i.serial_number,
-                owner.id AS current_owner_user_id,
-                owner.display_name AS current_owner_name,
-                EXISTS (
-                    SELECT 1 FROM user_follows f
-                    JOIN users viewer ON viewer.id = f.follower_user_id
-                    WHERE f.follower_user_id = ? AND f.followed_user_id = owner.id
-                      AND viewer.ban_status <> 'ban' AND viewer.account_type <> 'source'
-                ) AS current_owner_following,
+                (
+                    SELECT c.id FROM claims c
+                    WHERE c.individual_id=i.id AND c.status='active'
+                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
+                    ORDER BY c.created_at DESC, c.id DESC LIMIT 1
+                ) AS latest_claim_id,
                 (
                     SELECT MAX(c.created_at)
                     FROM claims c
@@ -2039,8 +2037,6 @@ def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[
                     WHERE o.individual_id = i.id
                 ) AS latest_observation_at
             FROM individuals i
-            LEFT JOIN users owner ON owner.id = i.current_owner_user_id
-              AND owner.ban_status = 'normal' AND owner.account_type <> 'source'
             ORDER BY MAX(
                 COALESCE((SELECT MAX(c.created_at) FROM claims c
                           WHERE c.individual_id = i.id AND c.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')), ''),
@@ -2052,13 +2048,11 @@ def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[
             ) DESC, i.id DESC
             LIMIT 200
             """,
-            (viewer_id,),
         ).fetchall()
 
     result: list[dict[str, Any]] = []
     for row in rows:
         item = _row_dict(row)
-        item["current_owner_following"] = bool(item["current_owner_following"])
         claim_at = str(item.get("latest_claim_at") or "")
         observation_at = str(item.get("latest_observation_at") or "")
         if claim_at >= observation_at and claim_at:
@@ -2076,13 +2070,15 @@ def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[
         item["claim_type"] = claim_type
         result.append(item)
 
-    result.sort(
-        key=lambda item: (
-            str(item.get("activity_at") or ""),
-            int(item.get("id") or 0),
-        ),
-        reverse=True,
-    )
+    followed = repository.list_following_activity(viewer_id)
+    # Describe a matching newest Claim once as the followed user's action.
+    followed_claim_ids = {item["claim_id"] for item in followed if item["action_kind"] == "claim"}
+    result = [item for item in result if not (
+        item["activity_type"] == "claim" and item.get("latest_claim_id") in followed_claim_ids)]
+    result.extend(followed)
+    result.sort(key=lambda item: (str(item.get("activity_at") or ""),
+                                int(item.get("action_id") or item.get("latest_claim_id") or 0),
+                                int(item["id"]), str(item.get("action_kind") or "")), reverse=True)
     return result
 
 

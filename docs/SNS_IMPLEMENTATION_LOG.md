@@ -59,7 +59,7 @@ GCP移行時はIdentity Platformで検証したprincipalからuser_idを決定�
 
 フィード・Follow通知・ユーザー検索拡張・接触設定・Block / Mute / Report・DMは未実装。フォロー一覧の公開範囲選択、非公開アカウントのフォロー承認、解除時の確認、ユーザー削除・BAN解除後の関係復帰方針も今後の検討対象。現段階では関係一覧は公開用情報として返す。
 
-## 第2段階：New DiscoveryのCurrent Owner表示（2026-09-30）
+## 第2段階：New DiscoveryのCurrent Owner表示（2026-09-30、後述の訂正で置換）
 
 ### 目論見と決定
 
@@ -78,3 +78,25 @@ Guestでも実ユーザーのOwnerリンクは表示し、Followingは表示し�
 `test_discovery_following.py`で逆向きFollow、閲覧者ごとの結果、Guest、未承認Acquire、譲渡承認、Follow解除、Release後のUnknownを確認する。`test_discovery_owner_ui.cjs`でOwnerリンク、HTML escape、Following条件、行クリックの伝播防止を確認する。実ブラウザでOwnerリンクと個体選択の分離を検証する。検証結果：Python全体194件通過・2件スキップ（画像認証の追加依存関係がないため）。JavaScript検証と共通Product Detail検証が通過。隔離DBのChromiumでFollowing表示、Owner名クリックの実プロフィール遷移、行クリックの個体選択との分離、Guestでのタグ非表示を確認。JavaScript例外は0件。
 
 Follow先の更新フィード・通知は引き続き未実装。viewer_idは引き続きローカル試作の識別入力であり、本認証ではない。GCP移行時の境界は第1段階と同じ。
+
+## 第2段階の訂正：全体の新着とFollow先の活動を混在（2026-09-30）
+
+### 意図の訂正
+
+前項は意図を誤って解釈した実装だった。求められているのは全体のギター・Claim新着を残し、その中に「Follow先ユーザーが対象ギターに何をしたか」という活動を混ぜること。表示対象はCurrent Ownerではなく行為の実行者。OwnerがFollow先だから第三者の活動にもFollowingを付ける挙動は廃止する。Git履歴は戻さず、訂正コミットで前項を置き換える。
+
+### 現行実装
+
+- 全体の既存新着最大200個体を取得し、Follow先の公開活動を別に直近最大200件取得して、記録日時の最新順に混ぜる。通常の新着をFollow条件で絞り込まない。最大400行となる。
+- 対象活動はClaimの作成とGood / Bad投票。ユーザー登録・プロフィール更新・誕生日、Favorite、Follow、Verification変更、コメントは今回の対象に含めない。既存のVerification更新は実行者履歴を記録しないため、Claim.updated_atから誰の行為かを推測しない。
+- Claim作成はcreated_at、投票はupdated_atで並べる。Claimの過去の発生日で新着順位を変えない。投票は現在保存されている状態の最終更新であり、全操作の履歴ではない。
+- 通常新着の最新ClaimとFollow活動が同じClaimの場合はFollow活動の1行へ統合する。それより古いFollow先のClaimも、直近活動の範囲内で表示できる。他人の所有ギターへのClaim、未承認Acquireも、公開されている活動として扱い、所有移転を意味する表示にはしない。
+- 活動行は「実行者名 · Following — added a Specification Claim to ギター名」等の英語表記。実行者名はUser Profileへのリンク、ギター名と行の他部分はProduct Detailへの導線。リンクのクリックを個体選択へ伝播させない。
+- Current Ownerの名前・Followingタグは通常新着行から削除する。Guestは全体新着のみ。Follow方向は操作ユーザー→実行者。BAN / Silent BAN / sourceの実行者は対象外、BAN / sourceの閲覧者はFollow活動を取得しない。inactive Claimと非公開扱いの作成者のClaimへの投票も除外する。
+- ギターDB、Claimの有効性・Verification、Observation、所有権の処理には変更を加えない。専用フィード枠や新規の活動保存テーブルは作らない。
+
+### 実装・検証の範囲
+
+Repositoryのlist_following_activityはClaimと投票を一括照合し、取得件数を制限する。New Discovery APIで全体新着との統合・同一Claim重複除去を行う。UIは実行者リンクと行動文を描画する。第2段階のCurrent Owner基準テストは、実行者基準のテストへ置き換える。
+
+テストでは他人の所有ギターへのFollow先Claim、逆方向Follow、全体新着の維持、最新Claimの重複除去、別ユーザーが後からClaimを追加しても古いFollow活動を保持すること、投票、Guest、Follow解除、Silent BAN除外を確認する。JSでは実行者リンク、HTML escape、クリック伝播防止、行動文を検証する。検証結果：Python全体194件通過、2件スキップ（画像認証の追加依存関係がないため）。活動表示のJS検証と共通Product Detail検証が通過。隔離DBのChromiumでFollow先の第三者ギターへのSpecification追加と通常新着の混在、活動者プロフィールへの遷移、行クリックとの分離、Guestの通常新着のみ表示を確認。JavaScript例外は0件。

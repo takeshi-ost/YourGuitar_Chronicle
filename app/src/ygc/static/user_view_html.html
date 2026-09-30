@@ -46,7 +46,7 @@ main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) cal
 .discovery-item:hover{background:#20252a}
 .discovery-time{flex:0 0 auto;color:var(--muted);font-size:10px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .discovery-story{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px}
-.discovery-owner{flex:0 0 auto;display:flex;align-items:center;gap:5px;font-size:10px;margin-left:auto}.discovery-owner a{color:var(--text);max-width:140px;overflow:hidden;text-overflow:ellipsis}.discovery-following{font-size:9px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+.discovery-actor{color:var(--text);font-weight:700}.discovery-following{font-size:9px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .discovery-story strong{color:var(--text);font-weight:800}
 .product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
 .detail-shell{position:fixed;top:calc(var(--header-height,108px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
@@ -852,11 +852,16 @@ function discoveryProductName(item){
   const finish=item.finish?' '+item.finish:'';
   return base+year+finish;
 }
-function discoveryOwnerHtml(item){
-  const owner=Number(item.current_owner_user_id);
-  if(!owner||!item.current_owner_name)return '';
-  return '<span class="discovery-owner"><a href="/users/'+owner+'" onclick="event.stopPropagation()">'+esc(item.current_owner_name)+'</a>'+
-    (item.current_owner_following?'<span class="discovery-following">Following</span>':'')+'</span>';
+function discoveryActorHtml(item){
+  if(item.activity_type!=='following'||!item.actor_user_id)return '';
+  return '<a class="discovery-actor" href="/users/'+Number(item.actor_user_id)+'" onclick="event.stopPropagation()">'+esc(item.actor_name)+'</a> <span class="discovery-following">Following</span>';
+}
+function followingDiscoveryMessage(item){
+  if(item.action_kind==='vote')return 'gave a '+String(item.action_value||'')+' vote to a Claim on';
+  const kind=item.claim_type==='ownership'?(item.ownership_kind||'Acquire'):
+    item.claim_type==='specification'&&item.specification_kind==='repair'?'Repair':item.claim_type;
+  const label=String(kind||'Claim').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+  return 'added '+(/^[AEIOU]/.test(label)?'an ':'a ')+label+' Claim to';
 }
 function renderNewDiscoveries(){
   const root=document.getElementById('newDiscoveryList');
@@ -868,11 +873,10 @@ function renderNewDiscoveries(){
   root.innerHTML=newDiscoveries.map(item=>{
     const when=displayDiscoveryDateTime(item.activity_at||'');
     const product=discoveryProductName(item);
-    const message=discoveryMessage(item);
+    const message=item.activity_type==='following'?String(item.actor_name||'')+' '+followingDiscoveryMessage(item):discoveryMessage(item);
     return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+',true)" title="'+esc(when+' '+product+' '+message)+'">'+
       '<span class="discovery-time">'+esc(when)+'</span>'+
-      '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
-      discoveryOwnerHtml(item)+
+      '<span class="discovery-story">'+(item.activity_type==='following'?discoveryActorHtml(item)+' '+esc(followingDiscoveryMessage(item))+' <strong>'+esc(product)+'</strong>':'<strong>'+esc(product)+'</strong> '+esc(message))+'</span>'+
     '</div>';
   }).join('');
 }
