@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
@@ -1825,8 +1825,9 @@ def no_icon_asset() -> Response:
 
 @app.get("/api/users/{user_id}/avatar")
 def api_user_avatar(
-    user_id: int,
+    user_id: int, request: Request, viewer_id: int | None = None,
 ):
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     user, _guitars = repository.get_user(
         user_id
@@ -1836,6 +1837,9 @@ def api_user_avatar(
             status_code=404,
             detail="User not found",
         )
+
+    if not repository.profile_field_visible(user, user_id, viewer_id, "avatar_visibility"):
+        return Response(NO_ICON_SVG, media_type="image/svg+xml")
 
     raw_path = str(
         user["avatar_storage_path"]
@@ -3159,12 +3163,8 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
     favorites = ([] if user['ban_status'] == 'silent_ban' and not own else
                  [_row_dict(g) for g in repository.get_user_favorites(user_id)
                   if int(g['individual_id']) not in owned_ids])
-    member = own or (viewer_id is not None and
-                     repository.get_user(viewer_id)[0] is not None)
-
     def visible(setting: str) -> bool:
-        level = user[setting]
-        return own or level == "Public" or (level == "Members" and member)
+        return repository.profile_field_visible(user, user_id, viewer_id, setting)
 
     public_user = _row_dict(user)
     public_user["ban_status"] = "normal"
@@ -3182,12 +3182,36 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
         "user": public_user,
         "guitars": [_row_dict(row) for row in guitars],
         "favorites": favorites,
+        "social": repository.user_social_summary(user_id, viewer_id),
         "summary": ({**repository.get_user_summary(user_id, viewer_id),
                      "owned_count": sum(g["ownership_status"] == 'current_owner' for g in guitars),
                      "former_count": sum(g["ownership_status"] == 'former_owner' for g in guitars)}
                     if user["ban_status"] == 'silent_ban'
                     else repository.get_user_summary(user_id, viewer_id)),
     }
+
+
+@app.get("/api/users/{user_id}/connections/{direction}")
+def api_user_connections(user_id: int, direction: str, limit: int = Query(50, ge=1, le=100),
+                         offset: int = Query(0, ge=0)):
+    try:
+        return repo().list_user_connections(user_id, direction, limit, offset)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if str(exc) == "User not found" else 400, detail=str(exc)) from exc
+
+
+@app.put("/api/users/{user_id}/following/{target_id}")
+@app.delete("/api/users/{user_id}/following/{target_id}")
+def api_set_user_follow(user_id: int, target_id: int, request: Request, viewer_id: int | None = None):
+    actor_id = prototype_viewer(request, viewer_id)
+    if actor_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to follow users")
+    if actor_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only change your own follows")
+    try:
+        return {"following": repo().set_user_follow(actor_id, target_id, request.method == "PUT")}
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if str(exc) == "User not found" else 400, detail=str(exc)) from exc
 
 
 @app.get("/api/users/{user_id}/favorites")

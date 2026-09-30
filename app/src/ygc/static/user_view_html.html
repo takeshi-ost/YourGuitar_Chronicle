@@ -197,7 +197,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .profile-mode .profile-meta-value{min-width:0;overflow-wrap:anywhere}
 .profile-mode .profile-bio{margin-top:15px;padding-top:12px;border-top:1px solid var(--line);white-space:pre-wrap;font-size:12px;line-height:1.5}
 .profile-mode .profile-stats{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
-.profile-mode .profile-stat{background:#14171a;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:10px}
+.profile-mode .profile-stat{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:10px}
 .profile-mode .profile-stat strong{color:var(--text)}
 .profile-mode .profile-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .profile-mode .profile-list-panel{max-height:370px;display:flex;flex-direction:column}
@@ -391,6 +391,12 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 
+<dialog id="userConnectionsDialog" aria-labelledby="userConnectionsTitle" style="width:min(440px,90vw);max-height:80vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle">Followers</h3><button type="button" onclick="document.getElementById('userConnectionsDialog').close()">Close</button></div>
+<div id="userConnectionsList" style="max-height:55vh;overflow:auto"></div>
+<p id="userConnectionsStatus" class="sub" role="status"></p>
+<button id="userConnectionsMore" type="button" hidden onclick="loadUserConnections()">Load more</button>
+</dialog>
 <div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Media Claim</h2>
@@ -717,7 +723,7 @@ function renderAccountHub(){
   const location=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
   hub.innerHTML=
     '<a class="account-hub-user account-hub-user-link" href="/users/'+Number(u.id)+'" aria-label="View '+esc(u.display_name||'User')+' profile">'+
-      '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="account-hub-user-copy">'+
         '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span><span class="account-hub-you">You</span></div>'+
         '<div class="account-hub-location">'+esc(location)+'</div>'+
@@ -2155,6 +2161,43 @@ function setupProfileShell(){
   }
   document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
 }
+async function toggleUserFollow(wasFollowing){
+  if(!activeUser?.user)return;
+  const button=document.getElementById('followUserButton'),status=document.getElementById('followUserStatus');
+  button.disabled=true;
+  try{
+    const actor=Number(activeUser.user.id);
+    await jfetch('/api/users/'+actor+'/following/'+PROFILE_USER_ID+'?viewer_id='+actor,{method:wasFollowing?'DELETE':'PUT'});
+    await loadProfilePage(selectedIndividualId||null);
+  }catch(e){status.textContent=e.message;button.disabled=false}
+}
+let connectionDirection='followers',connectionOffset=0,connectionLoading=false,connectionGeneration=0;
+async function openUserConnections(direction){
+  connectionDirection=direction;connectionOffset=0;connectionGeneration++;connectionLoading=false;
+  const dialog=document.getElementById('userConnectionsDialog');
+  document.getElementById('userConnectionsTitle').textContent=direction==='followers'?'Followers':'Following';
+  document.getElementById('userConnectionsList').innerHTML='';
+  document.getElementById('userConnectionsMore').hidden=true;
+  dialog.onclick=e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close()}};
+  dialog.showModal();
+  await loadUserConnections();
+}
+async function loadUserConnections(){
+  if(connectionLoading)return;
+  connectionLoading=true;
+  const generation=connectionGeneration,status=document.getElementById('userConnectionsStatus'),more=document.getElementById('userConnectionsMore');
+  more.disabled=true;status.textContent='Loading...';
+  try{
+    const users=await jfetch('/api/users/'+PROFILE_USER_ID+'/connections/'+connectionDirection+'?limit=50&offset='+connectionOffset);
+    if(generation!==connectionGeneration)return;
+    const list=document.getElementById('userConnectionsList');
+    list.insertAdjacentHTML('beforeend',users.map(u=>'<a style="display:block;padding:8px 0;border-bottom:1px solid var(--line);color:var(--text)" href="/users/'+Number(u.id)+'">'+esc(u.display_name)+' <span class="sub">'+esc(u.account_type)+'</span></a>').join(''));
+    connectionOffset+=users.length;more.hidden=users.length<50;
+    status.textContent=connectionOffset?'':'No users yet.';
+  }catch(e){if(generation===connectionGeneration)status.textContent=e.message}
+  finally{if(generation===connectionGeneration){connectionLoading=false;more.disabled=false}}
+}
+
 async function loadProfilePage(preferredIndividualId=null){
   const hero=document.getElementById('profileHero');
   if(!activeUser||!activeUser.user){
@@ -2182,14 +2225,14 @@ async function loadProfilePage(preferredIndividualId=null){
       ...(locationText?[['Location',locationText]]:[]),
       ...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])
     ].map(([label,value])=>'<div class="profile-meta-item"><span class="profile-meta-label">'+esc(label)+'</span><span class="profile-meta-value">'+esc(value)+'</span></div>').join('');
-    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
+    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',data.social.followers_count],['Following',data.social.following_count]];
     hero.innerHTML='<div class="profile-hero">'+
-      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
-      '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
-      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'')+'</div></div>';
+      '<div class="profile-stats">'+stats.map(x=>['Followers','Following'].includes(x[0])?'<button type="button" class="profile-stat" onclick="openUserConnections(\''+x[0].toLowerCase()+'\')"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</button>':'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');

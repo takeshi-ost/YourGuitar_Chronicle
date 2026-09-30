@@ -9,6 +9,7 @@
 | Claimと個体Snapshotの規則、所有権と判定権限の不変条件 | [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) |
 | 収集・再判定・統計 | [incremental-crawl.md](incremental-crawl.md) |
 | 管理者操作とBAN | [console-claim-administration.md](console-claim-administration.md) |
+| SNS要素の目論見・実装・検証履歴 | [SNS_IMPLEMENTATION_LOG.md](SNS_IMPLEMENTATION_LOG.md) |
 | テーマ・ロゴ | [USER_THEMES.md](USER_THEMES.md) |
 | GCP移行時の交換箇所 | [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) |
 | ローカル画像認証テストの導入と制約 | [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md) |

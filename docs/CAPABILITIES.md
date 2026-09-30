@@ -12,7 +12,8 @@
 - User ProfileでClaimの追加・判定・投票を行うと、選択中のギターを維持してプロフィールの件数、Owned / Formerly Ownedなどの一覧、User Chronicleも再取得する。
 - Guestにはプロフィール画面でMembers onlyを表示する。これは現段階の画面上の挙動で、公開サーバー上での情報保護はまだ保証しない。
 - User SettingsはDisplay Name、Account Type、Date of Birth、Residence、Bio、Avatar、Signature Guitar、Themeと項目別公開範囲を保存する。Date of Birthは有効な過去・当日の日付を受け付け、公開範囲に従ってProfileとUser Chronicleへ表示する。Display NameとAccount TypeはPublic固定、UserName、Email、Preferred Languageは表示用のダミー欄で保存されない。Save成功時とCancel操作時はProfileに戻る。ギター追加は本人ProfileのOwned Guitars直下から行う。
-- 項目別公開範囲はPublic / Members / Followers / Private。Followersはフォロー関係未実装のためPrivateと同じ表示範囲。選択した公開範囲はDBに保存するが、ブラウザ指定の閲覧者IDと一部直接API・画像URLの制約があるため機密情報のアクセス制御とは扱えない。
+- Follow / Unfollow、Followers / Followingの人数とページ付き一覧をUser Profileに表示する。自己Follow、Guest、BAN・sourceユーザーの更新は禁止。所有権・Claim・Verificationには影響しない。設計と検証履歴は [SNS_IMPLEMENTATION_LOG.md](SNS_IMPLEMENTATION_LOG.md)。
+- 項目別公開範囲はPublic / Members / Followers / Private。Followersはプロフィール本人をFollowしている閲覧者に表示する。選択した公開範囲はDBに保存するが、ブラウザ指定の閲覧者IDと一部直接API・画像URLの制約があるため機密情報のアクセス制御とは扱えない。
 - 運営提供の13種類のテーマを設定できる。Top Page / Settingsには操作用ユーザー、User Profileにはプロフィールの持ち主のテーマを使う。管理用Browser Consoleはコンパクトな文字ヘッダー。詳細は [USER_THEMES.md](USER_THEMES.md)。
 
 ## IndividualとClaim

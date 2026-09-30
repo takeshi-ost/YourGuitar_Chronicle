@@ -2595,6 +2595,74 @@ class Repository:
                 guitars,
             )
 
+    @staticmethod
+    def _profile_field_visible(con, user, user_id, viewer_id, setting):
+        if viewer_id == user_id:
+            return True
+        level = user[setting]
+        if level == "Public":
+            return True
+        member = viewer_id is not None and con.execute(
+            "SELECT 1 FROM users WHERE id=? AND ban_status<>'ban' AND account_type<>'source'",
+            (viewer_id,),
+        ).fetchone() is not None
+        if level == "Members":
+            return member
+        return bool(level == "Followers" and member and con.execute(
+            "SELECT 1 FROM user_follows WHERE follower_user_id=? AND followed_user_id=?",
+            (viewer_id, user_id),
+        ).fetchone())
+
+    def profile_field_visible(self, user, user_id, viewer_id, setting):
+        with self.connect() as con:
+            return self._profile_field_visible(con, user, user_id, viewer_id, setting)
+
+    @staticmethod
+    def _social_user(con, user_id):
+        if con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban' AND account_type<>'source'",
+                       (user_id,)).fetchone() is None:
+            raise ValueError("User not found")
+
+    def set_user_follow(self, follower_id: int, followed_id: int, following: bool) -> bool:
+        with self.connect() as con:
+            self._social_user(con, follower_id)
+            self._social_user(con, followed_id)
+            if follower_id == followed_id:
+                raise ValueError("You cannot follow yourself")
+            if following:
+                con.execute("INSERT OR IGNORE INTO user_follows VALUES (?,?,?)",
+                            (follower_id, followed_id, utcnow()))
+            else:
+                con.execute("DELETE FROM user_follows WHERE follower_user_id=? AND followed_user_id=?",
+                            (follower_id, followed_id))
+        return following
+
+    def list_user_connections(self, user_id: int, direction: str, limit: int = 50, offset: int = 0):
+        if direction not in ("followers", "following"):
+            raise ValueError("Invalid connection direction")
+        subject, other = (("followed_user_id", "follower_user_id") if direction == "followers"
+                          else ("follower_user_id", "followed_user_id"))
+        with self.connect() as con:
+            self._social_user(con, user_id)
+            return [dict(row) for row in con.execute(f"""
+                SELECT u.id, u.display_name, u.account_type FROM user_follows f
+                JOIN users u ON u.id=f.{other}
+                WHERE f.{subject}=? AND u.ban_status<>'ban' AND u.account_type<>'source'
+                ORDER BY f.created_at DESC, u.id DESC LIMIT ? OFFSET ?
+            """, (user_id, limit, offset))]
+
+    def user_social_summary(self, user_id: int, viewer_id: int | None):
+        with self.connect() as con:
+            def count(subject, other):
+                return con.execute(f"SELECT COUNT(*) FROM user_follows f JOIN users u ON u.id=f.{other} "
+                                   f"WHERE f.{subject}=? AND u.ban_status<>'ban' AND u.account_type<>'source'",
+                                   (user_id,)).fetchone()[0]
+            return {"followers_count": count("followed_user_id", "follower_user_id"),
+                    "following_count": count("follower_user_id", "followed_user_id"),
+                    "is_following": bool(con.execute("SELECT 1 FROM user_follows f JOIN users u ON u.id=f.follower_user_id "
+                          "WHERE f.follower_user_id=? AND f.followed_user_id=? AND u.ban_status<>'ban' AND u.account_type<>'source'",
+                          (viewer_id, user_id)).fetchone())}
+
     def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
         with self.connect() as con:
             return list(con.execute("""
@@ -2675,12 +2743,8 @@ class Repository:
                 return []
             name = str(user["display_name"])
             add("User", user["created_at"], name, "joined Your Guitar Chronicle.")
-            member = viewer_user_id is not None and con.execute(
-                "SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'", (viewer_user_id,)
-            ).fetchone() is not None
-            if (user["date_of_birth"] and (viewer_user_id == user_id or
-                    user["birth_visibility"] == "Public" or
-                    (user["birth_visibility"] == "Members" and member))):
+            if user["date_of_birth"] and self._profile_field_visible(
+                    con, user, user_id, viewer_user_id, "birth_visibility"):
                 add("User", user["date_of_birth"], name, "was born.")
             if user["updated_at"] > user["created_at"]:
                 add("User", user["updated_at"], name, "updated their profile.")

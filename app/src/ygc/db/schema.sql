@@ -364,3 +364,13 @@ CREATE TABLE IF NOT EXISTS individual_resolution_actions (
  action TEXT NOT NULL,
  created_at TEXT NOT NULL
 );
+
+-- Social relationships never participate in Claim/Observation evaluation.
+CREATE TABLE IF NOT EXISTS user_follows (
+ follower_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ followed_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY (follower_user_id, followed_user_id),
+ CHECK (follower_user_id <> followed_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_follows_followed ON user_follows(followed_user_id, follower_user_id);
