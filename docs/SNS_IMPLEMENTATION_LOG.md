@@ -57,7 +57,7 @@ GCP移行時はIdentity Platformで検証したprincipalからuser_idを決定�
 
 ## 次段階の未実装項目
 
-フィード・Follow通知・ユーザー検索拡張・接触設定・Block / Mute / Report・DMは未実装。フォロー一覧の公開範囲選択、非公開アカウントのフォロー承認、解除時の確認、ユーザー削除・BAN解除後の関係復帰方針も今後の検討対象。現段階では関係一覧は公開用情報として返す。
+フィード・Follow通知・ユーザー検索拡張・接触設定・Block / Mute / Reportは未実装。DMは後述の第3段階で追加した。フォロー一覧の公開範囲選択、非公開アカウントのフォロー承認、解除時の確認、ユーザー削除・BAN解除後の関係復帰方針も今後の検討対象。現段階では関係一覧は公開用情報として返す。
 
 ## 第2段階：New DiscoveryのCurrent Owner表示（2026-09-30、後述の訂正で置換）
 
@@ -100,3 +100,53 @@ Follow先の更新フィード・通知は引き続き未実装。viewer_idは�
 Repositoryのlist_following_activityはClaimと投票を一括照合し、取得件数を制限する。New Discovery APIで全体新着との統合・同一Claim重複除去を行う。UIは実行者リンクと行動文を描画する。第2段階のCurrent Owner基準テストは、実行者基準のテストへ置き換える。
 
 テストでは他人の所有ギターへのFollow先Claim、逆方向Follow、全体新着の維持、最新Claimの重複除去、別ユーザーが後からClaimを追加しても古いFollow活動を保持すること、投票、Guest、Follow解除、Silent BAN除外を確認する。JSでは実行者リンク、HTML escape、クリック伝播防止、行動文を検証する。検証結果：Python全体194件通過、2件スキップ（画像認証の追加依存関係がないため）。活動表示のJS検証と共通Product Detail検証が通過。隔離DBのChromiumでFollow先の第三者ギターへのSpecification追加と通常新着の混在、活動者プロフィールへの遷移、行クリックとの分離、Guestの通常新着のみ表示を確認。JavaScript例外は0件。
+
+## 第3段階：Claimから独立したDM（2026-09-30）
+
+### 目論見・初期範囲
+
+Claim関連の変更は慎重に進めたいという要望から、コメント・返信を先行せず、ユーザー間のテキストDMを追加する。DMは交流データであり、Claim / Evidence / Verification / Observation / Ownershipと独立させる。内容をClaimの根拠に自動採用せず、New Discoveryにも出さない。
+
+初期版は1対1、テキストのみ、1通2000文字まで。Followの有無を送受信権限に使わず、相互Followも要求しない。有効な通常アカウント間で開始できる。DM受付設定・Block・Mute・Reportは後続の設計対象とし、まだ搭載しない。
+
+### UI
+
+- 他ユーザーのUser ProfileにMessageボタンを追加し、対象者との会話を開く。本人には表示しない。
+- TopPage / User ProfileのヘッダーにあるMessagesボタンを有効化し、未読総数を表示する。既存のClaim通知と別に管理する。
+- モーダル左側に会話一覧と相手名・直近本文・未読件数、右側に選択した会話と入力欄。相手名からUser Profileへ移動できる。自身の送信を右側へ寄せ、受信と区別する。
+- 直近50通を古い順に表示し、Load older messagesで50通ずつ追加。会話一覧も50件ずつ追加読込する。Refreshで他タブ・別ユーザーからの新着を取得する。リアルタイム配信・自動ポーリングは行わない。
+- 表示した会話の受信メッセージを既読にし、未読総数・会話別件数を更新する。読込後に届いた未表示メッセージを既読にしないよう、表示済みの最大IDまで更新する。
+- 本文はHTML escapeし、改行を保持する。添付画像・リンクの自動展開・HTML入力は非搭載。
+- 送信中は入力とSendを無効化して二重クリックを防ぎ、失敗した場合は入力を残して再操作可能にする。会話切替時の古い読込結果は新しい会話へ反映しない。
+- Close、Escape、枠外クリックで閉じる。狭い画面では会話一覧と本文を縦に配置する。GuestにはMessages操作を提供しない。
+
+### DB・API
+
+`direct_messages(id, sender_user_id, recipient_user_id, body, created_at, read_at)`を追加。自己送信の禁止、本文長、ユーザー外部キーをDB制約でも確認する。受信者・既読・ID、送信者・受信者・IDのindexを追加する。起動時のinit_dbで既存DBに自動追加し、再初期化で既存メッセージを保持する。
+
+会話は送信者と受信者の組から導出し、新規のConversationレコードを先に作らない。GETは保存内容を返すだけで既読にせず、既読更新を別APIにする。
+
+| API | 内容 |
+| --- | --- |
+| `GET /api/dm?viewer_id=…&limit=50&before_id=…` | 操作ユーザーの会話一覧・未読総数・次ページcursor |
+| `GET /api/dm/users/{peer_id}/messages?viewer_id=…&limit=50&before_id=…` | 操作ユーザーと指定相手の会話だけ。古い順の本文と次ページcursor |
+| `POST /api/dm/users/{peer_id}/messages?viewer_id=…` | bodyフィールドのテキストを、解決された操作ユーザーから送信 |
+| `POST /api/dm/users/{peer_id}/read?viewer_id=…` | through_idまでの、自分宛て・指定相手からの受信だけを既読にする |
+
+一覧・履歴はlimit 1〜100、cursorは正のID。相手や操作ユーザーが存在しない、BAN、sourceなら拒否し、自己送信・空白のみ・2000文字超も拒否する。会話一覧・未読件数からBAN / sourceの相手を除外するがデータは削除しない。Silent BANは既存のClaimに対する措置なので、DMに追加の不活性化は設けない。ユーザー削除時には外部キーCASCADEで関係メッセージも削除する。
+
+### 仮認証・将来の交換箇所
+
+全DM APIはPrototypeIdentity経由で操作ユーザーを解決し、操作ユーザーが参加する組だけを照会・更新する。送信者IDを本文から受け取らない。第三者として自分のIDを指定した場合は他の2人の会話を取得・既読化できない。
+
+ただしviewer_idはブラウザからの仮入力であり、他人のIDを名乗れない認証ではない。このローカル試作を本番の秘密通信として扱わない。GCP移行時はIdentity Platformで検証したprincipalからuser_idを決定し、全DM APIの照会・更新へ渡す必要がある。既存のfail-closedクラウド境界は維持する。
+
+本文はローカルSQLiteに通常のテキストで保存し、エンドツーエンド暗号化・暗号鍵管理は非搭載。外部通知・メール送信・添付ファイル・管理者閲覧UIも作らない。通信失敗時の自動再送は行わず、送信済み応答が失われた場合の再送重複を防ぐrequest IDも未搭載。
+
+### 検証・評価観点
+
+`test_direct_messages.py`で送受信・返信、未読と既読cursor、第三者の会話非表示・既読不可、Guest・自己送信・空白・文字数制限・不存在・BAN/source、ページング、既存DBの自動追加・保存保持を確認する。DM前後でindividuals / claims / claim_evidence / user_guitars / notifications / user_followsが変化しないことを確認する。
+
+`test_direct_message_ui.cjs`で送信後の入力消去・会話更新、失敗時の入力保持と再操作、送信中の二重送信防止を検証する。実ブラウザは隔離DBで2ユーザーの送信・返信・未読・既読、HTML escape、プロフィール導線を往復確認する。検証結果：Python全体197件通過、2件スキップ（画像認証の追加依存関係がないため）。DM UIのJSテスト3件、既存プロフィール更新5件、Console User Detailと共通Product Detail検証が通過。隔離DBのChromiumで2ユーザーの送信・返信・未読→既読、HTML escape、第三者の受信箱非表示、500px幅の表示を確認。JavaScript例外は0件。
+
+後続の評価では、Identity Platformへの交換、DM受付設定、Block / Mute / Report、保存期間・ユーザー削除方針、送信頻度制限、送信request ID、リアルタイム更新を検討する。所有権・Claim権限の判定とは接続しない。

@@ -3054,6 +3054,63 @@ def api_claim_vote(
     return {"ok": True}
 
 
+class DirectMessageRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class DirectMessageReadRequest(BaseModel):
+    through_id: int = Field(ge=1)
+
+
+def direct_message_actor(request: Request, viewer_id: int | None) -> int:
+    actor_id = prototype_viewer(request, viewer_id)
+    if actor_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to use messages")
+    return actor_id
+
+
+def direct_message_error(exc: ValueError):
+    return HTTPException(status_code=404 if str(exc)=="User not found" else 400, detail=str(exc))
+
+
+@app.get("/api/dm")
+def api_dm_inbox(request: Request, viewer_id: int | None = None,
+                 limit: int = Query(50, ge=1, le=100), before_id: int | None = Query(None, ge=1)):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().direct_message_inbox(actor, limit, before_id)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.get("/api/dm/users/{peer_id}/messages")
+def api_dm_history(peer_id: int, request: Request, viewer_id: int | None = None,
+                   limit: int = Query(50, ge=1, le=100), before_id: int | None = Query(None, ge=1)):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().direct_message_history(actor, peer_id, limit, before_id)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.post("/api/dm/users/{peer_id}/messages")
+def api_dm_send(peer_id: int, body: DirectMessageRequest, request: Request, viewer_id: int | None = None):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().send_direct_message(actor, peer_id, body.body)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.post("/api/dm/users/{peer_id}/read")
+def api_dm_read(peer_id: int, body: DirectMessageReadRequest, request: Request, viewer_id: int | None = None):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return {"updated": repo().read_direct_messages(actor, peer_id, body.through_id)}
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
 @app.get("/api/users/{user_id}/notifications")
 def api_user_notifications(
     user_id: int,

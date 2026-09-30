@@ -2698,6 +2698,68 @@ class Repository:
                 " UNION ALL ".join(queries) + " ORDER BY activity_at DESC, action_id DESC, action_kind DESC LIMIT ?",
                 (viewer_id, limit, viewer_id, limit, limit))]
 
+    def send_direct_message(self, sender_id: int, recipient_id: int, body: str) -> dict:
+        text = body.strip()
+        if not text or len(text) > 2000:
+            raise ValueError("Message must contain 1 to 2000 characters")
+        with self.connect() as con:
+            self._social_user(con, sender_id)
+            self._social_user(con, recipient_id)
+            if sender_id == recipient_id:
+                raise ValueError("You cannot message yourself")
+            now = utcnow()
+            cur = con.execute("INSERT INTO direct_messages (sender_user_id,recipient_user_id,body,created_at) VALUES (?,?,?,?)",
+                              (sender_id, recipient_id, text, now))
+            return {"id": cur.lastrowid, "sender_user_id": sender_id, "recipient_user_id": recipient_id,
+                    "body": text, "created_at": now, "read_at": None}
+
+    def direct_message_inbox(self, user_id: int, limit: int = 50, before_id: int | None = None) -> dict:
+        with self.connect() as con:
+            self._social_user(con, user_id)
+            unread = con.execute("""SELECT COUNT(*) FROM direct_messages m JOIN users u ON u.id=m.sender_user_id
+                WHERE m.recipient_user_id=? AND m.read_at IS NULL AND u.ban_status<>'ban' AND u.account_type<>'source'""",
+                (user_id,)).fetchone()[0]
+            rows = con.execute("""WITH own AS (
+                SELECT m.*, CASE WHEN sender_user_id=? THEN recipient_user_id ELSE sender_user_id END AS peer_id
+                FROM direct_messages m WHERE sender_user_id=? OR recipient_user_id=?
+            ), ranked AS (
+                SELECT own.*, ROW_NUMBER() OVER (PARTITION BY peer_id ORDER BY id DESC) AS position,
+                    SUM(CASE WHEN recipient_user_id=? AND read_at IS NULL THEN 1 ELSE 0 END)
+                        OVER (PARTITION BY peer_id) AS unread_count
+                FROM own
+            ) SELECT ranked.id AS last_message_id, ranked.peer_id, u.display_name AS peer_name,
+                     ranked.body AS preview, ranked.created_at, ranked.unread_count
+              FROM ranked JOIN users u ON u.id=ranked.peer_id
+              WHERE ranked.position=1 AND u.ban_status<>'ban' AND u.account_type<>'source'
+                AND (? IS NULL OR ranked.id<?)
+              ORDER BY ranked.id DESC LIMIT ?""", (user_id,user_id,user_id,user_id,before_id,before_id,limit+1)).fetchall()
+            items = [dict(row) for row in rows[:limit]]
+            return {"unread_count": unread, "conversations": items,
+                    "next_before_id": items[-1]["last_message_id"] if len(rows)>limit else None}
+
+    def direct_message_history(self, user_id: int, peer_id: int, limit: int = 50, before_id: int | None = None) -> dict:
+        with self.connect() as con:
+            self._social_user(con, user_id)
+            self._social_user(con, peer_id)
+            if user_id == peer_id:
+                raise ValueError("You cannot message yourself")
+            peer = con.execute("SELECT id,display_name FROM users WHERE id=?", (peer_id,)).fetchone()
+            rows = con.execute("""SELECT * FROM direct_messages
+                WHERE ((sender_user_id=? AND recipient_user_id=?) OR (sender_user_id=? AND recipient_user_id=?))
+                  AND (? IS NULL OR id<?) ORDER BY id DESC LIMIT ?""",
+                (user_id,peer_id,peer_id,user_id,before_id,before_id,limit+1)).fetchall()
+            items = [dict(row) for row in reversed(rows[:limit])]
+            return {"peer": dict(peer), "messages": items,
+                    "next_before_id": items[0]["id"] if len(rows)>limit else None}
+
+    def read_direct_messages(self, user_id: int, peer_id: int, through_id: int) -> int:
+        with self.connect() as con:
+            self._social_user(con, user_id)
+            self._social_user(con, peer_id)
+            return con.execute("""UPDATE direct_messages SET read_at=?
+                WHERE recipient_user_id=? AND sender_user_id=? AND id<=? AND read_at IS NULL""",
+                (utcnow(),user_id,peer_id,through_id)).rowcount
+
     def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
         with self.connect() as con:
             return list(con.execute("""

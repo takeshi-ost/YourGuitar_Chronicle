@@ -374,3 +374,16 @@ CREATE TABLE IF NOT EXISTS user_follows (
  CHECK (follower_user_id <> followed_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_user_follows_followed ON user_follows(followed_user_id, follower_user_id);
+
+-- Private social messages, entirely independent of Claims and Evidence.
+CREATE TABLE IF NOT EXISTS direct_messages (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 2000),
+ created_at TEXT NOT NULL,
+ read_at TEXT,
+ CHECK(sender_user_id <> recipient_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_recipient_read ON direct_messages(recipient_user_id,read_at,id);
+CREATE INDEX IF NOT EXISTS idx_dm_sender_recipient ON direct_messages(sender_user_id,recipient_user_id,id);

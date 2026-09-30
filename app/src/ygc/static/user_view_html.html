@@ -284,6 +284,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .claim-footer-meta{min-width:0;overflow-wrap:anywhere;line-height:1.4}
 #detail .claim-footer-meta a{color:inherit}
 @media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
+.dm-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:12px}.dm-conversations{max-height:420px;overflow:auto}.dm-conversation{display:block;width:100%;text-align:left;background:var(--bg);color:var(--text);border:1px solid var(--line);padding:8px;margin-bottom:5px}.dm-conversation.selected{border-color:var(--accent)}.dm-preview{font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.dm-thread{height:300px;overflow:auto;background:var(--bg);padding:8px;border:1px solid var(--line);border-radius:8px}.dm-message{margin:5px 0;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.dm-message.mine{margin-left:auto;border-color:var(--accent)}.dm-time{font-size:9px;color:var(--muted);margin-top:4px}.dm-compose{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;resize:vertical;margin-top:8px}@media(max-width:650px){.dm-layout{grid-template-columns:1fr}.dm-conversations{max-height:120px}.dm-thread{height:240px}}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
@@ -392,6 +393,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 
+<dialog id="directMessageDialog" aria-labelledby="directMessageTitle" style="width:min(800px,95vw);max-height:90vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button type="button" onclick="document.getElementById('directMessageDialog').close()">Close</button></div></div>
+<div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)">Load more conversations</button></div>
+<div><div id="dmPeerTitle" style="margin-bottom:8px">Select a conversation, or use Message on a User Profile.</div><button id="dmOlder" type="button" hidden onclick="loadDirectMessageHistory(true)">Load older messages</button><div id="dmThread" class="dm-thread"></div>
+<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody">Message (up to 2000 characters)</label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button id="dmSend" type="submit">Send</button></form></div></div>
+<p id="dmStatus" class="sub" role="status"></p>
+</dialog>
 <dialog id="userConnectionsDialog" aria-labelledby="userConnectionsTitle" style="width:min(440px,90vw);max-height:80vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
 <div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle">Followers</h3><button type="button" onclick="document.getElementById('userConnectionsDialog').close()">Close</button></div>
 <div id="userConnectionsList" style="max-height:55vh;overflow:auto"></div>
@@ -737,7 +745,7 @@ function renderAccountHub(){
     '</div>'+
     '<div class="account-hub-actions">'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
-      '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
+      '<button class="account-hub-action" type="button" onclick="openDirectMessages()">Messages <span class="account-hub-count" id="directMessageCount">'+Number(dmInbox.unread_count||0)+'</span></button>'+
     '</div>';
 }
 
@@ -821,6 +829,7 @@ async function loadActiveUser(){
     sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
+  await loadDirectMessageInbox();
   renderAccountHub();
   renderNotificationPanel();
 }
@@ -2174,6 +2183,80 @@ function setupProfileShell(){
   }
   document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
 }
+let dmInbox={unread_count:0,conversations:[],next_before_id:null},dmPeer=null,dmBefore=null,dmGeneration=0,dmSending=false,dmHistoryLoading=false,dmInboxLoading=false;
+function dmActor(){return Number(activeUser?.user?.id||0)}
+function dmStatus(text){document.getElementById('dmStatus').textContent=text}
+function renderDirectMessageInbox(){
+  document.getElementById('dmConversationList').innerHTML=dmInbox.conversations.map(c=>'<button type="button" class="dm-conversation'+(Number(c.peer_id)===dmPeer?' selected':'')+'" onclick="selectDirectMessagePeer('+Number(c.peer_id)+')"><strong>'+esc(c.peer_name)+'</strong> '+(c.unread_count?'<span class="account-hub-count">'+Number(c.unread_count)+'</span>':'')+'<div class="dm-preview">'+esc(c.preview)+'</div></button>').join('')||'<p class="sub">No conversations yet.</p>';
+  document.getElementById('dmMoreConversations').hidden=!dmInbox.next_before_id;
+  const count=document.getElementById('directMessageCount');if(count)count.textContent=Number(dmInbox.unread_count||0);
+}
+async function loadDirectMessageInbox(append=false){
+  if(!dmActor()){dmInbox={unread_count:0,conversations:[],next_before_id:null};return}
+  if(dmInboxLoading)return;
+  dmInboxLoading=true;document.getElementById('dmMoreConversations').disabled=true;
+  try{
+    const cursor=append?dmInbox.next_before_id:null;if(append&&!cursor)return;
+    const result=await jfetch('/api/dm?viewer_id='+dmActor()+(cursor?'&before_id='+cursor:''));
+    const previous=append?dmInbox.conversations:[];
+    dmInbox={...result,conversations:[...previous,...result.conversations.filter(c=>!previous.some(p=>p.peer_id===c.peer_id))]};
+    renderDirectMessageInbox();
+  }catch(e){if(document.getElementById('directMessageDialog').open)dmStatus(e.message)}
+  finally{dmInboxLoading=false;document.getElementById('dmMoreConversations').disabled=false}
+}
+async function openDirectMessages(peer=null){
+  if(!dmActor())return;
+  const dialog=document.getElementById('directMessageDialog');
+  dmStatus('');
+  if(!dialog.open)dialog.showModal();
+  dialog.onclick=e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close()}};
+  await loadDirectMessageInbox();
+  if(peer)await selectDirectMessagePeer(Number(peer));
+  else if(dmPeer)await loadDirectMessageHistory();
+}
+async function selectDirectMessagePeer(peer){
+  if(dmSending)return;
+  dmPeer=Number(peer);dmBefore=null;dmGeneration++;dmHistoryLoading=false;
+  document.getElementById('dmBody').value='';document.getElementById('dmComposeForm').hidden=true;
+  document.getElementById('dmThread').innerHTML='';document.getElementById('dmPeerTitle').textContent='Loading conversation...';
+  renderDirectMessageInbox();await loadDirectMessageHistory();
+}
+async function loadDirectMessageHistory(older=false){
+  if(!dmPeer||dmHistoryLoading)return;
+  const peer=dmPeer,generation=dmGeneration,cursor=older?dmBefore:null;
+  if(older&&!cursor)return;
+  dmHistoryLoading=true;document.getElementById('dmOlder').disabled=true;dmStatus('Loading...');
+  try{
+    const data=await jfetch('/api/dm/users/'+peer+'/messages?viewer_id='+dmActor()+(cursor?'&before_id='+cursor:''));
+    if(generation!==dmGeneration)return;
+    document.getElementById('dmPeerTitle').innerHTML='<a href="/users/'+Number(data.peer.id)+'" style="color:var(--text)">'+esc(data.peer.display_name)+'</a>';
+    const thread=document.getElementById('dmThread'),height=thread.scrollHeight,top=thread.scrollTop;
+    const content=data.messages.map(m=>'<div class="dm-message'+(m.sender_user_id===dmActor()?' mine':'')+'">'+esc(m.body)+'<div class="dm-time">'+esc(displayDiscoveryDateTime(m.created_at))+'</div></div>').join('');
+    if(older){thread.insertAdjacentHTML('afterbegin',content);thread.scrollTop=top+thread.scrollHeight-height}
+    else{thread.innerHTML=content||'<p class="sub">Start a conversation.</p>';thread.scrollTop=thread.scrollHeight}
+    dmBefore=data.next_before_id;document.getElementById('dmOlder').hidden=!dmBefore;
+    document.getElementById('dmComposeForm').hidden=false;dmStatus('');
+    if(data.messages.length&&document.getElementById('directMessageDialog').open){
+      await jfetch('/api/dm/users/'+peer+'/read?viewer_id='+dmActor(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({through_id:data.messages[data.messages.length-1].id})});
+      await loadDirectMessageInbox();
+    }
+  }catch(e){if(generation===dmGeneration)dmStatus(e.message)}
+  finally{if(generation===dmGeneration){dmHistoryLoading=false;document.getElementById('dmOlder').disabled=false}}
+}
+async function sendDirectMessage(){
+  const peer=dmPeer,input=document.getElementById('dmBody'),body=input.value.trim();
+  if(!peer||dmSending)return;
+  if(dmHistoryLoading){dmStatus('Wait for the conversation to finish loading.');return}
+  if(!body){dmStatus('Enter a message.');return}
+  dmSending=true;document.getElementById('dmSend').disabled=true;input.disabled=true;dmStatus('Sending...');
+  try{
+    await jfetch('/api/dm/users/'+peer+'/messages?viewer_id='+dmActor(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})});
+    input.value='';await loadDirectMessageHistory();await loadDirectMessageInbox();dmStatus('Message sent.');
+  }catch(e){dmStatus(e.message)}
+  finally{dmSending=false;document.getElementById('dmSend').disabled=false;input.disabled=false}
+}
+async function refreshDirectMessages(){if(dmSending)return;await loadDirectMessageInbox();if(dmPeer)await loadDirectMessageHistory()}
+
 async function toggleUserFollow(wasFollowing){
   if(!activeUser?.user)return;
   const button=document.getElementById('followUserButton'),status=document.getElementById('followUserStatus');
@@ -2245,7 +2328,7 @@ async function loadProfilePage(preferredIndividualId=null){
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
       '<div class="profile-stats">'+stats.map(x=>['Followers','Following'].includes(x[0])?'<button type="button" class="profile-stat" onclick="openUserConnections(\''+x[0].toLowerCase()+'\')"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</button>':'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
-      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');
