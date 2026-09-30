@@ -150,3 +150,7 @@ Claim関連の変更は慎重に進めたいという要望から、コメント
 `test_direct_message_ui.cjs`で送信後の入力消去・会話更新、失敗時の入力保持と再操作、送信中の二重送信防止を検証する。実ブラウザは隔離DBで2ユーザーの送信・返信・未読・既読、HTML escape、プロフィール導線を往復確認する。検証結果：Python全体197件通過、2件スキップ（画像認証の追加依存関係がないため）。DM UIのJSテスト3件、既存プロフィール更新5件、Console User Detailと共通Product Detail検証が通過。隔離DBのChromiumで2ユーザーの送信・返信・未読→既読、HTML escape、第三者の受信箱非表示、500px幅の表示を確認。JavaScript例外は0件。
 
 後続の評価では、Identity Platformへの交換、DM受付設定、Block / Mute / Report、保存期間・ユーザー削除方針、送信頻度制限、送信request ID、リアルタイム更新を検討する。所有権・Claim権限の判定とは接続しない。
+
+## Transferの追加（2026-09-30）
+
+DMとは独立して、Current Owner本人が相手ユーザーを指定し、通知を受けた相手がAcceptするユーザー間Transferを実装する。合意は承認者ID・日時・その時点のCurrent Owner IDを持つEvidenceであり、Verificationとは独立。ユーザー検索は相手指定に限定する。設計・API・旧データとの区別・検証は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md) に記録する。既存DM・Follow関係を所有権の許可条件に使わない。

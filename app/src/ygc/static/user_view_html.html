@@ -393,6 +393,9 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 
+<dialog id="transferReviewDialog" aria-labelledby="transferReviewTitle" style="width:min(480px,90vw);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:18px">
+<h3 id="transferReviewTitle">Transfer</h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button type="button" style="margin-top:10px" onclick="document.getElementById('transferReviewDialog').close()">Close</button>
+</dialog>
 <dialog id="directMessageDialog" aria-labelledby="directMessageTitle" style="width:min(800px,95vw);max-height:90vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button type="button" onclick="document.getElementById('directMessageDialog').close()">Close</button></div></div>
 <div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)">Load more conversations</button></div>
@@ -565,7 +568,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="form-row">
       <label class="form-label">Tag</label>
       <div id="ownershipClaimFixedTag"><strong>Acquire</strong></div>
-      <select id="ownershipClaimKind" style="display:none">
+      <select id="ownershipClaimKind" style="display:none" onchange="updateTransferFields()">
         <option value="acquire">Acquire</option>
         <option value="transfer">Transfer</option>
         <option value="inherit">Inherit</option>
@@ -579,6 +582,14 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
     <div class="form-row" id="ownershipClaimPreviousRow">
       <label class="form-label" for="ownershipClaimPrevious">Counterparty / related person (optional)</label>
       <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
+    </div>
+    <div class="form-row" id="transferRecipientRow" hidden>
+      <div class="sub">From: you, the Current Owner. The recipient must Accept. No other Evidence is required.</div>
+      <label class="form-label" for="transferRecipientSearch">To: search by Display Name or User ID</label>
+      <div style="display:flex;gap:6px"><input id="transferRecipientSearch" maxlength="160" style="flex:1" oninput="transferSearchGeneration++;transferSelectedUser=null;transferSearchOffset=0;document.getElementById('transferSearchMore').hidden=true;document.getElementById('transferSelectedRecipient').textContent='';document.getElementById('transferSearchResults').innerHTML=''" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTransferRecipients()}"><button type="button" onclick="searchTransferRecipients()">Search</button></div>
+      <div id="transferSearchResults" style="max-height:140px;overflow:auto"></div>
+      <div id="transferSelectedRecipient" class="sub"></div>
+      <button id="transferSearchMore" type="button" hidden onclick="searchTransferRecipients(true)">More candidates</button>
     </div>
     <div class="form-row">
       <label class="form-label" for="ownershipClaimBody">Memo (optional)</label>
@@ -795,6 +806,7 @@ async function openNotification(notificationId,individualId){
   await loadNotifications();
   const panel=document.getElementById('notificationPanel');
   if(panel)panel.classList.remove('open');
+  if(item&&item.notification_type?.startsWith('transfer_')&&item.claim_id){if(individualId)await showIndividual(Number(individualId),true);await openTransferReview(Number(item.claim_id));return}
   if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId),true);
 }
 async function markAllNotificationsRead(){
@@ -1135,6 +1147,11 @@ function claimCardFull(c){
       body=c.ownership_source==='automation'
         ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
         : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'&&c.transfer){
+      const t=c.transfer;
+      body='<div><strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong></div><div class="claim-memo">Transfer: '+esc(t.state)+'</div>';
+      if(t.accepted_at)body+='<div class="claim-memo">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</div>';
+      if(t.state==='pending'&&activeUser?.user&&[t.from_user_id,t.to_user_id].includes(Number(activeUser.user.id)))body+='<button type="button" onclick="openTransferReview('+Number(c.id)+')">Review Transfer</button>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -1739,7 +1756,8 @@ function openOwnershipClaim(individualId,mode='acquire'){
   document.getElementById('ownershipClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  configureOwnershipClaim(mode);
+  transferSelectedUser=null;transferSearchGeneration++;document.getElementById('transferRecipientSearch').value='';document.getElementById('transferSearchResults').innerHTML='';document.getElementById('transferSelectedRecipient').textContent='';
+  configureOwnershipClaim(mode);updateTransferFields();
   document.getElementById('ownershipClaimDate').value='';
   document.getElementById('ownershipClaimPrevious').value='';
   document.getElementById('ownershipClaimBody').value='';
@@ -1758,6 +1776,7 @@ async function submitOwnershipClaim(){
   if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
   const button=document.getElementById('ownershipClaimSubmit');
   const kind=document.getElementById('ownershipClaimKind').value;
+  if(kind==='transfer'){await submitTransferProposal();return}
   if(kind==='acquire'&&!document.getElementById('ownershipClaimDate').value){
     alert('Acquire requires an acquisition date.');
     document.getElementById('ownershipClaimDate').focus();
@@ -2183,6 +2202,58 @@ function setupProfileShell(){
   }
   document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
 }
+let transferSelectedUser=null,transferCandidates=[],transferSearchOffset=0,transferSearchGeneration=0,transferReviewRecord=null;
+function updateTransferFields(){
+  const transfer=document.getElementById('ownershipClaimKind').value==='transfer';
+  document.getElementById('transferRecipientRow').hidden=!transfer;
+  document.getElementById('transferSearchMore').hidden=true;
+  document.getElementById('ownershipClaimDate').closest('.form-row').hidden=transfer;
+  document.getElementById('ownershipClaimPreviousRow').hidden=transfer;
+  document.getElementById('ownershipClaimPreviousRow').style.display=transfer?'none':'';
+  document.getElementById('ownershipClaimBody').closest('.form-row').hidden=transfer;
+}
+async function searchTransferRecipients(more=false){
+  const query=document.getElementById('transferRecipientSearch').value.trim();if(!query)return;
+  const generation=++transferSearchGeneration,offset=more?transferSearchOffset:0;
+  if(!more){transferCandidates=[];transferSelectedUser=null;document.getElementById('transferSelectedRecipient').textContent=''}
+  try{
+    const users=await jfetch('/api/transfer-users?viewer_id='+Number(activeUser.user.id)+'&q='+encodeURIComponent(query)+'&offset='+offset);
+    if(generation!==transferSearchGeneration)return;
+    transferCandidates=[...transferCandidates,...users];transferSearchOffset=offset+users.length;
+    document.getElementById('transferSearchResults').innerHTML=transferCandidates.map((u,index)=>'<button type="button" style="display:block;width:100%;text-align:left;margin-top:4px" onclick="selectTransferRecipient('+index+')">'+esc(u.display_name)+' · #'+Number(u.id)+' · '+esc(u.account_type)+'</button>').join('')||'<p class="sub">No matching users.</p>';
+    document.getElementById('transferSearchMore').hidden=users.length<20;
+  }catch(e){if(generation===transferSearchGeneration)document.getElementById('transferSearchResults').textContent=e.message}
+}
+function selectTransferRecipient(index){transferSelectedUser=transferCandidates[index];document.getElementById('transferSelectedRecipient').textContent='To: '+transferSelectedUser.display_name+' (#'+transferSelectedUser.id+')'}
+async function submitTransferProposal(){
+  if(!transferSelectedUser){alert('Select a recipient from the search results.');return}
+  const button=document.getElementById('ownershipClaimSubmit'),individualId=pendingOwnershipClaimIndividualId;button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+individualId+'/transfers?viewer_id='+Number(activeUser.user.id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to_user_id:Number(transferSelectedUser.id)})});
+    closeOwnershipClaim();await refreshClaimViews(individualId);
+  }catch(e){alert('Transfer could not be proposed.\n'+e.message)}finally{button.disabled=false}
+}
+async function openTransferReview(claimId){
+  const dialog=document.getElementById('transferReviewDialog');if(!dialog.open)dialog.showModal();
+  transferReviewRecord=null;document.getElementById('transferReviewBody').textContent='Loading...';document.getElementById('transferReviewActions').innerHTML='';document.getElementById('transferReviewStatus').textContent='';
+  try{
+    const t=await jfetch('/api/transfers/'+claimId+'?viewer_id='+Number(activeUser.user.id));transferReviewRecord=t;
+    document.getElementById('transferReviewBody').innerHTML='<strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong><p>'+esc([t.guitar?.manufacturer,t.guitar?.model,t.guitar?.serial_number].filter(Boolean).join(' / '))+' · #'+Number(t.individual_id)+' · '+esc(t.state)+'</p>'+(t.accepted_at?'<p class="sub">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</p>':'<p class="sub">Accept confirms this ownership transfer. Verification remains a separate Claim judgement.</p>');
+    if(t.state==='pending'&&t.claim_active){
+      const choices=Number(activeUser.user.id)===t.to_user_id?['accept','decline']:['cancel'];
+      document.getElementById('transferReviewActions').innerHTML=choices.map(action=>'<button type="button" onclick="resolveTransfer(\''+action+'\')">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('');
+    }
+  }catch(e){document.getElementById('transferReviewBody').textContent=e.message}
+}
+async function resolveTransfer(action){
+  const t=transferReviewRecord;if(!t)return;
+  const buttons=[...document.getElementById('transferReviewActions').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+  try{
+    await jfetch('/api/transfers/'+t.claim_id+'/resolve?viewer_id='+Number(activeUser.user.id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    document.getElementById('transferReviewDialog').close();closeClaimPopup();await refreshClaimViews(t.individual_id);
+  }catch(e){document.getElementById('transferReviewStatus').textContent=e.message;buttons.forEach(b=>b.disabled=false)}
+}
+
 let dmInbox={unread_count:0,conversations:[],next_before_id:null},dmPeer=null,dmBefore=null,dmGeneration=0,dmSending=false,dmHistoryLoading=false,dmInboxLoading=false;
 function dmActor(){return Number(activeUser?.user?.id||0)}
 function dmStatus(text){document.getElementById('dmStatus').textContent=text}

@@ -21,7 +21,7 @@
 ## IndividualとClaim
 
 - 新しいギターを登録できる。手動登録も外部収集も、Listing Claimを起点とする同じ個体作成パイプラインを通る。個体の現在のMaker / Model / Finish / Year / Serial、Owner / LocationはClaimから作るSnapshotを表示する。
-- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。現時点ではAcquireがOwnerとLocationを設定し、Transfer / Inherit / ReleaseはOwnerとLocationを空欄に戻す。関係者への所有権移転を自動で確定する処理はない。
+- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Inherit / Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
 - Specification / Repair / Incident（Damage / Lost / Theft）/ Event（Exhibition / Performance / Recording / Auction / Other）/ Media（画像）Claimを追加できる。本人が現在Ownerなら本人のClaimをPositiveにし、第三者の対象ClaimはUnverifiedから開始する。OwnerはPositive / Negative / Unverifiedに変更できる。Identity CorrectionはListingの訂正入口から作り、重複を検査する。
 - 元Ownerを主張するFormer Owner操作はAcquire / Releaseのペアを作り、Owner Verificationに従う。Claimの無効化は来歴を残すソフト削除。通常の表示とSnapshot評価から除外する。Listingは通常編集しない。
 - ClaimにGood / Bad投票とResponseを記録できる。画像Media Claimは一つに最大10枚、JPEG / PNG / WebP / GIF、画像ごと最大12MB。ギャラリーに反映する条件はClaimの有効性と承認状態に従う。

@@ -2188,8 +2188,11 @@ def api_individual_claims(
         if row["effective_status"] == "active"
     ]
     verifiable_ids = repository.owner_verifiable_claim_ids(individual_id, viewer_user_id)
+    transfers = repository.transfer_details(individual_id=individual_id)
     for claim in claims:
         claim['can_verify'] = int(claim['id']) in verifiable_ids
+        if claim['ownership_source'] == 'user_transfer':
+            claim['transfer'] = transfers.get(int(claim['id']))
 
     items_by_claim: dict[
         int,
@@ -3052,6 +3055,76 @@ def api_claim_vote(
         )
 
     return {"ok": True}
+
+
+class TransferProposalRequest(BaseModel):
+    to_user_id: int = Field(ge=1)
+
+
+class TransferActionRequest(BaseModel):
+    action: str
+
+
+def transfer_actor(request: Request, viewer_id: int | None) -> int:
+    actor = prototype_viewer(request, viewer_id)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Sign in to use Transfer")
+    return actor
+
+
+def transfer_error(exc: ValueError):
+    reason = str(exc)
+    return HTTPException(status_code=403 if reason.startswith('Only ') else
+                         404 if reason in ('Transfer not found','Individual not found','User not available for Transfer') else 409,
+                         detail=reason)
+
+
+@app.get("/api/transfer-users")
+def api_transfer_users(request: Request, viewer_id: int | None = None, q: str = Query('', max_length=160),
+                       offset: int = Query(0,ge=0), limit: int = Query(20,ge=1,le=50)):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        return repo().search_transfer_users(actor,q,limit,offset)
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.post("/api/individuals/{individual_id}/transfers")
+def api_create_transfer(individual_id: int, body: TransferProposalRequest, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        cid = repo().create_transfer(actor,individual_id,body.to_user_id)
+        return {'claim_id':cid,'state':'pending'}
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.get("/api/transfers/{claim_id}")
+def api_transfer_details(claim_id: int, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    repository = repo()
+    record = repository.transfer_details(claim_id)
+    if record is None:
+        raise HTTPException(404,detail='Transfer not found')
+    if actor not in (record['from_user_id'],record['to_user_id']):
+        raise HTTPException(403,detail='Only Transfer participants can open this request')
+    try:
+        with repository.connect() as con:
+            repository._transfer_user(con,actor)
+            claim = con.execute('SELECT c.individual_id,c.status,i.manufacturer,i.model,i.serial_number FROM claims c JOIN individuals i ON i.id=c.individual_id WHERE c.id=?',(claim_id,)).fetchone()
+        return {**record,'individual_id':claim['individual_id'],'claim_active':claim['status']=='active',
+                'guitar':{field:claim[field] for field in ('manufacturer','model','serial_number')}}
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.post("/api/transfers/{claim_id}/resolve")
+def api_resolve_transfer(claim_id: int, body: TransferActionRequest, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        return repo().resolve_transfer(claim_id,actor,body.action)
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
 
 
 class DirectMessageRequest(BaseModel):

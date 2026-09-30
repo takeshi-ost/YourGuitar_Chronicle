@@ -387,3 +387,20 @@ CREATE TABLE IF NOT EXISTS direct_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_dm_recipient_read ON direct_messages(recipient_user_id,read_at,id);
 CREATE INDEX IF NOT EXISTS idx_dm_sender_recipient ON direct_messages(sender_user_id,recipient_user_id,id);
+
+CREATE TABLE IF NOT EXISTS claim_transfers (
+ claim_id INTEGER PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+ from_user_id INTEGER NOT NULL,
+ to_user_id INTEGER NOT NULL,
+ state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','accepted','declined','cancelled')),
+ created_at TEXT NOT NULL,
+ resolved_at TEXT,
+ CHECK(from_user_id<>to_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_claim_transfers_to_state ON claim_transfers(to_user_id,state);
+CREATE TABLE IF NOT EXISTS claim_transfer_acceptance (
+ claim_id INTEGER PRIMARY KEY REFERENCES claim_transfers(claim_id) ON DELETE CASCADE,
+ accepted_by_user_id INTEGER NOT NULL,
+ accepted_at TEXT NOT NULL,
+ current_owner_user_id INTEGER NOT NULL
+);

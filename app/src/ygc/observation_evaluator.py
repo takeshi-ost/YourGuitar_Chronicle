@@ -142,7 +142,29 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
                 decisions.append({'claim_id': cid, 'type': 'ownership',
                                   'result': 'not_effective', 'reason': 'missing_acquisition_date_evidence'})
                 continue
-        if claim['claim_type'] == 'listing' or claim['ownership_source'] == 'merged_listing':
+        if claim['ownership_source'] == 'user_transfer':
+            evidence = con.execute("""SELECT t.*,e.accepted_by_user_id,e.accepted_at,e.current_owner_user_id
+                FROM claim_transfers t JOIN claim_transfer_acceptance e ON e.claim_id=t.claim_id
+                WHERE t.claim_id=? AND t.state='accepted'""", (cid,)).fetchone()
+            target = con.execute("SELECT * FROM users WHERE id=? AND ban_status='normal' AND account_type<>'source'",
+                                 (claim['value_text'],)).fetchone()
+            valid = (evidence is not None and target is not None
+                     and evidence['from_user_id'] == claim['author_user_id']
+                     and str(evidence['to_user_id']) == str(claim['value_text'])
+                     and evidence['accepted_by_user_id'] == evidence['to_user_id']
+                     and evidence['current_owner_user_id'] == evidence['from_user_id']
+                     and evidence['accepted_at'] == claim['occurred_at']
+                     and str(state['current_owner_user_id']) == str(evidence['from_user_id']))
+            if not valid:
+                decisions.append({'claim_id':cid,'type':'ownership','result':'not_effective',
+                                  'reason':'missing_transfer_acceptance_or_owner_conflict'})
+                continue
+            for field,value in {'current_owner_name':target['display_name'],
+                'current_owner_type':target['account_type'],'current_owner_user_id':str(target['id']),
+                'current_owner_source_url':None,'location_country':target['location_country'],
+                'location_region':target['location_region']}.items():
+                set_value(field,value,cid)
+        elif claim['claim_type'] == 'listing' or claim['ownership_source'] == 'merged_listing':
             items = claim_items('claim_listing_items', cid)
             owner_id = items.get('owner_user_id')
             owner = con.execute('SELECT display_name,account_type FROM users WHERE id=?',
@@ -211,6 +233,11 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
             key: row[key] for key in ('evidence_type', 'source_site', 'source_listing_id',
                                        'effective_date', 'date_basis')
         })
+    for e in con.execute("""SELECT e.* FROM claim_transfer_acceptance e JOIN claims c ON c.id=e.claim_id
+                            WHERE c.individual_id=?""", (individual_id,)):
+        evidence_by_claim.setdefault(e['claim_id'],[]).append({'evidence_type':'transfer_acceptance',
+            'accepted_by_user_id':e['accepted_by_user_id'],'accepted_at':e['accepted_at'],
+            'current_owner_user_id':e['current_owner_user_id']})
     claims_by_id = {int(claim['id']): claim for claim in claims}
     for decision in decisions:
         cid = decision['claim_id']

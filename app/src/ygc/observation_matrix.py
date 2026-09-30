@@ -85,6 +85,13 @@ def build_observation_matrix(
             if claim['ownership_source'] == 'merged_listing':
                 proposals.update(listing_owner(items))
                 proposals.update({field: items.get(field) for field in location_fields})
+            elif claim['ownership_source'] == 'user_transfer':
+                owner = users.get(str(claim['value_text']))
+                proposals.update({'current_owner_name':owner['display_name'] if owner else None,
+                    'current_owner_type':owner['account_type'] if owner else None,
+                    'current_owner_user_id':str(claim['value_text']), 'current_owner_source_url':None,
+                    'location_country':owner['location_country'] if owner else None,
+                    'location_region':owner['location_region'] if owner else None})
             elif kind in ('release', 'lost', 'transfer', 'inherit'):
                 proposals.update({'current_owner_name': 'Unknown',
                                   'current_owner_type': 'unknown',

@@ -51,8 +51,8 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
     assert refreshed["location_region"] == "Osaka"
 
 
-def test_transfer_release_and_inherit_end_ownership(tmp_path: Path):
-    for index, kind in enumerate(("transfer", "release", "inherit"), start=1):
+def test_release_and_inherit_end_ownership(tmp_path: Path):
+    for index, kind in enumerate(("release", "inherit"), start=1):
         repository = Repository(tmp_path / f"chronicle-{kind}.db")
         repository.init_db()
 
@@ -108,7 +108,7 @@ def test_ownership_ending_kind_requires_current_owner(tmp_path: Path):
         media_storage_path="test/ownership-2.jpg",
     )
 
-    for kind in ("transfer", "release", "inherit"):
+    for kind in ("release", "inherit"):
         try:
             repository.create_ownership_claim(
                 other_user_id,
