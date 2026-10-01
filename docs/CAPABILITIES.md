@@ -21,7 +21,7 @@
 ## IndividualとClaim
 
 - 新しいギターを登録できる。手動登録も外部収集も、Listing Claimを起点とする同じ個体作成パイプラインを通る。個体の現在のMaker / Model / Finish / Year / Serial、Owner / LocationはClaimから作るSnapshotを表示する。
-- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Inherit / Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
+- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Inherit / Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。成立済みTransferは承認時のEvidenceに基づく独立した所有権根拠として時系列順に適用する。過去のTransferの否定によって後続を連鎖的に無効化しない。譲受人自身はPositiveなTransferのVerificationを変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
 - Specification / Repair / Incident（Damage / Lost / Theft）/ Event（Exhibition / Performance / Recording / Auction / Other）/ Media（画像）Claimを追加できる。本人が現在Ownerなら本人のClaimをPositiveにし、第三者の対象ClaimはUnverifiedから開始する。OwnerはPositive / Negative / Unverifiedに変更できる。Identity CorrectionはListingの訂正入口から作り、重複を検査する。
 - 元Ownerを主張するFormer Owner操作はAcquire / Releaseのペアを作り、Owner Verificationに従う。Claimの無効化は来歴を残すソフト削除。通常の表示とSnapshot評価から除外する。Listingは通常編集しない。
 - ClaimにGood / Bad投票とResponseを記録できる。画像Media Claimは一つに最大10枚、JPEG / PNG / WebP / GIF、画像ごと最大12MB。ギャラリーに反映する条件はClaimの有効性と承認状態に従う。
@@ -34,10 +34,14 @@
 - Batch CrawlとIncremental Crawl、保存済み詳細の再判定、進捗・実行ログ、Claim migration / backfill、DB統計、バックアップ・復元・初期化を操作する。
 - 未承認Acquire欄は**承認するとCurrent Ownerが変わる可能性がある**Claimだけを列挙する。Repeated欄は**同じ正規化メーカーとシリアルを持つ複数のDB個体**の候補を表示し、残す個体を指定してMerge／Deleteする。
 - ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
-- Authentication Testで接写・全体写真の2枚を一時アップロードし、ローカルOCR、単純画像の質感検査、知覚ハッシュ・局所特徴点照合を試せる。任意の目標画像を追加アップロードでき、個体IDのローカル保存画像とも比較する。別欄でCLIPSegによるギター領域検出、領域のプレビュー、背景を除いた外観類似度・局所特徴一致を表示する（追加ランタイム・モデルの事前導入が必要）。スコアは同一個体の確率ではなく、Claimや所有状態には反映しない。高度な加工検出は未搭載。追加依存関係と制約は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
+- Browser ConsoleのAuthentication Test（GPT連携）は複数申請の永続キュー（専用SQLite、最大100件・画像256MB）。接続キー・画像・診断文章・JSONを再起動後も保持し、申請一覧を15秒ごとに更新できる。MCPが1件ずつ原子的に確保し、2時間の審議期限と試行履歴で重複・古い結果を防止する。実行開始時点の未処理申請全件を順次審議し、途中追加分は次回に回す。エラー再試行・取消・終了済み申請削除・レポート保存に対応。Claim／所有権への反映やスケジュール自体の設定は行わない。詳細は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
+
+- 正式Acquireは専用の申請・画像審議フローを通し、通過後のみClaimを追加する。24時間のChallenge提出期限、申請中表示、Owner承認待ち、非ユーザーOwner時の自動Positive、診断・写真の限定公開、再試行・取消・通知に対応。実験とは別のMCPツールを使い、正式EvidenceはメインDBへ保存する。Listingは下記の独自審議に対応済み。公開環境の本人認証・係争解決は別途対応。
 
 ## 未完成・サーバー移行前の要件
 
 - Identity Platformへの接続、サーバー側の本人確認、全APIの認可、管理者ロール、実際のログイン・アカウント作成。
 - SQLiteからPostgreSQLへの移植、複数インスタンス間のClaim更新とCrawlカーソル排他、画像の永続保存、トークンの安全な保管、再試行可能なジョブ実行。
 - フォロー関係、ユーザー間メッセージ、日英UI切替、定期自動クロール。収集の実データでの網羅性・誤照合検証も継続課題。
+
+- 新規Listingの画像審議：Serial・両Challenge・Maker/Model/Finishを確認し、通過後に個体と初期Ownerを登録。同じMaker・Serialは既存Acquireへ案内。Ownership RequestでAcquireと併せて管理。

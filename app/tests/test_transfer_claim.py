@@ -54,8 +54,15 @@ def test_accept_evidence_observation_history_and_existing_verification(tmp_path)
     assert diagnostic['differences']=={}
     matrix_claim=next(x for x in diagnostic['matrix']['rows'] if x['claim_id']==cid)
     assert matrix_claim['cells']['current_owner_user_id']['value']==str(b)
-    assert cid in r.owner_verifiable_claim_ids(g,b)
-    r.set_claim_response(cid,b,'negative')
+    assert cid not in r.owner_verifiable_claim_ids(g,b)
+    for stance in ('positive', 'negative', 'unverified'):
+        with pytest.raises(ValueError, match='recipient cannot change'):
+            r.set_claim_response(cid,b,stance)
+        assert owner(r,g)==b
+        assert r.transfer_details(cid)==t
+        assert r.get_user_summary(a)['former_count']==1
+        assert r.get_user_summary(b)['owned_count']==1
+    r.admin_moderate_claim(cid,'negative')
     assert owner(r,g)==a
     assert r.transfer_details(cid)==t  # Negative is not Decline and does not withdraw agreement.
     r.resolve_transfer(cid,b,'accept')
@@ -70,6 +77,9 @@ def test_accept_evidence_observation_history_and_existing_verification(tmp_path)
     r.resolve_transfer(next_id,c,'accept')
     assert owner(r,g)==c
     assert r.get_user_summary(b)['former_count']==1
+    assert next_id not in r.owner_verifiable_claim_ids(g,c)
+    # A later, unrelated owner can still verify another user's historical Transfer.
+    assert cid in r.owner_verifiable_claim_ids(g,c)
 
 
 def test_decline_cancel_competing_and_no_admin_bypass_of_acceptance(tmp_path):
@@ -121,6 +131,34 @@ def test_transfer_api_restrictions_search_and_claim_metadata(tmp_path,monkeypatc
         assert client.post(f'/api/transfers/{cid}/resolve?viewer_id={b}',json={'action':'accept'}).status_code==200
         assert client.get(f'/api/users/{b}/profile?viewer_id={b}').json()['guitars'][0]['ownership_status']=='current_owner'
         assert client.get(f'/api/users/{a}/profile?viewer_id={a}').json()['guitars'][0]['ownership_status']=='former_owner'
+        claims=client.get(f'/api/individuals/{g}/claims?viewer_user_id={b}').json()
+        assert next(x for x in claims if x['id']==cid)['can_verify'] is False
+        before=r.transfer_details(cid)
+        for actor in (a,b,c):
+            for stance in ('negative','unverified'):
+                response=client.post(f'/api/claims/{cid}/response',json={
+                    'responder_user_id':actor,'stance':stance})
+                assert response.status_code==400
+                assert owner(r,g)==b
+                assert r.transfer_details(cid)==before
+
+
+@pytest.mark.parametrize('stance', ['negative', 'unverified'])
+def test_admin_can_override_transfer_without_erasing_acceptance(tmp_path, stance):
+    r,a,b,c,g=setup(tmp_path)
+    cid=r.create_transfer(a,g,b)
+    r.resolve_transfer(cid,b,'accept')
+    evidence=r.transfer_details(cid)
+    r.admin_moderate_claim(cid,stance)
+    assert owner(r,g)==a
+    assert r.transfer_details(cid)==evidence
+    r.resolve_transfer(cid,b,'accept')
+    assert owner(r,g)==a
+    assert next(x for x in r.list_claims(g) if x['id']==cid)['verification_status']==stance
+    r.admin_moderate_claim(cid,'positive')
+    assert owner(r,g)==b
+    assert r.transfer_details(cid)==evidence
+    assert cid not in r.owner_verifiable_claim_ids(g,b)
 
 
 def test_existing_database_and_legacy_transfer_preserved(tmp_path):
@@ -136,3 +174,69 @@ def test_existing_database_and_legacy_transfer_preserved(tmp_path):
         assert evaluate_observation(con,g).values['current_owner_user_id'] is None
     r.init_db()
     with pytest.raises(ValueError,match='workflow'):r.create_ownership_claim(a,g,ownership_kind='transfer')
+
+
+@pytest.mark.parametrize('change', ['negative', 'unverified', 'admin_negative', 'delete', 'deactivate'])
+def test_later_transfer_is_independent_of_earlier_transfer(tmp_path, change):
+    r,a,b,c,g=setup(tmp_path)
+    first=r.create_transfer(a,g,b)
+    r.resolve_transfer(first,b,'accept')
+    second=r.create_transfer(b,g,c)
+    r.resolve_transfer(second,c,'accept')
+    evidence=r.transfer_details(second)
+    if change in ('negative', 'unverified'):
+        r.set_claim_response(first,c,change)
+    elif change == 'deactivate':
+        r.deactivate_claim(first,a)
+    else:
+        r.admin_moderate_claim(first,'negative' if change == 'admin_negative' else 'delete')
+    assert owner(r,g)==c
+    assert r.transfer_details(second)==evidence
+    assert r.get_user_summary(c)['owned_count']==1
+    assert r.get_user_summary(b)['former_count']==1
+    assert second not in r.owner_verifiable_claim_ids(g,c)
+    assert r.owner_verifiable_claim_ids(g,b)==set()
+    assert r.observation_diagnostic(g)['differences']=={}
+    with r.connect() as con:
+        evaluated=evaluate_observation(con,g)
+        assert evaluated.sources['current_owner_user_id']==second
+    with pytest.raises(ValueError, match='recipient cannot change'):
+        r.set_claim_response(second,c,'negative')
+
+
+def test_transfer_checks_owner_at_acceptance_and_preserves_day_id_order(tmp_path, monkeypatch):
+    r,a,b,c,g=setup(tmp_path)
+    monkeypatch.setattr('ygc.db.repository.utcnow', lambda: '2026-10-01T10:00:00Z')
+    older=r.create_transfer(a,g,c)
+    first=r.create_transfer(a,g,b)
+    r.resolve_transfer(first,b,'accept')
+    with pytest.raises(ValueError, match='Current Owner changed'):
+        r.resolve_transfer(older,c,'accept')
+    second=r.create_transfer(b,g,a)
+    r.resolve_transfer(second,a,'accept')
+    monkeypatch.setattr('ygc.db.repository.utcnow', lambda: '2026-10-01T11:00:00Z')
+    with pytest.raises(ValueError, match='chronology'):
+        r.resolve_transfer(older,c,'accept')
+    assert owner(r,g)==a
+    assert r.transfer_details(older)['state']=='pending'
+    assert r.transfer_details(older)['accepted_at'] is None
+    assert r.get_user(c)[1]==[]
+    # A later calendar day takes precedence over the lower Claim ID.
+    monkeypatch.setattr('ygc.db.repository.utcnow', lambda: '2026-10-02T10:00:00Z')
+    r.resolve_transfer(older,c,'accept')
+    assert owner(r,g)==c
+    assert r.observation_diagnostic(g)['differences']=={}
+
+
+@pytest.mark.parametrize('field', ['accepted_by_user_id', 'current_owner_user_id', 'accepted_at'])
+def test_independent_transfer_still_requires_consistent_acceptance_evidence(tmp_path, field):
+    r,a,b,c,g=setup(tmp_path)
+    cid=r.create_transfer(a,g,b)
+    r.resolve_transfer(cid,b,'accept')
+    with r.connect() as con:
+        value='2020-01-01' if field=='accepted_at' else c
+        con.execute(f'UPDATE claim_transfer_acceptance SET {field}=? WHERE claim_id=?', (value,cid))
+        evaluated=evaluate_observation(con,g)
+        assert str(evaluated.values['current_owner_user_id'])==str(a)
+        assert any(d['claim_id']==cid and d.get('reason')=='missing_or_invalid_transfer_acceptance'
+                   for d in evaluated.decisions)

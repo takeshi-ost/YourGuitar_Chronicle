@@ -296,8 +296,21 @@ def test_return_acquire_waits_for_new_owner_across_profiles_and_claim_api(tmp_pa
         response = client.post(f'/api/individuals/{individual_id}/ownership-claim', json={
             'user_id': a, 'ownership_kind': 'acquire', 'occurred_at': '2023-01-01',
         })
-        assert response.status_code == 200, response.text
-        a_claim = response.json()['claim_id']
+        assert response.status_code == 409  # Legacy direct Acquire bypass is closed.
+        from ygc import acquire_review as ar
+        from authentication_fixtures import image_bytes, transcription
+        application=ar.start(repo,a,individual_id)
+        ar.submit(repo,a,application['revision'],'2023-01-01','',image_bytes(),image_bytes())
+        job=ar.call_tool(repo,'ygc_pending_acquire',{})['jobs'][0]
+        ar.call_tool(repo,'ygc_acquire_product_details',dict(
+            revision=job['revision'],lease_token=job['lease_token'],
+            observations={k:'overview: 確認不能' for k in ('maker','model','finish')}))
+        done=ar.call_tool(repo,'ygc_submit_acquire_review',dict(
+            revision=job['revision'],lease_token=job['lease_token'],
+            closeup=transcription('RETURN-001',application['challenge']),
+            overview=transcription(None,application['challenge']),identity=None,
+            product_consistency={k:dict(status='uncertain',note='確認不能') for k in ('maker','model','finish')}))
+        a_claim = done['claim_id']
         a_profile = client.get(f'/api/users/{a}/profile?viewer_id={a}').json()
         b_profile = client.get(f'/api/users/{b}/profile?viewer_id={b}').json()
         assert next(g for g in a_profile['guitars'] if g['individual_id'] == individual_id)['ownership_status'] == 'former_owner'

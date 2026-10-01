@@ -153,11 +153,13 @@ def evaluate_observation(con: sqlite3.Connection, individual_id: int) -> Observa
                      and str(evidence['to_user_id']) == str(claim['value_text'])
                      and evidence['accepted_by_user_id'] == evidence['to_user_id']
                      and evidence['current_owner_user_id'] == evidence['from_user_id']
-                     and evidence['accepted_at'] == claim['occurred_at']
-                     and str(state['current_owner_user_id']) == str(evidence['from_user_id']))
+                     and evidence['accepted_at'] == claim['occurred_at'])
+            # From's ownership was checked atomically at acceptance. Each accepted
+            # Transfer is an independent historical basis, not a dependency on
+            # the current re-evaluation of earlier Claims.
             if not valid:
                 decisions.append({'claim_id':cid,'type':'ownership','result':'not_effective',
-                                  'reason':'missing_transfer_acceptance_or_owner_conflict'})
+                                  'reason':'missing_or_invalid_transfer_acceptance'})
                 continue
             for field,value in {'current_owner_name':target['display_name'],
                 'current_owner_type':target['account_type'],'current_owner_user_id':str(target['id']),

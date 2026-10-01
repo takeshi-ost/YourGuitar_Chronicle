@@ -7,6 +7,7 @@ assert.doesNotMatch(html, /id="activeUserSelect"/);
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1]).find(text => text.includes('let selectedUserId=null'))
   .split('const header=document.querySelector')[0]
+  .replace(/let directBusy=[\s\S]*?(?=function statCard\()/, '')
   .replace('const CONSOLE_ADMIN_TOKEN="";', 'const CONSOLE_ADMIN_TOKEN="admin";');
 
 const elements = Object.fromEntries(['userBody', 'userCount', 'accountPanel',

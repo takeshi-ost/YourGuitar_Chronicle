@@ -264,13 +264,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .chronicle-toolbar .claim-menu-wrap{display:block;width:calc(100% - 22px);margin-left:22px}
 #detail .chronicle-toolbar .add-claim-action{display:block;width:100%;padding:10px 12px;text-align:center;white-space:normal}
 #detail .chronicle-toolbar .claim-menu{left:0;right:0}
-.new-guitar-modal{max-height:calc(100dvh - 32px);overflow:auto}
-.new-guitar-modal .modal-grid label{display:block;color:var(--muted);font-size:11px}
-.new-guitar-modal .modal-grid label.full{grid-column:1/-1}
-.new-guitar-modal .modal-grid input,.new-guitar-modal .modal-grid textarea{display:block;width:100%;margin-top:4px}
-.new-guitar-modal .sub{display:block;margin:0 0 14px}
-.new-guitar-modal #guitarStatus{margin:12px 0 0}
-@media(max-width:560px){.new-guitar-modal .modal-grid label.full{grid-column:auto}}
+.ownership-request-modal{max-height:calc(100dvh - 32px);overflow:auto}
+.ownership-request-modal .modal-grid label{display:block;color:var(--muted);font-size:11px}
+.ownership-request-modal .modal-grid label.full{grid-column:1/-1}
+.ownership-request-modal .modal-grid input,.ownership-request-modal .modal-grid textarea{display:block;width:100%;margin-top:4px}
+.ownership-request-modal .sub{display:block;margin:0 0 14px}
+.ownership-request-modal #guitarStatus{margin:12px 0 0}.ownership-request-modal input[type="file"]{max-width:100%}.ownership-request-modal .challenge-box{padding:12px;border:1px solid var(--line);border-radius:8px;margin:12px 0}.ownership-request-modal .challenge-box strong{font-size:20px;letter-spacing:2px}
+@media(max-width:560px){.ownership-request-modal .modal-grid label.full{grid-column:auto}}
 #detail .accordion-header .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-wrap:wrap}
 #detail .accordion-header .toolbar button,#detail .accordion-header .toolbar select{height:28px;min-height:28px;line-height:1.2;padding:4px 8px;font-size:11px}
 #detail .accordion-header .toolbar select{width:auto;max-width:100%;border:1px solid #343b43;border-radius:7px;background:#111418;color:var(--text)}
@@ -285,6 +285,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .claim-footer-meta a{color:inherit}
 @media(max-width:520px){#detail .current-owner-line,#detail .catalog-spec-row{grid-template-columns:80px minmax(0,1fr)}}
 .dm-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:12px}.dm-conversations{max-height:420px;overflow:auto}.dm-conversation{display:block;width:100%;text-align:left;background:var(--bg);color:var(--text);border:1px solid var(--line);padding:8px;margin-bottom:5px}.dm-conversation.selected{border-color:var(--accent)}.dm-preview{font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.dm-thread{height:300px;overflow:auto;background:var(--bg);padding:8px;border:1px solid var(--line);border-radius:8px}.dm-message{margin:5px 0;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.dm-message.mine{margin-left:auto;border-color:var(--accent)}.dm-time{font-size:9px;color:var(--muted);margin-top:4px}.dm-compose{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;resize:vertical;margin-top:8px}@media(max-width:650px){.dm-layout{grid-template-columns:1fr}.dm-conversations{max-height:120px}.dm-thread{height:240px}}
+#acquireReviewContent label{display:block;margin:12px 0}#acquireReviewContent input{display:block;width:100%;box-sizing:border-box}#acquireReviewContent{overflow-wrap:anywhere}#acquireReviewContent button{margin:4px 6px 4px 0}
 </style>
 <style>.brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}</style>
 <style>.favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}</style>
@@ -308,6 +309,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </div>
 <main>
+<button type="button" onclick="showAcquireApplications()">My Ownership申請・審議結果</button>
 <div class="notification-panel" id="notificationPanel">
   <div class="notification-panel-head">
     <span class="notification-panel-title">Notifications</span>
@@ -614,27 +616,13 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   </div>
 </div>
 
-<div class="modal-backdrop" id="newGuitarModal" onclick="if(event.target===this)closeNewGuitar()">
-  <div class="modal new-guitar-modal" role="dialog" aria-modal="true" aria-labelledby="newGuitarTitle">
-    <h2 id="newGuitarTitle">Add Guitar</h2>
-    <p class="sub">Creates the first Listing Claim and registers this user as the initial owner.</p>
-    <div class="modal-grid">
-      <label>Maker *<input id="guitarMaker" maxlength="120"></label><label>Model<input id="guitarModel" maxlength="160"></label>
-      <label>Year<input id="guitarYear" maxlength="40"></label><label>Finish<input id="guitarFinish" maxlength="160"></label>
-      <label>Serial *<input id="guitarSerial" maxlength="160"></label><label>Listing Date<input id="guitarDate" type="date"></label>
-      <label class="full">Representative Image *<input id="guitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-      <label class="full">Claim memo<textarea id="guitarMemo" maxlength="2000"></textarea></label>
-    </div><p class="sub" id="guitarStatus" role="status"></p>
-    <div class="modal-actions"><button class="secondary" type="button" onclick="closeNewGuitar()">Cancel</button><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Add Guitar</button></div>
-  </div>
-</div>
-
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
   <div class="claim-popup-modal" onclick="event.stopPropagation()">
     <div id="claimPopupContent"></div>
   </div>
 </div>
 
+<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request"><button onclick="closeAcquireReview()">閉じる</button><div id="acquireReviewContent"></div></div></div>
 <script>
 let individuals=[];
 let newDiscoveries=[];
@@ -1015,6 +1003,7 @@ function ownershipControlsHtml(individual){
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
     return actorNote;
   }
+  if(individual.acquire_application)return actorNote+'<button onclick="viewAcquireApplication(\''+esc(individual.acquire_application.revision)+'\')">'+esc(acquireStatusLabel(individual.acquire_application))+'</button>';
   const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
   return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
 }
@@ -1359,6 +1348,87 @@ async function voteClaim(claimId,vote){
   }
 }
 
+let acquireRevision=null;
+let acquireBusy=false;
+let acquireDisplayState=null;
+function listingMetadataFields(payload={},readOnly=false){
+  return '<div class="modal-grid">'+[['manufacturer','guitarMaker','Maker *',120],['model','guitarModel','Model',160],['year','guitarYear','Year',40],['finish','guitarFinish','Finish',160],['serial_number','guitarSerial','Serial *',160]].map(([key,id,label,max])=>'<label>'+label+'<input id="'+id+'" maxlength="'+max+'" value="'+esc(payload[key]||'')+'" '+(readOnly?'readonly':'')+'></label>').join('')+'</div>';
+}
+function ownershipEvidenceFields({listing=false,issued=true,date='',body=''}={}){
+  return '<div class="modal-grid"><label>'+ (listing?'Listing日付':'取得日')+' *<input id="acquireDate" type="date" required value="'+esc(date)+'" '+(listing&&issued?'readonly':'')+'></label><label class="full">説明<textarea id="acquireBody" maxlength="4000" '+(listing&&issued?'readonly':'')+'>'+esc(body)+'</textarea></label>'+
+    '<label class="full">シリアルとChallengeの近接写真 *<input id="acquireCloseup" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label><label class="full">ギター全体とChallengeの写真 *<input id="acquireOverview" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label></div>'+
+    (listing?'<p class="sub">採用後、全体写真は代表画像として公開されます。近接写真と診断は申請者・管理者・現在Ownerのみ閲覧できます。</p>':'');
+}
+function ownershipChallengeBox(row){
+  if(!row)return '<div class="challenge-box">Challenge: 未発行<p>個体情報と日付を入力して「Challengeを発行」を押してください。発行されたコードを紙に書いてから撮影し、下の2枚の写真を選択します。</p></div>';
+  return '<div class="challenge-box">Serial: '+esc(row.serial)+'<br>Challenge: <strong>'+esc(row.challenge)+'</strong><br>提出期限: '+esc(new Date(row.expires_at*1000).toLocaleString())+'</div><p>このChallengeを書いた紙を近接・全体の両写真に写してください。画像はGPTへ渡して審議します。提出後の審議待ちでは期限切れになりません。</p>';
+}
+function acquireQuery(){return '?viewer_id='+encodeURIComponent(activeUser.user.id)}
+const acquireLabels={draft:'写真提出待ち',pending:'Acquire申請中',processing:'Acquire申請中（審議中）',error:'審議エラー・再開可能',rejected:'Evidence不採用',accepted:'Acquire追加済み',cancelled:'取消済み',closed:'申請終了',expired:'提出期限切れ'};
+function acquireStatusLabel(row){if(row.request_kind==='listing')return ({pending:'Listing申請中',processing:'Listing申請中（審議中）',accepted:'Listing登録済み'})[row.status]||acquireLabels[row.status]||row.status;return row.status==='accepted'&&row.verification_status==='unverified'?'Acquire追加済み・Owner承認待ち':(acquireLabels[row.status]||row.status)}
+async function openAcquireApplication(individualId){
+  if(!activeUser||!activeUser.user){requireAccount();return}
+  if(acquireBusy)return;
+  acquireBusy=true;
+  try{
+    const row=await jfetch('/api/individuals/'+individualId+'/acquire-applications'+acquireQuery(),{method:'POST'});
+    acquireRevision=row.revision;renderAcquireApplication(row);
+    document.getElementById('acquireReviewModal').classList.add('open');
+  }catch(e){alert(e.message)}finally{acquireBusy=false}
+}
+function closeAcquireReview(){document.getElementById('acquireReviewModal').classList.remove('open');acquireRevision=null}
+async function showAcquireApplications(){
+  if(!activeUser||!activeUser.user){requireAccount();return}
+  acquireRevision=null;
+  try{
+    const rows=await jfetch('/api/acquire-applications'+acquireQuery());
+    document.getElementById('acquireReviewContent').innerHTML='<h3>Ownership申請履歴</h3>'+(rows.length?rows.map(r=>'<p><button onclick="viewAcquireApplication(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'申請はありません。');
+    document.getElementById('acquireReviewModal').classList.add('open');
+  }catch(e){alert(e.message)}
+}
+async function viewAcquireApplication(revision){
+  try{const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision)+acquireQuery());acquireRevision=row.revision;renderAcquireApplication(row);document.getElementById('acquireReviewModal').classList.add('open');if(['accepted','closed'].includes(row.status)&&selectedIndividualId)await refreshClaimViews(selectedIndividualId)}catch(e){alert(e.message)}
+}
+function renderAcquireApplication(row){
+  acquireDisplayState=row.status;
+  const terminal=['accepted','rejected','cancelled','closed','expired'].includes(row.status);
+  const listing=row.request_kind==='listing';
+  let html='<h3>'+esc(acquireStatusLabel(row))+'</h3><p>'+esc(listing?row.product_name:'Individual #'+row.original_individual_id)+' / '+esc(row.revision)+'</p>';
+  if(row.existing_individual_ids?.length)html+='<p>同じMaker・Serialが登録されています。既存個体を確認し、所有を申請する場合はAcquireを使用してください。</p>'+row.existing_individual_ids.map(id=>'<button onclick="closeAcquireReview();showIndividual('+Number(id)+',true)">既存個体 #'+Number(id)+'を確認</button>').join('');
+  if(listing&&row.status==='accepted'&&row.individual_id)html+='<p><a href="/users/'+Number(activeUser.user.id)+'?individual_id='+Number(row.individual_id)+'">登録したギターを表示</a></p>';
+  if(row.error)html+='<p>'+esc(row.error)+'</p>';
+  if(row.status==='draft'){
+    if(listing)html+=listingMetadataFields(row.listing_payload,true);
+    html+=ownershipChallengeBox(row)+ownershipEvidenceFields({listing,date:listing?row.listing_payload.occurred_at:'',body:listing?row.listing_payload.body:''})+
+      '<div class="modal-actions"><button id="acquireSubmit" onclick="submitAcquireApplication()">写真を提出して審議開始</button></div>';
+  }else if(!terminal){html+='<p>'+ (listing?'審議を通過するまで個体とListingは登録されません。':'審議を通過するまでAcquireはギターに追加されません。')+'</p>'}
+  if(row.status==='error')html+='<button onclick="actAcquireApplication(\'retry\')">審議を再開</button>';
+  if(!terminal)html+='<button onclick="actAcquireApplication(\'cancel\')">申請を取り消す</button>';
+  html+='<button onclick="viewAcquireApplication(\''+esc(row.revision)+'\')">状態を更新</button>';
+  if(row.admin_review)html+='<p>管理者による審議: '+(row.admin_review.accepted?'採用':'不採用')+' — '+esc(row.admin_review.reason)+'</p>';
+  if(row.report)html+='<label>診断レポート<textarea readonly rows="12">'+esc(row.report)+'</textarea></label>';
+  for(const role of Object.keys(row.images||{}))html+='<p>'+esc(role)+'</p><img style="max-width:100%;max-height:360px;object-fit:contain" src="/api/acquire-applications/'+encodeURIComponent(row.revision)+'/images/'+encodeURIComponent(role)+acquireQuery()+'" alt="'+esc(role)+'">';
+  document.getElementById('acquireReviewContent').innerHTML=html;
+}
+async function submitAcquireApplication(){
+  if(acquireBusy||!acquireRevision)return;
+  const form=new FormData();const acquired=document.getElementById('acquireDate').value;
+  const closeup=document.getElementById('acquireCloseup').files[0],overview=document.getElementById('acquireOverview').files[0];
+  if(!acquired||!closeup||!overview){alert('取得日と両方の写真を入力してください。');return}
+  form.append('acquisition_date',acquired);form.append('body',document.getElementById('acquireBody').value);form.append('closeup',closeup);form.append('overview',overview);
+  acquireBusy=true;document.getElementById('acquireSubmit').disabled=true;
+  try{const row=await jfetch('/api/acquire-applications/'+acquireRevision+'/submit'+acquireQuery(),{method:'POST',body:form});renderAcquireApplication(row);if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false;const button=document.getElementById('acquireSubmit');if(button)button.disabled=false}
+}
+async function actAcquireApplication(action){
+  if(acquireBusy||!acquireRevision)return;
+  if(action==='cancel'&&!confirm('この申請を取り消しますか？'))return;
+  acquireBusy=true;
+  try{renderAcquireApplication(await jfetch('/api/acquire-applications/'+acquireRevision+'/'+action+acquireQuery(),{method:'POST'}));if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false}
+}
+
+if(typeof setInterval==='function')setInterval(()=>{
+  if(!document.hidden&&!acquireBusy&&acquireRevision&&['pending','processing'].includes(acquireDisplayState)&&document.getElementById('acquireReviewModal').classList.contains('open'))viewAcquireApplication(acquireRevision);
+},15000);
 let individualLoadSequence=0;
 function closeCompactDetail(){
   document.getElementById('productDetailShell').classList.remove('compact-open');
@@ -1429,6 +1499,9 @@ async function showIndividual(id,fromList=false){
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
+  if((d.acquire_evidence||[]).length){
+    const section=document.createElement('div');section.innerHTML='<h4>Acquire Evidence（閲覧権限あり）</h4>'+d.acquire_evidence.map(e=>'<button onclick="viewAcquireApplication(\''+esc(e.revision)+'\')">Claim #'+esc(e.claim_id)+' の診断・写真</button>').join('');document.getElementById('detail').appendChild(section);
+  }
   if(changedIndividual){
     const detail=document.getElementById('detail');
     if(detail)detail.scrollTop=0;
@@ -1742,6 +1815,7 @@ function configureOwnershipClaim(mode){
   }
 }
 function openOwnershipClaim(individualId,mode='acquire'){
+  if(mode==='acquire'){openAcquireApplication(individualId);return}
   if(!activeUser||!activeUser.user){
     requireAccount();
     return;
@@ -1765,7 +1839,7 @@ function openOwnershipClaim(individualId,mode='acquire'){
   document.getElementById('ownershipClaimModal').classList.add('open');
 }
 function openOwnerClaim(individualId){
-  openOwnershipClaim(individualId,'acquire');
+  openAcquireApplication(individualId);
 }
 function closeOwnershipClaim(event){
   if(event&&event.target&&event.target.id!=='ownershipClaimModal')return;
@@ -2120,24 +2194,27 @@ function profileGuitarTable(section,title){
 }
 function openNewGuitar(){
   if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
-  document.getElementById('guitarStatus').textContent='';
-  document.getElementById('newGuitarModal').classList.add('open');
+  if(acquireBusy)return;
+  acquireRevision=null;acquireDisplayState=null;
+  document.getElementById('acquireReviewContent').innerHTML='<h3>Add Guitar — Listing申請</h3><p>① 個体情報を入力してChallengeを発行 → ② コードとギターを撮影 → ③ 写真を提出</p>'+listingMetadataFields()+ownershipChallengeBox(null)+ownershipEvidenceFields({listing:true,issued:false,date:new Date().toLocaleDateString('sv-SE')})+'<p id="guitarStatus" class="sub" role="status"></p><div class="modal-actions"><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Challengeを発行</button></div>';
+  document.getElementById('acquireReviewModal').classList.add('open');
   document.getElementById('guitarMaker').focus();
 }
-function closeNewGuitar(){document.getElementById('newGuitarModal').classList.remove('open')}
+function closeNewGuitar(){closeAcquireReview()}
 async function submitNewGuitar(){
   if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
-  const field=id=>document.getElementById(id);
-  const maker=field('guitarMaker').value.trim(),serial=field('guitarSerial').value.trim(),image=field('guitarImage').files[0];
-  if(!maker||!serial||!image){field('guitarStatus').textContent='Maker, Serial, and Representative Image are required.';return}
-  const button=field('guitarSubmit');button.disabled=true;field('guitarStatus').textContent='Saving...';
+  if(acquireBusy)return;
+  const field=id=>document.getElementById(id),button=field('guitarSubmit');
+  const payload={};for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'acquireDate',body:'acquireBody'}))payload[key]=field(id).value.trim();
+  if(!payload.manufacturer||!payload.serial_number||!payload.occurred_at){field('guitarStatus').textContent='Maker・Serial・日付を入力してください。';return}
+  acquireBusy=true;button.disabled=true;field('guitarStatus').textContent='Challengeを発行しています…';
   try{
-    const data=new FormData();
-    for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'guitarDate',body:'guitarMemo'}))data.append(key,field(id).value.trim());
-    data.append('representative_image',image);
-    const result=await jfetch('/api/users/'+PROFILE_USER_ID+'/new-guitar',{method:'POST',body:data});
-    window.location.href='/users/'+PROFILE_USER_ID+'?individual_id='+encodeURIComponent(result.individual_id);
-  }catch(error){field('guitarStatus').textContent=error.message;button.disabled=false}
+    const row=await jfetch('/api/listing-applications'+acquireQuery(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(row.status==='duplicate'){
+      field('guitarStatus').innerHTML='同じMaker・Serialの個体が登録されています。既存個体のAcquireから申請してください。'+row.existing_individual_ids.map(id=>'<button onclick="closeNewGuitar();showIndividual('+Number(id)+',true)">個体 #'+Number(id)+'を確認</button>').join('');return;
+    }
+    acquireRevision=row.revision;renderAcquireApplication(row);document.getElementById('acquireReviewContent').parentElement.scrollTop=0;
+  }catch(error){if(field('guitarStatus'))field('guitarStatus').textContent=error.message;else alert(error.message)}finally{acquireBusy=false;button.disabled=false}
 }
 function setProfileSort(section,key){
   const state=profileSort[section];

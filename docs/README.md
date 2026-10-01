@@ -13,7 +13,7 @@
 | SNS要素の目論見・実装・検証履歴 | [SNS_IMPLEMENTATION_LOG.md](SNS_IMPLEMENTATION_LOG.md) |
 | テーマ・ロゴ | [USER_THEMES.md](USER_THEMES.md) |
 | GCP移行時の交換箇所 | [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) |
-| ローカル画像認証テストの導入と制約 | [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md) |
+| GPT連携の認証テスト・審議キューの導入と制約 | [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md) |
 | **一時作業計画（未実装の改修案）** | [TEMP_OBSERVATION_MIGRATION_PLAN.md](TEMP_OBSERVATION_MIGRATION_PLAN.md) |
 
 `docs/Your_Guitar_Chronicle_実装仕様書.md`、`BROWSER_GUI.md`、`REVERB_SETUP.md`、`DATABASE_UPDATE_POLICY.md` は初期のObservation中心・Phase 1向け資料だったため削除した。初期企画書も現行の企画概要に集約した。これらの履歴はGitに残る。現行仕様の根拠は実装とテストであり、本書群はその案内である。

@@ -249,7 +249,9 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         assert '>Cancel</button>' in page.text
         profile = client.get(f"/users/{user_id}")
         assert profile.status_code == 200
-        assert 'id="newGuitarModal"' in profile.text
+        assert 'id="newGuitarModal"' not in profile.text
+        assert 'id="acquireReviewModal"' in profile.text
+        assert 'aria-label="Ownership Request"' in profile.text
         assert "Let\\'s add your undiscovered new guitar!" in profile.text
         assert "Let\\'s add your Claim !!" in profile.text
         assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in profile.text

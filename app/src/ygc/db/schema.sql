@@ -404,3 +404,32 @@ CREATE TABLE IF NOT EXISTS claim_transfer_acceptance (
  accepted_at TEXT NOT NULL,
  current_owner_user_id INTEGER NOT NULL
 );
+
+-- Private Acquire application and durable review Evidence, separate from experiment jobs.
+CREATE TABLE IF NOT EXISTS acquire_applications (
+ request_kind TEXT NOT NULL DEFAULT 'acquire', listing_payload TEXT,
+ revision TEXT PRIMARY KEY,
+ applicant_id INTEGER NOT NULL,
+ individual_id INTEGER REFERENCES individuals(id) ON DELETE SET NULL,
+ original_individual_id INTEGER NOT NULL,
+ serial TEXT NOT NULL, challenge TEXT NOT NULL,
+ expires_at REAL NOT NULL, created_at TEXT NOT NULL,
+ submitted_at TEXT, started_at TEXT, completed_at TEXT,
+ acquisition_date TEXT, body TEXT,
+ status TEXT NOT NULL DEFAULT 'draft',
+ images TEXT, image_meta TEXT, reference_source TEXT,
+ product_details TEXT, product_observations TEXT,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ lease_token TEXT, lease_until REAL,
+ error TEXT, received TEXT, result TEXT, report TEXT,
+ prompt_version TEXT NOT NULL,
+ claim_id INTEGER UNIQUE REFERENCES claims(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acquire_open_application
+ ON acquire_applications(applicant_id,individual_id)
+ WHERE status IN ('draft','pending','processing','error');
+CREATE TABLE IF NOT EXISTS acquire_application_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ revision TEXT NOT NULL REFERENCES acquire_applications(revision),
+ at TEXT NOT NULL, kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
+);

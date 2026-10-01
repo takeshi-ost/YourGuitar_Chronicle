@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import nullcontext
 import json
 import uuid
 from datetime import date, datetime, timezone
@@ -471,6 +472,12 @@ class Repository:
             'ownership_source' not in self._table_columns(con, 'claims')
         )
         migrations = {
+            "acquire_applications": {
+                "request_kind": "TEXT NOT NULL DEFAULT 'acquire'",
+                "listing_payload": "TEXT",
+                "product_details": "TEXT",
+                "product_observations": "TEXT",
+            },
             "individuals": {
                 "finish": "TEXT",
                 "year": "TEXT",
@@ -3806,6 +3813,7 @@ class Repository:
         year: str | None = None,
         occurred_at: str | None = None,
         body: str | None = None,
+        connection: sqlite3.Connection | None = None,
     ) -> tuple[int, int, int, int]:
         maker = manufacturer.strip()
         serial = serial_number.strip()
@@ -3862,7 +3870,7 @@ class Repository:
             else now[:10]
         )
 
-        with self.connect() as con:
+        with (nullcontext(connection) if connection is not None else self.connect()) as con:
             user = con.execute(
                 """
                 SELECT *
@@ -4220,221 +4228,229 @@ class Repository:
         note = body.strip() if body and body.strip() else None
 
         with self.connect() as con:
-            user = con.execute(
-                """
-                SELECT *
-                FROM users
-                WHERE id = ?
-                  AND account_type <> 'source'
-                  AND ban_status <> 'ban'
-                """,
-                (user_id,),
-            ).fetchone()
-            individual = con.execute(
-                "SELECT * FROM individuals WHERE id = ?",
-                (individual_id,),
-            ).fetchone()
-            if not user or not individual:
-                raise ValueError("User or Individual not found")
+            con.execute('BEGIN IMMEDIATE')
+            return self._create_ownership_claim_in_connection(
+                con, user_id, individual_id, kind, event_date, note, previous_owner_text, now)
 
-            ownership = con.execute(
+    def _create_ownership_claim_in_connection(self, con, user_id, individual_id,
+                                               kind, event_date, note, previous_owner_text, now):
+        user = con.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE id = ?
+              AND account_type <> 'source'
+              AND ban_status <> 'ban'
+            """,
+            (user_id,),
+        ).fetchone()
+        individual = con.execute(
+            "SELECT * FROM individuals WHERE id = ?",
+            (individual_id,),
+        ).fetchone()
+        if not user or not individual:
+            raise ValueError("User or Individual not found")
+
+        ownership = con.execute(
+            """
+            SELECT *
+            FROM user_guitars
+            WHERE user_id = ?
+              AND individual_id = ?
+              AND ownership_status = 'current_owner'
+            """,
+            (user_id, individual_id),
+        ).fetchone()
+
+        ending_kinds = ("transfer", "release", "inherit")
+        if kind in ending_kinds and not ownership:
+            raise ValueError(
+                "User is not the current owner of this Individual"
+            )
+
+        pending_owner_verification = (
+            kind == "acquire"
+            and individual["current_owner_user_id"] is not None
+            and int(individual["current_owner_user_id"]) != user_id
+            and con.execute("SELECT 1 FROM users WHERE id=? AND account_type<>'source'",
+                            (individual["current_owner_user_id"],)).fetchone() is not None
+        )
+
+        owner_name = (
+            "Unknown"
+            if kind in ending_kinds
+            else user["display_name"]
+        )
+        owner_type = (
+            "unknown"
+            if kind in ending_kinds
+            else "user"
+        )
+        event_title = f"Ownership / {kind.capitalize()}"
+        details: list[str] = []
+        if previous_owner_text:
+            details.append(
+                f"Previous owner: {previous_owner_text.strip()}"
+            )
+        if note:
+            details.append(note)
+        raw_text = "\n".join(details) or None
+
+        cur = con.execute(
+            """
+            INSERT INTO observations (
+                individual_id,
+                manufacturer,
+                model,
+                finish,
+                year,
+                serial_number,
+                owner_name,
+                owner_type,
+                event_type,
+                actor_user_id,
+                occurred_at,
+                source_site,
+                source_url,
+                observed_at,
+                title,
+                raw_text,
+                created_at
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                'ownership', ?, ?,
+                'user', ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                individual_id,
+                individual["manufacturer"],
+                individual["model"],
+                individual["finish"],
+                individual["year"],
+                individual["serial_number"],
+                owner_name,
+                owner_type,
+                user_id,
+                event_date,
+                f"user://{user_id}",
+                now,
+                event_title,
+                raw_text,
+                now,
+            ),
+        )
+        observation_id = int(cur.lastrowid)
+
+        cur = con.execute(
+            """
+            INSERT INTO claims (
+                individual_id,
+                observation_id,
+                author_user_id,
+                claim_type,
+                field_name,
+                value_text,
+                ownership_kind,
+                body,
+                occurred_at,
+                status,
+                verification_status,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                ?, ?, ?, 'ownership',
+                'owner_user_id', ?, ?, ?, ?,
+                'active', ?, ?, ?
+            )
+            """,
+            (
+                individual_id,
+                observation_id,
+                user_id,
+                (
+                    "unknown"
+                    if kind in ending_kinds
+                    else str(user_id)
+                ),
+                kind,
+                note,
+                event_date,
+                "unverified" if pending_owner_verification else "positive",
+                now,
+                now,
+            ),
+        )
+        claim_id = int(cur.lastrowid)
+
+        if kind == "acquire":
+            con.execute(
+                """INSERT INTO claim_source_evidence
+                   (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
+                   VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
+                (claim_id, event_date,
+                 json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
+            )
+
+        if kind in ending_kinds:
+            con.execute(
                 """
-                SELECT *
-                FROM user_guitars
+                UPDATE user_guitars
+                SET released_at = ?,
+                    updated_at = ?
                 WHERE user_id = ?
                   AND individual_id = ?
-                  AND ownership_status = 'current_owner'
                 """,
-                (user_id, individual_id),
-            ).fetchone()
-
-            ending_kinds = ("transfer", "release", "inherit")
-            if kind in ending_kinds and not ownership:
-                raise ValueError(
-                    "User is not the current owner of this Individual"
-                )
-
-            pending_owner_verification = (
-                kind == "acquire"
-                and individual["current_owner_user_id"] is not None
-                and int(individual["current_owner_user_id"]) != user_id
+                (event_date, now, user_id, individual_id),
             )
-
-            owner_name = (
-                "Unknown"
-                if kind in ending_kinds
-                else user["display_name"]
+        elif not pending_owner_verification:
+            next_order = int(
+                con.execute(
+                    """
+                    SELECT COALESCE(MAX(display_order), -1) + 1
+                    FROM user_guitars
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchone()[0]
             )
-            owner_type = (
-                "unknown"
-                if kind in ending_kinds
-                else "user"
-            )
-            event_title = f"Ownership / {kind.capitalize()}"
-            details: list[str] = []
-            if previous_owner_text:
-                details.append(
-                    f"Previous owner: {previous_owner_text.strip()}"
-                )
-            if note:
-                details.append(note)
-            raw_text = "\n".join(details) or None
-
-            cur = con.execute(
+            con.execute(
                 """
-                INSERT INTO observations (
-                    individual_id,
-                    manufacturer,
-                    model,
-                    finish,
-                    year,
-                    serial_number,
-                    owner_name,
-                    owner_type,
-                    event_type,
-                    actor_user_id,
-                    occurred_at,
-                    source_site,
-                    source_url,
-                    observed_at,
-                    title,
-                    raw_text,
-                    created_at
-                )
-                VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?,
-                    'ownership', ?, ?,
-                    'user', ?, ?, ?, ?, ?
-                )
-                """,
-                (
-                    individual_id,
-                    individual["manufacturer"],
-                    individual["model"],
-                    individual["finish"],
-                    individual["year"],
-                    individual["serial_number"],
-                    owner_name,
-                    owner_type,
+                INSERT INTO user_guitars (
                     user_id,
-                    event_date,
-                    f"user://{user_id}",
-                    now,
-                    event_title,
-                    raw_text,
-                    now,
-                ),
-            )
-            observation_id = int(cur.lastrowid)
-
-            cur = con.execute(
-                """
-                INSERT INTO claims (
                     individual_id,
-                    observation_id,
-                    author_user_id,
-                    claim_type,
-                    field_name,
-                    value_text,
-                    ownership_kind,
-                    body,
-                    occurred_at,
-                    status,
-                    verification_status,
+                    ownership_status,
+                    display_order,
+                    acquired_at,
                     created_at,
                     updated_at
                 )
-                VALUES (
-                    ?, ?, ?, 'ownership',
-                    'owner_user_id', ?, ?, ?, ?,
-                    'active', ?, ?, ?
-                )
+                VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
+                ON CONFLICT(user_id, individual_id)
+                DO UPDATE SET
+                    acquired_at = COALESCE(
+                        excluded.acquired_at,
+                        user_guitars.acquired_at
+                    ),
+                    updated_at = excluded.updated_at
                 """,
                 (
-                    individual_id,
-                    observation_id,
                     user_id,
-                    (
-                        "unknown"
-                        if kind in ending_kinds
-                        else str(user_id)
-                    ),
-                    kind,
-                    note,
+                    individual_id,
+                    next_order,
                     event_date,
-                    "unverified" if pending_owner_verification else "positive",
                     now,
                     now,
                 ),
             )
-            claim_id = int(cur.lastrowid)
 
-            if kind == "acquire":
-                con.execute(
-                    """INSERT INTO claim_source_evidence
-                       (claim_id,evidence_type,effective_date,date_basis,payload_json,created_at)
-                       VALUES (?, 'acquisition_date', ?, 'user_reported', ?, ?)""",
-                    (claim_id, event_date,
-                     json.dumps({'reported_by_user_id': user_id}, ensure_ascii=False), now),
-                )
-
-            if kind in ending_kinds:
-                con.execute(
-                    """
-                    UPDATE user_guitars
-                    SET released_at = ?,
-                        updated_at = ?
-                    WHERE user_id = ?
-                      AND individual_id = ?
-                    """,
-                    (event_date, now, user_id, individual_id),
-                )
-            elif not pending_owner_verification:
-                next_order = int(
-                    con.execute(
-                        """
-                        SELECT COALESCE(MAX(display_order), -1) + 1
-                        FROM user_guitars
-                        WHERE user_id = ?
-                        """,
-                        (user_id,),
-                    ).fetchone()[0]
-                )
-                con.execute(
-                    """
-                    INSERT INTO user_guitars (
-                        user_id,
-                        individual_id,
-                        ownership_status,
-                        display_order,
-                        acquired_at,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (?, ?, 'current_owner', ?, ?, ?, ?)
-                    ON CONFLICT(user_id, individual_id)
-                    DO UPDATE SET
-                        acquired_at = COALESCE(
-                            excluded.acquired_at,
-                            user_guitars.acquired_at
-                        ),
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        user_id,
-                        individual_id,
-                        next_order,
-                        event_date,
-                        now,
-                        now,
-                    ),
-                )
-
-            self._rebuild_individual_snapshot_in_connection(
-                con,
-                individual_id,
-            )
-            return observation_id, claim_id
+        self._rebuild_individual_snapshot_in_connection(
+            con,
+            individual_id,
+        )
+        return observation_id, claim_id
 
     @staticmethod
     def _record_accepted_acquire(con: sqlite3.Connection, claim: sqlite3.Row) -> None:
@@ -6059,83 +6075,87 @@ class Repository:
         individual_id: int,
     ) -> list[sqlite3.Row]:
         with self.connect() as con:
-            return list(
-                con.execute(
-                    """
-                    WITH candidates AS (
-                        SELECT
-                            c.id AS claim_id,
-                            c.field_name,
-                            c.value_text,
-                            COALESCE(
-                                c.specification_kind,
-                                'specification'
-                            ) AS specification_kind,
-                            c.occurred_at,
-                            c.created_at,
-                            c.author_user_id,
-                            u.display_name
-                                AS author_name
-                        FROM claims c
-                        INNER JOIN users u
-                          ON u.id = c.author_user_id AND u.ban_status='normal'
-                        WHERE c.individual_id = ?
-                          AND c.claim_type = 'specification'
-                          AND c.status = 'active'
-                          AND COALESCE(c.verification_status, 'positive') = 'positive'
-                          AND c.field_name IS NOT NULL
-                          AND TRIM(c.field_name) <> ''
+            return self.current_specifications_in_connection(con, individual_id)
 
-                        UNION ALL
-
-                        SELECT
-                            c.id AS claim_id,
-                            si.field_name,
-                            si.value_text,
-                            COALESCE(
-                                c.specification_kind,
-                                'specification'
-                            ) AS specification_kind,
-                            c.occurred_at,
-                            c.created_at,
-                            c.author_user_id,
-                            u.display_name
-                                AS author_name
-                        FROM claim_spec_items si
-                        INNER JOIN claims c
-                          ON c.id = si.claim_id
-                        INNER JOIN users u
-                          ON u.id = c.author_user_id AND u.ban_status='normal'
-                        WHERE c.individual_id = ?
-                          AND c.claim_type = 'specification'
-                          AND c.status = 'active'
-                          AND COALESCE(c.verification_status, 'positive') = 'positive'
-                    ),
-                    ranked AS (
-                        SELECT
-                            *,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY field_name
-                                ORDER BY
-                                    SUBSTR(COALESCE(occurred_at, created_at), 1, 10) DESC,
-                                    claim_id DESC
-                            ) AS row_number
-                        FROM candidates
-                    )
+    @staticmethod
+    def current_specifications_in_connection(con, individual_id: int) -> list[sqlite3.Row]:
+        return list(
+            con.execute(
+                """
+                WITH candidates AS (
                     SELECT
-                        claim_id AS id,
-                        *
-                    FROM ranked
-                    WHERE row_number = 1
-                    ORDER BY
-                        field_name COLLATE NOCASE
-                    """,
-                    (
-                        individual_id,
-                        individual_id,
-                    ),
+                        c.id AS claim_id,
+                        c.field_name,
+                        c.value_text,
+                        COALESCE(
+                            c.specification_kind,
+                            'specification'
+                        ) AS specification_kind,
+                        c.occurred_at,
+                        c.created_at,
+                        c.author_user_id,
+                        u.display_name
+                            AS author_name
+                    FROM claims c
+                    INNER JOIN users u
+                      ON u.id = c.author_user_id AND u.ban_status='normal'
+                    WHERE c.individual_id = ?
+                      AND c.claim_type = 'specification'
+                      AND c.status = 'active'
+                      AND COALESCE(c.verification_status, 'positive') = 'positive'
+                      AND c.field_name IS NOT NULL
+                      AND TRIM(c.field_name) <> ''
+
+                    UNION ALL
+
+                    SELECT
+                        c.id AS claim_id,
+                        si.field_name,
+                        si.value_text,
+                        COALESCE(
+                            c.specification_kind,
+                            'specification'
+                        ) AS specification_kind,
+                        c.occurred_at,
+                        c.created_at,
+                        c.author_user_id,
+                        u.display_name
+                            AS author_name
+                    FROM claim_spec_items si
+                    INNER JOIN claims c
+                      ON c.id = si.claim_id
+                    INNER JOIN users u
+                      ON u.id = c.author_user_id AND u.ban_status='normal'
+                    WHERE c.individual_id = ?
+                      AND c.claim_type = 'specification'
+                      AND c.status = 'active'
+                      AND COALESCE(c.verification_status, 'positive') = 'positive'
+                ),
+                ranked AS (
+                    SELECT
+                        *,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY field_name
+                            ORDER BY
+                                SUBSTR(COALESCE(occurred_at, created_at), 1, 10) DESC,
+                                claim_id DESC
+                        ) AS row_number
+                    FROM candidates
                 )
+                SELECT
+                    claim_id AS id,
+                    *
+                FROM ranked
+                WHERE row_number = 1
+                ORDER BY
+                    field_name COLLATE NOCASE
+                """,
+                (
+                    individual_id,
+                    individual_id,
+                ),
             )
+        )
 
     def list_claims(
         self,
@@ -6482,39 +6502,46 @@ class Repository:
         if action not in ("positive", "negative", "unverified", "delete"):
             raise ValueError("Invalid admin action")
         with self.connect() as con:
-            claim = con.execute("SELECT * FROM claims WHERE id=?", (claim_id,)).fetchone()
-            if not claim:
-                return None
-            individual_id = int(claim["individual_id"])
-            targets = [claim]
-            targets = self._former_owner_pair(con, claim) or [claim]
-            delete_individual = False
-            if action == "delete" and claim["claim_type"] == "listing" and claim["status"] == "active":
-                other = con.execute("SELECT 1 FROM claims WHERE individual_id=? AND claim_type='listing' "
-                                    "AND status='active' AND id<>?", (individual_id, claim_id)).fetchone()
-                delete_individual = not other
-                if delete_individual and not confirm_individual_delete:
-                    raise ValueError("Deleting the last Listing also deletes the Individual and its related records. Confirmation required.")
-            for target in targets:
-                con.execute("INSERT INTO claim_admin_actions "
-                            "(claim_id, individual_id, action, previous_verification, actor, created_at) "
-                            "VALUES (?, ?, ?, ?, 'local-console-admin', ?)",
-                            (target["id"], individual_id, action, target["verification_status"], utcnow()))
-            if delete_individual:
-                con.execute("DELETE FROM observations WHERE individual_id=?", (individual_id,))
-                con.execute("DELETE FROM individuals WHERE id=?", (individual_id,))
-                return {"claim_id": claim_id, "individual_id": individual_id, "individual_deleted": True}
-            for target in targets:
-                if action == "delete":
-                    con.execute("DELETE FROM claims WHERE id=?", (target["id"],))
-                else:
-                    con.execute("UPDATE claims SET verification_status=?, admin_verification=1, updated_at=? WHERE id=?",
-                                (action, utcnow(), target["id"]))
-                    if action == 'positive':
-                        self._record_accepted_acquire(con, target)
-            snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
-            return {"claim_id": claim_id, "individual_id": individual_id,
-                    "individual_deleted": False, "snapshot": snapshot}
+            return self.admin_moderate_claim_in_connection(con, claim_id, action,
+                confirm_individual_delete=confirm_individual_delete)
+
+    def admin_moderate_claim_in_connection(self, con, claim_id: int, action: str, *,
+                                          confirm_individual_delete: bool = False) -> dict | None:
+        if action not in ('positive', 'negative', 'unverified', 'delete'):
+            raise ValueError('Invalid admin action')
+        claim = con.execute("SELECT * FROM claims WHERE id=?", (claim_id,)).fetchone()
+        if not claim:
+            return None
+        individual_id = int(claim["individual_id"])
+        targets = [claim]
+        targets = self._former_owner_pair(con, claim) or [claim]
+        delete_individual = False
+        if action == "delete" and claim["claim_type"] == "listing" and claim["status"] == "active":
+            other = con.execute("SELECT 1 FROM claims WHERE individual_id=? AND claim_type='listing' "
+                                "AND status='active' AND id<>?", (individual_id, claim_id)).fetchone()
+            delete_individual = not other
+            if delete_individual and not confirm_individual_delete:
+                raise ValueError("Deleting the last Listing also deletes the Individual and its related records. Confirmation required.")
+        for target in targets:
+            con.execute("INSERT INTO claim_admin_actions "
+                        "(claim_id, individual_id, action, previous_verification, actor, created_at) "
+                        "VALUES (?, ?, ?, ?, 'local-console-admin', ?)",
+                        (target["id"], individual_id, action, target["verification_status"], utcnow()))
+        if delete_individual:
+            con.execute("DELETE FROM observations WHERE individual_id=?", (individual_id,))
+            con.execute("DELETE FROM individuals WHERE id=?", (individual_id,))
+            return {"claim_id": claim_id, "individual_id": individual_id, "individual_deleted": True}
+        for target in targets:
+            if action == "delete":
+                con.execute("DELETE FROM claims WHERE id=?", (target["id"],))
+            else:
+                con.execute("UPDATE claims SET verification_status=?, admin_verification=1, updated_at=? WHERE id=?",
+                            (action, utcnow(), target["id"]))
+                if action == 'positive':
+                    self._record_accepted_acquire(con, target)
+        snapshot = self._rebuild_individual_snapshot_in_connection(con, individual_id)
+        return {"claim_id": claim_id, "individual_id": individual_id,
+                "individual_deleted": False, "snapshot": snapshot}
 
     @staticmethod
     def _owner_verification_denial(
@@ -6531,6 +6558,11 @@ class Repository:
             return 'Only the current owner can verify this Claim'
         if int(claim['author_user_id']) == int(responder_user_id):
             return "Owner Verification is only for another user's Claim"
+        if (claim['claim_type'] == 'ownership'
+                and claim['ownership_source'] == 'user_transfer'
+                and claim['verification_status'] == 'positive'
+                and str(claim['value_text']) == str(responder_user_id)):
+            return 'The recipient cannot change Verification of their Positive Transfer'
         return None
 
     def owner_verifiable_claim_ids(self, individual_id: int, viewer_user_id: int | None) -> set[int]:
@@ -6546,7 +6578,8 @@ class Repository:
             if not owner:
                 return set()
             claims = con.execute(
-                """SELECT id,claim_type,ownership_kind,author_user_id,admin_verification
+                """SELECT id,claim_type,ownership_kind,author_user_id,admin_verification,
+                          ownership_source,verification_status,value_text
                    FROM claims WHERE individual_id=? AND status='active'""",
                 (individual_id,),
             )
@@ -6582,6 +6615,7 @@ class Repository:
                     ownership_kind,
                     ownership_source,
                     ownership_pair_id,
+                    verification_status,
                     value_text,
                     occurred_at,
                     created_at
