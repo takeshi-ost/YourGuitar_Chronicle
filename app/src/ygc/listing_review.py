@@ -1,4 +1,5 @@
 """Initial Listing applications; shared private review queue, no pre-review Individual."""
+from ygc.claim_dates import validate_claim_date
 import json
 import secrets
 import time
@@ -33,12 +34,13 @@ def duplicates(con,payload):
         (normalize_manufacturer(payload['manufacturer']),normalize_serial(payload['serial_number'])))]
 
 
-def start(repo,user,request):
+def start(repo,user,request,*,preview=False,draft=None):
     payload=ListingInput.model_validate(request).model_dump()
     for key in payload:payload[key]=payload[key].strip()
     serial=normalized(payload['serial_number'])
     if not normalize_manufacturer(payload['manufacturer']) or not serial or serial in ('UNKNOWN','NA','N/A','NONE','不明','未確認') or not any(c.isalnum() for c in serial):
         raise ValueError('Makerと既知のシリアルが必要です。シリアル不明は申請できません。')
+    validate_claim_date(payload['occurred_at'])
     date.fromisoformat(payload['occurred_at'])
     with common.transaction(repo) as con:
         common.expire(con)
@@ -49,13 +51,19 @@ def start(repo,user,request):
             old=json.loads(row['listing_payload'])
             if normalize_manufacturer(old['manufacturer'])==normalize_manufacturer(payload['manufacturer']) and normalize_serial(old['serial_number'])==normalize_serial(payload['serial_number']):
                 return common.detail(con,row['revision'],user)
-        revision=secrets.token_hex(16)
-        challenge=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+        revision=draft['revision'] if draft else secrets.token_hex(16)
+        challenge=draft['challenge'] if draft else ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+        expires_at=draft['expires_at'] if draft else time.time()+86400
+        if preview:
+            from ygc.request_drafts import preview as prepare
+            return prepare('listing',user,revision,challenge,expires_at,
+                original_individual_id=None,individual_id=None,serial=payload['serial_number'],
+                listing_payload=payload,product_name=' '.join(filter(None,[payload['manufacturer'],payload['model']])))
         # 0 is only the legacy non-null original-id placeholder, never a real Individual.
         con.execute('''INSERT INTO acquire_applications(revision,request_kind,listing_payload,applicant_id,original_individual_id,
             serial,challenge,expires_at,created_at,prompt_version,product_details,reference_source,acquisition_date,body)
             VALUES (?,'listing',?,?,0,?,?,?,?,?,?,?,?,?)''',
-            (revision,json.dumps(payload),user,payload['serial_number'],challenge,time.time()+86400,utcnow(),PROMPT_VERSION,
+            (revision,json.dumps(payload),user,payload['serial_number'],challenge,expires_at,utcnow(),PROMPT_VERSION,
              json.dumps(dict(maker=payload['manufacturer'],model=payload['model'] or None,finish=payload['finish'] or None)),
              json.dumps({'kind':'absent'}),payload['occurred_at'],payload['body']))
         common.event(con,revision,'created')
@@ -68,6 +76,7 @@ def submit(repo,user,revision,closeup,overview):
     with common.transaction(repo) as con:
         common.expire(con);r=common.find(con,revision)
         if r['request_kind']!='listing' or r['applicant_id']!=user or not common.available_user(con,user):raise PermissionError('申請者本人だけが提出できます。')
+        validate_claim_date(r['acquisition_date'])
         if r['status']!='draft':raise ValueError('提出可能な申請ではありません。')
         reason=invalidated(con,r)
         if reason:

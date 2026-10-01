@@ -3,6 +3,8 @@ let newDiscoveries=[];
 let activeUser=null;
 let selectedIndividualId=null;
 let currentClaims=[];
+let ownershipAttention={attention_count:0};
+let ownershipAttentionSequence=0;
 let notificationData={unread_count:0,notifications:[]};
 let pendingOwnershipClaimIndividualId=null;
 let ownershipClaimMode='acquire';
@@ -39,9 +41,11 @@ function applyTheme(theme){document.documentElement.dataset.theme=theme||'dark_d
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 async function jfetch(url,opt={}){
-  const r=await fetch(url,opt);
+  const headers=new Headers(opt.headers||{});
+  headers.set('X-YGC-Timezone',Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const r=await fetch(url,{...opt,headers});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(d.detail||r.statusText);
+  if(!r.ok)throw new Error(Array.isArray(d.detail)?d.detail.map(e=>e.msg).join(' / '):(d.detail||r.statusText));
   return d;
 }
 function favoriteButton(id){
@@ -89,7 +93,7 @@ function renderAccountHub(){
       '<div></div>'+
       '<div class="account-hub-actions">'+
         '<button class="account-hub-action" type="button" onclick="window.location.href=\'/user-view/edit\'">Sign In</button>'+
-        '<button class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Create Account</button>'+
+        '<button data-ui-action="primary" class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Create Account</button>'+
       '</div>';
     return;
   }
@@ -114,6 +118,7 @@ function renderAccountHub(){
       '<div class="account-hub-stat"><span class="account-hub-stat-value">'+claims+'</span><span class="account-hub-stat-label">Claims</span></div>'+
     '</div>'+
     '<div class="account-hub-actions">'+
+      '<button id="ownershipRequestAttention" class="account-hub-action" type="button" onclick="showAcquireApplications()" '+(ownershipAttention.attention_count?'':'hidden')+'>Check Requests</button>'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
       '<button class="account-hub-action" type="button" onclick="openDirectMessages()">Messages <span class="account-hub-count" id="directMessageCount">'+Number(dmInbox.unread_count||0)+'</span></button>'+
     '</div>';
@@ -151,8 +156,9 @@ async function loadNotifications(){
 async function toggleNotifications(){
   const panel=document.getElementById('notificationPanel');
   if(!panel)return;
-  if(!panel.classList.contains('open'))await loadNotifications();
-  panel.classList.toggle('open');
+  if(panel.classList.contains('open')){YGCOverlays.close(panel);return}
+  await loadNotifications();
+  YGCOverlays.open(panel);
 }
 async function openNotification(notificationId,individualId){
   if(!activeUser||!activeUser.user)return;
@@ -164,7 +170,7 @@ async function openNotification(notificationId,individualId){
   notificationData.unread_count=Math.max(0,Number(notificationData.unread_count||0)-(item&&Number(item.is_read)===0?1:0));
   await loadNotifications();
   const panel=document.getElementById('notificationPanel');
-  if(panel)panel.classList.remove('open');
+  if(panel)YGCOverlays.close(panel);
   if(item&&item.notification_type?.startsWith('transfer_')&&item.claim_id){if(individualId)await showIndividual(Number(individualId),true);await openTransferReview(Number(item.claim_id));return}
   if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId),true);
 }
@@ -178,13 +184,47 @@ async function markAllNotificationsRead(){
   }
 }
 
+let unansweredSequence=0,unansweredBusy=false;
+async function loadUnansweredRequests(){
+  const section=document.getElementById('unansweredRequests');if(!section)return;
+  const userId=activeUser?.user?.id,sequence=++unansweredSequence;
+  if(!userId){section.hidden=true;section.innerHTML='';return}
+  try{
+    const rows=await jfetch('/api/ownership-requests/unanswered?viewer_id='+Number(userId));
+    if(sequence!==unansweredSequence||activeUser?.user?.id!==userId)return;
+    section.hidden=!rows.length;
+    section.innerHTML='<h2 id="unansweredRequestsTitle" data-count-items="#unansweredRequests > .unanswered-request">Unanswered Requests</h2>'+rows.map(r=>
+      '<div class="unanswered-request"><p>'+YGCProductDetail.userLink(r.sender_id,r.sender_name,esc)+
+      (r.kind==='transfer'?' has offered to transfer ':' is claiming ownership of ')+
+      '<a href="/users/'+Number(userId)+'?individual_id='+Number(r.individual_id)+'">'+esc(r.guitar||('Guitar #'+r.individual_id))+'</a>'+(r.kind==='transfer'?' to you.':'.')+
+      '</p><div><button data-ui-action="primary" onclick="answerOwnershipRequest('+Number(r.claim_id)+',&quot;'+r.kind+'&quot;,true,'+Number(r.individual_id)+')">Accept</button> '+
+      '<button class="secondary" onclick="answerOwnershipRequest('+Number(r.claim_id)+',&quot;'+r.kind+'&quot;,false,'+Number(r.individual_id)+')">Decline</button></div></div>').join('');
+  }catch(error){if(sequence!==unansweredSequence||activeUser?.user?.id!==userId)return;section.hidden=false;section.textContent='Unable to load unanswered requests. Please refresh.'}
+}
+async function answerOwnershipRequest(claimId,kind,accept,individualId){
+  if(unansweredBusy||!activeUser?.user)return;
+  const userId=activeUser.user.id;
+  if(!await confirmOwnershipAction(accept?'Accept':'Decline',accept?'Accept this ownership request?':'Decline this ownership request?'))return;
+  if(activeUser?.user?.id!==userId)return;
+  unansweredBusy=true;
+  try{
+    const url=kind==='transfer'?'/api/transfers/'+claimId+'/resolve?viewer_id='+Number(userId):'/api/claims/'+claimId+'/response';
+    const body=kind==='transfer'?{action:accept?'accept':'decline'}:{responder_user_id:userId,stance:accept?'positive':'negative'};
+    await jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    await refreshClaimViews(individualId);
+  }catch(error){alert(error.message)}finally{unansweredBusy=false;await loadUnansweredRequests()}
+}
+if(typeof setInterval==='function')setInterval(()=>{if(!document.hidden&&!unansweredBusy)loadUnansweredRequests()},30000);
+
 async function loadActiveUser(){
   const id=sessionStorage.getItem(ACTIVE_USER_KEY);
   if(!id){
     activeUser=null;
+    await loadUnansweredRequests();
     if(!PROFILE_USER_ID)applyTheme('dark_default');
     favoriteIds=new Set();
     notificationData={unread_count:0,notifications:[]};
+    ownershipAttention={attention_count:0};++ownershipAttentionSequence;
     renderAccountHub();
     renderNotificationPanel();
     return;
@@ -195,12 +235,15 @@ async function loadActiveUser(){
     favoriteIds=new Set(await jfetch('/api/users/'+id+'/favorites'));
   }catch(e){
     activeUser=null;
+    await loadUnansweredRequests();
     if(!PROFILE_USER_ID)applyTheme('dark_default');
     favoriteIds=new Set();
     sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
   await loadDirectMessageInbox();
+  await loadOwnershipAttention();
+  await loadUnansweredRequests();
   renderAccountHub();
   renderNotificationPanel();
 }
@@ -383,7 +426,7 @@ function incidentClaimLabel(c){return c.value_text==='lost'?'Incident Lost':clai
 function displayEventDate(value){
   if(!value)return 'Date unknown';
   const text=String(value).trim();
-  const direct=text.match(/^(\d{4}-\d{2}-\d{2})/);
+  const direct=text.match(/^(\d{4}-\d{2}-\d{2})$/);
   if(direct)return direct[1];
   const d=new Date(text);
   if(Number.isNaN(d.getTime()))return text;
@@ -436,6 +479,7 @@ function claimCardFull(c){
   if(c.claim_type==='ownership'){
     const kind=String(c.ownership_kind||'acquire');
     const owner=String(['automation','merged_listing'].includes(c.ownership_source)?(c.value_text||'Unknown'):(c.author_name||'User')).trim()||'User';
+    const ownerHtml=['automation','merged_listing'].includes(c.ownership_source)?esc(owner):YGCProductDetail.userLink(c.author_user_id,owner,esc);
     const raw=String(c.observation_raw_text||'');
     const firstLine=(raw.split(/\r?\n/)[0]||'').trim();
     const party=firstLine.startsWith('Previous owner:')
@@ -446,18 +490,18 @@ function claimCardFull(c){
     }else if(kind==='release'){
       body=c.ownership_source==='automation'
         ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
-        : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
+        : '<div><strong>'+ownerHtml+' released this product.</strong></div>';
     }else if(kind==='transfer'&&c.transfer){
       const t=c.transfer;
-      body='<div><strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong></div><div class="claim-memo">Transfer: '+esc(t.state)+'</div>';
-      if(t.accepted_at)body+='<div class="claim-memo">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</div>';
+      body='<div><strong>'+YGCProductDetail.userLink(t.from_user_id,t.from_name,esc)+' → '+YGCProductDetail.userLink(t.to_user_id,t.to_name,esc)+'</strong></div><div class="claim-memo">Transfer: '+esc(t.state)+'</div>';
+      if(t.accepted_at)body+='<div class="claim-memo">Info: Transfer accepted on '+esc(displayInputDate(t.accepted_at))+'</div>';
       if(t.state==='pending'&&activeUser?.user&&[t.from_user_id,t.to_user_id].includes(Number(activeUser.user.id)))body+='<button type="button" onclick="openTransferReview('+Number(c.id)+')">Review Transfer</button>';
     }else if(kind==='transfer'){
-      body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
+      body='<div><strong>'+esc(party)+' acquired this product from '+ownerHtml+'.</strong></div>';
     }else if(kind==='inherit'){
-      body='<div><strong>'+esc(party)+' inherited this product from '+esc(owner)+'.</strong></div>';
+      body='<div><strong>'+esc(party)+' inherited this product from '+ownerHtml+'.</strong></div>';
     }else{
-      body='<div><strong>'+esc(owner)+' became the owner of this product.</strong></div>';
+      body='<div><strong>'+ownerHtml+' became the owner of this product.</strong></div>';
     }
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }else if(c.claim_type==='incident'){
@@ -491,7 +535,7 @@ function claimCardFull(c){
     const details=[];
     const listingOwner=String(c.observed_owner_name||'').trim();
     const seller=String(c.seller||'').trim();
-    if(listingOwner&&listingOwner!==seller)details.push('Owner: '+listingOwner);
+    if(listingOwner&&listingOwner!==seller)body+='<div class="claim-memo">Owner: '+YGCProductDetail.userLink(c.observed_owner_user_id,listingOwner,esc)+'</div>';
     if(seller)details.push('Seller: '+seller);
     const location=[c.location_country,c.location_region].filter(Boolean).join(' / ');
     if(location)details.push('Location: '+location);
@@ -508,14 +552,8 @@ function claimCardFull(c){
     if(c.value_text)body+='<div><strong>'+esc(c.value_text)+'</strong></div>';
     if(c.body)body+='<div class="claim-memo">'+esc(c.body)+'</div>';
   }
-  if(c.source_site==='reverb'&&c.source_listing_id&&(c.claim_type==='listing'||c.claim_type==='ownership'||c.claim_type==='specification')){
-    const id='Reverb ID #'+esc(c.source_listing_id);
-    body+='<div class="claim-memo">Evidence: '+(c.source_url?'<a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+id+'</a>':id)+'</div>';
-  }else if(c.claim_type==='listing'&&c.source_url){
-    body+='<div class="claim-memo"><a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">Open listing</a></div>';
-  }
-  if(c.evidence_media_id&&c.claim_type!=='media'){
-    body+='<div class="claim-memo"><img class="claim-evidence-image" width="48" height="48" style="width:48px;height:48px;max-width:48px;max-height:48px;object-fit:cover" src="/api/media/'+encodeURIComponent(c.evidence_media_id)+'" alt="Claim evidence" loading="lazy" onerror="this.onerror=null;this.src=\'/assets/no-picture.svg\'"></div>';
+  if(c.source_url&&(c.claim_type==='listing'||c.source_site==='reverb')){
+    body+='<div class="claim-info"><strong>Info</strong>: <a href="'+esc(c.source_url)+'" target="_blank" rel="noopener noreferrer">'+(c.source_site==='reverb'?'View Reverb listing':'View listing')+'</a></div>';
   }
   const good=String(Number(c.good_count||0)).padStart(2,'0');
   const bad=String(Number(c.bad_count||0)).padStart(2,'0');
@@ -526,7 +564,7 @@ function claimCardFull(c){
   return '<div class="claim-card'+claimVisualTypeClass(c)+(c.claim_type==='identity_correction'?' identity-correction-card':'')+'">'+
     '<div class="claim-head">'+claimHeaderHtml(c,type,eventDate)+'</div>'+
     '<div class="claim-body">'+body+'</div>'+
-    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+((activeUser&&activeUser.user)?'<a href="/users/'+Number(c.author_user_id)+'">'+esc(c.author_name||('User #'+c.author_user_id))+'</a>':esc(c.author_name||('User #'+c.author_user_id)))+'</div></div>'+
+    '<div class="claim-footer">'+votes+'<div class="claim-footer-meta">'+esc(displayInputDate(c.created_at))+' · By '+YGCProductDetail.userLink(c.author_user_id,c.author_name,esc)+'</div></div>'+
     '</div>';
 }
 function compactClaimType(c){
@@ -661,79 +699,170 @@ async function voteClaim(claimId,vote){
 let acquireRevision=null;
 let acquireBusy=false;
 let acquireDisplayState=null;
+let acquireForm=null;
+let ownershipConfirmResolve=null;
+function confirmOwnershipAction(title,message){
+  if(ownershipConfirmResolve)return Promise.resolve(false);
+  document.getElementById('ownershipConfirmTitle').textContent=title;
+  document.getElementById('ownershipConfirmMessage').textContent=message;
+  const submit=document.getElementById('ownershipConfirmSubmit');
+  submit.dataset.uiAction=/^(Cansel Request|Cancel Request|Delete|Release|Transfer)$/.test(title)?'danger':/^(Cancel|Close|Back)$/.test(title)?'close':/^(Accept|Submit|Keep Request|Save)$/.test(title)?'primary':'neutral';
+  return new Promise(resolve=>{
+    ownershipConfirmResolve=resolve;
+    YGCOverlays.open('ownershipConfirmModal',{onClose:()=>{if(ownershipConfirmResolve){const done=ownershipConfirmResolve;ownershipConfirmResolve=null;done(false)}}});
+  });
+}
+function resolveOwnershipConfirmation(accepted){
+  const done=ownershipConfirmResolve;ownershipConfirmResolve=null;
+  YGCOverlays.close('ownershipConfirmModal');if(done)done(accepted);
+}
+function requestFooter(row=null){
+  const saved=row&&!row.unsaved;
+  const terminal=row&&['accepted','rejected','cancelled','closed','expired'].includes(row.status);
+  let buttons='';
+  if(!row)buttons+='<button id="guitarSubmit" onclick="submitNewGuitar()">Generate Challenge</button>';
+  if(!row||row.status==='draft')buttons+='<button data-ui-action="primary" id="acquireSubmit" onclick="submitAcquireApplication()" '+(!row?'disabled':'')+'>Submit</button>';
+  buttons+='<button onclick="requestRefresh()">Reflesh</button>';
+  if(row?.status==='error')buttons+='<button onclick="actAcquireApplication(\'retry\')">Retry Review</button>';
+  buttons+='<button data-ui-action="primary" onclick="keepAcquireRequest()">Keep Request</button><button data-ui-action="close" class="secondary" onclick="cancelRequestWindow()">Cancel</button>';
+  if(saved&&!terminal)buttons+='<button data-ui-action="danger" class="secondary" onclick="actAcquireApplication(\'cancel\')">Cansel Request</button>';
+  document.getElementById('acquireReviewActions').innerHTML=buttons;
+}
+async function cancelRequestWindow(){
+  if(acquireBusy)return;
+  closeAcquireReview();
+}
+async function requestRefresh(){
+  if(acquireBusy)return;
+  const saved=acquireForm&&!acquireForm.unsaved;
+  const message=saved?'Reload the saved request? Unsaved input and selected photos will be discarded.':'Refresh this form? Entered text and the current Challenge will be kept. Selected photos will be cleared. The request will not be saved.';
+  if(!await confirmOwnershipAction('Reflesh',message))return;
+  if(saved){await viewAcquireApplication(acquireRevision);return}
+  const values={};
+  for(const id of ['guitarMaker','guitarModel','guitarYear','guitarFinish','guitarSerial','acquireDate','acquireBody']){
+    const field=document.getElementById(id);if(field)values[id]=field.value;
+  }
+  if(acquireForm)renderAcquireApplication(acquireForm);else openNewGuitar();
+  for(const [id,value] of Object.entries(values)){
+    const field=document.getElementById(id);if(field)field.value=value;
+  }
+}
+async function requestExistingGuitar(id){
+  if(await confirmOwnershipAction('View Guitar','Close this window and view the existing guitar?')){closeAcquireReview();await showIndividual(id,true)}
+}
+async function requestHistoryItem(revision){
+  if(await confirmOwnershipAction('Open Request','Open this request and view its current status?'))await viewAcquireApplication(revision);
+}
+async function keepAcquireRequest(){
+  if(acquireBusy)return;
+  if(!await confirmOwnershipAction('Keep Request','Save the request details and close this window? Selected photos will not be saved.'))return;
+  acquireBusy=true;
+  try{
+    if(!acquireForm)await prepareListingDraft();
+    if(acquireForm?.status==='draft'){
+      const row=await jfetch('/api/ownership-drafts/keep'+acquireQuery(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        ...(acquireForm.unsaved?{draft_token:acquireForm.draft_token}:{revision:acquireForm.revision}),
+        acquisition_date:document.getElementById('acquireDate').value,body:document.getElementById('acquireBody').value})});
+      acquireForm=row;
+    }
+    if(acquireForm){closeAcquireReview();await loadOwnershipAttention()}
+  }catch(error){alert(error.message)}finally{acquireBusy=false}
+}
 function listingMetadataFields(payload={},readOnly=false){
   return '<div class="modal-grid">'+[['manufacturer','guitarMaker','Maker *',120],['model','guitarModel','Model',160],['year','guitarYear','Year',40],['finish','guitarFinish','Finish',160],['serial_number','guitarSerial','Serial *',160]].map(([key,id,label,max])=>'<label>'+label+'<input id="'+id+'" maxlength="'+max+'" value="'+esc(payload[key]||'')+'" '+(readOnly?'readonly':'')+'></label>').join('')+'</div>';
 }
 function ownershipEvidenceFields({listing=false,issued=true,date='',body=''}={}){
-  return '<div class="modal-grid"><label>'+ (listing?'Listing日付':'取得日')+' *<input id="acquireDate" type="date" required value="'+esc(date)+'" '+(listing&&issued?'readonly':'')+'></label><label class="full">説明<textarea id="acquireBody" maxlength="4000" '+(listing&&issued?'readonly':'')+'>'+esc(body)+'</textarea></label>'+
-    '<label class="full">シリアルとChallengeの近接写真 *<input id="acquireCloseup" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label><label class="full">ギター全体とChallengeの写真 *<input id="acquireOverview" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label></div>'+
-    (listing?'<p class="sub">採用後、全体写真は代表画像として公開されます。近接写真と診断は申請者・管理者・現在Ownerのみ閲覧できます。</p>':'');
+  return '<div class="modal-grid"><label>'+ (listing?'Listing date':'Acquisition date')+' *<input id="acquireDate" type="date" required value="'+esc(date)+'" '+(listing&&issued?'readonly':'')+'></label><label class="full">Description<textarea id="acquireBody" maxlength="4000" '+(listing&&issued?'readonly':'')+'>'+esc(body)+'</textarea></label>'+
+    '<label class="full">Close-up of serial and challenge *<input id="acquireCloseup" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label><label class="full">Overview of guitar and challenge *<input id="acquireOverview" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label></div>'+
+    (listing?'<p class="sub">After approval, the overview photo becomes the public representative image. The close-up and report are accessible only to the applicant, administrators and current owner.</p>':'');
 }
 function ownershipChallengeBox(row){
-  if(!row)return '<div class="challenge-box">Challenge: 未発行<p>個体情報と日付を入力して「Challengeを発行」を押してください。発行されたコードを紙に書いてから撮影し、下の2枚の写真を選択します。</p></div>';
-  return '<div class="challenge-box">Serial: '+esc(row.serial)+'<br>Challenge: <strong>'+esc(row.challenge)+'</strong><br>提出期限: '+esc(new Date(row.expires_at*1000).toLocaleString())+'</div><p>このChallengeを書いた紙を近接・全体の両写真に写してください。画像はGPTへ渡して審議します。提出後の審議待ちでは期限切れになりません。</p>';
+  if(!row)return '<div class="challenge-box">Challenge: Not generated<p>Enter the guitar details and date, then select Generate Challenge. Write the code on paper before taking and selecting both photos.</p></div>';
+  return '<div class="challenge-box">Serial: '+esc(row.serial)+'<br>Challenge: <strong>'+esc(row.challenge)+'</strong><br>Submit by: '+esc(new Date(row.expires_at*1000).toLocaleString())+'</div><p>Include the handwritten challenge in both photos. Images will be sent to GPT for review. Submitted requests do not expire while awaiting review.</p>';
 }
 function acquireQuery(){return '?viewer_id='+encodeURIComponent(activeUser.user.id)}
-const acquireLabels={draft:'写真提出待ち',pending:'Acquire申請中',processing:'Acquire申請中（審議中）',error:'審議エラー・再開可能',rejected:'Evidence不採用',accepted:'Acquire追加済み',cancelled:'取消済み',closed:'申請終了',expired:'提出期限切れ'};
-function acquireStatusLabel(row){if(row.request_kind==='listing')return ({pending:'Listing申請中',processing:'Listing申請中（審議中）',accepted:'Listing登録済み'})[row.status]||acquireLabels[row.status]||row.status;return row.status==='accepted'&&row.verification_status==='unverified'?'Acquire追加済み・Owner承認待ち':(acquireLabels[row.status]||row.status)}
+const acquireLabels={draft:'Awaiting photos',pending:'Awaiting review',processing:'Under review',error:'Review error — retry available',rejected:'Evidence rejected',accepted:'Acquire added',cancelled:'Cancelled',closed:'Closed',expired:'Submission expired'};
+function acquireStatusLabel(row){if(row.request_kind==='listing')return row.status==='accepted'?'Listing registered':(acquireLabels[row.status]||row.status);return row.status==='accepted'&&row.verification_status==='unverified'?'Awaiting owner approval':(acquireLabels[row.status]||row.status)}
+function setRequestTitle(title,status){
+  document.getElementById('acquireReviewTitle').innerHTML=esc(title)+' <small class="ownership-request-status">- '+esc(status)+'</small>';
+}
 async function openAcquireApplication(individualId){
   if(!activeUser||!activeUser.user){requireAccount();return}
   if(acquireBusy)return;
   acquireBusy=true;
   try{
-    const row=await jfetch('/api/individuals/'+individualId+'/acquire-applications'+acquireQuery(),{method:'POST'});
+    const row=await jfetch('/api/ownership-drafts/acquire/'+individualId+acquireQuery(),{method:'POST'});
     acquireRevision=row.revision;renderAcquireApplication(row);
-    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
+    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null;acquireForm=null}});
   }catch(e){alert(e.message)}finally{acquireBusy=false}
 }
-function closeAcquireReview(){YGCOverlays.close('acquireReviewModal');acquireRevision=null}
+async function loadOwnershipAttention(){
+  const userId=activeUser?.user?.id,sequence=++ownershipAttentionSequence;
+  if(!userId){ownershipAttention={attention_count:0};return}
+  try{
+    const data=await jfetch('/api/acquire-applications/attention?viewer_id='+encodeURIComponent(userId));
+    if(sequence!==ownershipAttentionSequence||activeUser?.user?.id!==userId)return;
+    ownershipAttention=data;
+    const button=document.getElementById('ownershipRequestAttention');
+    if(button)button.hidden=!data.attention_count;
+  }catch(error){/* Preserve the last known state during a connection failure. */}
+}
+async function acknowledgeOwnershipResult(row){
+  if(!row.unread_result||Number(row.applicant_id)!==Number(activeUser?.user?.id))return;
+  await jfetch('/api/acquire-applications/'+encodeURIComponent(row.revision)+'/seen'+acquireQuery(),{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_id:row.review_event_id})});
+  await loadOwnershipAttention();
+}
+function closeAcquireReview(){YGCOverlays.close('acquireReviewModal');acquireRevision=null;acquireForm=null}
 async function showAcquireApplications(){
   if(!activeUser||!activeUser.user){requireAccount();return}
-  acquireRevision=null;
+  acquireRevision=null;acquireForm=null;
+  document.getElementById('acquireReviewTitle').textContent='Ownership Requests';
+  document.getElementById('acquireReviewActions').innerHTML='<button data-ui-action="close" onclick="cancelRequestWindow()">Cancel</button>';
   try{
     const rows=await jfetch('/api/acquire-applications'+acquireQuery());
-    document.getElementById('acquireReviewContent').innerHTML='<h3>Ownership申請履歴</h3>'+(rows.length?rows.map(r=>'<p><button onclick="viewAcquireApplication(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'申請はありません。');
-    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
+    document.getElementById('acquireReviewContent').innerHTML=(rows.length?rows.map(r=>'<p><button onclick="requestHistoryItem(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+(r.unread_result?' — New result':'')+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'No requests.');
+    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null;acquireForm=null}});
   }catch(e){alert(e.message)}
 }
 async function viewAcquireApplication(revision){
-  try{const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision)+acquireQuery());acquireRevision=row.revision;renderAcquireApplication(row);YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});if(['accepted','closed'].includes(row.status)&&selectedIndividualId)await refreshClaimViews(selectedIndividualId)}catch(e){alert(e.message)}
+  try{const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision)+acquireQuery());acquireRevision=row.revision;renderAcquireApplication(row);YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null;acquireForm=null}});await acknowledgeOwnershipResult(row);if(['accepted','closed'].includes(row.status)&&selectedIndividualId)await refreshClaimViews(selectedIndividualId)}catch(e){alert(e.message)}
 }
 function renderAcquireApplication(row){
-  acquireDisplayState=row.status;
+  acquireDisplayState=row.status;acquireForm=row;
+  setRequestTitle(row.request_kind==='listing'?'Listing Request':'Acquire Request',acquireStatusLabel(row));
   const terminal=['accepted','rejected','cancelled','closed','expired'].includes(row.status);
   const listing=row.request_kind==='listing';
-  let html='<h3>'+esc(acquireStatusLabel(row))+'</h3><p>'+esc(listing?row.product_name:'Individual #'+row.original_individual_id)+' / '+esc(row.revision)+'</p>';
-  if(row.existing_individual_ids?.length)html+='<p>同じMaker・Serialが登録されています。既存個体を確認し、所有を申請する場合はAcquireを使用してください。</p>'+row.existing_individual_ids.map(id=>'<button onclick="closeAcquireReview();showIndividual('+Number(id)+',true)">既存個体 #'+Number(id)+'を確認</button>').join('');
-  if(listing&&row.status==='accepted'&&row.individual_id)html+='<p><a href="/users/'+Number(activeUser.user.id)+'?individual_id='+Number(row.individual_id)+'">登録したギターを表示</a></p>';
+  let html='<p>'+esc(listing?row.product_name:'Individual #'+row.original_individual_id)+' / '+esc(row.unsaved?'Not saved':row.revision)+'</p>';
+  if(row.existing_individual_ids?.length)html+='<p>This maker and serial are already registered. View the existing guitar and use Acquire to request ownership.</p>'+row.existing_individual_ids.map(id=>'<button onclick="requestExistingGuitar('+Number(id)+')">Existing guitar #'+Number(id)+' — View</button>').join('');
+  if(listing&&row.status==='accepted'&&row.individual_id)html+='<p><a href="/users/'+Number(activeUser.user.id)+'?individual_id='+Number(row.individual_id)+'">View Registered Guitar</a></p>';
   if(row.error)html+='<p>'+esc(row.error)+'</p>';
   if(row.status==='draft'){
     if(listing)html+=listingMetadataFields(row.listing_payload,true);
-    html+=ownershipChallengeBox(row)+ownershipEvidenceFields({listing,date:listing?row.listing_payload.occurred_at:'',body:listing?row.listing_payload.body:''})+
-      '<div class="modal-actions"><button id="acquireSubmit" onclick="submitAcquireApplication()">写真を提出して審議開始</button></div>';
-  }else if(!terminal){html+='<p>'+ (listing?'審議を通過するまで個体とListingは登録されません。':'審議を通過するまでAcquireはギターに追加されません。')+'</p>'}
-  if(row.status==='error')html+='<button onclick="actAcquireApplication(\'retry\')">審議を再開</button>';
-  if(!terminal)html+='<button onclick="actAcquireApplication(\'cancel\')">申請を取り消す</button>';
-  html+='<button onclick="viewAcquireApplication(\''+esc(row.revision)+'\')">状態を更新</button>';
-  if(row.admin_review)html+='<p>管理者による審議: '+(row.admin_review.accepted?'採用':'不採用')+' — '+esc(row.admin_review.reason)+'</p>';
-  if(row.report)html+='<label>診断レポート<textarea readonly rows="12">'+esc(row.report)+'</textarea></label>';
-  for(const role of Object.keys(row.images||{}))html+='<p>'+esc(role)+'</p><img style="max-width:100%;max-height:360px;object-fit:contain" src="/api/acquire-applications/'+encodeURIComponent(row.revision)+'/images/'+encodeURIComponent(role)+acquireQuery()+'" alt="'+esc(role)+'">';
-  document.getElementById('acquireReviewContent').innerHTML=html;
+    html+=ownershipChallengeBox(row)+ownershipEvidenceFields({listing,date:listing?row.listing_payload.occurred_at:(row.acquisition_date||''),body:listing?row.listing_payload.body:(row.body||'')});
+  }else if(!terminal){html+='<p>'+ (listing?'The guitar and Listing will be registered only after approval.':'The Acquire Claim will be added only after approval.')+'</p>'}
+  if(row.admin_review)html+='<p>Administrator review: '+(row.admin_review.accepted?'Approved':'Rejected')+' — '+esc(row.admin_review.reason)+'</p>';
+  const reasons=row.result?.adjudication?.reasons||[];
+  if(row.status==='rejected'&&reasons.length)html+='<section class="request-info"><h3>Info</h3><ul>'+reasons.map(reason=>'<li>'+esc(reason)+'</li>').join('')+'</ul></section>';
+  document.getElementById('acquireReviewContent').innerHTML=html;requestFooter(row);
 }
 async function submitAcquireApplication(){
   if(acquireBusy||!acquireRevision)return;
   const form=new FormData();const acquired=document.getElementById('acquireDate').value;
   const closeup=document.getElementById('acquireCloseup').files[0],overview=document.getElementById('acquireOverview').files[0];
-  if(!acquired||!closeup||!overview){alert('取得日と両方の写真を入力してください。');return}
+  if(!acquired||!closeup||!overview){alert('Enter the date and select both photos.');return}
+  if(!await confirmOwnershipAction('Submit','Save this request and submit both photos for review?'))return;
   form.append('acquisition_date',acquired);form.append('body',document.getElementById('acquireBody').value);form.append('closeup',closeup);form.append('overview',overview);
+  let url='/api/acquire-applications/'+acquireRevision+'/submit';
+  if(acquireForm?.unsaved){url='/api/ownership-drafts/submit';form.append('draft_token',acquireForm.draft_token)}
   acquireBusy=true;document.getElementById('acquireSubmit').disabled=true;
-  try{const row=await jfetch('/api/acquire-applications/'+acquireRevision+'/submit'+acquireQuery(),{method:'POST',body:form});renderAcquireApplication(row);if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false;const button=document.getElementById('acquireSubmit');if(button)button.disabled=false}
+  try{const row=await jfetch(url+acquireQuery(),{method:'POST',body:form});renderAcquireApplication(row);await loadOwnershipAttention();if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false;const button=document.getElementById('acquireSubmit');if(button)button.disabled=false}
 }
 async function actAcquireApplication(action){
   if(acquireBusy||!acquireRevision)return;
-  if(action==='cancel'&&!confirm('この申請を取り消しますか？'))return;
+  if(!await confirmOwnershipAction(action==='cancel'?'Cansel Request':'Retry Review',action==='cancel'?'Withdraw this saved request? Any in-progress review will be stopped.':'Queue this request for another review?'))return;
   acquireBusy=true;
-  try{renderAcquireApplication(await jfetch('/api/acquire-applications/'+acquireRevision+'/'+action+acquireQuery(),{method:'POST'}));if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false}
+  try{renderAcquireApplication(await jfetch('/api/acquire-applications/'+acquireRevision+'/'+action+acquireQuery(),{method:'POST'}));await loadOwnershipAttention();if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false}
 }
 
 if(typeof setInterval==='function')setInterval(()=>{
@@ -806,9 +935,7 @@ async function showIndividual(id,fromList=false){
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
-  if((d.acquire_evidence||[]).length){
-    const section=document.createElement('div');section.innerHTML='<h4>Acquire Evidence（閲覧権限あり）</h4>'+d.acquire_evidence.map(e=>'<button onclick="viewAcquireApplication(\''+esc(e.revision)+'\')">Claim #'+esc(e.claim_id)+' の診断・写真</button>').join('');document.getElementById('detail').appendChild(section);
-  }
+
   if(changedIndividual){
     const detail=document.getElementById('detail');
     if(detail)detail.scrollTop=0;
@@ -873,7 +1000,7 @@ function openMediaClaim(individualId){
   const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
   document.getElementById('mediaClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
   resetMediaImageInputs();
-  document.getElementById('mediaClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('mediaClaimDate').value=new Date().toLocaleDateString('sv-SE');
   document.getElementById('mediaClaimCaption').value='';
   YGCOverlays.open('mediaClaimModal');
 }
@@ -912,7 +1039,7 @@ function openEventClaim(individualId){
   const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
   document.getElementById('eventClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
   document.getElementById('eventClaimKind').value='exhibition';
-  document.getElementById('eventClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('eventClaimDate').value=new Date().toLocaleDateString('sv-SE');
   document.getElementById('eventClaimDetail').value='';
   document.getElementById('eventClaimImages').value='';
   YGCOverlays.open('eventClaimModal');
@@ -954,7 +1081,7 @@ function openIncidentClaim(individualId){
   const guitar=individuals.find(x=>Number(x.id)===Number(individualId));
   document.getElementById('incidentClaimGuitar').textContent=guitar?guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:''):'Individual #'+individualId;
   document.getElementById('incidentClaimKind').value='damage';
-  document.getElementById('incidentClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('incidentClaimDate').value=new Date().toLocaleDateString('sv-SE');
   document.getElementById('incidentClaimDetail').value='';
   YGCOverlays.open('incidentClaimModal');
 }
@@ -986,7 +1113,7 @@ function openSpecificationClaim(individualId){
   editingSpecificationClaimId=null;specificationItems=[];setSpecificationKind('specification');
   document.getElementById('specClaimTitle').textContent='Specification/Repair Claim';
   document.getElementById('specClaimSubmit').textContent='Add Claim';
-  document.getElementById('specClaimDate').value=new Date().toISOString().slice(0,10);
+  document.getElementById('specClaimDate').value=new Date().toLocaleDateString('sv-SE');
   document.getElementById('specClaimBody').value='';
   renderSpecificationItems();renderSpecItemMenu();
   YGCOverlays.open('specClaimModal', {onClose: () => document.getElementById('specItemMenu')?.classList.remove('open')});
@@ -1020,7 +1147,7 @@ function removeSpecificationItem(index){specificationItems.splice(index,1);rende
 function updateSpecificationItem(index,value){if(specificationItems[index])specificationItems[index].value_text=value;}
 function renderSpecificationItems(){
   const el=document.getElementById('specClaimItems');if(!el)return;
-  el.innerHTML=specificationItems.length?specificationItems.map((item,index)=>'<div class="spec-item-row"><div class="spec-item-label">'+esc(item.label)+'</div><input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value"><button type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button></div>').join(''):'<div class="sub">Use + to add a field.</div>';
+  el.innerHTML=specificationItems.length?specificationItems.map((item,index)=>'<div class="spec-item-row"><div class="spec-item-label">'+esc(item.label)+'</div><input maxlength="500" value="'+esc(item.value_text)+'" oninput="updateSpecificationItem('+index+',this.value)" placeholder="Value"><button data-ui-action="close" type="button" class="spec-item-remove" onclick="removeSpecificationItem('+index+')">×</button></div>').join(''):'<div class="sub">Use + to add a field.</div>';
 }
 async function submitSpecificationClaim(){
   const items=specificationItems.map(item=>({field_name:item.field_name,value_text:String(item.value_text||'').trim()})).filter(item=>item.value_text);
@@ -1166,7 +1293,7 @@ async function submitOwnershipClaim(){
   if(kind==='release'){
     const guitar=individuals.find(x=>Number(x.id)===Number(pendingOwnershipClaimIndividualId));
     const label=guitar?guitar.manufacturer+' '+(guitar.model||''):'this guitar';
-    if(!confirm(label+' will be released and Current Owner will become Unknown.\n\nContinue?'))return;
+    if(!await confirmOwnershipAction('Release',label+' will be released and Current Owner will become Unknown. Continue?'))return;
   }
   button.disabled=true;
   try{
@@ -1494,7 +1621,7 @@ async function loadTopPageCharts(){
 function profileGuitarTable(section,title){
   const columns=[['id','ID'],['favorite','♡'],['manufacturer','Maker'],['model','Model'],['finish','Finish'],['year','Year'],['serial_number','Serial'],['claim_count','Claims']];
   return '<section class="panel profile-panel profile-list-panel page-section" data-profile-section="'+section+'" id="profile-'+section+'">'+
-    '<div class="toolbar"><h2>'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
+    '<div class="toolbar"><h2 data-count-items="#profileRows-'+section+' > tr.clickable">'+title+'</h2><input id="profileFilter-'+section+'" placeholder="maker / model / finish / year / serial" oninput="renderProfileGuitars(\''+section+'\')"></div>'+
     '<div class="table-wrap"><table><thead><tr>'+columns.map(([key,label])=>key==='favorite'?'<th class="favorite-cell" aria-label="Favorite">'+label+'</th>':'<th class="sortable" onclick="setProfileSort(\''+section+'\',\''+key+'\')">'+label+'<span class="sort-indicator" id="profileSort-'+section+'-'+key+'"></span></th>').join('')+'</tr></thead>'+
     '<tbody id="profileRows-'+section+'"></tbody></table></div>'+
     (section==='owned'?'<button id="newGuitarAction" class="new-guitar-action" type="button" onclick="openNewGuitar()" hidden>Let\'s add your undiscovered new guitar!</button>':'')+'</section>';
@@ -1502,26 +1629,30 @@ function profileGuitarTable(section,title){
 function openNewGuitar(){
   if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
   if(acquireBusy)return;
-  acquireRevision=null;acquireDisplayState=null;
-  document.getElementById('acquireReviewContent').innerHTML='<h3>Add Guitar — Listing申請</h3><p>① 個体情報を入力してChallengeを発行 → ② コードとギターを撮影 → ③ 写真を提出</p>'+listingMetadataFields()+ownershipChallengeBox(null)+ownershipEvidenceFields({listing:true,issued:false,date:new Date().toLocaleDateString('sv-SE')})+'<p id="guitarStatus" class="sub" role="status"></p><div class="modal-actions"><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Challengeを発行</button></div>';
-  YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
+  acquireRevision=null;acquireDisplayState=null;acquireForm=null;
+  setRequestTitle('Listing Request','Awaiting details');
+  document.getElementById('acquireReviewContent').innerHTML='<p>1. Enter details and generate a challenge → 2. Photograph the guitar with the code → 3. Submit both photos</p>'+listingMetadataFields()+ownershipChallengeBox(null)+ownershipEvidenceFields({listing:true,issued:false,date:new Date().toLocaleDateString('sv-SE')})+'<p id="guitarStatus" class="sub" role="status"></p>';
+  requestFooter();
+  YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null;acquireForm=null}});
   document.getElementById('guitarMaker').focus();
 }
 function closeNewGuitar(){closeAcquireReview()}
 async function submitNewGuitar(){
-  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
   if(acquireBusy)return;
-  const field=id=>document.getElementById(id),button=field('guitarSubmit');
+  if(!await confirmOwnershipAction('Generate Challenge','Generate a challenge for these guitar details? The request will not be saved yet.'))return;
+  acquireBusy=true;
+  try{await prepareListingDraft()}catch(error){alert(error.message)}finally{acquireBusy=false}
+}
+async function prepareListingDraft(){
+  if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
+  const field=id=>document.getElementById(id);
   const payload={};for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'acquireDate',body:'acquireBody'}))payload[key]=field(id).value.trim();
-  if(!payload.manufacturer||!payload.serial_number||!payload.occurred_at){field('guitarStatus').textContent='Maker・Serial・日付を入力してください。';return}
-  acquireBusy=true;button.disabled=true;field('guitarStatus').textContent='Challengeを発行しています…';
-  try{
-    const row=await jfetch('/api/listing-applications'+acquireQuery(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(row.status==='duplicate'){
-      field('guitarStatus').innerHTML='同じMaker・Serialの個体が登録されています。既存個体のAcquireから申請してください。'+row.existing_individual_ids.map(id=>'<button onclick="closeNewGuitar();showIndividual('+Number(id)+',true)">個体 #'+Number(id)+'を確認</button>').join('');return;
-    }
-    acquireRevision=row.revision;renderAcquireApplication(row);document.getElementById('acquireReviewContent').parentElement.scrollTop=0;
-  }catch(error){if(field('guitarStatus'))field('guitarStatus').textContent=error.message;else alert(error.message)}finally{acquireBusy=false;button.disabled=false}
+  if(!payload.manufacturer||!payload.serial_number||!payload.occurred_at)throw new Error('Enter the maker, serial and date.');
+  const row=await jfetch('/api/ownership-drafts/listing'+acquireQuery(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(row.status==='duplicate'){
+    field('guitarStatus').innerHTML='This maker and serial are already registered. Use Acquire on the existing guitar.'+row.existing_individual_ids.map(id=>'<a href="/users/'+Number(activeUser.user.id)+'?individual_id='+Number(id)+'">Guitar #'+Number(id)+' — View</a>').join('');return;
+  }
+  acquireRevision=row.revision;renderAcquireApplication(row);document.getElementById('acquireReviewContent').parentElement.scrollTop=0;
 }
 function setProfileSort(section,key){
   const state=profileSort[section];
@@ -1579,7 +1710,7 @@ function setupProfileShell(){
     profileGuitarTable('owned','Owned Guitars')+
     profileGuitarTable('former','Formerly Owned Guitars')+
     profileGuitarTable('favorites','Favorite Guitars')+
-    '<section class="panel profile-panel page-section" data-profile-section="chronicle" id="profile-chronicle"><h2>User Chronicle</h2><div class="profile-activity-list" id="userChronicleList"><div class="sub">Loading...</div></div></section>';
+    '<section class="panel profile-panel page-section" data-profile-section="chronicle" id="profile-chronicle"><h2 data-count-items="#userChronicleList > .profile-chronicle-row">User Chronicle</h2><div class="profile-activity-list" id="userChronicleList"><div class="sub">Loading...</div></div></section>';
   for(const selector of ['#statistics','#world-map','.page-bottom-space']){
     const el=document.querySelector(selector);
     if(el)el.remove();
@@ -1622,10 +1753,10 @@ async function openTransferReview(claimId){
   transferReviewRecord=null;document.getElementById('transferReviewBody').textContent='Loading...';document.getElementById('transferReviewActions').innerHTML='';document.getElementById('transferReviewStatus').textContent='';
   try{
     const t=await jfetch('/api/transfers/'+claimId+'?viewer_id='+Number(activeUser.user.id));transferReviewRecord=t;
-    document.getElementById('transferReviewBody').innerHTML='<strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong><p>'+esc([t.guitar?.manufacturer,t.guitar?.model,t.guitar?.serial_number].filter(Boolean).join(' / '))+' · #'+Number(t.individual_id)+' · '+esc(t.state)+'</p>'+(t.accepted_at?'<p class="sub">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</p>':'<p class="sub">Accept confirms this ownership transfer. Verification remains a separate Claim judgement.</p>');
+    document.getElementById('transferReviewBody').innerHTML='<strong>'+YGCProductDetail.userLink(t.from_user_id,t.from_name,esc)+' → '+YGCProductDetail.userLink(t.to_user_id,t.to_name,esc)+'</strong><p>'+esc([t.guitar?.manufacturer,t.guitar?.model,t.guitar?.serial_number].filter(Boolean).join(' / '))+' · #'+Number(t.individual_id)+' · '+esc(t.state)+'</p>'+(t.accepted_at?'<p class="sub">Info: Transfer accepted on '+esc(displayInputDate(t.accepted_at))+'</p>':'<p class="sub">Accept confirms this ownership transfer. Verification remains a separate Claim judgement.</p>');
     if(t.state==='pending'&&t.claim_active){
       const choices=Number(activeUser.user.id)===t.to_user_id?['accept','decline']:['cancel'];
-      document.getElementById('transferReviewActions').innerHTML=choices.map(action=>'<button type="button" onclick="resolveTransfer(\''+action+'\')">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('');
+      document.getElementById('transferReviewActions').innerHTML=choices.map(action=>'<button data-ui-action="'+(action==='accept'?'primary':action==='cancel'?'danger':'neutral')+'" type="button" onclick="resolveTransfer(\''+action+'\')">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('');
     }
   }catch(e){document.getElementById('transferReviewBody').textContent=e.message}
 }
@@ -1781,7 +1912,7 @@ async function loadProfilePage(preferredIndividualId=null){
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
       '<div class="profile-stats">'+stats.map(x=>['Followers','Following'].includes(x[0])?'<button type="button" class="profile-stat" onclick="openUserConnections(\''+x[0].toLowerCase()+'\')"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</button>':'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
-      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button><button type="button" onclick="showAcquireApplications()">Ownership Requests</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');
@@ -1833,3 +1964,5 @@ async function loadProfilePage(preferredIndividualId=null){
     document.getElementById('detail').textContent='No Individual to display.';
   }
 })()
+
+if(typeof setInterval==='function')setInterval(()=>{if(!document.hidden&&activeUser?.user)loadOwnershipAttention()},30000);

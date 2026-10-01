@@ -28,7 +28,7 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .world-map-legend{position:absolute;right:10px;bottom:9px;display:flex;align-items:center;gap:5px;padding:5px 7px;border-radius:7px;background:rgba(13,15,17,.86);font-size:9px;color:var(--muted)}
 .world-map-swatch{width:18px;height:7px;border-radius:2px}
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
-main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) calc(clamp(320px,28vw,430px) + 44px) 22px 22px}
+main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) calc(clamp(290px,calc(28vw - 30px),400px) + 44px) 22px 22px}
 .grid{display:block}
 .left-column{display:flex;flex-direction:column;gap:12px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
@@ -41,7 +41,7 @@ main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) cal
 .discovery-actor{color:var(--text);font-weight:700}.discovery-following{font-size:9px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 4px}
 .discovery-story strong{color:var(--text);font-weight:800}
 .product-list-panel{height:620px;min-height:620px;max-height:620px;display:flex;flex-direction:column}
-.detail-shell{position:fixed;top:calc(var(--header-height,108px) + 14px);right:22px;bottom:14px;width:clamp(320px,28vw,430px);z-index:850}
+.detail-shell{position:fixed;top:calc(var(--header-height,108px) + 14px);right:22px;bottom:14px;width:clamp(290px,calc(28vw - 30px),400px);z-index:850}
 .detail-panel{height:100%;min-height:0;display:flex;flex-direction:column;box-shadow:0 12px 30px rgba(0,0,0,.25)}
 .product-list-panel .table-wrap{flex:1;max-height:none;min-height:0;overflow:auto}
 .detail-panel #detail{flex:1;min-height:0;overflow-y:auto;padding-right:4px}
@@ -160,7 +160,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   main{padding:14px 14px 22px}
   .left-column{gap:12px}
   .product-list-panel{height:520px}
-  .detail-shell{display:none;position:fixed;top:auto;right:14px;bottom:14px;width:min(320px,calc(100vw - 28px));height:min(720px,calc(100dvh - var(--header-height,108px) - 28px));margin:0;z-index:950}
+  .detail-shell{display:none;position:fixed;top:auto;right:14px;bottom:14px;width:min(300px,calc(100vw - 28px));height:min(720px,calc(100dvh - var(--header-height,108px) - 28px));margin:0;z-index:950}
   .detail-shell.compact-open{display:block}
   .detail-panel{height:100%}
   .content-frame{width:100%;max-width:none}
@@ -251,6 +251,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .chronicle-toolbar .add-claim-action{display:block;width:100%;padding:10px 12px;text-align:center;white-space:normal}
 #detail .chronicle-toolbar .claim-menu{left:0;right:0}
 .ownership-request-modal{max-height:calc(100dvh - 32px);overflow:auto}
+.ownership-request-status{font-size:.7em;font-weight:400;color:var(--muted);display:inline-block}
 .ownership-request-modal .modal-grid label{display:block;color:var(--muted);font-size:11px}
 .ownership-request-modal .modal-grid label.full{grid-column:1/-1}
 .ownership-request-modal .modal-grid input,.ownership-request-modal .modal-grid textarea{display:block;width:100%;margin-top:4px}
@@ -274,3 +275,27 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #acquireReviewContent label{display:block;margin:12px 0}#acquireReviewContent input{display:block;width:100%;box-sizing:border-box}#acquireReviewContent{overflow-wrap:anywhere}#acquireReviewContent button{margin:4px 6px 4px 0}
 .brand-link{color:inherit;text-decoration:none}.brand-link:hover{color:var(--accent)}
 .favorite-button{border:0;background:none;color:var(--muted);padding:2px 5px;font-size:20px;line-height:1;cursor:pointer}.favorite-button:hover,.favorite-button.is-favorite{color:#e67884}.favorite-button:disabled{opacity:.4;cursor:default}.favorite-cell{width:36px;text-align:center}.product-list-panel .favorite-cell .favorite-button,.profile-list-panel .favorite-cell .favorite-button{font-size:16px;padding:2px}.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.detail-title-row .detail-header-title{min-width:0;flex:1}
+
+#ownershipRequestAttention[hidden]{display:none}
+
+.ownership-request-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+#ownershipConfirmModal .modal{max-width:480px}
+
+.unanswered-requests{padding:8px 12px;margin-bottom:10px;border:1px solid #c4eeec;border-radius:8px;background:#007f83;color:#fff;font-weight:700;line-height:1.3}
+.unanswered-requests[hidden]{display:none}
+.unanswered-requests h2{margin:0 0 3px;font-size:14px;color:#fff;font-weight:700;line-height:1.3}
+.unanswered-request{display:flex;align-items:center;justify-content:space-between;gap:4px 10px;flex-wrap:wrap;padding:3px 0}
+.unanswered-request p{margin:0;flex:1;min-width:180px;color:#fff;font-weight:700;line-height:1.3}
+.unanswered-requests a,.unanswered-requests a:visited,.unanswered-requests a:hover{color:#fff;font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.unanswered-request>div{display:flex;gap:6px}
+.unanswered-requests button{padding:4px 9px;min-height:30px;border:1px solid #fff;border-radius:5px;background:#005e63;color:#fff;font-weight:700;line-height:1.2}
+.unanswered-requests button.secondary{background:#007f83;color:#fff}
+.unanswered-requests button:hover{background:#004e53;color:#fff}
+.unanswered-requests a:focus-visible,.unanswered-requests button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* Product Detail shares one centered content width for requests and Claim cards. */
+.detail-panel #detail{padding-inline:4px;scrollbar-gutter:stable both-edges}
+#detail #chronicleEntries{padding-inline:0}
+#detail .claim-card{margin:8px 0 12px;width:100%;box-sizing:border-box}
+#detail .chronicle-toolbar .claim-menu-wrap{width:100%;margin-inline:0}
+#detail :is(.owner-claim-card,.add-claim-action){width:100%;margin-inline:0;box-sizing:border-box}

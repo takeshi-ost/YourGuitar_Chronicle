@@ -545,3 +545,63 @@ def test_failed_run_keeps_partial_counts_in_log(tmp_path):
     assert run['phase'] == 'error'
     assert run['counts']['summaries_processed'] == 1
     assert run['counts']['details_fetched'] == 1
+
+
+@pytest.mark.parametrize('category,expected', [
+    ('electric-guitars',True),('acoustic-guitars',True),
+    ('guitar-parts',False),('amplifiers',False),('',False),
+])
+def test_all_guitars_category(category,expected):
+    from ygc.incremental_crawl import _category_matches, CATEGORY_QUERY
+    from ygc.platform_boundaries import CrawlStep
+    assert _category_matches({'product_type':category},'all') is expected
+    assert CATEGORY_QUERY['all']=='guitar'
+    CrawlStep('all',1950,2026)
+
+
+def test_all_guitars_collects_both_categories(tmp_path):
+    repo=Repository(tmp_path/'all.db');repo.init_db()
+    class MixedCollector(Collector):
+        def _get_json(self,url,params=None):
+            if params:
+                assert params['query']=='guitar'
+            result=super()._get_json(url,params)
+            if url.endswith('/2'):
+                result['product_type']='acoustic-guitars'
+            return result
+    acoustic={**_summary(2),'product_type':'acoustic-guitars'}
+    result=advance_program(repo,MixedCollector([{'listings':[_summary(1),acoustic]}]),'all',1970,1979)
+    assert result['details_fetched']==2
+    assert result['new_individuals']==2
+    assert result['skipped_category']==0
+
+
+@pytest.mark.parametrize('condition,expected', [
+    ({'uuid':'7c3f45de-2ae0-4c81-8400-fdb6b1d74890'},True),
+    ({'display_name':'Brand New'},True),('Brand New',True),
+    ({'display_name':'Mint'},False),('Excellent',False),(None,False),
+])
+def test_explicit_brand_new_condition(condition,expected):
+    from ygc.reverb_adapter import is_brand_new
+    assert is_brand_new({'condition':condition,'title':'1957 Reissue New York'}) is expected
+
+
+def test_new_excluded_at_summary_and_detail_but_used_reissue_collected(tmp_path):
+    repo=Repository(tmp_path/'condition.db');repo.init_db()
+    class Conditions(Collector):
+        def _get_json(self,url,params=None):
+            result=super()._get_json(url,params)
+            if url.endswith('/2'):result['condition']={'display_name':'Brand New'}
+            if url.endswith('/3'):
+                result['condition']={'display_name':'Mint'}
+                result['model']='1957 Reissue'
+            return result
+    c=Conditions([{'listings':[{**_summary(1),'condition':{'display_name':'Brand New'}},_summary(2),_summary(3)]}])
+    result=advance_program(repo,c,'all',1970,1979)
+    assert result['skipped_new']==2
+    assert result['details_fetched']==2
+    assert result['new_individuals']==1
+    from ygc.crawl_detail_cache import reprocess_details
+    cached=reprocess_details(repo,'all',1970,1979)
+    assert cached['skipped_new']==1
+    assert cached['new_individuals']==0

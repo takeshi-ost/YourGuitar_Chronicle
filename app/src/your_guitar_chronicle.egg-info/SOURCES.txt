@@ -4,6 +4,7 @@ src/ygc/__init__.py
 src/ygc/acquire_review.py
 src/ygc/authentication_decision.py
 src/ygc/authentication_evidence.py
+src/ygc/claim_dates.py
 src/ygc/cli.py
 src/ygc/config.py
 src/ygc/crawl_candidates.py
@@ -17,6 +18,7 @@ src/ygc/listing_review.py
 src/ygc/observation_evaluator.py
 src/ygc/observation_matrix.py
 src/ygc/platform_boundaries.py
+src/ygc/request_drafts.py
 src/ygc/reverb_adapter.py
 src/ygc/specification_extractor.py
 src/ygc/theme_catalog.py
@@ -70,6 +72,7 @@ tests/test_authentication_evidence.py
 tests/test_cached_specification_backfill.py
 tests/test_claim_architecture_status.py
 tests/test_claim_backfill.py
+tests/test_claim_dates.py
 tests/test_claim_deactivation.py
 tests/test_claim_snapshot.py
 tests/test_claim_verification.py
@@ -101,6 +104,7 @@ tests/test_observation_migration_evidence.py
 tests/test_ownership_claim.py
 tests/test_platform_boundaries.py
 tests/test_repeated_resolution.py
+tests/test_request_drafts.py
 tests/test_reverb_adapter.py
 tests/test_reverb_claim_persistence.py
 tests/test_reverb_collector.py

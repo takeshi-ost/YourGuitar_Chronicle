@@ -22,6 +22,8 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response, JSONResponse
 from pydantic import BaseModel, Field
+from ygc.claim_dates import ClaimDateRequest, validate_claim_date, viewer_timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
@@ -480,7 +482,7 @@ class AdminUserUpdateRequest(BaseModel):
     theme: str = 'dark_default'
 
 
-class UserGuitarLinkRequest(BaseModel):
+class UserGuitarLinkRequest(ClaimDateRequest):
     ownership_status: str = Field(
         default="current_owner",
         max_length=30,
@@ -513,7 +515,7 @@ class SpecificationItemRequest(BaseModel):
     )
 
 
-class SpecificationClaimRequest(BaseModel):
+class SpecificationClaimRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     specification_kind: str = Field(
         default="specification",
@@ -533,21 +535,21 @@ class SpecificationClaimRequest(BaseModel):
     )
 
 
-class EventClaimRequest(BaseModel):
+class EventClaimRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     event_kind: str = Field(max_length=30)
     occurred_at: str | None = Field(default=None, max_length=40)
     detail: str = Field(min_length=1, max_length=2000)
 
 
-class IncidentClaimRequest(BaseModel):
+class IncidentClaimRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     incident_kind: str = Field(max_length=20)
     occurred_at: str | None = Field(default=None, max_length=40)
     detail: str = Field(min_length=1, max_length=2000)
 
 
-class OwnershipClaimRequest(BaseModel):
+class OwnershipClaimRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     ownership_kind: str = Field(
         default="acquire",
@@ -567,7 +569,7 @@ class OwnershipClaimRequest(BaseModel):
     )
 
 
-class FormerOwnerClaimRequest(BaseModel):
+class FormerOwnerClaimRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     acquisition_date: str = Field(min_length=10, max_length=10)
     release_date: str = Field(min_length=10, max_length=10)
@@ -588,7 +590,7 @@ class ClaimVoteRequest(BaseModel):
     vote: str = Field(max_length=10)
 
 
-class ClaimEditRequest(BaseModel):
+class ClaimEditRequest(ClaimDateRequest):
     user_id: int = Field(ge=1)
     occurred_at: str | None = Field(
         default=None,
@@ -1118,14 +1120,14 @@ def _validate_backup_media_references(
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     token = CONSOLE_ADMIN_TOKEN if _local_console_request(request) else ""
-    return HTMLResponse(INDEX_HTML.replace('const CONSOLE_ADMIN_TOKEN="";',
+    return HTMLResponse((Path(__file__).with_name("static") / "index_html.html").read_text(encoding="utf-8").replace('const CONSOLE_ADMIN_TOKEN="";',
                         'const CONSOLE_ADMIN_TOKEN=' + json.dumps(token) + ';'),
                         headers={"Cache-Control": "no-store"})
 
 
 @app.get("/user-view", response_class=HTMLResponse)
 def user_view() -> HTMLResponse:
-    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
+    return HTMLResponse((Path(__file__).with_name("static") / "user_view_html.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/themes.css")
@@ -1135,7 +1137,7 @@ def theme_stylesheet() -> FileResponse:
 
 @app.get("/assets/list-navigation.js")
 def list_navigation_script() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript")
+    return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/overlays.js")
@@ -1145,7 +1147,7 @@ def overlays_script() -> FileResponse:
 
 @app.get("/assets/ui-components.css")
 def ui_components_stylesheet() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("static") / "ui-components.css", media_type="text/css")
+    return FileResponse(Path(__file__).with_name("static") / "ui-components.css", media_type="text/css", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/pages/{filename}")
@@ -1155,7 +1157,8 @@ def page_asset(filename: str) -> FileResponse:
     if filename not in allowed:
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(Path(__file__).with_name("static") / "pages" / filename,
-                        media_type="text/javascript" if filename.endswith('.js') else "text/css")
+                        media_type="text/javascript" if filename.endswith('.js') else "text/css",
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/product-detail.js")
@@ -1200,7 +1203,7 @@ def user_edit() -> HTMLResponse:
 def user_profile(
     user_id: int,
 ) -> HTMLResponse:
-    return HTMLResponse(USER_VIEW_HTML, headers={"Cache-Control": "no-store"})
+    return HTMLResponse((Path(__file__).with_name("static") / "user_view_html.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status")
@@ -1312,13 +1315,13 @@ def api_top_page_charts() -> dict[str, Any]:
             }
         ]
 
-    years = [
-        {
-            "label": str(row["label"]),
-            "count": int(row["count"] or 0),
-        }
-        for row in year_rows
-    ]
+    year_counts = {}
+    for row in year_rows:
+        # Only a single year is chartable; do not extract a year from a range.
+        label = re.sub(r"circa|c\.ha", "", str(row["label"]), flags=re.IGNORECASE).strip()
+        if re.fullmatch(r"[0-9]{4}", label):
+            year_counts[label] = year_counts.get(label, 0) + int(row["count"] or 0)
+    years = [{"label": label, "count": year_counts[label]} for label in sorted(year_counts)]
 
     listing_map = {
         str(row["day"]): int(row["count"] or 0)
@@ -2474,6 +2477,8 @@ async def api_media_claim(
     occurred_at: str | None = Form(None),
     caption: str | None = Form(None),
 ) -> dict[str, Any]:
+    try:occurred_at=validate_claim_date(occurred_at)
+    except ValueError as exc:raise HTTPException(400,detail=str(exc)) from exc
     repository = repo()
 
     if not images:
@@ -2612,6 +2617,8 @@ async def api_event_claim_with_media(
     detail: str = Form(...),
     images: list[UploadFile] = File(...),
 ) -> dict[str, Any]:
+    try:occurred_at=validate_claim_date(occurred_at)
+    except ValueError as exc:raise HTTPException(400,detail=str(exc)) from exc
     if not images or len(images) > 10:
         raise HTTPException(status_code=400, detail="Select 1 to 10 images")
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -3005,6 +3012,15 @@ def transfer_error(exc: ValueError):
     return HTTPException(status_code=403 if reason.startswith('Only ') else
                          404 if reason in ('Transfer not found','Individual not found','User not available for Transfer') else 409,
                          detail=reason)
+
+
+@app.get("/api/ownership-requests/unanswered")
+def api_unanswered_ownership_requests(request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        return JSONResponse(repo().unanswered_ownership_requests(actor), headers={"Cache-Control": "no-store"})
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
 
 
 @app.get("/api/transfer-users")
@@ -3677,14 +3693,14 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
 
 @app.get("/api/crawl/program")
 def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
-    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+    if category not in ("all", "electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return program_status(repo(), category, year_min, year_max)
 
 
 @app.get("/api/crawl/program/runs")
 def api_crawl_program_runs(category: str, year_min: int, year_max: int) -> list[dict]:
-    if category not in ("electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+    if category not in ("all", "electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return repo().crawl_run_log(category, year_min, year_max)
 
@@ -3718,7 +3734,7 @@ def api_crawl_program_restart(request: CrawlAdvanceRequest) -> dict:
 @app.post("/api/crawl/advance")
 def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> dict:
     global _active_job_id
-    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+    if request.category not in ("all", "electric", "acoustic") or request.year_min > request.year_max:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     token, _source = _request_token(http_request)
     if not token:
@@ -3761,7 +3777,7 @@ def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
 @app.post("/api/crawl/cache/reprocess")
 def api_reprocess_cached_details(request: CrawlAdvanceRequest) -> dict:
     global _active_job_id
-    if request.category not in ("electric", "acoustic") or request.year_min > request.year_max:
+    if request.category not in ("all", "electric", "acoustic") or request.year_min > request.year_max:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     if not repo().claim_architecture_status()["ready"]:
         raise HTTPException(status_code=409, detail="Run Claim migration before reprocessing")
@@ -3957,8 +3973,16 @@ def main() -> None:
 
 @app.middleware('http')
 async def private_acquire_cache_control(request: Request, call_next):
-    response=await call_next(request)
-    if request.url.path.startswith(('/api/acquire-applications','/api/admin/acquire-applications','/api/listing-applications')):
+    try:
+        zone=ZoneInfo(request.headers.get('X-YGC-Timezone') or 'UTC')
+    except (ZoneInfoNotFoundError, ValueError):
+        return JSONResponse({'detail':'Invalid timezone.'}, status_code=400)
+    token=viewer_timezone.set(zone)
+    try:
+        response=await call_next(request)
+    finally:
+        viewer_timezone.reset(token)
+    if request.url.path.startswith(('/api/acquire-applications','/api/admin/acquire-applications','/api/listing-applications','/api/ownership-drafts')):
         response.headers['Cache-Control']='private, no-store'
     return response
 
@@ -3971,7 +3995,70 @@ def acquire_actor(request: Request, viewer_id: int | None):
 
 
 def acquire_error(exc):
-    return HTTPException(status_code=403 if isinstance(exc,PermissionError) else 409,detail=str(exc))
+    from ygc.acquire_review import ui_message
+    return HTTPException(status_code=403 if isinstance(exc,PermissionError) else 409,detail=ui_message(str(exc)))
+
+
+@app.post('/api/ownership-drafts/acquire/{individual_id}')
+def api_preview_acquire(individual_id: int, request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review
+    actor=acquire_actor(request,viewer_id)
+    try:return acquire_review.start(repo(),actor,individual_id,preview=True)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.post('/api/ownership-drafts/listing')
+def api_preview_listing(request: Request, body: dict, viewer_id: int | None = None):
+    from ygc import listing_review
+    from pydantic import ValidationError
+    actor=acquire_actor(request,viewer_id)
+    try:return listing_review.start(repo(),actor,body,preview=True)
+    except ValidationError as exc:raise HTTPException(status_code=422,detail='Check the Listing fields.') from exc
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+class KeepOwnershipDraft(ClaimDateRequest):
+    draft_token: str | None = Field(default=None,max_length=64000)
+    revision: str | None = Field(default=None,max_length=64)
+    acquisition_date: str = Field(default='',max_length=10)
+    body: str = Field(default='',max_length=4000)
+
+
+@app.post('/api/ownership-drafts/keep')
+def api_keep_ownership_draft(request: Request, body: KeepOwnershipDraft, viewer_id: int | None = None):
+    from ygc import request_drafts
+    actor=acquire_actor(request,viewer_id)
+    try:
+        if bool(body.draft_token)==bool(body.revision):raise ValueError('Specify one request.')
+        if body.acquisition_date:
+            from datetime import date
+            date.fromisoformat(body.acquisition_date)
+        repository=repo()
+        revision=request_drafts.keep(repository,actor,body.draft_token)['revision'] if body.draft_token else body.revision
+        return request_drafts.save_inputs(repository,actor,revision,body.acquisition_date,body.body)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.post('/api/ownership-drafts/submit')
+async def api_submit_ownership_draft(request: Request, viewer_id: int | None = None,
+    draft_token: str = Form(...), acquisition_date: str = Form(...), body: str = Form(''),
+    closeup: UploadFile = File(...), overview: UploadFile = File(...)):
+    from ygc import acquire_review as review, request_drafts
+    from datetime import date
+    actor=acquire_actor(request,viewer_id)
+    try:
+        validate_claim_date(acquisition_date)
+        date.fromisoformat(acquisition_date)
+        if len(body)>4000:raise ValueError('The description must be 4,000 characters or fewer.')
+        contents=[]
+        for upload in (closeup,overview):
+            content=await upload.read(12*1024*1024+1)
+            review.pack(content)  # Invalid photos must not create a saved request.
+            contents.append(content)
+        repository=repo()
+        row=request_drafts.keep(repository,actor,draft_token)
+        return await run_in_threadpool(review.submit,repository,actor,row['revision'],acquisition_date,body,*contents)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
 
 
 @app.post('/api/listing-applications')
@@ -3980,7 +4067,7 @@ def api_start_listing(request: Request, body: dict, viewer_id: int | None = None
     from ygc import listing_review
     actor=acquire_actor(request,viewer_id)
     try:return listing_review.start(repo(),actor,body)
-    except ValidationError as exc:raise HTTPException(status_code=422,detail='Listing入力項目を確認してください。') from exc
+    except ValidationError as exc:raise HTTPException(status_code=422,detail='Check the Listing fields.') from exc
     except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
 
 
@@ -4019,6 +4106,26 @@ def api_manage_acquire(revision: str, body: AdminAcquireRequest, request: Reques
     _require_console_admin(request)
     from ygc import acquire_review as review
     try:return review.administer(repo(),revision,body.operation,body.reason,body.expected_version)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.get('/api/acquire-applications/attention')
+def api_acquire_attention(request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=acquire_actor(request,viewer_id)
+    try:return review.attention(repo(),actor)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+class AcquireSeenRequest(BaseModel):
+    event_id: int = Field(ge=0)
+
+
+@app.post('/api/acquire-applications/{revision}/seen')
+def api_acquire_seen(revision: str, body: AcquireSeenRequest, request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=acquire_actor(request,viewer_id)
+    try:return review.mark_seen(repo(),actor,revision,body.event_id)
     except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
 
 

@@ -107,7 +107,7 @@
   background-attachment: fixed;
   color: var(--text);
 }
-:root[data-theme]:not([data-theme="dark_default"]) :is(.panel,.dashboard-card,.modal,.notification-panel) {
+:root[data-theme]:not([data-theme="dark_default"]) :is(.panel,.dashboard-card,.notification-panel) {
   background: var(--panel);
   color: var(--text);
 }
@@ -119,17 +119,17 @@
 :root[data-theme]:not([data-theme="dark_default"]) :is(.claim-menu button:hover,.profile-chronicle-row.clickable:hover) {
   background:var(--control-hover);
 }
-:root[data-theme]:not([data-theme="dark_default"]):not([data-theme="light_default"]):not([data-theme="sunburst_3ply"]) :is(.panel,.dashboard-card,.modal,.notification-panel) {
+:root[data-theme]:not([data-theme="dark_default"]):not([data-theme="light_default"]):not([data-theme="sunburst_3ply"]) :is(.panel,.dashboard-card,.notification-panel) {
   border:var(--ply-border);
   box-shadow:var(--ply-shadow);
 }
-:root[data-theme="black_pearl"] :is(.panel,.dashboard-card,.modal,.notification-panel),
-:root[data-theme="lake_blue_pearl"] :is(.panel,.dashboard-card,.modal,.notification-panel) {
+:root[data-theme="black_pearl"] :is(.panel,.dashboard-card,.notification-panel),
+:root[data-theme="lake_blue_pearl"] :is(.panel,.dashboard-card,.notification-panel) {
   background-color:var(--panel);
   background-image:linear-gradient(rgba(255,255,255,.84),rgba(255,255,255,.84)),url('/assets/theme-textures/white-pearl.webp');
   background-size:auto,280px auto;
 }
-:root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.modal,.notification-panel) {
+:root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.notification-panel) {
   border: 2px solid #f8f1e2;
   box-shadow: inset 0 0 0 1px #11100d,
               inset 0 0 0 3px #f8f1e2,

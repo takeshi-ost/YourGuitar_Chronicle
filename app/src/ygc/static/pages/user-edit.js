@@ -14,7 +14,7 @@ function setStatus(message,error=false){field('status').textContent=message;fiel
 function syncHeader(){
  const u=activeUser?.user;
  field('profileLink').href=u?'/users/'+u.id:'/user-view';
- field('accountHub').innerHTML=u?'<a class="account-user" href="/users/'+Number(u.id)+'"><img src="/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(u.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt=""><span>'+esc(u.display_name||'User')+'</span></a><div class="account-actions"><button class="secondary" onclick="switchUser()">Switch User</button></div>':'<span class="sub">No user selected</span><div class="account-actions"><button onclick="createUser()">Create Account</button><button class="secondary" onclick="switchUser()">Select User</button></div>';
+ field('accountHub').innerHTML=u?'<a class="account-user" href="/users/'+Number(u.id)+'"><img src="/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(u.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt=""><span>'+esc(u.display_name||'User')+'</span></a>':'<span class="sub">No user selected</span><div class="account-actions"><button data-ui-action="primary" onclick="createUser()">Create Account</button><button class="secondary" onclick="switchUser()">Select User</button></div>';
 }
 async function switchUser(){
  const users=await request('/api/users');

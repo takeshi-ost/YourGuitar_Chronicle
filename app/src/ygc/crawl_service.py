@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ygc.reverb_adapter import is_brand_new
+
 from typing import Any
 
 from ygc import config
@@ -49,7 +51,7 @@ def crawl_query(
         "skipped_existing", "new_observations", "missing_identity",
         "serial_candidates", "new_individuals", "existing_individuals_extended",
         "ambiguous_matches",
-        "detail_unavailable",
+        "detail_unavailable", "skipped_new",
     ), 0)
     try:
         summaries = list(collector.iter_listing_summaries(
@@ -63,6 +65,9 @@ def crawl_query(
             listing_id = collector.listing_id(item)
             if listing_id and listing_id in existing:
                 counts["skipped_existing"] += 1
+                continue
+            if is_brand_new(item):
+                counts["skipped_new"] += 1
                 continue
             if (_guitar_scope(item) and
                     (year_min is None or year_max is None or
@@ -80,6 +85,9 @@ def crawl_query(
             listing_id = collector.listing_id(item)
             if listing_id:
                 save_detail(repository, str(listing_id), item)
+            if is_brand_new(item):
+                counts["skipped_new"] += 1
+                continue
             claim_data = to_listing_claim_data(
                 item, config.SERIAL_CONFIDENCE_THRESHOLD,
             )

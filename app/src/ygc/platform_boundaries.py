@@ -54,7 +54,7 @@ class CrawlStep:
     origin: str = "manual"
 
     def __post_init__(self) -> None:
-        if self.category not in ("electric", "acoustic") or not 1800 <= self.year_min <= self.year_max <= 2100:
+        if self.category not in ("all", "electric", "acoustic") or not 1800 <= self.year_min <= self.year_max <= 2100:
             raise ValueError("Invalid crawl category or manufacture-year range")
         if self.origin not in ("manual", "scheduled"):
             raise ValueError("Invalid crawl origin")

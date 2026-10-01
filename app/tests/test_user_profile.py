@@ -245,7 +245,7 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         assert 'id="newGuitarModal"' not in page.text
         assert 'onclick="openNewGuitar()"' not in page.text
         assert 'window.location.href=\'/users/\'+id' in client.get("/assets/pages/user-edit.js").text
-        assert 'onclick="saveSettings()">Save</button><button type="button" class="secondary"' in page.text
+        assert 'onclick="saveSettings()">Save</button><button data-ui-action="close" type="button" class="secondary"' in page.text
         assert '>Cancel</button>' in page.text
         profile = client.get(f"/users/{user_id}")
         assert profile.status_code == 200
@@ -299,3 +299,14 @@ def test_profile_visibility_and_signature_guitar(tmp_path, monkeypatch):
             "signature_individual_id": guitar,
         })
         assert invalid.status_code == 400
+
+
+def test_year_chart_only_single_year_after_qualifiers(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, 'DB_PATH', tmp_path/'years.db')
+    repository=Repository(config.DB_PATH);repository.init_db()
+    user=repository.create_user('Year chart')
+    for index,year in enumerate(['1960','Circa 1960','C.ha 1960','circa1972','1972-1974','1970s','Unknown','', 'circa 1970-1971']):
+        repository.create_initial_listing_claim(user,manufacturer='Test',model='Test',serial_number=f'YEAR{index}',year=year,media_storage_path='test.jpg',occurred_at='2020-01-01')
+    with TestClient(app) as client:
+        result=client.get('/api/top-page-charts').json()
+    assert result['years']==[{'label':'1960','count':3},{'label':'1972','count':1}]

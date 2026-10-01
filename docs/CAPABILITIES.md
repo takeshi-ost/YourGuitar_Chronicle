@@ -7,7 +7,7 @@
 - `/user-view` はGuestも閲覧できるTop Page。Product Listの検索・ソート、Product Detail、Specification、Claim Chronicle、新着順のNew Discovery（最大200個体）、統計と地図を表示する。GuestはClaimや投票など参加操作を利用できない。
 - 画面の操作ラベルは英語。Product DetailはTop Page / User Profile / Browser Consoleで共通の描画部品を使う。Top Page / User Profileでは幅900px以下で一覧から開閉可能なオーバーレイとして表示する。
 - Top Page、User Profile、Browser Consoleのクリック可能な一覧では、行をクリックした後に上下キーで同じ一覧の前後項目を選べる。入力欄やモーダルのキー操作は優先し、一覧以外をクリックすると解除する。
-- ローカル操作用ユーザーはアカウント欄から選択する。本人の通知一覧、既読操作、プロフィール、Claim参加を使える。通知はアプリ内のみ。Sign In / Create Accountの実際の認証処理は未実装。
+- ローカル操作用ユーザーはアカウント欄から選択する。本人の通知一覧、既読操作、プロフィール、Claim参加を使える。通知は共通モーダルで表示し、確認済みの行はウィンドウと同じ背景にする。通知はアプリ内のみ。Sign In / Create Accountの実際の認証処理は未実装。
 - `/users/{user_id}` のUser ProfileはUser Profile、Owned Guitars、Formerly Owned Guitars、Favorite Guitars、User Chronicleを表示する。リストはProduct List形式。Owned / Formerly Owned / Favoriteには表示高さの上限があり、超えた部分は枠内をスクロールする。所有・過去所有の個体はFavorite欄より前者を優先する。
 - Product ListとProduct Detailの♡／♥からお気に入りを追加・解除し、DBに保存する。User ChronicleはUser / Social / Product / Claim / Otherのタグ付き時系列表示。プロフィールの初期Product Detailには本人が指定したSignature Guitarを使用する。
 - User ProfileでClaimの追加・判定・投票を行うと、選択中のギターを維持してプロフィールの件数、Owned / Formerly Ownedなどの一覧、User Chronicleも再取得する。
@@ -20,6 +20,8 @@
 - 運営提供の13種類のテーマを設定できる。Top Page / Settingsには操作用ユーザー、User Profileにはプロフィールの持ち主のテーマを使う。管理用Browser Consoleはコンパクトな文字ヘッダー。詳細は [USER_THEMES.md](USER_THEMES.md)。
 
 ## IndividualとClaim
+
+- Claimの投稿者、ユーザーに紐づく所有者、Transferの譲渡人・譲受人の名前はUser Profileへリンクする。カード・詳細ポップアップとBrowser Consoleで共通。IDを持たない外部掲載の名前や自由記入の旧所有者名はテキストで表示する。
 
 - 新しいギターを登録できる。手動登録も外部収集も、Listing Claimを起点とする同じ個体作成パイプラインを通る。個体の現在のMaker / Model / Finish / Year / Serial、Owner / LocationはClaimから作るSnapshotを表示する。
 - OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Inherit / Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。成立済みTransferは承認時のEvidenceに基づく独立した所有権根拠として時系列順に適用する。過去のTransferの否定によって後続を連鎖的に無効化しない。譲受人自身はPositiveなTransferのVerificationを変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
@@ -49,3 +51,28 @@
 - 日英UI切替、定期自動クロール。収集の実データでの網羅性・誤照合検証も継続課題。
 
 - 旧Observationテーブルの未登録クロール記録・移行互換処理の整理。主要な読取経路はClaim・Evidenceへ切替済みで、外部登録と手動操作の二重書込も停止済み。現行の依存箇所と撤去条件は [Observation移行の残作業](TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照。
+
+### リスト件数と全ギター差分収集
+
+TopPage・UserProfile・Browser Consoleの主要リストは見出し右側に表示行数を `N items` として表示する。
+検索で絞った後の行数を使用し、未読件数や未取得ページを含む総件数とは区別する。
+Incremental Crawlの初期選択は `All Guitars`。Reverbを `guitar` で検索し、Electric / Acousticを区別せずギターのカテゴリを収集する。
+部品・アンプ等の除外と製造年の検査は維持する。全ギターの進捗は `all` として既存のカテゴリ別進捗と別に保存し、既存データの重複確認を引き続き行う。
+
+Reverbクロールは公式Conditionの`Brand New`（UUID `7c3f45de-2ae0-4c81-8400-fdb6b1d74890`）を除外する。
+Incremental / Batchの一覧と詳細、および保存済み詳細の再処理で判定する。Reverbから受け取った状態をYGC側で検査し、検索クエリやタイトル中の`new`には依存しない。
+Mint・状態不明・中古リイシューは新品とみなさない。既存登録個体・Claimをこの条件で削除しない。
+状態名とUUIDの出典: https://www.reverb-api.com/docs/create-listings （Condition）。
+
+### テーマと共通操作UI
+
+ページ背景・通常カード・ロゴはテーマに従う。モーダル、native dialog内のアプリUI、画像アルバム、操作メニュー、入力欄は共通のダーク／ライトパレットを使う。テーマのページ背景ではなくパネル（サブウィンドウ）の明暗で選ぶ。Dark Default・Butterscotch Black・Cherry Red Blackはダーク、それ以外の現行テーマはライト。背景が暗いBlack Pearl・Sunburstも明るいパネルに合わせてライトを使う。
+ボタンは`data-ui-action`で意味を指定し、`primary`（Submit / Save / Accept）は青緑、`close`（Close / Back）は明度の高いグレー、指定なし・`neutral`は暗いグレー、`danger`は赤。
+新しい操作を追加するときは文言から色を推測せず、この属性を指定する。動的な確認ボタンも操作内容に従う。
+共通CSSはテーマの装飾より優先する。エラー以外の状態表示は無彩色を基本に、無効状態・フォーカスも共通化する。通常ページのClaim種別色はコンテンツ分類として維持し、モーダル内では無彩色にする。
+Unanswered Requestsは例外として彩度の高い青緑背景（#007f83）・白文字を維持する。
+ブラウザ標準のalert / confirm、OSのファイル選択画面はブラウザ・OS側の表示に従う。
+
+### 年式統計
+
+Year DistributionはSnapshotの年式から`Circa`と`C.ha`を大文字小文字を区別せず除去し、前後空白を除いた値が4桁の数字だけの場合に集計する。同じ年は合算し、年の昇順で表示する。`1960-1962`などの範囲、年代、Unknownは集計しない。元の年式データは変更しない。

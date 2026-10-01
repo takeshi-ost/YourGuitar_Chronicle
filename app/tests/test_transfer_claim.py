@@ -240,3 +240,28 @@ def test_independent_transfer_still_requires_consistent_acceptance_evidence(tmp_
         assert str(evaluated.values['current_owner_user_id'])==str(a)
         assert any(d['claim_id']==cid and d.get('reason')=='missing_or_invalid_transfer_acceptance'
                    for d in evaluated.decisions)
+
+
+def test_unanswered_requests_follow_recipient_and_current_owner(tmp_path):
+    r,a,b,c,g=setup(tmp_path)
+    tid=r.create_transfer(a,g,b)
+    assert r.unanswered_ownership_requests(a)==[]
+    assert r.unanswered_ownership_requests(c)==[]
+    assert [x['claim_id'] for x in r.unanswered_ownership_requests(b)]==[tid]
+    r.resolve_transfer(tid,b,'decline')
+    assert r.unanswered_ownership_requests(b)==[]
+    r.create_ownership_claim(b,g,ownership_kind='acquire',occurred_at='2026-02-01')
+    cid=next(x['id'] for x in r.list_claims(g) if x['ownership_kind']=='acquire')
+    assert [x['claim_id'] for x in r.unanswered_ownership_requests(a)]==[cid]
+    assert r.unanswered_ownership_requests(b)==[]
+    r.set_claim_response(cid,a,'negative')
+    assert r.unanswered_ownership_requests(a)==[]
+    r.set_claim_response(cid,a,'unverified')
+    tid=r.create_transfer(a,g,c)
+    r.resolve_transfer(tid,c,'accept')
+    assert r.unanswered_ownership_requests(a)==[]
+    assert [x['claim_id'] for x in r.unanswered_ownership_requests(c)]==[cid]
+    r.set_claim_response(cid,c,'positive')
+    assert owner(r,g)==c  # The later Transfer remains the ownership basis.
+    assert r.unanswered_ownership_requests(c)==[]
+    assert r.unanswered_ownership_requests(b)==[]

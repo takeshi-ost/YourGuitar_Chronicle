@@ -21,3 +21,10 @@ User Settings で選ぶ運営提供のテーマ。TopPage と User Settings は�
 定義は `ygc.theme_catalog.THEMES`、見た目は `app/src/ygc/static/themes.css`、画像は同じ `static` ディレクトリにある。旧DBの `users.theme` には3種類のみを許可する CHECK 制約が残るため、追加テーマの選択は nullable な `users.theme_override` に保存し、読み取りでは優先して適用する。将来 PostgreSQL へ移行する際には1列に統合できる。
 
 ヘッダーのロゴは `static/logos` 内のPNGを縦横比を保って表示する。Dark Default／Black & Pearl／Goldtop & Cream／Cherry Red & Black は `block.png`、Butterscotch & Black／Olympic White & Mint／Surf Green & White／Vintage White & Gold／Lake Blue & Pearl は `badge.png`、その他のテーマは `script.png` を使う。
+
+## テーマから独立する操作部品
+
+モーダル・メニュー・画像アルバム・入力欄は共通配色を使う。Dark Default / Butterscotch & Black / Cherry Red & Blackはダーク、それ以外はライトを選ぶ。ページ背景が暗くてもパネルが明るいテーマはライトになる。
+Submit / Accept / Saveは青緑、Close / Backは背景より明度の異なるグレー、通常操作はその中間、破壊的操作は赤。テーマ装飾でこれらの役割色を上書きしない。
+ヘッダーのNotifications / Messagesも全テーマでダークを維持する。YOU表示は共通パレットに追従し、お気に入りのハートは背景透明で文字色のみを変える。
+Unanswered Requestsのみ、全テーマ共通の青緑背景（#007f83）、白太字、明るいミントの枠（#c4eeec）を使用する。

@@ -94,3 +94,17 @@ handlers.click({target: body});
 assert.equal(arrow('ArrowUp'), false);
 assert.equal(root.rows[2].classList.contains('list-keyboard-current'), false);
 console.log('list navigation: passed');
+
+// Shared counters follow filtered rows and ignore empty-state placeholders.
+{
+  let update, label=null;
+  let rows=[{hidden:false,querySelector:()=>null},{hidden:false,querySelector:()=>({})}];
+  const title={dataset:{countItems:'#rows'},querySelector:()=>label,append:value=>{label=value}};
+  const counterSource=fs.readFileSync('app/src/ygc/static/list-navigation.js','utf8').split('/* Count the displayed rows')[1].split('/* Calendar dates')[0];
+  vm.runInNewContext('/* Count the displayed rows'+counterSource,{
+    MutationObserver:class {constructor(fn){update=fn}observe(){}},
+    document:{body:{},querySelectorAll:selector=>selector==='[data-count-items]'?[title]:rows,createElement:()=>({})}
+  });
+  assert.equal(label.textContent,'1 items');
+  rows=[];update();assert.equal(label.textContent,'0 items');
+}

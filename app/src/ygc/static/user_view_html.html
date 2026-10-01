@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
 <script src="/assets/overlays.js" defer></script>
 <script src="/assets/product-detail.js?v=shared-ui-v2" defer></script>
-<script src="/assets/list-navigation.js?v=shared-ui-v2" defer></script>
+<script src="/assets/list-navigation.js?v=list-counts-v1" defer></script>
 </head>
 <body>
 <div class="sticky-header">
@@ -30,26 +30,17 @@
   </div>
 </div>
 <main>
-<button type="button" onclick="showAcquireApplications()">My Ownership申請・審議結果</button>
-<div class="notification-panel" id="notificationPanel">
-  <div class="notification-panel-head">
-    <span class="notification-panel-title">Notifications</span>
-    <div class="notification-panel-actions">
-      <button type="button" onclick="markAllNotificationsRead()">Mark all read</button>
-    </div>
-  </div>
-  <div class="notification-list" id="notificationList"></div>
-</div>
+<section id="unansweredRequests" class="unanswered-requests" hidden aria-labelledby="unansweredRequestsTitle"></section>
 
 <div class="grid">
 <section class="left-column content-frame">
   <div class="panel discovery-panel page-section" id="discovery">
-    <div class="toolbar"><h2>New discovery</h2></div>
+    <div class="toolbar"><h2 data-count-items="#newDiscoveryList > .discovery-item">New discovery</h2></div>
     <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">Loading recent activity...</div></div>
   </div>
   <div class="panel product-list-panel page-section" id="products">
     <div class="toolbar">
-      <h2>Product List</h2>
+      <h2 data-count-items="#individualBody > tr.clickable">Product List</h2>
       <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
     </div>
     <div class="table-wrap">
@@ -74,13 +65,12 @@
 
 <aside class="detail-shell" id="productDetailShell" aria-label="Product Detail">
   <div class="panel detail-panel">
-    <div class="detail-panel-heading"><h2>Product Detail</h2><button type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()">×</button></div>
+    <div class="detail-panel-heading"><h2>Product Detail</h2><button data-ui-action="close" type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()">×</button></div>
     <div id="detail" class="sub">Select a row in Product List to view its history.</div>
   </div>
 </aside>
 
 <section class="section-stack page-section content-frame" id="statistics">
-  <div class="toolbar"><h2>Statistics</h2></div>
   <div class="dashboard-grid">
     <div class="dashboard-card">
       <h2>Model Distribution</h2>
@@ -115,19 +105,25 @@
 </section>
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
+<div class="modal-backdrop" id="notificationPanel"><div class="modal notification-modal" role="dialog" aria-modal="true" aria-labelledby="notificationTitle">
+  <h2 id="notificationTitle" data-count-items="#notificationList > .notification-item">Notifications</h2>
+  <div class="notification-list" id="notificationList"></div>
+  <div class="modal-actions"><button type="button" onclick="markAllNotificationsRead()">Mark all read</button><button type="button" data-ui-action="close" onclick="YGCOverlays.close('notificationPanel')">Close</button></div>
+</div></div>
+
 
 <dialog id="transferReviewDialog" aria-labelledby="transferReviewTitle" style="width:min(480px,90vw);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:18px">
-<h3 id="transferReviewTitle">Transfer</h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button type="button" style="margin-top:10px" onclick="YGCOverlays.close('transferReviewDialog')">Close</button>
+<h3 id="transferReviewTitle">Transfer</h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button data-ui-action="close" type="button" style="margin-top:10px" onclick="YGCOverlays.close('transferReviewDialog')">Close</button>
 </dialog>
 <dialog id="directMessageDialog" aria-labelledby="directMessageTitle" style="width:min(800px,95vw);max-height:90vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
-<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button type="button" onclick="YGCOverlays.close('directMessageDialog')">Close</button></div></div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button data-ui-action="close" type="button" onclick="YGCOverlays.close('directMessageDialog')">Close</button></div></div>
 <div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)">Load more conversations</button></div>
 <div><div id="dmPeerTitle" style="margin-bottom:8px">Select a conversation, or use Message on a User Profile.</div><button id="dmOlder" type="button" hidden onclick="loadDirectMessageHistory(true)">Load older messages</button><div id="dmThread" class="dm-thread"></div>
-<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody">Message (up to 2000 characters)</label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button id="dmSend" type="submit">Send</button></form></div></div>
+<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody">Message (up to 2000 characters)</label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button data-ui-action="primary" id="dmSend" type="submit">Send</button></form></div></div>
 <p id="dmStatus" class="sub" role="status"></p>
 </dialog>
 <dialog id="userConnectionsDialog" aria-labelledby="userConnectionsTitle" style="width:min(440px,90vw);max-height:80vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
-<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle">Followers</h3><button type="button" onclick="YGCOverlays.close('userConnectionsDialog')">Close</button></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle" data-count-items="#userConnectionsList > a">Followers</h3><button data-ui-action="close" type="button" onclick="YGCOverlays.close('userConnectionsDialog')">Close</button></div>
 <div id="userConnectionsList" style="max-height:55vh;overflow:auto"></div>
 <p id="userConnectionsStatus" class="sub" role="status"></p>
 <button id="userConnectionsMore" type="button" hidden onclick="loadUserConnections()">Load more</button>
@@ -151,8 +147,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeMediaClaim()">Cancel</button>
-      <button id="mediaClaimSubmit" onclick="submitMediaClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeMediaClaim()">Cancel</button>
+      <button data-ui-action="primary" id="mediaClaimSubmit" onclick="submitMediaClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -186,8 +182,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeEventClaim()">Cancel</button>
-      <button id="eventClaimSubmit" onclick="submitEventClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeEventClaim()">Cancel</button>
+      <button data-ui-action="primary" id="eventClaimSubmit" onclick="submitEventClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -215,8 +211,8 @@
       </div>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeIncidentClaim()">Cancel</button>
-      <button id="incidentClaimSubmit" onclick="submitIncidentClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeIncidentClaim()">Cancel</button>
+      <button data-ui-action="primary" id="incidentClaimSubmit" onclick="submitIncidentClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -252,8 +248,8 @@
 
     <div class="sub">All added fields are saved in one Claim. The latest value for each field appears in Specification.</div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeSpecificationClaim()">Cancel</button>
-      <button id="specClaimSubmit" onclick="submitSpecificationClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeSpecificationClaim()">Cancel</button>
+      <button data-ui-action="primary" id="specClaimSubmit" onclick="submitSpecificationClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -278,8 +274,8 @@
     </div>
     <div class="sub">Creates an Acquire and a Release Claim. Once approved, the guitar appears in Formerly Owned Guitars.</div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeFormerOwnerClaim()">Cancel</button>
-      <button id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
+      <button data-ui-action="close" class="secondary" onclick="closeFormerOwnerClaim()">Cancel</button>
+      <button data-ui-action="primary" id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
     </div>
   </div>
 </div>
@@ -319,8 +315,8 @@
       <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Additional ownership details"></textarea>
     </div>
     <div class="modal-actions">
-      <button class="secondary" onclick="closeOwnershipClaim()">Cancel</button>
-      <button id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeOwnershipClaim()">Cancel</button>
+      <button data-ui-action="primary" id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Add Claim</button>
     </div>
   </div>
 </div>
@@ -330,9 +326,9 @@
     <h2>Join Your Guitar Chronicle</h2>
     <div class="sub" style="margin-bottom:14px">This action requires an account. Sign in or create an account to continue.</div>
     <div class="modal-actions">
-      <button class="secondary" type="button" onclick="closeAccountRequired()">Cancel</button>
+      <button data-ui-action="close" class="secondary" type="button" onclick="closeAccountRequired()">Cancel</button>
       <button class="secondary" type="button" onclick="window.location.href='/user-view/edit'">Sign In</button>
-      <button type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
+      <button data-ui-action="primary" type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
     </div>
   </div>
 </div>
@@ -343,7 +339,11 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request"><button onclick="closeAcquireReview()">閉じる</button><div id="acquireReviewContent"></div></div></div>
+<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request"><h2 id="acquireReviewTitle">Ownership Request</h2><div id="acquireReviewContent"></div><div id="acquireReviewActions" class="modal-actions ownership-request-actions"></div></div></div>
 <script src="/assets/pages/user-view.js" defer></script>
+
+
+<div class="modal-backdrop" id="ownershipConfirmModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="ownershipConfirmTitle"><h3 id="ownershipConfirmTitle">Confirm</h3><p id="ownershipConfirmMessage"></p><div class="modal-actions"><button id="ownershipConfirmSubmit" data-ui-action="primary" type="button" onclick="resolveOwnershipConfirmation(true)">Confirm</button><button data-ui-action="close" type="button" class="secondary" onclick="resolveOwnershipConfirmation(false)">Back</button></div></div></div>
+
 </body>
 </html>

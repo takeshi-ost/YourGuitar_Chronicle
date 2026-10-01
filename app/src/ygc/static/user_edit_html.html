@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>User Settings — Your Guitar Chronicle</title>
+<link rel="stylesheet" href="/assets/ui-components.css">
 <link rel="stylesheet" href="/assets/pages/user-edit.css">
 
 <link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
@@ -29,7 +30,7 @@
 <div class="settings-row"><div><div class="field-name">Your signature guitar</div><div class="field-note">Optional · Guitar initially shown on your profile</div></div><div class="field-value"><select id="signatureGuitar" aria-label="Your signature guitar"><option value="">Select an owned guitar</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">Color theme · Header remains consistent</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"></select><span class="sub">Preview the selected theme. Select Save to apply it.</span></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Preferred Language</div><div class="field-note">Required · UI language</div></div><div class="field-value"><select id="language" disabled aria-label="Preferred Language"><option value="en">English</option><option value="ja">Japanese</option></select><span class="sub">Available when multiple UI languages are supported.</span></div><div class="visibility-fixed">Private · Fixed</div></div>
-<div class="settings-actions"><button id="saveButton" onclick="saveSettings()">Save</button><button type="button" class="secondary" onclick="window.location.href=activeUser?'/users/'+activeUser.user.id:'/user-view'">Cancel</button><span class="sub" id="status" role="status"></span></div>
+<div class="settings-actions"><button data-ui-action="primary" id="saveButton" onclick="saveSettings()">Save</button><button data-ui-action="close" type="button" class="secondary" onclick="window.location.href=activeUser?'/users/'+activeUser.user.id:'/user-view'">Cancel</button><span class="sub" id="status" role="status"></span></div>
 </div><div id="emptyState" class="sub">Select a user to edit settings.</div>
 </section></main>
 <script src="/assets/pages/user-edit.js" defer></script>
