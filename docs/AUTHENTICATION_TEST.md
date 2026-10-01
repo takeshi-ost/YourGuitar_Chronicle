@@ -323,3 +323,42 @@ Acquireの比較画像はListing項目・marketplace Evidenceを優先し、旧O
 新規Listing／Acquireは旧Observationへ二重書込しない。未登録クロール記録の保全・移行テストも継続する。
 統合後はPython330件（ローカルMCP接続を含む）・JavaScript34件が通過。
 一時DBの実ブラウザーでもListing登録・重複案内、Acquireの承認待ち、管理者採否変更と所有権再評価を確認した。
+
+### Ownership Requestsの導線と確認状態
+
+申請フォーム・状態ラベル・管理操作は英語で表示する。診断文章や管理者の記入内容は保存された原文を表示する。
+本人のUser Profile欄のUser Settings横にOwnership Requestsを置く。Top Pageには常設の履歴ボタンを置かない。
+ヘッダーのNotifications左側には、提出済みの審議待ち・審議中・Owner承認待ち、または未確認の結果がある場合だけCheck Requestsを表示する。
+写真未提出のdraftは対象外。error・accepted・rejected・closedの新しい結果は、申請者が詳細を開くと確認済みにする。
+履歴一覧の表示や管理者・現Ownerの閲覧では確認済みにしない。申請記録のseen_event_idで確認した履歴の位置を保存し、
+古い画面からの確認操作がそれより新しい結果を既読にしないようにする。確認状態は通常通知の既読状態とは独立する。
+表示中は30秒ごと、および写真提出・取消・再試行・結果確認後にヘッダーを更新する。
+
+### Requestモーダルの保存と操作
+
+ウィンドウタイトルを最上部、操作ボタンを最下部へ配置する。Cancel以外の操作ボタンは共通確認モーダルでConfirm／Backを選ぶ。Cancelは再確認せず閉じる。
+- Generate Challenge：署名付きの未保存フォームを発行する。申請DB・履歴・審議キューには追加しない。
+- Submit：写真を検証し、入力内容と写真を保存して審議待ちへ進める。
+- Keep Request：入力内容だけを保存して閉じる。選択した写真は保存しないため、再開時に選び直す。保存済みの審議中・結果画面では状態を変えず閉じる。
+- Cancel：入力の変更を保存せず閉じる。保存済みの申請自体は取り消さない。Escapeによる閉じる操作も保存しない。
+- Reflesh：保存済みの状態を再取得する。未保存フォームでは入力とChallengeを維持して写真選択を解除し、申請は作成しない。
+- Cansel Request：保存済みの下書きまたは未決着の申請を、従来の取消処理で停止する。
+
+Reflesh／Cansel Requestは指定されたUI表記。未保存フォームは申請者・種別・入力・Challenge・期限を署名で固定し、改変・別ユーザーによる保存を拒否する。
+保存前にWebUIを再起動した場合、未保存フォームは無効になるため開き直す。Keep済みのリクエストはDBに残り、再起動後も開ける。
+Challengeの24時間期限は発行時から継続し、Keepで延長しない。Keep後も写真提出まではGPT審議の対象にしない。
+
+### ユーザー画面のEvidence表示
+
+Browser Console以外では、Claimの根拠画像や審議レポートを直接表示しない。
+Product DetailのAcquire Evidenceへの導線を外し、申請履歴は状態・エラー・管理者判定・却下理由を表示する。
+公開Claimには掲載元リンクとTransfer受領日をInfoとして切り出す。Media Claimの投稿画像は通常のコンテンツとして表示を維持する。
+これは画面表示の整理であり、Evidenceの保存・審議・既存APIの閲覧権限は変更しない。
+
+### 未回答Claimの表示
+
+TopPageとUserProfileのメイン先頭に、操作ユーザー宛ての`Unanswered Requests`を表示する。
+対象は未回答Transferの譲受人と、Unverified Acquireを判定できるCurrent Owner。
+通知の既読とは独立し、Claim作成前の画像審議中申請は対象にしない。
+Accept / Declineは確認後、既存のTransfer応答またはPositive / Negative Verificationへ接続する。
+回答後・ページ読込時・表示中30秒ごとに更新し、未回答がなければ欄を隠す。

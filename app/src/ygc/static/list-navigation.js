@@ -103,3 +103,37 @@
   `;
   document.head.append(style);
 })();
+
+/* Count the displayed rows, including after filtering or dynamic profile rendering. */
+(() => {
+  if (typeof MutationObserver === 'undefined') return;
+  function updateCounts() {
+    for (const title of document.querySelectorAll('[data-count-items]')) {
+      const count = [...document.querySelectorAll(title.dataset.countItems)]
+        .filter(row => !row.hidden && !row.querySelector('td[colspan]')).length;
+      let label = title.querySelector('.list-item-count');
+      if (!label) {
+        label = document.createElement('small');
+        label.className = 'list-item-count';
+        title.append(label);
+      }
+      const text = count + ' items';
+      if (label.textContent !== text) label.textContent = text;
+    }
+  }
+  new MutationObserver(updateCounts).observe(document.body, {childList: true, subtree: true});
+  updateCounts();
+})();
+
+/* Calendar dates are local civil dates, not UTC midnight timestamps. */
+(() => {
+  if (typeof MutationObserver === 'undefined') return;
+  function updateDateLimits(){
+    const today=new Date().toLocaleDateString('sv-SE');
+    for(const field of document.querySelectorAll('input[type="date"]'))field.max=today;
+  }
+  new MutationObserver(updateDateLimits).observe(document.body,{childList:true,subtree:true});
+  document.addEventListener('focusin',updateDateLimits);
+  setInterval(updateDateLimits,60000);
+  updateDateLimits();
+})();

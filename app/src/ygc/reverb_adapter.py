@@ -77,6 +77,20 @@ NON_GUITAR_CATEGORY_WORDS = [
 ]
 
 
+def is_brand_new(item: dict) -> bool:
+    """Use Reverb's explicit condition, never title/model wording or Mint."""
+    condition = item.get('condition')
+    if isinstance(condition, dict):
+        if str(condition.get('uuid', '')).lower() == '7c3f45de-2ae0-4c81-8400-fdb6b1d74890':
+            return True
+        values = [condition.get('display_name'), condition.get('name'), condition.get('slug')]
+    else:
+        values = [condition]
+    return any(str(value or '').strip().lower().replace('-', ' ').replace('_', ' ')
+               in ('new', 'brand new', '7c3f45de-2ae0-4c81-8400-fdb6b1d74890'.replace('-', ' '))
+               for value in values)
+
+
 def _strip_html(
     value: str | None,
 ) -> str:

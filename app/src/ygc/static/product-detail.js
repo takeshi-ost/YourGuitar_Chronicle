@@ -1,5 +1,12 @@
 /* Shared Product Detail layout. Page-specific actions and Claim cards are extensions. */
 window.YGCProductDetail = (() => {
+  function userLink(id, name, escape) {
+    const userId = Number(id);
+    const label = escape(name || (Number.isSafeInteger(userId) && userId > 0 ? 'User #' + userId : 'User'));
+    return Number.isSafeInteger(userId) && userId > 0
+      ? '<a class="claim-user-link" href="/users/' + userId + '" onclick="event.stopPropagation()">' + label + '</a>'
+      : label;
+  }
   function orderedClaims(source) {
     const sorted = (source || []).slice().sort((a, b) => {
       const value = c => String(c.occurred_at || c.created_at || '').slice(0, 10);
@@ -60,7 +67,7 @@ window.YGCProductDetail = (() => {
       '<section class="accordion-section" id="chronicleAccordion"><div class="accordion-header"><span class="accordion-title" onclick="toggleDetailAccordion(\'chronicleAccordion\')">Chronicle</span><button type="button" class="accordion-toggle" aria-label="Toggle Chronicle" onclick="toggleDetailAccordion(\'chronicleAccordion\')">▼</button></div>' +
       '<div class="accordion-body">' + chronicleAction + '<div id="chronicleEntries"></div></div></section>';
   }
-  return {render, orderedClaims, toggleAccordion: id => document.getElementById(id)?.classList.toggle('collapsed')};
+  return {render, orderedClaims, userLink, toggleAccordion: id => document.getElementById(id)?.classList.toggle('collapsed')};
 })();
 
 /* The same album is used by Top Page, User Profile, and Browser Console. */

@@ -120,7 +120,7 @@ def test_transfer_during_review_closes_without_claim(setup):
     before=len(repo.list_claims(i));done=complete(repo,job)
     assert done['status']=='closed' and done['claim_id'] is None
     assert len(repo.list_claims(i))==before
-    assert 'Current Owner' in detail(repo,r['revision'],b)['error']
+    assert 'current owner' in detail(repo,r['revision'],b)['error']
 
 
 def test_concurrent_claims_and_results_are_idempotent(setup):
@@ -357,7 +357,7 @@ def test_product_detail_uses_displayed_finish_and_detects_changes(setup):
         assert json.loads(ar.find(con,r['revision'])['product_details'])['finish']=='Black'
     repo.create_specification_claim(a,i,field_name='finish',value_text='Red',occurred_at='2026-01-02')
     assert ar.call_tool(repo,'ygc_submit_acquire_review',payload)['status']=='closed'
-    assert '登録情報が変更' in detail(repo,r['revision'],b)['error']
+    assert 'maker, model or finish has changed' in detail(repo,r['revision'],b)['error']
 
 
 def test_upgrade_preserves_old_result_and_initializes_queued_metadata(setup):
@@ -512,3 +512,40 @@ def test_admin_management_api_authorization_reason_and_version(setup):
     assert client.post(url,json=payload,headers=headers).status_code==200
     assert client.post(url,json=payload,headers=headers).status_code==409
     assert len(repo.list_claims(i))==2
+
+
+def test_request_attention_excludes_drafts_and_persists_seen_results(setup):
+    repo,a,b,c,i=setup
+    draft=ar.start(repo,b,i)
+    assert ar.attention(repo,b)==dict(pending_count=0,unread_count=0,attention_count=0)
+    r=submitted(setup)
+    assert ar.attention(repo,b)['pending_count']==1
+    complete(repo,claim(repo))
+    row=detail(repo,r['revision'],b)
+    assert row['unread_result'] and ar.attention(repo,b)['unread_count']==1
+    # Reading the list or viewing as the current owner must not acknowledge it.
+    ar.list_for(repo,b)
+    with pytest.raises(PermissionError):ar.mark_seen(repo,a,r['revision'],row['review_event_id'])
+    ar.mark_seen(repo,b,r['revision'],row['review_event_id'])
+    reopened=Repository(config.DB_PATH)
+    assert ar.attention(reopened,b)==dict(pending_count=1,unread_count=0,attention_count=1)
+    repo.set_claim_response(row['claim_id'],a,'positive')
+    assert ar.attention(repo,b)['attention_count']==0
+
+
+def test_request_seen_does_not_hide_newer_result_and_is_actor_scoped(setup):
+    repo,a,b,c,i=setup;r=submitted(setup);job=claim(repo)
+    ar.call_tool(repo,'ygc_fail_acquire',dict(revision=job['revision'],lease_token=job['lease_token'],reason='Temporary failure'))
+    old=detail(repo,r['revision'],b)['review_event_id']
+    ar.action(repo,b,r['revision'],'retry')
+    complete(repo,claim(repo))
+    ar.mark_seen(repo,b,r['revision'],old)
+    assert ar.attention(repo,b)['unread_count']==1
+    assert ar.attention(repo,a)['attention_count']==0
+    client=TestClient(app)
+    path='/api/acquire-applications/'+r['revision']+'/seen'
+    assert client.post(path+'?viewer_id='+str(a),json={'event_id':old}).status_code==403
+    assert client.post(path+'?viewer_id='+str(b),json={'event_id':-1}).status_code==422
+    response=client.get('/api/acquire-applications/attention?viewer_id='+str(b))
+    assert response.status_code==200 and response.json()['attention_count']==1
+    assert response.headers['cache-control']=='private, no-store'

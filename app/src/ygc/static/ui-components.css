@@ -22,3 +22,83 @@
     .ygc-album-nav[hidden]{visibility:hidden}
     .ygc-album-caption{min-height:24px;text-align:center;font-size:13px;color:#c6cbd0;overflow-wrap:anywhere}
     @media(max-width:600px){.ygc-album-panel{padding:8px}.ygc-album-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:2px}.ygc-album-nav{width:30px;height:44px}}
+
+.claim-user-link{color:inherit;text-decoration:underline;text-underline-offset:2px}.claim-user-link:hover{color:var(--accent)}
+
+[data-count-items]{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.list-item-count{font-size:.72em;font-weight:400;line-height:1.2;white-space:nowrap;color:inherit;opacity:.85}
+
+/* Two shared interaction palettes, selected by the theme panel tone. */
+:root{--ui-bg:#191d21;--ui-surface:#22282e;--ui-close:#46515b;--ui-line:#596570;--ui-text:#f2f5f7;--ui-muted:#b8c2cb;--ui-primary:#087e83;--ui-danger:#b43740;--ui-scheme:dark;--ui-input:#12171b;--ui-hover:#343e47;--ui-focus:#42b7bd;--ui-link:#8bdbdf;--ui-error:#ffb3b8;--ui-error-bg:#382125;--ui-placeholder:#a7b2bc;--ui-backdrop:rgba(0,0,0,.68)}
+:root[data-theme="light_default"],
+:root[data-theme="sunburst_3ply"],
+:root[data-theme="olympic_white_mint"],
+:root[data-theme="surf_green_white"],
+:root[data-theme="sonic_blue_white"],
+:root[data-theme="fiesta_red_white"],
+:root[data-theme="black_pearl"],
+:root[data-theme="goldtop_cream"],
+:root[data-theme="vintage_white_gold"],
+:root[data-theme="lake_blue_pearl"]{
+  --ui-scheme:light;--ui-bg:#f5f6f7;--ui-surface:#e7eaed;--ui-close:#ced4da;--ui-line:#a2adb7;--ui-text:#202a33;--ui-muted:#52606c;--ui-input:#fff;--ui-hover:#d9dfe4;--ui-focus:#087e83;--ui-link:#086d73;--ui-error:#a52732;--ui-error-bg:#fbe9eb;--ui-placeholder:#64717d;--ui-backdrop:rgba(15,23,30,.38);
+}
+:is(.modal,dialog,.ygc-album-panel,.claim-menu,.spec-item-menu){
+  --bg:var(--ui-bg);--panel:var(--ui-bg);--surface:var(--ui-surface);--input:var(--ui-input);--control:var(--ui-surface);--control-hover:var(--ui-hover);--line:var(--ui-line);--text:var(--ui-text);--muted:var(--ui-muted);--accent:var(--ui-focus);--good:var(--ui-text);--warn:var(--ui-muted);--bad:var(--ui-error);
+  color-scheme:var(--ui-scheme);color:var(--ui-text)!important;background:var(--ui-bg)!important;background-image:none!important;border:1px solid var(--ui-line)!important;border-radius:12px;box-shadow:0 18px 60px #0007!important;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;
+}
+.modal-backdrop{background:var(--ui-backdrop)!important}
+dialog::backdrop{background:var(--ui-backdrop)}
+:is(.modal,dialog) :is(h2,h3,h4){color:var(--ui-text);line-height:1.3}
+:is(.modal,dialog) h2{font-size:18px}
+:is(.modal,dialog) h3{font-size:15px}
+:is(.modal,dialog) :is(.sub,small,label){color:var(--ui-muted)}
+:is(.modal,dialog) a{color:var(--ui-link)}
+:is(input,select,textarea){background:var(--ui-input)!important;color:var(--ui-text)!important;border:1px solid var(--ui-line)!important;color-scheme:var(--ui-scheme);accent-color:var(--ui-primary)}
+:is(input,textarea)::placeholder{color:var(--ui-placeholder);opacity:1}
+:is(input,select,textarea):focus-visible{outline:2px solid var(--ui-focus);outline-offset:2px}
+:is(input,select,textarea)[aria-invalid="true"]{border-color:var(--ui-error)!important}
+:where(button){background:var(--ui-surface)!important;color:var(--ui-text)!important;border-color:var(--ui-line)!important;box-shadow:none!important}
+button[data-ui-action="primary"]{background:var(--ui-primary)!important;color:#fff!important}
+button[data-ui-action="close"]{background:var(--ui-close)!important;color:var(--ui-text)!important}
+button[data-ui-action="danger"],button.danger{background:var(--ui-danger)!important;color:#fff!important}
+button:hover:not(:disabled){filter:brightness(1.14)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--ui-focus);outline-offset:3px}
+:is(button,input,select,textarea):disabled{opacity:.48;cursor:not-allowed;filter:none}
+:is(button[aria-pressed="true"],button.active){outline:1px solid var(--ui-link);outline-offset:-1px}
+.status{background:var(--ui-surface)!important;color:var(--ui-text)!important}
+.status.bad,[role="alert"]{color:var(--ui-error)!important;background:var(--ui-error-bg)!important}
+/* Claim categories are content labels, not action colors. Keep modal content neutral. */
+:is(.modal,dialog) :is(.claim-badge,.claim-compact-tag,.profile-chronicle-tag){background:var(--ui-surface)!important;color:var(--ui-text)!important}
+/* Explicit exception: persistent unanswered ownership requests. */
+.unanswered-requests button{background:#005e63!important;color:#fff!important;border-color:#fff!important}
+.unanswered-requests button.secondary{background:#007f83!important}
+
+:is(.modal,dialog) :is(.panel,.dashboard-card,.notification-panel){background:var(--ui-bg)!important;background-image:none!important;border:1px solid var(--ui-line)!important;box-shadow:none!important}
+:is(.modal,dialog) :is(.good,.warn){color:var(--ui-text)!important}
+:is(.modal,dialog) .bad{color:var(--ui-error)!important}
+
+input[type="file"]::file-selector-button{background:var(--ui-surface);color:var(--ui-text);border:1px solid var(--ui-line);border-radius:5px;padding:5px 9px;margin-right:8px;font:inherit}
+:is(.modal,dialog) .modal-actions{flex-wrap:wrap}
+
+.ygc-album-header,.ygc-album-caption{color:var(--ui-muted)}
+
+/* Small controls inherit the appropriate shared palette; header stays dark. */
+.account-hub-you{background:var(--ui-surface)!important;color:var(--ui-text)!important;border:1px solid var(--ui-line)}
+.sticky-header{--ui-bg:#191d21;--ui-surface:#22282e;--ui-close:#46515b;--ui-line:#596570;--ui-text:#f2f5f7;--ui-muted:#b8c2cb;--ui-input:#12171b;--ui-scheme:dark}
+.sticky-header .account-hub-count{background:#3b4147;color:#f2f5f7}
+button.favorite-button{background:transparent!important;border:0!important;box-shadow:none!important;color:var(--muted)!important}
+button.favorite-button:hover,button.favorite-button.is-favorite{color:var(--ui-primary)!important;background:transparent!important}
+button:is(.owner-claim-card,.add-claim-action,.new-guitar-action){border:3px double var(--ui-line)!important;border-radius:9px}
+
+/* Keep a single-photo album in the wide center column when nav buttons are hidden. */
+.ygc-album-image{grid-column:2;grid-row:1}
+.ygc-album-prev{grid-column:1;grid-row:1}
+.ygc-album-next{grid-column:3;grid-row:1}
+.notification-modal{width:min(620px,100%)}
+.notification-modal .notification-list{max-height:60dvh;overflow:auto}
+.notification-modal .notification-item{color:var(--ui-text)}
+
+/* Read notifications recede into the modal; unread ones retain a raised surface. */
+.notification-modal .notification-item:not(.unread){background:var(--ui-bg)!important}
+.notification-modal .notification-item.unread{background:var(--ui-surface)!important;border-left:3px solid var(--ui-primary);font-weight:700}
+.notification-modal .notification-item-time{color:var(--ui-muted)}

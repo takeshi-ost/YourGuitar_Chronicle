@@ -30,12 +30,13 @@ def save_detail(repository: Repository, listing_id: str, detail: dict) -> None:
 def reprocess_details(repository: Repository, category: str, year_min: int,
                       year_max: int, progress_callback=None) -> dict:
     # Local import keeps the network crawler and offline processor independent.
+    from ygc.reverb_adapter import is_brand_new
     from ygc.incremental_crawl import CATEGORY_QUERY, _category_matches, _year_matches
 
     if category not in CATEGORY_QUERY or not 1800 <= year_min <= year_max <= 2100:
         raise ValueError("Invalid category or manufacture-year range")
     counts = {"cached_processed": 0, "cached_total": 0, "skipped_existing": 0,
-              "skipped_scope": 0, "missing_identity": 0, "serial_candidates": 0}
+              "skipped_new": 0, "skipped_scope": 0, "missing_identity": 0, "serial_candidates": 0}
     with repository.connect() as con:
         counts["cached_total"] = con.execute(
             "SELECT COUNT(*) FROM crawl_detail_cache WHERE source_site='reverb'"
@@ -58,6 +59,9 @@ def reprocess_details(repository: Repository, category: str, year_min: int,
                 counts["skipped_existing"] += 1
                 continue
             detail = json.loads(row["payload_json"])
+            if is_brand_new(detail):
+                counts["skipped_new"] += 1
+                continue
             if not (_category_matches(detail, category) and
                     _year_matches(detail, year_min, year_max)):
                 counts["skipped_scope"] += 1

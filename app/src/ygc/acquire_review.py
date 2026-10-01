@@ -5,6 +5,7 @@ acceptance and authorization are controlled by YGC. No inference API is used.
 """
 from contextlib import contextmanager
 from datetime import date
+from ygc.claim_dates import validate_claim_date
 import base64
 import hashlib
 import json
@@ -132,7 +133,7 @@ def expire(con):
         event(con,r['revision'],'timeout')
 
 
-def start(repo,user,individual_id):
+def start(repo,user,individual_id,*,preview=False,draft=None):
     with transaction(repo) as con:
         expire(con)
         individual=eligibility(con,user,individual_id)
@@ -142,11 +143,19 @@ def start(repo,user,individual_id):
                 WHERE a.applicant_id=? AND c.individual_id=? AND a.status='accepted'
                 AND c.status='active' AND c.verification_status='unverified' ORDER BY a.created_at DESC LIMIT 1''',(user,individual_id)).fetchone()
         if existing: return detail(con,existing['revision'],user)
-        revision=secrets.token_hex(16)
-        challenge=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+        revision=draft['revision'] if draft else secrets.token_hex(16)
+        challenge=draft['challenge'] if draft else ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+        expires_at=draft['expires_at'] if draft else time.time()+86400
+        if draft and normalized(draft['serial'])!=normalized(individual['serial_number']):
+            raise ValueError('The serial has changed. Reopen the request.')
+        if preview:
+            from ygc.request_drafts import preview as prepare
+            return prepare('acquire',user,revision,challenge,expires_at,
+                original_individual_id=individual_id,individual_id=individual_id,serial=individual['serial_number'],
+                product_name=' '.join(filter(None,[individual['manufacturer'],individual['model']])))
         con.execute('''INSERT INTO acquire_applications(revision,applicant_id,individual_id,original_individual_id,
             serial,challenge,expires_at,created_at,prompt_version) VALUES (?,?,?,?,?,?,?,?,?)''',
-            (revision,user,individual_id,individual_id,individual['serial_number'],challenge,time.time()+86400,utcnow(),PROMPT_VERSION))
+            (revision,user,individual_id,individual_id,individual['serial_number'],challenge,expires_at,utcnow(),PROMPT_VERSION))
         event(con,revision,'created')
         return detail(con,revision,user)
 
@@ -162,11 +171,60 @@ def visible(con,row,user,admin=False):
     return False
 
 
+UI_MESSAGES = {'申請がありません。': 'Request not found.',
+ 'このアカウントでは申請できません。': 'This account cannot submit requests.',
+ '対象個体がありません。': 'Guitar not found.',
+ 'サイトポリシーによりシリアル不明の個体には申請できません。': 'A known serial number is required by site policy.',
+ 'すでにCurrent Ownerのため申請できません。': 'You are already the current owner.',
+ 'この申請の閲覧権限がありません。': 'You do not have permission to view this request.',
+ '変更理由を1〜2000文字で入力してください。': 'Enter a reason between 1 and 2,000 characters.',
+ '申請またはClaimが更新されています。一覧を更新して確認してください。': 'The request or Claim has changed. Refresh the list before '
+                                         'continuing.',
+ 'この状態では操作できません。': 'This action is unavailable in the current state.',
+ '同じ個体の別申請が進行中です。': 'Another request for this guitar is in progress.',
+ 'Claimがありません。': 'Claim not found.',
+ 'Claimの状態または対象個体が変更されています。': 'The Claim status or guitar has changed.',
+ '比較画像のファイルを取得できません。画像なし扱いにはしません。': 'The reference image could not be loaded. This does not waive image '
+                                    'comparison.',
+ '比較画像が大きすぎます。': 'The reference image is too large.',
+ '比較画像URLを確認してください。Reverb画像配信先以外には接続しません。': 'Invalid reference URL. Only approved Reverb image hosts are '
+                                            'allowed.',
+ 'Reverb比較画像を取得できません。再試行してください。': 'The Reverb reference image could not be loaded. Please retry.',
+ 'Reverb比較画像の通信に失敗しました。再試行してください。': 'Could not connect to the Reverb image host. Please retry.',
+ '送信用画像が大きすぎます。': 'The prepared image is too large.',
+ '取得日をYYYY-MM-DD形式で入力してください。': 'Enter the acquisition date as YYYY-MM-DD.',
+ '説明は4000文字以内です。': 'The description must be 4,000 characters or fewer.',
+ '申請者本人だけが提出できます。': 'Only the applicant can submit photos.',
+ '提出可能な申請ではありません。': 'This request is not accepting submissions.',
+ '登録シリアルが変更されました。再申請してください。': 'The registered serial has changed. Please start a new request.',
+ '申請が変更されたか提出期限を過ぎています。': 'The request has changed or its submission deadline has passed.',
+ '申請者本人だけが操作できます。': 'Only the applicant can perform this action.',
+ '申請者のアカウントが無効になりました。': 'The applicant account is no longer available.',
+ '個体が削除またはMergeされました。': 'The guitar was deleted or merged.',
+ 'すでにCurrent Ownerになったため申請を終了しました。': 'The request was closed because you are already the current owner.',
+ '対象シリアルが変更されました。再申請してください。': 'The serial has changed. Please start a new request.',
+ 'Maker・Model・Finishの登録情報が変更されました。再申請してください。': 'The maker, model or finish has changed. Please start a new '
+                                               'request.',
+ '比較元Claimが無効化または変更されました。再申請してください。': 'The reference Claim has changed or become invalid. Please start a new '
+                                      'request.',
+ 'Makerと既知のシリアルが必要です。シリアル不明は申請できません。': 'A maker and known serial number are required.',
+ 'Listing Claimが削除・無効化・Mergeされています。': 'The Listing Claim was deleted, deactivated or merged.',
+ '作成済みの個体またはClaimが削除されています。再申請してください。': 'The guitar or Claim was deleted. Please start a new request.',
+ '同じMaker・Serialの個体が登録されています。既存個体のAcquireから申請してください。': 'This maker and serial are already registered. Use '
+                                                       'Acquire on the existing guitar.',
+ '同じMaker・Serialの個体が登録されています。': 'This maker and serial are already registered.',
+ '審議の確保が時間切れになりました。': 'The review timed out.'}
+
+def ui_message(message):
+    return UI_MESSAGES.get(message,message)
+
+
 def detail(con,revision,user,admin=False):
     r=find(con,revision)
     if not visible(con,r,user,admin):raise PermissionError('この申請の閲覧権限がありません。')
     result={k:r[k] for k in ('revision','original_individual_id','status','created_at','submitted_at','completed_at',
-        'expires_at','acquisition_date','claim_id','error','serial','challenge','report')}
+        'expires_at','acquisition_date','body','claim_id','error','serial','challenge','report')}
+    result['error']=ui_message(result['error'])
     result['result']=json.loads(r['result']) if r['result'] else None
     result['reference_source']=json.loads(r['reference_source']) if r['reference_source'] else None
     result['images']=json.loads(r['image_meta']) if r['image_meta'] else {}
@@ -177,7 +235,9 @@ def detail(con,revision,user,admin=False):
         result['listing_payload']=payload
         result['existing_individual_ids']=[i for i in duplicates(con,payload) if i!=r['individual_id']]
         if not r['original_individual_id']:result['original_individual_id']=None
-    result['events']=[dict(e) for e in con.execute('SELECT at,kind,note FROM acquire_application_events WHERE revision=? ORDER BY id',(revision,))]
+    result['events']=[dict(e) for e in con.execute('SELECT id,at,kind,note FROM acquire_application_events WHERE revision=? ORDER BY id',(revision,))]
+    result['review_event_id']=max((e['id'] for e in result['events']),default=0)
+    result['unread_result']=r['status'] in ('accepted','rejected','closed','error') and result['review_event_id']>r['seen_event_id']
     applicant=con.execute('SELECT display_name FROM users WHERE id=?',(r['applicant_id'],)).fetchone()
     individual=con.execute('SELECT * FROM individuals WHERE id=?',(r['individual_id'],)).fetchone()
     result.update(applicant_id=r['applicant_id'],applicant_name=applicant[0] if applicant else '(deleted)',
@@ -273,7 +333,7 @@ def administer(repo,revision,operation,reason,expected_version):
         event(con,revision,'admin_'+operation,json.dumps(note,ensure_ascii=False))
         if available_user(con,r['applicant_id']):
             con.execute("INSERT INTO notifications(recipient_user_id,notification_type,individual_id,claim_id,title,body,created_at) VALUES (?,'acquire_review',?,?,?, ?,?)",
-                (r['applicant_id'],r['individual_id'],find(con,revision)['claim_id'],'Ownership Requestの管理者変更',operation+': '+reason,utcnow()))
+                (r['applicant_id'],r['individual_id'],find(con,revision)['claim_id'],'Ownership Request updated by administrator',operation+': '+reason,utcnow()))
         return detail(con,revision,None,admin=True)
 
 
@@ -282,6 +342,29 @@ def list_for(repo,user,admin=False):
         expire(con)
         rows=con.execute('SELECT revision FROM acquire_applications '+('' if admin else 'WHERE applicant_id=? ')+'ORDER BY created_at DESC',() if admin else (user,)).fetchall()
         return [detail(con,r['revision'],user,admin) for r in rows]
+
+
+def attention(repo,user):
+    with transaction(repo) as con:
+        expire(con)
+        if not available_user(con,user):raise PermissionError('This account cannot view requests.')
+        rows=con.execute("""SELECT a.status,a.seen_event_id,c.verification_status,
+            (SELECT COALESCE(MAX(e.id),0) FROM acquire_application_events e WHERE e.revision=a.revision) AS event_id
+            FROM acquire_applications a LEFT JOIN claims c ON c.id=a.claim_id WHERE a.applicant_id=?""",(user,)).fetchall()
+        pending=lambda r:r['status'] in ('pending','processing') or (r['status']=='accepted' and r['verification_status']=='unverified')
+        unread=lambda r:r['status'] in ('accepted','rejected','closed','error') and r['event_id']>r['seen_event_id']
+        return dict(pending_count=sum(pending(r) for r in rows),unread_count=sum(unread(r) for r in rows),
+                    attention_count=sum(pending(r) or unread(r) for r in rows))
+
+
+def mark_seen(repo,user,revision,event_id):
+    with transaction(repo) as con:
+        r=find(con,revision)
+        if r['applicant_id']!=user or not available_user(con,user):raise PermissionError('Only the applicant can mark a result as read.')
+        if event_id and not con.execute('SELECT 1 FROM acquire_application_events WHERE revision=? AND id=?',(revision,event_id)).fetchone():
+            raise ValueError('Invalid review event.')
+        con.execute('UPDATE acquire_applications SET seen_event_id=MAX(seen_event_id,?) WHERE revision=?',(event_id,revision))
+        return {'status':'seen'}
 
 
 def reference(con,individual):
@@ -354,6 +437,7 @@ def submit(repo,user,revision,acquired,body,closeup,overview):
     try:
         if date.fromisoformat(acquired).isoformat()!=acquired:raise ValueError()
     except ValueError:raise ValueError('取得日をYYYY-MM-DD形式で入力してください。') from None
+    validate_claim_date(acquired)
     if len(body)>4000:raise ValueError('説明は4000文字以内です。')
     with transaction(repo) as con:
         expire(con);r=find(con,revision)
@@ -476,13 +560,13 @@ def apply_review(repo,con,r,review):
     if available_user(con,r['applicant_id']):
         con.execute("""INSERT INTO notifications(recipient_user_id,notification_type,individual_id,claim_id,title,body,created_at)
             VALUES (?,'acquire_review',?,?,?, ?,?)""",(r['applicant_id'],r['individual_id'],claim_id,
-            r['request_kind'].title()+'審議結果', 'My Ownership申請・審議結果から診断を確認してください。状態: '+state,utcnow()))
+            r['request_kind'].title()+' review result', 'Open Ownership Requests to view the report. Status: '+state,utcnow()))
     if claim_id:
         claim=con.execute('SELECT verification_status FROM claims WHERE id=?',(claim_id,)).fetchone()
         owner=con.execute('SELECT current_owner_user_id FROM individuals WHERE id=?',(r['individual_id'],)).fetchone()[0]
         if claim['verification_status']=='unverified' and owner:
             con.execute("""INSERT INTO notifications(recipient_user_id,actor_user_id,notification_type,individual_id,claim_id,title,body,created_at)
-                VALUES (?,?,'claim_review',?,?,'Acquire承認待ち','画像Evidenceの審議を通過したAcquireです。診断と申請内容を確認してください。',?)""",
+                VALUES (?,?,'claim_review',?,?,'Acquire awaiting approval','Image review passed. Please review the evidence and ownership request.',?)""",
                 (owner,r['applicant_id'],r['individual_id'],claim_id,utcnow()))
 
 

@@ -486,6 +486,7 @@ class Repository:
         )
         migrations = {
             "acquire_applications": {
+                "seen_event_id": "INTEGER NOT NULL DEFAULT 0",
                 "request_kind": "TEXT NOT NULL DEFAULT 'acquire'",
                 "listing_payload": "TEXT",
                 "product_details": "TEXT",
@@ -5988,6 +5989,10 @@ class Repository:
                                 LIMIT 1
                             )
                         ) AS observed_owner_name,
+                        (SELECT ou.id FROM claim_listing_items li
+                         JOIN users ou ON CAST(ou.id AS TEXT)=li.value_text
+                         WHERE li.claim_id=c.id AND li.field_name='owner_user_id'
+                         LIMIT 1) AS observed_owner_user_id,
                         (
                             SELECT li.value_text
                             FROM claim_listing_items li
@@ -6960,6 +6965,29 @@ class Repository:
                 individual,
                 observations,
             )
+
+    def unanswered_ownership_requests(self, user_id: int) -> list[dict]:
+        """Pending Claim actions addressed to the acting user, independent of notifications."""
+        with self.connect() as con:
+            self._transfer_user(con, user_id)
+            rows = con.execute("""SELECT c.*, i.manufacturer,i.model,i.serial_number,
+                i.current_owner_user_id,u.display_name AS sender_name,
+                t.to_user_id,t.from_user_id,t.state AS transfer_state
+                FROM claims c JOIN individuals i ON i.id=c.individual_id
+                JOIN users u ON u.id=c.author_user_id
+                LEFT JOIN claim_transfers t ON t.claim_id=c.id
+                WHERE c.status='active' AND c.claim_type='ownership'
+                AND u.ban_status='normal' AND (
+                  (c.ownership_kind='transfer' AND t.state='pending' AND t.to_user_id=?) OR
+                  (c.ownership_kind='acquire' AND c.verification_status='unverified'
+                   AND i.current_owner_user_id=? AND c.author_user_id<>?
+                   AND u.account_type<>'source'))
+                ORDER BY c.created_at,c.id""", (user_id,user_id,user_id)).fetchall()
+            return [dict(claim_id=r['id'],individual_id=r['individual_id'],
+                         kind=r['ownership_kind'],sender_id=r['author_user_id'],sender_name=r['sender_name'],
+                         guitar=' / '.join(str(r[k]) for k in ('manufacturer','model','serial_number') if r[k]))
+                    for r in rows if r['ownership_kind']=='transfer' or
+                    self._owner_verification_denial(r,user_id,True) is None]
 
     def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
         """Active pending Acquire claims from both users and Automation."""

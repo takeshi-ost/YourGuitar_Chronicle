@@ -22,7 +22,7 @@ function scenario(profileId, fail = false) {
     PROFILE_USER_ID: profileId, activeUser: {user: {id: 2}},
     selectedIndividualId: 7, pendingOwnershipClaimIndividualId: 7,
     individuals: [], document: {getElementById: id => elements[id]},
-    confirm: () => true, alert: message => calls.push(['alert', message]),
+    confirm: () => true, confirmOwnershipAction: async () => true, alert: message => calls.push(['alert', message]),
     jfetch: async url => {
       calls.push(['write', url]);
       if (fail) throw new Error('Save failed');

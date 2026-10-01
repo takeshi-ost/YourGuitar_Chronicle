@@ -14,14 +14,14 @@ from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
 from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
-from ygc.reverb_adapter import _category_text, to_listing_claim_data, to_provenance_observation
+from ygc.reverb_adapter import is_brand_new, _category_text, to_listing_claim_data, to_provenance_observation
 
 
-CATEGORY_QUERY = {"electric": "electric guitar", "acoustic": "acoustic guitar"}
+CATEGORY_QUERY = {"all": "guitar", "electric": "electric guitar", "acoustic": "acoustic guitar"}
 MAX_SUMMARIES = 2000
 MAX_RECHECKS = 5
 MIN_REQUEST_GAP = 0.5
-DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category")
+DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category", "condition")
 
 
 def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool:
@@ -29,7 +29,7 @@ def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool
     value = value.lower().replace("-", " ").replace("_", " ").strip()
     if not value.strip():
         return not strict  # Do not infer a category from a model/title.
-    return category in value and "guitar" in value and not any(
+    return (category == "all" or category in value) and "guitar" in value and not any(
         word in value for word in ("parts", "pedal", "amplifier", "case only")
     )
 
@@ -234,7 +234,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
               "new_observations": 0, "skipped_existing": 0,
               "missing_identity": 0, "serial_candidates": 0,
               "skipped_category_or_year": 0,
-              "skipped_year": 0, "skipped_category": 0,
+              "skipped_new": 0, "skipped_year": 0, "skipped_category": 0,
               "missing_year": 0, "missing_category": 0,
               "detail_unavailable": 0, "detail_scope_matched": 0,
               "missing_detail_url": 0, "candidate_checked": 0,
@@ -295,6 +295,8 @@ def advance_program(repository: Repository, collector: Any, category: str,
                 else:
                     if listing_id in known_ids:
                         counts["skipped_existing"] += 1
+                    elif is_brand_new(summary):
+                        counts["skipped_new"] += 1
                     elif not _category_matches(summary, category, strict=False):
                         counts["skipped_category_or_year"] += 1
                         counts["skipped_category"] += 1
@@ -318,7 +320,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
                             counts["details_fetched"] += 1
                             if detail is not None:
                                 save_detail(repository, str(listing_id), detail)
-                            if detail and (_category_matches(detail, category)
+                            if detail and (not is_brand_new(detail) and _category_matches(detail, category)
                                     and _year_matches(detail, year_min, year_max)):
                                 counts["detail_scope_matched"] += 1
                                 claim_data = to_listing_claim_data(detail, config.SERIAL_CONFIDENCE_THRESHOLD)
@@ -339,6 +341,9 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                 if not detail:
                                     counts["detail_unavailable"] += 1
                                     reason = "detail_unavailable"
+                                elif is_brand_new(detail):
+                                    reason = "skipped_new"
+                                    counts[reason] += 1
                                 elif not _category_matches(detail, category):
                                     reason = ("missing_category" if _missing_metadata(
                                         detail, "category") else "skipped_category")

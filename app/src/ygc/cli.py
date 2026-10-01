@@ -177,7 +177,7 @@ def init_db():
 
 
 @app.command("crawl-step")
-def crawl_step(category: str = typer.Option(..., help="electric or acoustic"),
+def crawl_step(category: str = typer.Option(..., help="all, electric or acoustic"),
                year_min: int = typer.Option(...),
                year_max: int = typer.Option(...)) -> None:
     """One synchronous, resumable crawl step; suitable as a future Run Job entrypoint."""

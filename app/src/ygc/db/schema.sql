@@ -428,6 +428,7 @@ CREATE TABLE IF NOT EXISTS claim_transfer_acceptance (
 -- Private Acquire application and durable review Evidence, separate from experiment jobs.
 CREATE TABLE IF NOT EXISTS acquire_applications (
  request_kind TEXT NOT NULL DEFAULT 'acquire', listing_payload TEXT,
+ seen_event_id INTEGER NOT NULL DEFAULT 0,
  revision TEXT PRIMARY KEY,
  applicant_id INTEGER NOT NULL,
  individual_id INTEGER REFERENCES individuals(id) ON DELETE SET NULL,

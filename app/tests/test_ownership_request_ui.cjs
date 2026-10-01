@@ -14,11 +14,11 @@ function setup(){
 test('Ownership Request is separate from experiments and safely shows owner approval wait',async()=>{
  assert.match(html,/href="#ownership-request"/);
  const {context,elements}=setup();await vm.runInContext('loadProductionAcquires()',context);
- assert.match(elements.productionAcquireRows.innerHTML,/Owner承認待ち/);
+ assert.match(elements.productionAcquireRows.innerHTML,/Awaiting owner approval/);
  assert.match(elements.productionAcquireRows.innerHTML,/&lt;script>/);
  assert.doesNotMatch(elements.productionAcquireRows.innerHTML,/<script>/);
  elements.productionAcquireFilter.value='rejected';vm.runInContext('renderProductionAcquires()',context);
- assert.match(elements.productionAcquireRows.innerHTML,/該当する申請はありません/);
+ assert.match(elements.productionAcquireRows.innerHTML,/No matching requests/);
 });
 test('Admin changes require a reason and send the displayed version',async()=>{
  const {context,elements,calls,row}=setup();vm.runInContext('renderProductionAcquireDetail(row)',context);
@@ -30,7 +30,7 @@ test('Admin changes require a reason and send the displayed version',async()=>{
 test('Manual decision is distinct from original AI JSON and its reason is escaped',()=>{
  const {context,elements,row}=setup();row.admin_review={accepted:false,reason:'<img src=x>'};row.result={adjudication:{accepted:true}};
  vm.runInContext('renderProductionAcquireDetail(row)',context);
- assert.match(elements.productionAcquireSummary.innerHTML,/管理者による審議: 不採用/);
+ assert.match(elements.productionAcquireSummary.innerHTML,/Administrator review: Rejected/);
  assert.match(elements.productionAcquireSummary.innerHTML,/&lt;img/);
  assert.equal(JSON.parse(elements.productionAcquireDetail.value).result.adjudication.accepted,true);
 });
