@@ -52,6 +52,7 @@ from ygc.crawl_service import crawl_query
 from ygc.crawl_detail_cache import reprocess_details
 from ygc.incremental_crawl import advance_program, program_status, restart_program
 from ygc.db.repository import Repository
+from ygc.db.source_records import MARKETPLACE_SOURCES_SQL
 from ygc.theme_catalog import THEMES
 from ygc.platform_boundaries import (CrawlStep, LocalCrawlRunner, PrototypeIdentity,
                                      local_repository, require_local_platform,
@@ -1137,6 +1138,26 @@ def list_navigation_script() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "list-navigation.js", media_type="text/javascript")
 
 
+@app.get("/assets/overlays.js")
+def overlays_script() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "overlays.js", media_type="text/javascript")
+
+
+@app.get("/assets/ui-components.css")
+def ui_components_stylesheet() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("static") / "ui-components.css", media_type="text/css")
+
+
+@app.get("/assets/pages/{filename}")
+def page_asset(filename: str) -> FileResponse:
+    allowed = {f'{page}.{extension}' for page in ('console', 'user-view', 'user-edit')
+               for extension in ('js', 'css')}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(Path(__file__).with_name("static") / "pages" / filename,
+                        media_type="text/javascript" if filename.endswith('.js') else "text/css")
+
+
 @app.get("/assets/product-detail.js")
 def product_detail_script() -> FileResponse:
     return FileResponse(
@@ -2036,53 +2057,34 @@ def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[
     repository = repo()
     with repository.connect() as con:
         rows = con.execute(
-            """
-            SELECT
-                i.id,
-                i.manufacturer,
-                i.model,
-                i.year,
-                i.finish,
-                i.serial_number,
-                (
-                    SELECT c.id FROM claims c
-                    WHERE c.individual_id=i.id AND c.status='active'
-                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
-                    ORDER BY c.created_at DESC, c.id DESC LIMIT 1
-                ) AS latest_claim_id,
-                (
-                    SELECT MAX(c.created_at)
-                    FROM claims c
-                    WHERE c.individual_id = i.id
-                      AND c.status = 'active'
-                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')
-                ) AS latest_claim_at,
-                (
-                    SELECT c2.claim_type
-                    FROM claims c2
-                    WHERE c2.individual_id = i.id
-                      AND c2.status = 'active'
-                      AND EXISTS (SELECT 1 FROM users u WHERE u.id=c2.author_user_id AND u.ban_status='normal')
-                    ORDER BY c2.created_at DESC, c2.id DESC
-                    LIMIT 1
-                ) AS latest_claim_type,
-                (
-                    SELECT MAX(o.observed_at)
-                    FROM observations o
-                    WHERE o.individual_id = i.id
-                ) AS latest_observation_at
-            FROM individuals i
+            f"""
+            WITH sources AS ({MARKETPLACE_SOURCES_SQL}), visible_claims AS (
+                SELECT c.* FROM claims c JOIN users u ON u.id=c.author_user_id
+                WHERE c.status='active' AND u.ban_status='normal'
+            ), source_activity AS (
+                SELECT s.individual_id, MAX(s.observed_at) AS observed_at
+                FROM sources s WHERE EXISTS (
+                    SELECT 1 FROM visible_claims c WHERE c.individual_id=s.individual_id
+                    AND (c.id=s.claim_id OR (s.claim_id IS NULL
+                         AND c.observation_id=s.legacy_observation_id))
+                ) GROUP BY s.individual_id
+            )
+            SELECT i.id,i.manufacturer,i.model,i.year,i.finish,i.serial_number,
+                (SELECT c.id FROM visible_claims c WHERE c.individual_id=i.id
+                 ORDER BY c.created_at DESC,c.id DESC LIMIT 1) AS latest_claim_id,
+                (SELECT MAX(c.created_at) FROM visible_claims c
+                 WHERE c.individual_id=i.id) AS latest_claim_at,
+                (SELECT c.claim_type FROM visible_claims c WHERE c.individual_id=i.id
+                 ORDER BY c.created_at DESC,c.id DESC LIMIT 1) AS latest_claim_type,
+                s.observed_at AS latest_observation_at
+            FROM individuals i LEFT JOIN source_activity s ON s.individual_id=i.id
+            WHERE EXISTS (SELECT 1 FROM visible_claims c WHERE c.individual_id=i.id)
             ORDER BY MAX(
-                COALESCE((SELECT MAX(c.created_at) FROM claims c
-                          WHERE c.individual_id = i.id AND c.status = 'active' AND EXISTS (SELECT 1 FROM users u WHERE u.id=c.author_user_id AND u.ban_status='normal')), ''),
-                COALESCE((SELECT MAX(o.observed_at) FROM observations o
-                          WHERE o.individual_id = i.id AND NOT EXISTS
-                          (SELECT 1 FROM claims blocked JOIN users actor
-                           ON actor.id=blocked.author_user_id AND actor.ban_status<>'normal'
-                           WHERE blocked.observation_id=o.id)), '')
-            ) DESC, i.id DESC
-            LIMIT 200
-            """,
+                COALESCE((SELECT MAX(c.created_at) FROM visible_claims c
+                          WHERE c.individual_id=i.id),''),
+                COALESCE(s.observed_at,'')
+            ) DESC,i.id DESC LIMIT 200
+            """
         ).fetchall()
 
     result: list[dict[str, Any]] = []
@@ -2122,7 +2124,8 @@ def api_individual(individual_id: int, request: Request,
                    viewer_user_id: int | None = None) -> dict[str, Any]:
     viewer_user_id = prototype_viewer(request, viewer_user_id)
     repository = repo()
-    individual, observations = repository.get_individual(individual_id)
+    individual, _ = repository.get_individual(
+        individual_id, include_legacy_observations=False)
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
     admin = _console_admin_authorized(request)
@@ -2134,11 +2137,6 @@ def api_individual(individual_id: int, request: Request,
                               (individual_id, viewer_user_id)).fetchone()
         if not admin and not visible:
             raise HTTPException(status_code=404, detail="Individual not found")
-        observations = [o for o in observations if admin or not con.execute(
-            "SELECT 1 FROM claims c JOIN users author ON author.id=c.author_user_id "
-            "WHERE c.observation_id=? AND author.ban_status<>'normal' "
-            "AND NOT (author.ban_status='silent_ban' AND author.id=?) LIMIT 1",
-            (o['id'],viewer_user_id)).fetchone()]
     individual_data = _row_dict(individual)
     if viewer_user_id is not None:
         individual_data.update(repo().preview_silent_profile(viewer_user_id, individual_id))
@@ -2209,7 +2207,6 @@ def api_individual(individual_id: int, request: Request,
     return {
         "individual": individual_data,
         "acquire_evidence": acquire_evidence,
-        "observations": [_row_dict(row) for row in observations],
         "current_listing": current_listing,
         "current_source": image_sources[-1] if image_sources else None,
         "gallery_images": gallery_images,
@@ -2889,7 +2886,6 @@ def api_ownership_claim(
 
     user, guitars = repository.get_user(request.user_id)
     return {
-        "observation_id": observation_id,
         "claim_id": claim_id,
         "user": _row_dict(user),
         "guitars": [_row_dict(row) for row in guitars],
@@ -2922,7 +2918,8 @@ def api_former_owner_claim(
         )
     user, guitars = repository.get_user(request.user_id)
     return {
-        **result,
+        "claim_ids": result["claim_ids"],
+        "snapshot": result["snapshot"],
         "user": _row_dict(user),
         "guitars": [_row_dict(row) for row in guitars],
     }

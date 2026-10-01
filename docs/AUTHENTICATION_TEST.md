@@ -315,3 +315,11 @@ StarletteのTestClient依存に関する非推奨警告が1種類残るが、検
 
 この確認はローカル運用を対象とする。公開サーバー向け本人認証・外部接続と係争解決は別途設計する。
 コミット時は実データ、接続キー、ローカル定期タスク設定を含めない。
+
+### main統合後の検証
+
+mainの旧Observation整理とページ別アセット・共通オーバーレイを保持して統合した。
+Acquireの比較画像はListing項目・marketplace Evidenceを優先し、旧Observationは既存データの互換読取だけに使用する。
+新規Listing／Acquireは旧Observationへ二重書込しない。未登録クロール記録の保全・移行テストも継続する。
+統合後はPython330件（ローカルMCP接続を含む）・JavaScript34件が通過。
+一時DBの実ブラウザーでもListing登録・重複案内、Acquireの承認待ち、管理者採否変更と所有権再評価を確認した。

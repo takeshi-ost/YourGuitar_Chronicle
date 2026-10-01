@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('app/src/ygc/static/index_html.html','utf8');
+const html=require('./page_source.cjs')('app/src/ygc/static/index_html.html');
 const script=html.slice(html.indexOf('let directBusy='),html.indexOf('function statCard('));
 function setup(){
  const elements=new Proxy({}, {get:(obj,id)=>obj[id]??=( {value:'',type:'password',textContent:'',files:[{size:10}],setAttribute(){},focus(){},select(){this.selected=true},setSelectionRange(){}} )});

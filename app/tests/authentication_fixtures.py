@@ -37,5 +37,3 @@ def measurement():
                 'photography':{'status':'different_capture_supported','reasons':['角度が異なる']},
                 'closeup_link':{'status':'uncertain','reasons':[],'limitations':['直接つながって見えない']}},
             'reference_note':'Uploaded reference','limitations':['AI may err'],'decision':'No approval'}
-
-

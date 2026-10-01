@@ -52,7 +52,7 @@
     if (!active || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') ||
         event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
         event.defaultPrevented || !active.root.isConnected ||
-        document.querySelector('dialog[open], .modal-backdrop.open')) return;
+        (window.YGCOverlays?.isOpen() || document.querySelector('dialog[open], .modal-backdrop.open'))) return;
     const focused = document.activeElement;
     if (focused && focused.matches('input, select, textarea, [contenteditable="true"]')) return;
     if (focused && focused.matches('button') &&

@@ -131,4 +131,3 @@ def check_reading(reading: dict, expected: str) -> dict:
     else:
         status = 'matched' if normalized(reading['text']) == normalized(expected) else 'mismatched'
     return {**reading, 'expected': expected, 'match_status': status}
-

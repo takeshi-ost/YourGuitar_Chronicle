@@ -14,6 +14,7 @@ from ygc.collectors.reverb import (
     ReverbAPICollector,
 )
 from ygc.db.repository import Repository
+from ygc.db.crawl_archive import archive_unregistered_crawl
 from ygc.platform_boundaries import CrawlStep, LocalCrawlRunner, local_repository
 from ygc.extractors.serial import (
     extract_serial_candidates,
@@ -256,6 +257,16 @@ def audit_observation_migration(
     except FileNotFoundError as exc:
         raise typer.BadParameter(f'Database does not exist: {exc}') from exc
     console.print_json(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("archive-unregistered-crawl")
+def archive_unregistered_crawl_command() -> None:
+    """Preserve complete unregistered crawl rows without deleting originals."""
+    try:
+        result = archive_unregistered_crawl(repo().db_path)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print_json(json.dumps(result, ensure_ascii=False))
 
 
 @app.command(
@@ -991,7 +1002,7 @@ def show(
     ) = (
         repository
         .get_individual(
-            individual_id
+            individual_id, include_legacy_observations=False,
         )
     )
 
@@ -1024,38 +1035,18 @@ def show(
         "\n"
     )
 
-    table = Table(
-        "When",
-        "Seller",
-        "Title",
-        "Source",
-    )
-
-    for obs in observations:
+    table = Table("When", "Claim", "Details", "Source")
+    for claim in repository.list_claims(individual_id):
+        if claim['effective_status'] != 'active':
+            continue
+        kind = claim['ownership_kind'] or claim['specification_kind'] or claim['claim_type']
         table.add_row(
-            obs[
-                "listing_date"
-            ]
-            or obs[
-                "observed_at"
-            ],
-            obs[
-                "seller"
-            ]
-            or "",
-            obs[
-                "title"
-            ]
-            or "",
-            obs[
-                "source_url"
-            ]
-            or "",
+            str(claim['occurred_at'] or claim['created_at']),
+            f"#{claim['id']} {kind}",
+            str(claim['listing_title'] or claim['body'] or claim['value_text'] or ''),
+            str(claim['source_url'] or ''),
         )
-
-    console.print(
-        table
-    )
+    console.print(table)
 
 
 @app.command(
@@ -1075,6 +1066,8 @@ def stats():
         key,
         value,
     ) in data.items():
+        if key == 'serial_observations':
+            continue  # Alias used by the current Web UI.
         if isinstance(
             value,
             float,

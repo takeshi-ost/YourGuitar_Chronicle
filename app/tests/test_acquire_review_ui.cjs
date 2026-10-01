@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const html=fs.readFileSync('app/src/ygc/static/user_view_html.html','utf8');
+const html=require('./page_source.cjs')('app/src/ygc/static/user_view_html.html');
 const source=html.slice(html.indexOf('let acquireRevision='),html.indexOf('let individualLoadSequence='));
 function setup(){
   const elements={acquireReviewContent:{innerHTML:''},acquireReviewModal:{classList:{add(){},remove(){},contains(){return true}}}};
@@ -10,6 +10,7 @@ function setup(){
   const context=vm.createContext({document:{getElementById:id=>elements[id]},activeUser:{user:{id:2}},selectedIndividualId:null,
     esc:v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'),
     requireAccount(){calls.push('account')},alert:v=>calls.push(v),jfetch:async(url,options)=>{calls.push([url,options]);return {revision:'a'.repeat(32),status:'draft',serial:'SERIAL',challenge:'CHALLENGE',expires_at:1800000000,original_individual_id:1}},
+    YGCOverlays:{open:id=>elements[id].classList.add('open'),close:id=>elements[id].classList.remove('open')},
     Date,encodeURIComponent,FormData,confirm:()=>true});
   vm.runInContext(source,context);return {context,elements,calls};
 }

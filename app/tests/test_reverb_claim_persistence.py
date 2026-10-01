@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -79,9 +80,7 @@ def test_reverb_listing_creates_claim_and_snapshot(
     individual_id = int(
         result["individual_id"]
     )
-    observation_id = int(
-        result["observation_id"]
-    )
+    assert result["observation_id"] is None
 
     with repository.connect() as con:
         individual = con.execute(
@@ -92,14 +91,11 @@ def test_reverb_listing_creates_claim_and_snapshot(
             """,
             (individual_id,),
         ).fetchone()
-        observation = con.execute(
-            """
-            SELECT *
-            FROM observations
-            WHERE id = ?
-            """,
-            (observation_id,),
+        evidence = con.execute(
+            "SELECT * FROM claim_source_evidence WHERE claim_id=?",
+            (result['claim_id'],),
         ).fetchone()
+        assert con.execute('SELECT COUNT(*) FROM observations').fetchone()[0] == 0
 
     assert individual is not None
     assert individual["manufacturer"] == "Fender"
@@ -110,16 +106,14 @@ def test_reverb_listing_creates_claim_and_snapshot(
     assert individual["location_country"] == "US"
     assert individual["location_region"] == "CA"
 
-    assert observation is not None
-    assert observation["source_site"] == "reverb"
-    assert observation["source_listing_id"] == "1"
-    assert observation["manufacturer"] is None
-    assert observation["model"] is None
-    assert observation["finish"] is None
-    assert observation["year"] is None
-    assert observation["serial_number"] is None
-    assert observation["owner_name"] == "Vintage Shop"
-    assert observation["location_country"] == "US"
+    assert evidence is not None
+    assert evidence['source_site'] == 'reverb'
+    assert evidence['source_listing_id'] == '1'
+    assert evidence['legacy_observation_id'] is None
+    payload = json.loads(evidence['payload_json'])
+    assert payload['claim']['owner_name'] == 'Vintage Shop'
+    assert payload['claim']['location_country'] == 'US'
+    assert payload['provenance']['raw_text'] == _provenance(listing_id='1')['raw_text']
 
     claims = repository.list_claims(
         individual_id
@@ -221,7 +215,7 @@ def test_reverb_external_duplicate_does_not_create_second_claim(
             con.execute(
                 """
                 SELECT COUNT(*)
-                FROM observations
+                FROM claim_source_evidence
                 WHERE source_site = 'reverb'
                   AND source_listing_id = '1'
                 """
@@ -342,7 +336,16 @@ def test_reverb_listing_without_identity_stores_provenance_only(
             con.execute(
                 "SELECT COUNT(*) FROM observations"
             ).fetchone()[0]
-        ) == 1
+        ) == 0
+
+    assert result['observation_id'] is None
+    with repository.connect() as con:
+        saved = con.execute('SELECT * FROM crawl_unregistered_records WHERE id=?',
+                            (result['crawl_record_id'],)).fetchone()
+        assert json.loads(saved['payload_json']) == {
+            'claim': _claim_data(listing_id='no-serial', serial=None),
+            'provenance': _provenance(listing_id='no-serial'),
+        }
 
 
 def test_reverb_refuses_unmigrated_matching_individual(

@@ -20,6 +20,13 @@ def setup(tmp_path,monkeypatch):
     return repo,a,b,c,individual
 
 
+def attach_reverb_evidence(con,individual):
+    listing=con.execute("SELECT id FROM claims WHERE individual_id=? AND claim_type='listing'",(individual,)).fetchone()[0]
+    con.execute("""INSERT INTO claim_source_evidence(claim_id,evidence_type,source_site,source_listing_id,payload_json,created_at)
+        VALUES (?,'marketplace_listing','reverb',?,?,'2026-01-01')""",
+        (listing,str(individual),json.dumps({'provenance':{'image_url':'https://images.reverb.com/test.jpg'}})))
+
+
 def submitted(setup,user=None):
     repo,a,b,c,i=setup;user=user or b
     r=ar.start(repo,user,i)
@@ -253,7 +260,7 @@ def test_reverb_url_failure_is_not_waived(setup,monkeypatch):
     repo,a,b,c,i=setup
     repo.create_ownership_claim(a,i,ownership_kind='release',occurred_at='2026-01-02')
     with repo.connect() as con:
-        con.execute("UPDATE observations SET source_site='reverb',image_url='https://images.reverb.com/test.jpg' WHERE event_type='listing' AND individual_id=?",(i,))
+        attach_reverb_evidence(con,i)
     client=httpx.Client
     monkeypatch.setattr(ar.httpx,'Client',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(404)),**kw))
     with pytest.raises(ValueError,match='取得できません'):submitted(setup)
@@ -390,7 +397,7 @@ def test_automatic_positive_and_ownership_for_nonuser_owner(setup,monkeypatch,ow
         # Turn the fixture's listing author into an external source account.
         with repo.connect() as con:
             con.execute("UPDATE users SET account_type='source' WHERE id=?",(a,))
-            con.execute("UPDATE observations SET source_site='reverb',image_url='https://images.reverb.com/test.jpg' WHERE individual_id=? AND event_type='listing'",(i,))
+            attach_reverb_evidence(con,i)
         repo.rebuild_individual_snapshot(i)
         client=httpx.Client
         monkeypatch.setattr(ar.httpx,'Client',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(200,content=image_bytes())),**kw))

@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync('app/src/ygc/static/index_html.html','utf8');
+const html=require('./page_source.cjs')('app/src/ygc/static/index_html.html');
 const source=html.slice(html.indexOf('let productionAcquires='),html.indexOf('function statCard('));
 function setup(){
  const elements={};for(const id of ['productionAcquireSearch','productionAcquireFilter','productionAcquireRows','productionAcquireSummary','productionAcquireActions','productionAcquireDetail','productionAcquireReason','productionAcquireStatus','productionAcquirePrompt','productionAcquireImages'])elements[id]={value:'',innerHTML:'',textContent:''};

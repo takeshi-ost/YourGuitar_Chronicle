@@ -287,7 +287,13 @@ def list_for(repo,user,admin=False):
 def reference(con,individual):
     """Freeze provenance before I/O; no user-supplied URL or candidate selection."""
     owner=con.execute("SELECT id FROM users WHERE id=? AND account_type<>'source'",(individual['current_owner_user_id'],)).fetchone()
-    candidates=con.execute('''SELECT c.id,c.claim_type,c.ownership_kind,o.image_url,o.source_site
+    candidates=con.execute('''SELECT c.id,c.claim_type,c.ownership_kind,
+        COALESCE((SELECT li.value_text FROM claim_listing_items li WHERE li.claim_id=c.id AND li.field_name='image_url' LIMIT 1),
+                 (SELECT COALESCE(json_extract(e.payload_json,'$.provenance.image_url'),json_extract(e.payload_json,'$.source.image_url'))
+                  FROM claim_source_evidence e WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing' ORDER BY e.id LIMIT 1),
+                 o.image_url) AS image_url,
+        COALESCE((SELECT e.source_site FROM claim_source_evidence e WHERE e.claim_id=c.id AND e.evidence_type='marketplace_listing' ORDER BY e.id LIMIT 1),
+                 (SELECT li.value_text FROM claim_listing_items li WHERE li.claim_id=c.id AND li.field_name='source_site' LIMIT 1),o.source_site) AS source_site
         FROM claims c JOIN users u ON u.id=c.author_user_id LEFT JOIN observations o ON o.id=c.observation_id
         WHERE c.individual_id=? AND c.status='active' AND c.verification_status='positive' AND u.ban_status='normal'
           AND (c.claim_type='listing' OR (c.claim_type='ownership' AND c.ownership_kind='acquire'))

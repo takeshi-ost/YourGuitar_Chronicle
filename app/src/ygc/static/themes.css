@@ -135,12 +135,12 @@
               inset 0 0 0 3px #f8f1e2,
               0 8px 22px rgba(12, 8, 5, .22);
 }
-:root[data-theme]:not([data-theme="dark_default"]) :is(.discovery-list,.observation-card,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed) {
+:root[data-theme]:not([data-theme="dark_default"]) :is(.discovery-list,.detail-meta-item,.profile-stat,.profile-placeholder,.account-hub-summary,.notification-item,.world-map-wrap,.visibility-fixed) {
   background: var(--surface);
   color: var(--text);
   border-color: var(--line);
 }
-:root[data-theme]:not([data-theme="dark_default"]) :is(.claim-card,.observation-card.latest,.profile-mode .profile-stat,.world-map-tooltip,.world-map-legend) {
+:root[data-theme]:not([data-theme="dark_default"]) :is(.claim-card,.profile-mode .profile-stat,.world-map-tooltip,.world-map-legend) {
   background: var(--surface);
   color: var(--text);
   border-color: var(--line);

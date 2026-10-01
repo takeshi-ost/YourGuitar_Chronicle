@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const html=fs.readFileSync('app/src/ygc/static/user_view_html.html','utf8');
+const html=require('./page_source.cjs')('app/src/ygc/static/user_view_html.html');
 const context=vm.createContext({esc:s=>String(s).replaceAll('<','&lt;').replaceAll('>','&gt;')});
 for(const name of ['discoveryActorHtml','followingDiscoveryMessage']){
 const start=html.indexOf('function '+name+'(');
