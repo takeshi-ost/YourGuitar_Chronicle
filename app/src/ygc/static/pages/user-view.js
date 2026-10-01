@@ -102,7 +102,7 @@ function renderAccountHub(){
   const location=[u.location_country,u.location_region].filter(Boolean).join(' / ')||'Location not set';
   hub.innerHTML=
     '<a class="account-hub-user account-hub-user-link" href="/users/'+Number(u.id)+'" aria-label="View '+esc(u.display_name||'User')+' profile">'+
-      '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="account-hub-user-copy">'+
         '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span><span class="account-hub-you">You</span></div>'+
         '<div class="account-hub-location">'+esc(location)+'</div>'+
@@ -115,7 +115,7 @@ function renderAccountHub(){
     '</div>'+
     '<div class="account-hub-actions">'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
-      '<button class="account-hub-action" type="button">Messages <span class="account-hub-count">0</span></button>'+
+      '<button class="account-hub-action" type="button" onclick="openDirectMessages()">Messages <span class="account-hub-count" id="directMessageCount">'+Number(dmInbox.unread_count||0)+'</span></button>'+
     '</div>';
 }
 
@@ -165,6 +165,7 @@ async function openNotification(notificationId,individualId){
   await loadNotifications();
   const panel=document.getElementById('notificationPanel');
   if(panel)panel.classList.remove('open');
+  if(item&&item.notification_type?.startsWith('transfer_')&&item.claim_id){if(individualId)await showIndividual(Number(individualId),true);await openTransferReview(Number(item.claim_id));return}
   if(individualId!==null&&individualId!==undefined)await showIndividual(Number(individualId),true);
 }
 async function markAllNotificationsRead(){
@@ -199,13 +200,15 @@ async function loadActiveUser(){
     sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
   await loadNotifications();
+  await loadDirectMessageInbox();
   renderAccountHub();
   renderNotificationPanel();
 }
 
 async function loadNewDiscoveries(){
   try{
-    newDiscoveries=await jfetch('/api/new-discoveries');
+    const viewer=activeUser?.user?.id;
+    newDiscoveries=await jfetch('/api/new-discoveries'+(viewer?'?viewer_id='+Number(viewer):''));
   }catch(e){
     newDiscoveries=[];
   }
@@ -229,6 +232,17 @@ function discoveryProductName(item){
   const finish=item.finish?' '+item.finish:'';
   return base+year+finish;
 }
+function discoveryActorHtml(item){
+  if(item.activity_type!=='following'||!item.actor_user_id)return '';
+  return '<a class="discovery-actor" href="/users/'+Number(item.actor_user_id)+'" onclick="event.stopPropagation()">'+esc(item.actor_name)+'</a> <span class="discovery-following">Following</span>';
+}
+function followingDiscoveryMessage(item){
+  if(item.action_kind==='vote')return 'gave a '+String(item.action_value||'')+' vote to a Claim on';
+  const kind=item.claim_type==='ownership'?(item.ownership_kind||'Acquire'):
+    item.claim_type==='specification'&&item.specification_kind==='repair'?'Repair':item.claim_type;
+  const label=String(kind||'Claim').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+  return 'added '+(/^[AEIOU]/.test(label)?'an ':'a ')+label+' Claim to';
+}
 function renderNewDiscoveries(){
   const root=document.getElementById('newDiscoveryList');
   if(!root)return;
@@ -239,10 +253,10 @@ function renderNewDiscoveries(){
   root.innerHTML=newDiscoveries.map(item=>{
     const when=displayDiscoveryDateTime(item.activity_at||'');
     const product=discoveryProductName(item);
-    const message=discoveryMessage(item);
+    const message=item.activity_type==='following'?String(item.actor_name||'')+' '+followingDiscoveryMessage(item):discoveryMessage(item);
     return '<div class="discovery-item" onclick="showIndividual('+Number(item.id)+',true)" title="'+esc(when+' '+product+' '+message)+'">'+
       '<span class="discovery-time">'+esc(when)+'</span>'+
-      '<span class="discovery-story"><strong>'+esc(product)+'</strong> '+esc(message)+'</span>'+
+      '<span class="discovery-story">'+(item.activity_type==='following'?discoveryActorHtml(item)+' '+esc(followingDiscoveryMessage(item))+' <strong>'+esc(product)+'</strong>':'<strong>'+esc(product)+'</strong> '+esc(message))+'</span>'+
     '</div>';
   }).join('');
 }
@@ -326,6 +340,7 @@ function ownershipControlsHtml(individual){
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
     return actorNote;
   }
+  if(individual.acquire_application)return actorNote+'<button onclick="viewAcquireApplication(\''+esc(individual.acquire_application.revision)+'\')">'+esc(acquireStatusLabel(individual.acquire_application))+'</button>';
   const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
   return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
 }
@@ -432,6 +447,11 @@ function claimCardFull(c){
       body=c.ownership_source==='automation'
         ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
         : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'&&c.transfer){
+      const t=c.transfer;
+      body='<div><strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong></div><div class="claim-memo">Transfer: '+esc(t.state)+'</div>';
+      if(t.accepted_at)body+='<div class="claim-memo">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</div>';
+      if(t.state==='pending'&&activeUser?.user&&[t.from_user_id,t.to_user_id].includes(Number(activeUser.user.id)))body+='<button type="button" onclick="openTransferReview('+Number(c.id)+')">Review Transfer</button>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -638,6 +658,87 @@ async function voteClaim(claimId,vote){
   }
 }
 
+let acquireRevision=null;
+let acquireBusy=false;
+let acquireDisplayState=null;
+function listingMetadataFields(payload={},readOnly=false){
+  return '<div class="modal-grid">'+[['manufacturer','guitarMaker','Maker *',120],['model','guitarModel','Model',160],['year','guitarYear','Year',40],['finish','guitarFinish','Finish',160],['serial_number','guitarSerial','Serial *',160]].map(([key,id,label,max])=>'<label>'+label+'<input id="'+id+'" maxlength="'+max+'" value="'+esc(payload[key]||'')+'" '+(readOnly?'readonly':'')+'></label>').join('')+'</div>';
+}
+function ownershipEvidenceFields({listing=false,issued=true,date='',body=''}={}){
+  return '<div class="modal-grid"><label>'+ (listing?'Listing日付':'取得日')+' *<input id="acquireDate" type="date" required value="'+esc(date)+'" '+(listing&&issued?'readonly':'')+'></label><label class="full">説明<textarea id="acquireBody" maxlength="4000" '+(listing&&issued?'readonly':'')+'>'+esc(body)+'</textarea></label>'+
+    '<label class="full">シリアルとChallengeの近接写真 *<input id="acquireCloseup" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label><label class="full">ギター全体とChallengeの写真 *<input id="acquireOverview" type="file" accept="image/jpeg,image/png,image/webp" '+(!issued?'disabled':'')+'></label></div>'+
+    (listing?'<p class="sub">採用後、全体写真は代表画像として公開されます。近接写真と診断は申請者・管理者・現在Ownerのみ閲覧できます。</p>':'');
+}
+function ownershipChallengeBox(row){
+  if(!row)return '<div class="challenge-box">Challenge: 未発行<p>個体情報と日付を入力して「Challengeを発行」を押してください。発行されたコードを紙に書いてから撮影し、下の2枚の写真を選択します。</p></div>';
+  return '<div class="challenge-box">Serial: '+esc(row.serial)+'<br>Challenge: <strong>'+esc(row.challenge)+'</strong><br>提出期限: '+esc(new Date(row.expires_at*1000).toLocaleString())+'</div><p>このChallengeを書いた紙を近接・全体の両写真に写してください。画像はGPTへ渡して審議します。提出後の審議待ちでは期限切れになりません。</p>';
+}
+function acquireQuery(){return '?viewer_id='+encodeURIComponent(activeUser.user.id)}
+const acquireLabels={draft:'写真提出待ち',pending:'Acquire申請中',processing:'Acquire申請中（審議中）',error:'審議エラー・再開可能',rejected:'Evidence不採用',accepted:'Acquire追加済み',cancelled:'取消済み',closed:'申請終了',expired:'提出期限切れ'};
+function acquireStatusLabel(row){if(row.request_kind==='listing')return ({pending:'Listing申請中',processing:'Listing申請中（審議中）',accepted:'Listing登録済み'})[row.status]||acquireLabels[row.status]||row.status;return row.status==='accepted'&&row.verification_status==='unverified'?'Acquire追加済み・Owner承認待ち':(acquireLabels[row.status]||row.status)}
+async function openAcquireApplication(individualId){
+  if(!activeUser||!activeUser.user){requireAccount();return}
+  if(acquireBusy)return;
+  acquireBusy=true;
+  try{
+    const row=await jfetch('/api/individuals/'+individualId+'/acquire-applications'+acquireQuery(),{method:'POST'});
+    acquireRevision=row.revision;renderAcquireApplication(row);
+    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
+  }catch(e){alert(e.message)}finally{acquireBusy=false}
+}
+function closeAcquireReview(){YGCOverlays.close('acquireReviewModal');acquireRevision=null}
+async function showAcquireApplications(){
+  if(!activeUser||!activeUser.user){requireAccount();return}
+  acquireRevision=null;
+  try{
+    const rows=await jfetch('/api/acquire-applications'+acquireQuery());
+    document.getElementById('acquireReviewContent').innerHTML='<h3>Ownership申請履歴</h3>'+(rows.length?rows.map(r=>'<p><button onclick="viewAcquireApplication(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'申請はありません。');
+    YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
+  }catch(e){alert(e.message)}
+}
+async function viewAcquireApplication(revision){
+  try{const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision)+acquireQuery());acquireRevision=row.revision;renderAcquireApplication(row);YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});if(['accepted','closed'].includes(row.status)&&selectedIndividualId)await refreshClaimViews(selectedIndividualId)}catch(e){alert(e.message)}
+}
+function renderAcquireApplication(row){
+  acquireDisplayState=row.status;
+  const terminal=['accepted','rejected','cancelled','closed','expired'].includes(row.status);
+  const listing=row.request_kind==='listing';
+  let html='<h3>'+esc(acquireStatusLabel(row))+'</h3><p>'+esc(listing?row.product_name:'Individual #'+row.original_individual_id)+' / '+esc(row.revision)+'</p>';
+  if(row.existing_individual_ids?.length)html+='<p>同じMaker・Serialが登録されています。既存個体を確認し、所有を申請する場合はAcquireを使用してください。</p>'+row.existing_individual_ids.map(id=>'<button onclick="closeAcquireReview();showIndividual('+Number(id)+',true)">既存個体 #'+Number(id)+'を確認</button>').join('');
+  if(listing&&row.status==='accepted'&&row.individual_id)html+='<p><a href="/users/'+Number(activeUser.user.id)+'?individual_id='+Number(row.individual_id)+'">登録したギターを表示</a></p>';
+  if(row.error)html+='<p>'+esc(row.error)+'</p>';
+  if(row.status==='draft'){
+    if(listing)html+=listingMetadataFields(row.listing_payload,true);
+    html+=ownershipChallengeBox(row)+ownershipEvidenceFields({listing,date:listing?row.listing_payload.occurred_at:'',body:listing?row.listing_payload.body:''})+
+      '<div class="modal-actions"><button id="acquireSubmit" onclick="submitAcquireApplication()">写真を提出して審議開始</button></div>';
+  }else if(!terminal){html+='<p>'+ (listing?'審議を通過するまで個体とListingは登録されません。':'審議を通過するまでAcquireはギターに追加されません。')+'</p>'}
+  if(row.status==='error')html+='<button onclick="actAcquireApplication(\'retry\')">審議を再開</button>';
+  if(!terminal)html+='<button onclick="actAcquireApplication(\'cancel\')">申請を取り消す</button>';
+  html+='<button onclick="viewAcquireApplication(\''+esc(row.revision)+'\')">状態を更新</button>';
+  if(row.admin_review)html+='<p>管理者による審議: '+(row.admin_review.accepted?'採用':'不採用')+' — '+esc(row.admin_review.reason)+'</p>';
+  if(row.report)html+='<label>診断レポート<textarea readonly rows="12">'+esc(row.report)+'</textarea></label>';
+  for(const role of Object.keys(row.images||{}))html+='<p>'+esc(role)+'</p><img style="max-width:100%;max-height:360px;object-fit:contain" src="/api/acquire-applications/'+encodeURIComponent(row.revision)+'/images/'+encodeURIComponent(role)+acquireQuery()+'" alt="'+esc(role)+'">';
+  document.getElementById('acquireReviewContent').innerHTML=html;
+}
+async function submitAcquireApplication(){
+  if(acquireBusy||!acquireRevision)return;
+  const form=new FormData();const acquired=document.getElementById('acquireDate').value;
+  const closeup=document.getElementById('acquireCloseup').files[0],overview=document.getElementById('acquireOverview').files[0];
+  if(!acquired||!closeup||!overview){alert('取得日と両方の写真を入力してください。');return}
+  form.append('acquisition_date',acquired);form.append('body',document.getElementById('acquireBody').value);form.append('closeup',closeup);form.append('overview',overview);
+  acquireBusy=true;document.getElementById('acquireSubmit').disabled=true;
+  try{const row=await jfetch('/api/acquire-applications/'+acquireRevision+'/submit'+acquireQuery(),{method:'POST',body:form});renderAcquireApplication(row);if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false;const button=document.getElementById('acquireSubmit');if(button)button.disabled=false}
+}
+async function actAcquireApplication(action){
+  if(acquireBusy||!acquireRevision)return;
+  if(action==='cancel'&&!confirm('この申請を取り消しますか？'))return;
+  acquireBusy=true;
+  try{renderAcquireApplication(await jfetch('/api/acquire-applications/'+acquireRevision+'/'+action+acquireQuery(),{method:'POST'}));if(selectedIndividualId)await showIndividual(selectedIndividualId)}catch(e){alert(e.message)}finally{acquireBusy=false}
+}
+
+if(typeof setInterval==='function')setInterval(()=>{
+  if(!document.hidden&&!acquireBusy&&acquireRevision&&['pending','processing'].includes(acquireDisplayState)&&document.getElementById('acquireReviewModal').classList.contains('open'))viewAcquireApplication(acquireRevision);
+},15000);
 let individualLoadSequence=0;
 function closeCompactDetail(){
   document.getElementById('productDetailShell').classList.remove('compact-open');
@@ -705,6 +806,9 @@ async function showIndividual(id,fromList=false){
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
   document.getElementById('detail').innerHTML=out;
   renderChronicle();
+  if((d.acquire_evidence||[]).length){
+    const section=document.createElement('div');section.innerHTML='<h4>Acquire Evidence（閲覧権限あり）</h4>'+d.acquire_evidence.map(e=>'<button onclick="viewAcquireApplication(\''+esc(e.revision)+'\')">Claim #'+esc(e.claim_id)+' の診断・写真</button>').join('');document.getElementById('detail').appendChild(section);
+  }
   if(changedIndividual){
     const detail=document.getElementById('detail');
     if(detail)detail.scrollTop=0;
@@ -1018,6 +1122,7 @@ function configureOwnershipClaim(mode){
   }
 }
 function openOwnershipClaim(individualId,mode='acquire'){
+  if(mode==='acquire'){openAcquireApplication(individualId);return}
   if(!activeUser||!activeUser.user){
     requireAccount();
     return;
@@ -1032,7 +1137,8 @@ function openOwnershipClaim(individualId,mode='acquire'){
   document.getElementById('ownershipClaimGuitar').textContent=guitar
     ? guitar.manufacturer+' '+(guitar.model||'')+(guitar.serial_number?' / '+guitar.serial_number:'')
     : 'Individual #'+individualId;
-  configureOwnershipClaim(mode);
+  transferSelectedUser=null;transferSearchGeneration++;document.getElementById('transferRecipientSearch').value='';document.getElementById('transferSearchResults').innerHTML='';document.getElementById('transferSelectedRecipient').textContent='';
+  configureOwnershipClaim(mode);updateTransferFields();
   document.getElementById('ownershipClaimDate').value='';
   document.getElementById('ownershipClaimPrevious').value='';
   document.getElementById('ownershipClaimBody').value='';
@@ -1040,7 +1146,7 @@ function openOwnershipClaim(individualId,mode='acquire'){
   YGCOverlays.open('ownershipClaimModal');
 }
 function openOwnerClaim(individualId){
-  openOwnershipClaim(individualId,'acquire');
+  openAcquireApplication(individualId);
 }
 function closeOwnershipClaim(event){
   if(event&&event.target&&event.target.id!=='ownershipClaimModal')return;
@@ -1051,6 +1157,7 @@ async function submitOwnershipClaim(){
   if(!activeUser||!activeUser.user||pendingOwnershipClaimIndividualId===null)return;
   const button=document.getElementById('ownershipClaimSubmit');
   const kind=document.getElementById('ownershipClaimKind').value;
+  if(kind==='transfer'){await submitTransferProposal();return}
   if(kind==='acquire'&&!document.getElementById('ownershipClaimDate').value){
     alert('Acquire requires an acquisition date.');
     document.getElementById('ownershipClaimDate').focus();
@@ -1394,24 +1501,27 @@ function profileGuitarTable(section,title){
 }
 function openNewGuitar(){
   if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
-  document.getElementById('guitarStatus').textContent='';
-  YGCOverlays.open('newGuitarModal');
+  if(acquireBusy)return;
+  acquireRevision=null;acquireDisplayState=null;
+  document.getElementById('acquireReviewContent').innerHTML='<h3>Add Guitar — Listing申請</h3><p>① 個体情報を入力してChallengeを発行 → ② コードとギターを撮影 → ③ 写真を提出</p>'+listingMetadataFields()+ownershipChallengeBox(null)+ownershipEvidenceFields({listing:true,issued:false,date:new Date().toLocaleDateString('sv-SE')})+'<p id="guitarStatus" class="sub" role="status"></p><div class="modal-actions"><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Challengeを発行</button></div>';
+  YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null}});
   document.getElementById('guitarMaker').focus();
 }
-function closeNewGuitar(){YGCOverlays.close('newGuitarModal')}
+function closeNewGuitar(){closeAcquireReview()}
 async function submitNewGuitar(){
   if(!activeUser?.user||Number(activeUser.user.id)!==PROFILE_USER_ID)return;
-  const field=id=>document.getElementById(id);
-  const maker=field('guitarMaker').value.trim(),serial=field('guitarSerial').value.trim(),image=field('guitarImage').files[0];
-  if(!maker||!serial||!image){field('guitarStatus').textContent='Maker, Serial, and Representative Image are required.';return}
-  const button=field('guitarSubmit');button.disabled=true;field('guitarStatus').textContent='Saving...';
+  if(acquireBusy)return;
+  const field=id=>document.getElementById(id),button=field('guitarSubmit');
+  const payload={};for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'acquireDate',body:'acquireBody'}))payload[key]=field(id).value.trim();
+  if(!payload.manufacturer||!payload.serial_number||!payload.occurred_at){field('guitarStatus').textContent='Maker・Serial・日付を入力してください。';return}
+  acquireBusy=true;button.disabled=true;field('guitarStatus').textContent='Challengeを発行しています…';
   try{
-    const data=new FormData();
-    for(const [key,id] of Object.entries({manufacturer:'guitarMaker',serial_number:'guitarSerial',model:'guitarModel',finish:'guitarFinish',year:'guitarYear',occurred_at:'guitarDate',body:'guitarMemo'}))data.append(key,field(id).value.trim());
-    data.append('representative_image',image);
-    const result=await jfetch('/api/users/'+PROFILE_USER_ID+'/new-guitar',{method:'POST',body:data});
-    window.location.href='/users/'+PROFILE_USER_ID+'?individual_id='+encodeURIComponent(result.individual_id);
-  }catch(error){field('guitarStatus').textContent=error.message;button.disabled=false}
+    const row=await jfetch('/api/listing-applications'+acquireQuery(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(row.status==='duplicate'){
+      field('guitarStatus').innerHTML='同じMaker・Serialの個体が登録されています。既存個体のAcquireから申請してください。'+row.existing_individual_ids.map(id=>'<button onclick="closeNewGuitar();showIndividual('+Number(id)+',true)">個体 #'+Number(id)+'を確認</button>').join('');return;
+    }
+    acquireRevision=row.revision;renderAcquireApplication(row);document.getElementById('acquireReviewContent').parentElement.scrollTop=0;
+  }catch(error){if(field('guitarStatus'))field('guitarStatus').textContent=error.message;else alert(error.message)}finally{acquireBusy=false;button.disabled=false}
 }
 function setProfileSort(section,key){
   const state=profileSort[section];
@@ -1476,6 +1586,167 @@ function setupProfileShell(){
   }
   document.getElementById('detail').textContent='Select a guitar from this profile to view its Product Detail.';
 }
+let transferSelectedUser=null,transferCandidates=[],transferSearchOffset=0,transferSearchGeneration=0,transferReviewRecord=null;
+function updateTransferFields(){
+  const transfer=document.getElementById('ownershipClaimKind').value==='transfer';
+  document.getElementById('transferRecipientRow').hidden=!transfer;
+  document.getElementById('transferSearchMore').hidden=true;
+  document.getElementById('ownershipClaimDate').closest('.form-row').hidden=transfer;
+  document.getElementById('ownershipClaimPreviousRow').hidden=transfer;
+  document.getElementById('ownershipClaimPreviousRow').style.display=transfer?'none':'';
+  document.getElementById('ownershipClaimBody').closest('.form-row').hidden=transfer;
+}
+async function searchTransferRecipients(more=false){
+  const query=document.getElementById('transferRecipientSearch').value.trim();if(!query)return;
+  const generation=++transferSearchGeneration,offset=more?transferSearchOffset:0;
+  if(!more){transferCandidates=[];transferSelectedUser=null;document.getElementById('transferSelectedRecipient').textContent=''}
+  try{
+    const users=await jfetch('/api/transfer-users?viewer_id='+Number(activeUser.user.id)+'&q='+encodeURIComponent(query)+'&offset='+offset);
+    if(generation!==transferSearchGeneration)return;
+    transferCandidates=[...transferCandidates,...users];transferSearchOffset=offset+users.length;
+    document.getElementById('transferSearchResults').innerHTML=transferCandidates.map((u,index)=>'<button type="button" style="display:block;width:100%;text-align:left;margin-top:4px" onclick="selectTransferRecipient('+index+')">'+esc(u.display_name)+' · #'+Number(u.id)+' · '+esc(u.account_type)+'</button>').join('')||'<p class="sub">No matching users.</p>';
+    document.getElementById('transferSearchMore').hidden=users.length<20;
+  }catch(e){if(generation===transferSearchGeneration)document.getElementById('transferSearchResults').textContent=e.message}
+}
+function selectTransferRecipient(index){transferSelectedUser=transferCandidates[index];document.getElementById('transferSelectedRecipient').textContent='To: '+transferSelectedUser.display_name+' (#'+transferSelectedUser.id+')'}
+async function submitTransferProposal(){
+  if(!transferSelectedUser){alert('Select a recipient from the search results.');return}
+  const button=document.getElementById('ownershipClaimSubmit'),individualId=pendingOwnershipClaimIndividualId;button.disabled=true;
+  try{
+    await jfetch('/api/individuals/'+individualId+'/transfers?viewer_id='+Number(activeUser.user.id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to_user_id:Number(transferSelectedUser.id)})});
+    closeOwnershipClaim();await refreshClaimViews(individualId);
+  }catch(e){alert('Transfer could not be proposed.\n'+e.message)}finally{button.disabled=false}
+}
+async function openTransferReview(claimId){
+  const dialog=document.getElementById('transferReviewDialog');YGCOverlays.open(dialog);
+  transferReviewRecord=null;document.getElementById('transferReviewBody').textContent='Loading...';document.getElementById('transferReviewActions').innerHTML='';document.getElementById('transferReviewStatus').textContent='';
+  try{
+    const t=await jfetch('/api/transfers/'+claimId+'?viewer_id='+Number(activeUser.user.id));transferReviewRecord=t;
+    document.getElementById('transferReviewBody').innerHTML='<strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong><p>'+esc([t.guitar?.manufacturer,t.guitar?.model,t.guitar?.serial_number].filter(Boolean).join(' / '))+' · #'+Number(t.individual_id)+' · '+esc(t.state)+'</p>'+(t.accepted_at?'<p class="sub">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</p>':'<p class="sub">Accept confirms this ownership transfer. Verification remains a separate Claim judgement.</p>');
+    if(t.state==='pending'&&t.claim_active){
+      const choices=Number(activeUser.user.id)===t.to_user_id?['accept','decline']:['cancel'];
+      document.getElementById('transferReviewActions').innerHTML=choices.map(action=>'<button type="button" onclick="resolveTransfer(\''+action+'\')">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('');
+    }
+  }catch(e){document.getElementById('transferReviewBody').textContent=e.message}
+}
+async function resolveTransfer(action){
+  const t=transferReviewRecord;if(!t)return;
+  const buttons=[...document.getElementById('transferReviewActions').querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+  try{
+    await jfetch('/api/transfers/'+t.claim_id+'/resolve?viewer_id='+Number(activeUser.user.id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    YGCOverlays.close('transferReviewDialog');closeClaimPopup();await refreshClaimViews(t.individual_id);
+  }catch(e){document.getElementById('transferReviewStatus').textContent=e.message;buttons.forEach(b=>b.disabled=false)}
+}
+
+let dmInbox={unread_count:0,conversations:[],next_before_id:null},dmPeer=null,dmBefore=null,dmGeneration=0,dmSending=false,dmHistoryLoading=false,dmInboxLoading=false;
+function dmActor(){return Number(activeUser?.user?.id||0)}
+function dmStatus(text){document.getElementById('dmStatus').textContent=text}
+function renderDirectMessageInbox(){
+  document.getElementById('dmConversationList').innerHTML=dmInbox.conversations.map(c=>'<button type="button" class="dm-conversation'+(Number(c.peer_id)===dmPeer?' selected':'')+'" onclick="selectDirectMessagePeer('+Number(c.peer_id)+')"><strong>'+esc(c.peer_name)+'</strong> '+(c.unread_count?'<span class="account-hub-count">'+Number(c.unread_count)+'</span>':'')+'<div class="dm-preview">'+esc(c.preview)+'</div></button>').join('')||'<p class="sub">No conversations yet.</p>';
+  document.getElementById('dmMoreConversations').hidden=!dmInbox.next_before_id;
+  const count=document.getElementById('directMessageCount');if(count)count.textContent=Number(dmInbox.unread_count||0);
+}
+async function loadDirectMessageInbox(append=false){
+  if(!dmActor()){dmInbox={unread_count:0,conversations:[],next_before_id:null};return}
+  if(dmInboxLoading)return;
+  dmInboxLoading=true;document.getElementById('dmMoreConversations').disabled=true;
+  try{
+    const cursor=append?dmInbox.next_before_id:null;if(append&&!cursor)return;
+    const result=await jfetch('/api/dm?viewer_id='+dmActor()+(cursor?'&before_id='+cursor:''));
+    const previous=append?dmInbox.conversations:[];
+    dmInbox={...result,conversations:[...previous,...result.conversations.filter(c=>!previous.some(p=>p.peer_id===c.peer_id))]};
+    renderDirectMessageInbox();
+  }catch(e){if(document.getElementById('directMessageDialog').open)dmStatus(e.message)}
+  finally{dmInboxLoading=false;document.getElementById('dmMoreConversations').disabled=false}
+}
+async function openDirectMessages(peer=null){
+  if(!dmActor())return;
+  const dialog=document.getElementById('directMessageDialog');
+  dmStatus('');
+  YGCOverlays.open(dialog);
+  await loadDirectMessageInbox();
+  if(peer)await selectDirectMessagePeer(Number(peer));
+  else if(dmPeer)await loadDirectMessageHistory();
+}
+async function selectDirectMessagePeer(peer){
+  if(dmSending)return;
+  dmPeer=Number(peer);dmBefore=null;dmGeneration++;dmHistoryLoading=false;
+  document.getElementById('dmBody').value='';document.getElementById('dmComposeForm').hidden=true;
+  document.getElementById('dmThread').innerHTML='';document.getElementById('dmPeerTitle').textContent='Loading conversation...';
+  renderDirectMessageInbox();await loadDirectMessageHistory();
+}
+async function loadDirectMessageHistory(older=false){
+  if(!dmPeer||dmHistoryLoading)return;
+  const peer=dmPeer,generation=dmGeneration,cursor=older?dmBefore:null;
+  if(older&&!cursor)return;
+  dmHistoryLoading=true;document.getElementById('dmOlder').disabled=true;dmStatus('Loading...');
+  try{
+    const data=await jfetch('/api/dm/users/'+peer+'/messages?viewer_id='+dmActor()+(cursor?'&before_id='+cursor:''));
+    if(generation!==dmGeneration)return;
+    document.getElementById('dmPeerTitle').innerHTML='<a href="/users/'+Number(data.peer.id)+'" style="color:var(--text)">'+esc(data.peer.display_name)+'</a>';
+    const thread=document.getElementById('dmThread'),height=thread.scrollHeight,top=thread.scrollTop;
+    const content=data.messages.map(m=>'<div class="dm-message'+(m.sender_user_id===dmActor()?' mine':'')+'">'+esc(m.body)+'<div class="dm-time">'+esc(displayDiscoveryDateTime(m.created_at))+'</div></div>').join('');
+    if(older){thread.insertAdjacentHTML('afterbegin',content);thread.scrollTop=top+thread.scrollHeight-height}
+    else{thread.innerHTML=content||'<p class="sub">Start a conversation.</p>';thread.scrollTop=thread.scrollHeight}
+    dmBefore=data.next_before_id;document.getElementById('dmOlder').hidden=!dmBefore;
+    document.getElementById('dmComposeForm').hidden=false;dmStatus('');
+    if(data.messages.length&&document.getElementById('directMessageDialog').open){
+      await jfetch('/api/dm/users/'+peer+'/read?viewer_id='+dmActor(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({through_id:data.messages[data.messages.length-1].id})});
+      await loadDirectMessageInbox();
+    }
+  }catch(e){if(generation===dmGeneration)dmStatus(e.message)}
+  finally{if(generation===dmGeneration){dmHistoryLoading=false;document.getElementById('dmOlder').disabled=false}}
+}
+async function sendDirectMessage(){
+  const peer=dmPeer,input=document.getElementById('dmBody'),body=input.value.trim();
+  if(!peer||dmSending)return;
+  if(dmHistoryLoading){dmStatus('Wait for the conversation to finish loading.');return}
+  if(!body){dmStatus('Enter a message.');return}
+  dmSending=true;document.getElementById('dmSend').disabled=true;input.disabled=true;dmStatus('Sending...');
+  try{
+    await jfetch('/api/dm/users/'+peer+'/messages?viewer_id='+dmActor(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})});
+    input.value='';await loadDirectMessageHistory();await loadDirectMessageInbox();dmStatus('Message sent.');
+  }catch(e){dmStatus(e.message)}
+  finally{dmSending=false;document.getElementById('dmSend').disabled=false;input.disabled=false}
+}
+async function refreshDirectMessages(){if(dmSending)return;await loadDirectMessageInbox();if(dmPeer)await loadDirectMessageHistory()}
+
+async function toggleUserFollow(wasFollowing){
+  if(!activeUser?.user)return;
+  const button=document.getElementById('followUserButton'),status=document.getElementById('followUserStatus');
+  button.disabled=true;
+  try{
+    const actor=Number(activeUser.user.id);
+    await jfetch('/api/users/'+actor+'/following/'+PROFILE_USER_ID+'?viewer_id='+actor,{method:wasFollowing?'DELETE':'PUT'});
+    await loadProfilePage(selectedIndividualId||null);
+  }catch(e){status.textContent=e.message;button.disabled=false}
+}
+let connectionDirection='followers',connectionOffset=0,connectionLoading=false,connectionGeneration=0;
+async function openUserConnections(direction){
+  connectionDirection=direction;connectionOffset=0;connectionGeneration++;connectionLoading=false;
+  const dialog=document.getElementById('userConnectionsDialog');
+  document.getElementById('userConnectionsTitle').textContent=direction==='followers'?'Followers':'Following';
+  document.getElementById('userConnectionsList').innerHTML='';
+  document.getElementById('userConnectionsMore').hidden=true;
+  YGCOverlays.open(dialog);
+  await loadUserConnections();
+}
+async function loadUserConnections(){
+  if(connectionLoading)return;
+  connectionLoading=true;
+  const generation=connectionGeneration,status=document.getElementById('userConnectionsStatus'),more=document.getElementById('userConnectionsMore');
+  more.disabled=true;status.textContent='Loading...';
+  try{
+    const users=await jfetch('/api/users/'+PROFILE_USER_ID+'/connections/'+connectionDirection+'?limit=50&offset='+connectionOffset);
+    if(generation!==connectionGeneration)return;
+    const list=document.getElementById('userConnectionsList');
+    list.insertAdjacentHTML('beforeend',users.map(u=>'<a style="display:block;padding:8px 0;border-bottom:1px solid var(--line);color:var(--text)" href="/users/'+Number(u.id)+'">'+esc(u.display_name)+' <span class="sub">'+esc(u.account_type)+'</span></a>').join(''));
+    connectionOffset+=users.length;more.hidden=users.length<50;
+    status.textContent=connectionOffset?'':'No users yet.';
+  }catch(e){if(generation===connectionGeneration)status.textContent=e.message}
+  finally{if(generation===connectionGeneration){connectionLoading=false;more.disabled=false}}
+}
+
 async function loadProfilePage(preferredIndividualId=null){
   const hero=document.getElementById('profileHero');
   if(!activeUser||!activeUser.user){
@@ -1503,14 +1774,14 @@ async function loadProfilePage(preferredIndividualId=null){
       ...(locationText?[['Location',locationText]]:[]),
       ...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])
     ].map(([label,value])=>'<div class="profile-meta-item"><span class="profile-meta-label">'+esc(label)+'</span><span class="profile-meta-value">'+esc(value)+'</span></div>').join('');
-    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',0],['Following',0]];
+    const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',data.social.followers_count],['Following',data.social.following_count]];
     hero.innerHTML='<div class="profile-hero">'+
-      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
+      '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
-      '<div class="profile-stats">'+stats.map(x=>'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
-      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'')+'</div></div>';
+      '<div class="profile-stats">'+stats.map(x=>['Followers','Following'].includes(x[0])?'<button type="button" class="profile-stat" onclick="openUserConnections(\''+x[0].toLowerCase()+'\')"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</button>':'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');

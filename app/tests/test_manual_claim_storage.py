@@ -86,7 +86,7 @@ def test_edit_keeps_existing_legacy_history_unchanged(tmp_path):
         assert con.execute('SELECT occurred_at FROM claims WHERE id=?', (acquire,)).fetchone()[0] == '2026-02-03'
 
 
-def test_ownership_api_returns_claim_without_legacy_id(tmp_path, monkeypatch):
+def test_acquire_api_requires_review_and_former_owner_avoids_legacy_id(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'DB_PATH', tmp_path / 'api.db')
     repo = Repository(config.DB_PATH)
     owner, other, individual, _ = setup(repo)
@@ -95,9 +95,10 @@ def test_ownership_api_returns_claim_without_legacy_id(tmp_path, monkeypatch):
             'user_id': other, 'ownership_kind': 'acquire', 'occurred_at': '2026-02-01',
             'previous_owner_text': 'Owner',
         })
-        assert response.status_code == 200, response.text
-        assert 'observation_id' not in response.json()
-        assert response.json()['claim_id'] > 0
+        assert response.status_code == 409, response.text
+        with repo.connect() as con:
+            assert con.execute("SELECT COUNT(*) FROM claims WHERE claim_type='ownership'").fetchone()[0] == 0
+            assert con.execute("SELECT COUNT(*) FROM observations").fetchone()[0] == 0
         response = client.post(f'/api/individuals/{individual}/former-owner-claim', json={
             'user_id': other, 'acquisition_date': '2020-01-01', 'release_date': '2021-01-01',
         })

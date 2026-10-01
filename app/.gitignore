@@ -8,3 +8,6 @@ data/migration-backups/
 logs/*.log
 .env
 .DS_Store
+
+# Private review queue contains images and the MCP connection key.
+data/direct-review/

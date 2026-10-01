@@ -8,5 +8,7 @@ Requires-Dist: typer<1,>=0.12
 Requires-Dist: rich<14,>=13
 Requires-Dist: fastapi<1,>=0.115
 Requires-Dist: uvicorn<1,>=0.30
+Requires-Dist: python-multipart<1,>=0.0.9
+Requires-Dist: Pillow<13,>=11
 Provides-Extra: dev
 Requires-Dist: pytest<9,>=8; extra == "dev"

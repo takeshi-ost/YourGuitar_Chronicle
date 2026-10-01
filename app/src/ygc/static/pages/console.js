@@ -6,14 +6,242 @@ let activeUser=null;
 let selectedIndividualId=null;
 const TOKEN_KEY='ygc_reverb_api_token';
 const ACTIVE_USER_KEY='ygc_active_user_id';
+try{
 if(sessionStorage.getItem(ACTIVE_USER_KEY)===null){
   const previous=localStorage.getItem(ACTIVE_USER_KEY);
   if(previous)sessionStorage.setItem(ACTIVE_USER_KEY,previous);
 }
 localStorage.removeItem(ACTIVE_USER_KEY);
+}catch(error){}
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-function storedToken(){return (localStorage.getItem(TOKEN_KEY)||'').trim()}
-async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||r.statusText);return d}
+function storedToken(){try{return (localStorage.getItem(TOKEN_KEY)||'').trim()}catch(error){return ''}}
+async function jfetch(url,opt={}){const headers=new Headers(opt.headers||{});const token=storedToken();if(token)headers.set('X-Reverb-Token',token);if(CONSOLE_ADMIN_TOKEN)headers.set('X-YGC-Console-Admin',CONSOLE_ADMIN_TOKEN);const r=await fetch(url,{...opt,headers});const d=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(d.detail||r.statusText);throw e}return d}
+// Remove only credentials saved by the retired inference API UI.
+try{for(const provider of ['openai','gemini'])localStorage.removeItem('ygc_authentication_api_key_'+provider)}catch(error){}
+let directBusy=false;
+let directSelectedRevision=null;
+let directSelectedResult=null;
+function hideDirectToken(){
+  document.getElementById('directToken').type='password';
+  const button=document.getElementById('directTokenToggle');
+  button.textContent='接続キーを表示';
+  button.setAttribute('aria-pressed','false');
+  document.getElementById('directTokenStatus').textContent='';
+}
+function toggleDirectToken(){
+  const input=document.getElementById('directToken');
+  const button=document.getElementById('directTokenToggle');
+  const visible=input.type==='password';
+  input.type=visible?'text':'password';
+  button.textContent=visible?'接続キーを隠す':'接続キーを表示';
+  button.setAttribute('aria-pressed',String(visible));
+}
+async function copyDirectToken(){
+  const input=document.getElementById('directToken');
+  const status=document.getElementById('directTokenStatus');
+  const token=input.value;
+  if(!token){status.textContent='先に「① 画像とテスト申請を準備」を実行してください。';return}
+  try{
+    await navigator.clipboard.writeText(token);
+    if(input.value===token)status.textContent='接続キーをコピーしました。設定のPASTE_TOKENを置き換えてください。';
+  }catch(error){
+    if(input.value!==token)return;
+    if(input.type==='password')toggleDirectToken();
+    input.focus();input.select();input.setSelectionRange(0,input.value.length);
+    status.textContent='自動コピーを利用できません。キーを表示・選択しました。⌘C（WindowsはCtrl+C）でコピーしてください。';
+  }
+}
+
+async function prepareDirectExperiment(){
+  if(directBusy)return;
+  directBusy=true;
+  const status=document.getElementById('directStatus');
+  try{
+    const body=new FormData();
+    for(const [key,id] of [['application_id','directApplication'],['serial','directSerial'],['challenge','directChallenge']])body.append(key,document.getElementById(id).value.trim());
+    for(const [key,id] of [['closeup','directCloseup'],['overview','directOverview'],['reference','directReference']]){
+      const file=document.getElementById(id).files[0];
+      if(!file||file.size>12*1024*1024)throw new Error('3画像をそれぞれ12MB以下で選択してください。');
+      body.append(key,file);
+    }
+    status.textContent='画像を準備しています…';
+    const result=await jfetch('/api/admin/direct-experiment/prepare',{method:'POST',body});
+    showDirectConnection(result);
+    directSelectedRevision=result.revision;
+    directSelectedResult=null;
+    const {token,prompt,python,project,...safe}=result;
+    document.getElementById('directResult').value=JSON.stringify(safe,null,2);
+    status.textContent='申請を追加しました。定期実行で審議されます。';
+    await loadDirectQueue();
+  }catch(error){status.textContent='準備できませんでした: '+error.message}
+  finally{directBusy=false}
+}
+async function inspectDirectExperiment(){
+  if(directBusy)return;
+  directBusy=true;
+  const status=document.getElementById('directStatus');
+  try{
+    const token=document.getElementById('directToken').value;
+    if(!token)throw new Error('先にテスト申請を準備してください。');
+    const call=async(method,params={})=>{
+      const response=await jfetch('/api/experiments/direct/mcp',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/event-stream','Authorization':'Bearer '+token},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+      if(response.error||response.result?.isError)throw new Error('MCP応答を確認できませんでした。');
+      return response.result;
+    };
+    const initialized=await call('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'YGC Console diagnostic',version:'1'}});
+    const tools=await call('tools/list');
+    await call('ping');
+    /* Diagnostic is deliberately non-claiming. */
+    document.getElementById('directResult').value=JSON.stringify({server:initialized.serverInfo,tools:tools.tools.map(t=>t.name)},null,2);
+    status.textContent='ローカル接続診断成功。申請は確保していません。画像閲覧と審議はGPT側で行います。';
+  }catch(error){status.textContent='接続診断失敗: '+error.message}
+  finally{directBusy=false}
+}
+function showDirectConnection(result){
+    document.getElementById('directToken').value=result.token;
+    hideDirectToken();
+    document.getElementById('directPrompt').value=result.prompt;
+    const url=location.origin+'/api/experiments/direct/mcp';
+    document.getElementById('directConfig').value='[mcp_servers.ygc_experiment]\ncommand = '+JSON.stringify(result.python)+'\nargs = ["-m", "ygc.direct_mcp_bridge", "--url", '+JSON.stringify(url)+']\ncwd = '+JSON.stringify(result.project)+'\n\n[mcp_servers.ygc_experiment.env]\nYGC_EXPERIMENT_TOKEN = "PASTE_TOKEN"';
+}
+async function restoreDirectConnection(){
+  if(directBusy)return;
+  directBusy=true;
+  try{
+    showDirectConnection(await jfetch('/api/admin/direct-experiment/connection',{method:'POST'}));
+    document.getElementById('directStatus').textContent='保存済み接続設定を表示しました。申請・結果は変更していません。';
+  }catch(error){document.getElementById('directStatus').textContent='接続設定取得失敗: '+error.message}
+  finally{directBusy=false}
+}
+function directStatusLabel(job){
+  return job.status==='completed'?(job.accepted?'True（採用）':'False（不採用）'):
+    ({pending:'未処理',processing:'審議中',error:'エラー',cancelled:'取消済み'}[job.status]||job.status);
+}
+async function loadDirectQueue(){
+  const result=await jfetch('/api/admin/direct-experiment');
+  const jobs=result.jobs||[];
+  document.getElementById('directQueueRows').innerHTML=jobs.map(job=>{
+    const revision=esc(job.revision);
+    const action=(name,label)=>`<button class="secondary" type="button" data-direct-action="${name}" data-direct-revision="${revision}">${label}</button>`;
+    return `<tr><td>${esc(job.application_id)}<br><small>${revision.slice(0,12)}</small></td><td>${esc(directStatusLabel(job))}<br>${esc(job.error||'')}</td><td>${esc(job.created_at)}<br>${esc(job.started_at||'—')}<br>${esc(job.completed_at||'—')}</td><td>${esc(job.attempts)}回 ${action('select','詳細')}${job.status==='error'?action('retry','再試行'):''}${['pending','processing','error'].includes(job.status)?action('cancel','取消'):''}${['completed','cancelled','error'].includes(job.status)?action('delete','削除'):''}</td></tr>`;
+  }).join('')||'<tr><td colspan="4">申請はありません。</td></tr>';
+  if(directSelectedRevision&&!jobs.some(j=>j.revision===directSelectedRevision))directSelectedRevision=null;
+  if(!directSelectedRevision&&jobs.length)directSelectedRevision=jobs[0].revision;
+  if(directSelectedRevision){
+    const detail=await jfetch('/api/admin/direct-experiment?revision='+encodeURIComponent(directSelectedRevision));
+    directSelectedResult=detail;
+    document.getElementById('directResult').value=JSON.stringify(detail,null,2);
+    document.getElementById('directReport').value=detail.report_text||'';
+    document.getElementById('directStatus').textContent=detail.status==='completed'?'暫定採否: '+(detail.result.adjudication.accepted?'True（採用）':'False（不採用）')+'。Claim・所有権の変更なし。':directStatusLabel(detail);
+  }else{
+    directSelectedResult=null;
+    document.getElementById('directResult').value='';document.getElementById('directReport').value='';
+    document.getElementById('directStatus').textContent='申請はありません。';
+  }
+}
+async function refreshDirectExperiment(){
+  if(directBusy)return;
+  directBusy=true;
+  try{await loadDirectQueue()}
+  catch(error){document.getElementById('directStatus').textContent='一覧取得失敗: '+error.message}
+  finally{directBusy=false}
+}
+async function manageDirectJob(revision,action){
+  if(directBusy)return;
+  if(['delete','cancel'].includes(action)&&!confirm(action==='delete'?'この実験申請の画像・診断・履歴を削除しますか？':'この実験申請の審議を取り消しますか？'))return;
+  directBusy=true;
+  try{
+    if(action==='select'){directSelectedRevision=revision;directSelectedResult=null;}
+    else await jfetch('/api/admin/direct-experiment/jobs/'+encodeURIComponent(revision)+'/'+action,{method:'POST'});
+    await loadDirectQueue();
+  }catch(error){document.getElementById('directStatus').textContent='操作失敗: '+error.message}
+  finally{directBusy=false}
+}
+function downloadDirectResult(format){
+  if(!directSelectedResult){document.getElementById('directStatus').textContent='一覧から申請を選択してください。';return}
+  if(format==='txt'&&!directSelectedResult.report_text){document.getElementById('directStatus').textContent='診断文章は未提出です。';return}
+  const value=format==='json'?JSON.stringify(directSelectedResult,null,2):directSelectedResult.report_text;
+  const url=URL.createObjectURL(new Blob([value],{type:format==='json'?'application/json':'text/plain;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download=directSelectedResult.application_id+'-'+directSelectedResult.revision+'.'+format;
+  a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+if(typeof window!=='undefined'){
+  document.getElementById('directQueueRows').addEventListener('click',event=>{
+    const button=event.target.closest('button[data-direct-action]');
+    if(button)manageDirectJob(button.dataset.directRevision,button.dataset.directAction);
+  });
+  window.setInterval(()=>{if(!document.hidden&&document.getElementById('directAutoRefresh').checked)refreshDirectExperiment()},15000);
+}
+async function revokeDirectExperiment(){
+  if(directBusy)return;
+  directBusy=true;
+  try{
+    await jfetch('/api/admin/direct-experiment',{method:'DELETE'});
+    for(const id of ['directToken','directConfig','directPrompt'])document.getElementById(id).value='';
+    hideDirectToken();
+    document.getElementById('directStatus').textContent='接続キーを失効しました。申請・画像・診断結果は保存されています。';
+  }catch(error){document.getElementById('directStatus').textContent='終了できませんでした: '+error.message}
+  finally{directBusy=false}
+}
+
+let productionAcquires=[],productionSelected=null,productionBusy=false,productionImageUrls=[],productionDetailSequence=0;
+const ownershipStates={draft:'写真提出待ち',pending:'審議待ち',processing:'審議中',error:'処理エラー',accepted:'採用',rejected:'不採用',cancelled:'取消',closed:'終了',expired:'提出期限切れ'};
+const ownershipActions={cancel:'申請を取り消す',retry:'再審議へ戻す',accept:'審議を採用に上書き',reject:'審議を不採用に上書き',positive:'Verification → Positive',negative:'Verification → Negative',unverified:'Verification → Unverified'};
+async function loadProductionAcquires(){
+  try{
+    const data=await jfetch('/api/admin/acquire-applications');
+    productionAcquires=data.applications;
+    document.getElementById('productionAcquirePrompt').value=data.prompt;
+    renderProductionAcquires();
+    document.getElementById('productionAcquireStatus').textContent='更新: '+new Date().toLocaleTimeString()+' / '+productionAcquires.length+'件';
+    if(productionSelected){const row=productionAcquires.find(r=>r.revision===productionSelected.revision);if(row)renderProductionAcquireDetail(row)}
+  }catch(e){document.getElementById('productionAcquireStatus').textContent='取得失敗: '+e.message}
+}
+function renderProductionAcquires(){
+  const query=document.getElementById('productionAcquireSearch').value.toLowerCase().trim();
+  const status=document.getElementById('productionAcquireFilter').value;
+  const rows=productionAcquires.filter(r=>(!status||r.status===status)&&[r.revision,r.applicant_name,r.applicant_id,r.product_name,r.original_individual_id,r.serial].join(' ').toLowerCase().includes(query));
+  document.getElementById('productionAcquireRows').innerHTML=rows.map(r=>'<tr><td><button onclick="inspectProductionAcquire(\''+esc(r.revision)+'\')">'+esc(r.revision.slice(0,12))+'</button></td><td>'+esc(r.applicant_name)+' (#'+Number(r.applicant_id)+')</td><td>'+esc(r.request_kind==='listing'?'Listing: ':'Acquire: ')+esc(r.product_name)+(r.original_individual_id?' (#'+Number(r.original_individual_id)+')':' (登録前)')+'<br>'+esc(r.serial)+'</td><td>'+esc(ownershipStates[r.status]||r.status)+'</td><td>'+esc(r.verification_status||'—')+(r.status==='accepted'&&r.verification_status==='unverified'?'<br>Owner承認待ち':'')+'</td><td>'+esc(r.submitted_at||r.created_at)+'</td></tr>').join('')||'<tr><td colspan="6">該当する申請はありません。</td></tr>';
+}
+function clearProductionImages(){for(const url of productionImageUrls)URL.revokeObjectURL(url);productionImageUrls=[];document.getElementById('productionAcquireImages').innerHTML=''}
+function renderProductionAcquireDetail(row){
+  productionSelected=row;
+  document.getElementById('productionAcquireDetail').value=JSON.stringify(row,null,2);
+  const manual=row.admin_review?'<p>管理者による審議: '+(row.admin_review.accepted?'採用':'不採用')+' — '+esc(row.admin_review.reason)+'</p>':'';
+  document.getElementById('productionAcquireSummary').innerHTML='<h3>申請 '+esc(row.revision)+'</h3><p>'+esc(ownershipStates[row.status]||row.status)+' / Verification: '+esc(row.verification_status||'未作成')+' / Claim: '+esc(row.claim_id||'—')+'</p><p>申請者: '+esc(row.applicant_name)+' / 現Owner ID: '+esc(row.current_owner_user_id||'不明')+'</p>'+manual+(row.error?'<p>'+esc(row.error)+'</p>':'');
+  document.getElementById('productionAcquireActions').innerHTML=(row.admin_actions||[]).map(action=>'<button '+(productionBusy?'disabled ':'')+'class="secondary" onclick="manageProductionAcquire(\''+esc(row.revision)+'\',\''+action+'\')">'+ownershipActions[action]+'</button>').join('');
+}
+async function inspectProductionAcquire(revision){
+  const sequence=++productionDetailSequence;clearProductionImages();
+  try{
+    const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision));
+    if(sequence!==productionDetailSequence)return;
+    renderProductionAcquireDetail(row);
+    for(const role of ['closeup','overview','reference']){
+      if(!row.images[role])continue;
+      const response=await fetch('/api/acquire-applications/'+encodeURIComponent(revision)+'/images/'+role,{headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN},cache:'no-store'});
+      if(!response.ok)throw new Error('画像を取得できません: '+role);
+      const blob=await response.blob();if(sequence!==productionDetailSequence)return;
+      const url=URL.createObjectURL(blob);productionImageUrls.push(url);
+      const figure=document.createElement('figure'),caption=document.createElement('figcaption'),img=document.createElement('img');
+      caption.textContent={closeup:'近接画像',overview:'全体画像',reference:'比較画像'}[role];img.src=url;img.alt=caption.textContent;img.style.cssText='max-width:100%;max-height:320px;object-fit:contain';figure.append(caption,img);document.getElementById('productionAcquireImages').append(figure);
+    }
+  }catch(e){if(sequence===productionDetailSequence)document.getElementById('productionAcquireStatus').textContent=e.message}
+}
+async function manageProductionAcquire(revision,operation){
+  if(productionBusy||!productionSelected||productionSelected.revision!==revision)return;
+  const reason=document.getElementById('productionAcquireReason').value.trim();
+  if(!reason){document.getElementById('productionAcquireStatus').textContent='変更理由を入力してください。';return}
+  const impact=operation==='accept'?(productionSelected.request_kind==='listing'?'個体とListingを作成または復帰し、申請者を初期Ownerとして登録します。':'Acquireを作成または復帰します。現Ownerがユーザーなら承認待ち、それ以外は自動Positiveになります。'):operation==='reject'?'作成済みのClaimがある場合はNegativeにして所有状態を再評価します。':operation==='retry'?'元の審議結果を履歴に保存し、GPTの再審議を待ちます。':operation==='cancel'?'実行中の審議結果は受け付けなくなります。':'管理者権限でClaimのVerificationを変更し、所有状態を再評価します。';
+  if(!confirm(ownershipActions[operation]+'\n'+impact+'\n理由: '+reason))return;
+  productionBusy=true;renderProductionAcquireDetail(productionSelected);
+  try{
+    const row=await jfetch('/api/admin/acquire-applications/'+encodeURIComponent(revision)+'/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,reason,expected_version:productionSelected.management_version})});
+    renderProductionAcquireDetail(row);document.getElementById('productionAcquireReason').value='';
+    await loadProductionAcquires();await loadIndividuals();await loadUsers();if(selectedIndividualId)await showIndividual(selectedIndividualId);
+  }catch(e){document.getElementById('productionAcquireStatus').textContent='変更できませんでした: '+e.message}
+  finally{productionBusy=false;if(productionSelected)renderProductionAcquireDetail(productionSelected)}
+}
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
 async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
 statCard('Registered Guitars',s.individuals,'Total guitars in the DB, including user and crawl registrations.'),statCard('Serial Listings',s.serial_observations,'External Listings linked to guitars with serial numbers. Duplicate site and Listing ID pairs are excluded. Includes relistings represented by Acquire and pending owner confirmation.'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'Groups of DB guitars with the same maker and serial. Select to inspect, merge, or delete.')+'</button>'
@@ -261,7 +489,7 @@ async function showUserRecord(id){
     if(!CONSOLE_ADMIN_TOKEN)meta.push(['Display Name',u.display_name],['Account Type',u.account_type],['BAN Status',u.ban_status||'normal'],['Country',u.location_country||'—'],['City / Region',u.location_region||'—'],['Bio',u.bio||'—'],...['birth','residence','bio','avatar'].map(key=>[key+' Visibility',u[key+'_visibility']||'—']),['Signature Guitar ID',u.signature_individual_id||'—'],['Theme',u.theme||'dark_default']);
     const guitars=data.guitars||[];
     panel.className='';
-    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><div class="user-header-text"><strong>'+esc(u.display_name)+'</strong><span>Account Type: '+esc(u.account_type)+'</span><span>BAN Status: '+esc(u.ban_status||'normal')+'</span></div></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
+    panel.innerHTML='<div class="user-detail-header"><img src="/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(u.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt="" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'"><div class="user-header-text"><strong>'+esc(u.display_name)+'</strong><span>Account Type: '+esc(u.account_type)+'</span><span>BAN Status: '+esc(u.ban_status||'normal')+'</span></div></div><div class="user-detail-list">'+meta.map(([label,value])=>'<div class="detail-meta-item"><span class="detail-meta-label">'+esc(label)+'</span><span class="detail-meta-value">'+esc(value)+'</span></div>').join('')+'</div>'+
       (CONSOLE_ADMIN_TOKEN?'<form id="adminUserForm" class="admin-user-form" onsubmit="saveAdminUser(event,'+Number(u.id)+')">'+
         '<label>Display Name<input name="display_name" maxlength="120" required value="'+esc(u.display_name)+'"></label>'+
         '<label>Account Type<select name="account_type">'+['user','shop','builder','repairer','organization'].map(x=>'<option value="'+x+'"'+(u.account_type===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
@@ -386,6 +614,10 @@ function claimCard(c){
       body=c.ownership_source==='automation'
         ? '<div><strong>Reverb listing unavailable. Current owner and location are unknown.</strong></div>'
         : '<div><strong>'+esc(owner)+' released this product.</strong></div>';
+    }else if(kind==='transfer'&&c.transfer){
+      const t=c.transfer;
+      body='<div><strong>'+esc(t.from_name||('User #'+t.from_user_id))+' → '+esc(t.to_name||('User #'+t.to_user_id))+'</strong></div><div class="claim-memo">Transfer: '+esc(t.state)+'</div>';
+      if(t.accepted_at)body+='<div class="claim-memo">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+esc(owner)+'.</strong></div>';
     }else if(kind==='inherit'){
@@ -576,4 +808,4 @@ async function reprocessCachedDetails(){const btn=document.getElementById('cache
 async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programResult').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCachedDetails(id),1000);return}document.getElementById('cacheReprocessBtn').disabled=false;if(d.status==='error'){alert(d.error||'Reprocessing failed');return}const s=d.aggregate||{};document.getElementById('programResult').textContent='Saved details '+s.cached_processed+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / already registered '+s.skipped_existing+'  / outside or unknown range '+s.skipped_scope+'  / Serial or maker unknown '+s.missing_identity+' ';await refreshStatus();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('cacheReprocessBtn').disabled=false;alert(e.message)}}
 const header=document.querySelector('.sticky-header');
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
-(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram()})()
+(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram();await loadProductionAcquires()})()

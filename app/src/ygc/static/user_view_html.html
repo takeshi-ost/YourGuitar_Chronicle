@@ -30,6 +30,7 @@
   </div>
 </div>
 <main>
+<button type="button" onclick="showAcquireApplications()">My Ownership申請・審議結果</button>
 <div class="notification-panel" id="notificationPanel">
   <div class="notification-panel-head">
     <span class="notification-panel-title">Notifications</span>
@@ -115,6 +116,22 @@
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 
+<dialog id="transferReviewDialog" aria-labelledby="transferReviewTitle" style="width:min(480px,90vw);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:18px">
+<h3 id="transferReviewTitle">Transfer</h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button type="button" style="margin-top:10px" onclick="YGCOverlays.close('transferReviewDialog')">Close</button>
+</dialog>
+<dialog id="directMessageDialog" aria-labelledby="directMessageTitle" style="width:min(800px,95vw);max-height:90vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button type="button" onclick="YGCOverlays.close('directMessageDialog')">Close</button></div></div>
+<div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)">Load more conversations</button></div>
+<div><div id="dmPeerTitle" style="margin-bottom:8px">Select a conversation, or use Message on a User Profile.</div><button id="dmOlder" type="button" hidden onclick="loadDirectMessageHistory(true)">Load older messages</button><div id="dmThread" class="dm-thread"></div>
+<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody">Message (up to 2000 characters)</label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button id="dmSend" type="submit">Send</button></form></div></div>
+<p id="dmStatus" class="sub" role="status"></p>
+</dialog>
+<dialog id="userConnectionsDialog" aria-labelledby="userConnectionsTitle" style="width:min(440px,90vw);max-height:80vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle">Followers</h3><button type="button" onclick="YGCOverlays.close('userConnectionsDialog')">Close</button></div>
+<div id="userConnectionsList" style="max-height:55vh;overflow:auto"></div>
+<p id="userConnectionsStatus" class="sub" role="status"></p>
+<button id="userConnectionsMore" type="button" hidden onclick="loadUserConnections()">Load more</button>
+</dialog>
 <div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <h2>Media Claim</h2>
@@ -274,7 +291,7 @@
     <div class="form-row">
       <label class="form-label">Tag</label>
       <div id="ownershipClaimFixedTag"><strong>Acquire</strong></div>
-      <select id="ownershipClaimKind" style="display:none">
+      <select id="ownershipClaimKind" style="display:none" onchange="updateTransferFields()">
         <option value="acquire">Acquire</option>
         <option value="transfer">Transfer</option>
         <option value="inherit">Inherit</option>
@@ -288,6 +305,14 @@
     <div class="form-row" id="ownershipClaimPreviousRow">
       <label class="form-label" for="ownershipClaimPrevious">Counterparty / related person (optional)</label>
       <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
+    </div>
+    <div class="form-row" id="transferRecipientRow" hidden>
+      <div class="sub">From: you, the Current Owner. The recipient must Accept. No other Evidence is required.</div>
+      <label class="form-label" for="transferRecipientSearch">To: search by Display Name or User ID</label>
+      <div style="display:flex;gap:6px"><input id="transferRecipientSearch" maxlength="160" style="flex:1" oninput="transferSearchGeneration++;transferSelectedUser=null;transferSearchOffset=0;document.getElementById('transferSearchMore').hidden=true;document.getElementById('transferSelectedRecipient').textContent='';document.getElementById('transferSearchResults').innerHTML=''" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTransferRecipients()}"><button type="button" onclick="searchTransferRecipients()">Search</button></div>
+      <div id="transferSearchResults" style="max-height:140px;overflow:auto"></div>
+      <div id="transferSelectedRecipient" class="sub"></div>
+      <button id="transferSearchMore" type="button" hidden onclick="searchTransferRecipients(true)">More candidates</button>
     </div>
     <div class="form-row">
       <label class="form-label" for="ownershipClaimBody">Memo (optional)</label>
@@ -312,27 +337,13 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="newGuitarModal" onclick="if(event.target===this)closeNewGuitar()">
-  <div class="modal new-guitar-modal" role="dialog" aria-modal="true" aria-labelledby="newGuitarTitle">
-    <h2 id="newGuitarTitle">Add Guitar</h2>
-    <p class="sub">Creates the first Listing Claim and registers this user as the initial owner.</p>
-    <div class="modal-grid">
-      <label>Maker *<input id="guitarMaker" maxlength="120"></label><label>Model<input id="guitarModel" maxlength="160"></label>
-      <label>Year<input id="guitarYear" maxlength="40"></label><label>Finish<input id="guitarFinish" maxlength="160"></label>
-      <label>Serial *<input id="guitarSerial" maxlength="160"></label><label>Listing Date<input id="guitarDate" type="date"></label>
-      <label class="full">Representative Image *<input id="guitarImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-      <label class="full">Claim memo<textarea id="guitarMemo" maxlength="2000"></textarea></label>
-    </div><p class="sub" id="guitarStatus" role="status"></p>
-    <div class="modal-actions"><button class="secondary" type="button" onclick="closeNewGuitar()">Cancel</button><button id="guitarSubmit" type="button" onclick="submitNewGuitar()">Add Guitar</button></div>
-  </div>
-</div>
-
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
   <div class="claim-popup-modal" onclick="event.stopPropagation()">
     <div id="claimPopupContent"></div>
   </div>
 </div>
 
+<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request"><button onclick="closeAcquireReview()">閉じる</button><div id="acquireReviewContent"></div></div></div>
 <script src="/assets/pages/user-view.js" defer></script>
 </body>
 </html>

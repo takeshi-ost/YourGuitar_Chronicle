@@ -19,10 +19,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response, JSONResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ygc import config
 
@@ -86,6 +87,94 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+
+
+@app.post("/api/admin/direct-experiment/prepare")
+async def api_direct_prepare(request: Request, application_id: str = Form(..., max_length=80),
+    serial: str = Form(..., max_length=160), challenge: str = Form(..., max_length=40),
+    closeup: UploadFile = File(...), overview: UploadFile = File(...), reference: UploadFile = File(...)):
+    _require_console_admin(request)
+    from ygc.direct_experiment import prepare
+    contents = []
+    for upload in (closeup, overview, reference):
+        content = await upload.read(MAX_IMAGE_BYTES + 1)
+        if not content or len(content) > MAX_IMAGE_BYTES:
+            raise HTTPException(400, '各画像は空でなく12MB以下にしてください。')
+        contents.append(content)
+    try:
+        return await run_in_threadpool(prepare, application_id, serial, challenge, contents)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/admin/direct-experiment")
+def api_direct_status(request: Request, revision: str | None = Query(None, max_length=64)):
+    _require_console_admin(request)
+    from ygc.direct_experiment import status
+    try:
+        return status(revision)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.delete("/api/admin/direct-experiment")
+def api_direct_revoke(request: Request):
+    _require_console_admin(request)
+    from ygc.direct_experiment import revoke
+    return revoke()
+
+
+@app.post("/api/admin/direct-experiment/connection")
+def api_direct_connection(request: Request):
+    _require_console_admin(request)
+    from ygc.direct_experiment import connection
+    return JSONResponse(connection(), headers={'Cache-Control':'no-store'})
+
+
+@app.post("/api/admin/direct-experiment/jobs/{revision}/{action}")
+def api_direct_manage(request: Request, revision: str, action: str):
+    _require_console_admin(request)
+    from ygc.direct_experiment import manage
+    try:
+        return manage(revision, action)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.api_route("/api/experiments/direct/mcp", methods=['POST', 'GET', 'DELETE'])
+async def api_direct_mcp(request: Request):
+    from ygc import direct_experiment as direct
+    # Local desktop experiment only; never expose the full Browser Console remotely.
+    if not _local_console_request(request):
+        raise HTTPException(403, 'Local experiment only')
+    origin = request.headers.get('origin')
+    if origin and origin != str(request.base_url).rstrip('/'):
+        raise HTTPException(403, 'Origin not allowed')
+    authorization = request.headers.get('authorization', '')
+    token = authorization[7:] if authorization.startswith('Bearer ') else ''
+    if not direct.authorized(token):
+        raise HTTPException(401, 'Invalid or expired experiment token')
+    if request.method != 'POST':
+        return Response(status_code=405, headers={'Allow':'POST'})
+    if request.headers.get('content-type', '').split(';')[0] != 'application/json':
+        raise HTTPException(415, 'application/json required')
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > 100_000:
+            raise HTTPException(413, 'MCP request too large')
+    try:
+        message = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return JSONResponse({'jsonrpc':'2.0', 'id':None, 'error':{'code':-32700,'message':'Parse error'}})
+    # Recheck inside the job lock so replacement/revocation cannot race a call.
+    with direct.LOCK:
+        if not direct.authorized(token):
+            raise HTTPException(401, 'Invalid or expired experiment token')
+        result = direct.rpc(message)
+    if result is None:
+        return Response(status_code=202)
+    return JSONResponse(result, headers={'Cache-Control':'no-store'})
 
 
 NO_PICTURE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="No picture">
@@ -1792,8 +1881,9 @@ def no_icon_asset() -> Response:
 
 @app.get("/api/users/{user_id}/avatar")
 def api_user_avatar(
-    user_id: int,
+    user_id: int, request: Request, viewer_id: int | None = None,
 ):
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     user, _guitars = repository.get_user(
         user_id
@@ -1803,6 +1893,9 @@ def api_user_avatar(
             status_code=404,
             detail="User not found",
         )
+
+    if not repository.profile_field_visible(user, user_id, viewer_id, "avatar_visibility"):
+        return Response(NO_ICON_SVG, media_type="image/svg+xml")
 
     raw_path = str(
         user["avatar_storage_path"]
@@ -1959,7 +2052,8 @@ def api_individuals(request: Request) -> list[dict[str, Any]]:
 
 
 @app.get("/api/new-discoveries")
-def api_new_discoveries() -> list[dict[str, Any]]:
+def api_new_discoveries(request: Request, viewer_id: int | None = None) -> list[dict[str, Any]]:
+    viewer_id = prototype_viewer(request, viewer_id)
     repository = repo()
     with repository.connect() as con:
         rows = con.execute(
@@ -1976,6 +2070,8 @@ def api_new_discoveries() -> list[dict[str, Any]]:
                 ) GROUP BY s.individual_id
             )
             SELECT i.id,i.manufacturer,i.model,i.year,i.finish,i.serial_number,
+                (SELECT c.id FROM visible_claims c WHERE c.individual_id=i.id
+                 ORDER BY c.created_at DESC,c.id DESC LIMIT 1) AS latest_claim_id,
                 (SELECT MAX(c.created_at) FROM visible_claims c
                  WHERE c.individual_id=i.id) AS latest_claim_at,
                 (SELECT c.claim_type FROM visible_claims c WHERE c.individual_id=i.id
@@ -2011,13 +2107,15 @@ def api_new_discoveries() -> list[dict[str, Any]]:
         item["claim_type"] = claim_type
         result.append(item)
 
-    result.sort(
-        key=lambda item: (
-            str(item.get("activity_at") or ""),
-            int(item.get("id") or 0),
-        ),
-        reverse=True,
-    )
+    followed = repository.list_following_activity(viewer_id)
+    # Describe a matching newest Claim once as the followed user's action.
+    followed_claim_ids = {item["claim_id"] for item in followed if item["action_kind"] == "claim"}
+    result = [item for item in result if not (
+        item["activity_type"] == "claim" and item.get("latest_claim_id") in followed_claim_ids)]
+    result.extend(followed)
+    result.sort(key=lambda item: (str(item.get("activity_at") or ""),
+                                int(item.get("action_id") or item.get("latest_claim_id") or 0),
+                                int(item["id"]), str(item.get("action_kind") or "")), reverse=True)
     return result
 
 
@@ -2055,6 +2153,10 @@ def api_individual(individual_id: int, request: Request,
         else None
     )
 
+    if viewer_user_id is not None:
+        with repository.connect() as con:
+            pending=con.execute("SELECT a.revision,a.status,c.verification_status FROM acquire_applications a LEFT JOIN claims c ON c.id=a.claim_id WHERE a.individual_id=? AND a.applicant_id=? AND (a.status IN ('draft','pending','processing','error') OR (a.status='accepted' AND c.status='active' AND c.verification_status='unverified')) ORDER BY a.created_at DESC LIMIT 1",(individual_id,viewer_user_id)).fetchone()
+            individual_data['acquire_application']=dict(pending) if pending else None
     gallery_images = []
     for row in repo().list_media_assets(individual_id):
         item = _row_dict(row)
@@ -2097,8 +2199,14 @@ def api_individual(individual_id: int, request: Request,
                      and row['verification_status'] == 'positive'
                      and row['image_url']]
 
+    with repository.connect() as con:
+        from ygc.acquire_review import visible
+        acquire_evidence=[dict(revision=r['revision'],claim_id=r['claim_id']) for r in con.execute(
+            "SELECT a.* FROM acquire_applications a JOIN claims c ON c.id=a.claim_id WHERE c.individual_id=? AND a.status='accepted'",(individual_id,))
+            if visible(con,r,viewer_user_id,admin)]
     return {
         "individual": individual_data,
+        "acquire_evidence": acquire_evidence,
         "current_listing": current_listing,
         "current_source": image_sources[-1] if image_sources else None,
         "gallery_images": gallery_images,
@@ -2122,8 +2230,11 @@ def api_individual_claims(
         if row["effective_status"] == "active"
     ]
     verifiable_ids = repository.owner_verifiable_claim_ids(individual_id, viewer_user_id)
+    transfers = repository.transfer_details(individual_id=individual_id)
     for claim in claims:
         claim['can_verify'] = int(claim['id']) in verifiable_ids
+        if claim['ownership_source'] == 'user_transfer':
+            claim['transfer'] = transfers.get(int(claim['id']))
 
     items_by_claim: dict[
         int,
@@ -2211,132 +2322,8 @@ def api_individual_claims(
 
 
 @app.post("/api/users/{user_id}/new-guitar")
-async def api_create_new_guitar(
-    user_id: int,
-    manufacturer: str = Form(...),
-    serial_number: str = Form(...),
-    representative_image: UploadFile = File(...),
-    model: str | None = Form(None),
-    finish: str | None = Form(None),
-    year: str | None = Form(None),
-    occurred_at: str | None = Form(None),
-    body: str | None = Form(None),
-) -> dict[str, Any]:
-    repository = repo()
-
-    content_type = (
-        representative_image.content_type
-        or ""
-    ).lower()
-    extension = ALLOWED_IMAGE_TYPES.get(
-        content_type
-    )
-    if not extension:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Representative image must be "
-                "JPEG, PNG, WebP, or GIF"
-            ),
-        )
-
-    image_bytes = await representative_image.read(
-        MAX_IMAGE_BYTES + 1
-    )
-    if not image_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Representative image is empty",
-        )
-    if len(image_bytes) > MAX_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                "Representative image must be "
-                "12 MB or smaller"
-            ),
-        )
-
-    MEDIA_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    stored_name = (
-        uuid.uuid4().hex
-        + extension
-    )
-    stored_path = MEDIA_DIR / stored_name
-    relative_storage_path = (
-        Path("media")
-        / stored_name
-    ).as_posix()
-
-    try:
-        stored_path.write_bytes(
-            image_bytes
-        )
-    except OSError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Could not save representative image"
-            ),
-        ) from exc
-
-    try:
-        (
-            individual_id,
-            observation_id,
-            claim_id,
-            media_asset_id,
-        ) = repository.create_initial_listing_claim(
-            user_id,
-            manufacturer=manufacturer,
-            model=model,
-            finish=finish,
-            year=year,
-            serial_number=serial_number,
-            occurred_at=occurred_at,
-            body=body,
-            media_storage_path=(
-                relative_storage_path
-            ),
-            media_original_filename=(
-                representative_image.filename
-            ),
-            media_mime_type=content_type,
-            media_captured_at=occurred_at,
-        )
-    except ValueError as exc:
-        _safe_unlink(stored_path)
-        message = str(exc)
-        status_code = (
-            409
-            if "already exists" in message
-            else 400
-        )
-        raise HTTPException(
-            status_code=status_code,
-            detail=message,
-        ) from exc
-    except Exception:
-        _safe_unlink(stored_path)
-        raise
-
-    user, guitars = repository.get_user(
-        user_id
-    )
-
-    return {
-        "individual_id": individual_id,
-        "claim_id": claim_id,
-        "media_asset_id": media_asset_id,
-        "user": _row_dict(user),
-        "guitars": [
-            _row_dict(row)
-            for row in guitars
-        ],
-    }
+def api_create_new_guitar(user_id: int):
+    raise HTTPException(status_code=409,detail='新規登録にはListing画像審議が必要です。Listing申請から開始してください。')
 
 
 @app.delete("/api/claims/{claim_id}")
@@ -2441,6 +2428,15 @@ def api_media(
             status_code=404,
             detail="Media asset not found",
         )
+
+    if str(media['storage_path']).startswith('review-listing/'):
+        import base64
+        from fastapi.responses import Response
+        revision=str(media['storage_path']).split('/',1)[1]
+        with repo().connect() as con:
+            row=con.execute("SELECT a.images FROM acquire_applications a JOIN claim_evidence e ON e.claim_id=a.claim_id JOIN claims c ON c.id=a.claim_id WHERE a.revision=? AND a.request_kind='listing' AND a.status='accepted' AND e.media_asset_id=? AND c.status='active' AND c.verification_status='positive'",(revision,media_asset_id)).fetchone()
+        if not row:raise HTTPException(status_code=404,detail='Listing image is not published')
+        return Response(base64.b64decode(json.loads(row['images'])['overview']),media_type='image/jpeg',headers={'Cache-Control':'no-store'})
 
     data_root = config.DATA_DIR.resolve()
     path = (
@@ -2869,6 +2865,8 @@ def api_ownership_claim(
     individual_id: int,
     request: OwnershipClaimRequest,
 ) -> dict[str, Any]:
+    if request.ownership_kind.strip().lower() == 'acquire':
+        raise HTTPException(status_code=409, detail='Acquireは画像Evidenceを提出する申請入口から作成してください。')
     repository = repo()
 
     try:
@@ -2985,6 +2983,133 @@ def api_claim_vote(
         )
 
     return {"ok": True}
+
+
+class TransferProposalRequest(BaseModel):
+    to_user_id: int = Field(ge=1)
+
+
+class TransferActionRequest(BaseModel):
+    action: str
+
+
+def transfer_actor(request: Request, viewer_id: int | None) -> int:
+    actor = prototype_viewer(request, viewer_id)
+    if actor is None:
+        raise HTTPException(status_code=401, detail="Sign in to use Transfer")
+    return actor
+
+
+def transfer_error(exc: ValueError):
+    reason = str(exc)
+    return HTTPException(status_code=403 if reason.startswith('Only ') else
+                         404 if reason in ('Transfer not found','Individual not found','User not available for Transfer') else 409,
+                         detail=reason)
+
+
+@app.get("/api/transfer-users")
+def api_transfer_users(request: Request, viewer_id: int | None = None, q: str = Query('', max_length=160),
+                       offset: int = Query(0,ge=0), limit: int = Query(20,ge=1,le=50)):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        return repo().search_transfer_users(actor,q,limit,offset)
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.post("/api/individuals/{individual_id}/transfers")
+def api_create_transfer(individual_id: int, body: TransferProposalRequest, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        cid = repo().create_transfer(actor,individual_id,body.to_user_id)
+        return {'claim_id':cid,'state':'pending'}
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.get("/api/transfers/{claim_id}")
+def api_transfer_details(claim_id: int, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    repository = repo()
+    record = repository.transfer_details(claim_id)
+    if record is None:
+        raise HTTPException(404,detail='Transfer not found')
+    if actor not in (record['from_user_id'],record['to_user_id']):
+        raise HTTPException(403,detail='Only Transfer participants can open this request')
+    try:
+        with repository.connect() as con:
+            repository._transfer_user(con,actor)
+            claim = con.execute('SELECT c.individual_id,c.status,i.manufacturer,i.model,i.serial_number FROM claims c JOIN individuals i ON i.id=c.individual_id WHERE c.id=?',(claim_id,)).fetchone()
+        return {**record,'individual_id':claim['individual_id'],'claim_active':claim['status']=='active',
+                'guitar':{field:claim[field] for field in ('manufacturer','model','serial_number')}}
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+@app.post("/api/transfers/{claim_id}/resolve")
+def api_resolve_transfer(claim_id: int, body: TransferActionRequest, request: Request, viewer_id: int | None = None):
+    actor = transfer_actor(request, viewer_id)
+    try:
+        return repo().resolve_transfer(claim_id,actor,body.action)
+    except ValueError as exc:
+        raise transfer_error(exc) from exc
+
+
+class DirectMessageRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class DirectMessageReadRequest(BaseModel):
+    through_id: int = Field(ge=1)
+
+
+def direct_message_actor(request: Request, viewer_id: int | None) -> int:
+    actor_id = prototype_viewer(request, viewer_id)
+    if actor_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to use messages")
+    return actor_id
+
+
+def direct_message_error(exc: ValueError):
+    return HTTPException(status_code=404 if str(exc)=="User not found" else 400, detail=str(exc))
+
+
+@app.get("/api/dm")
+def api_dm_inbox(request: Request, viewer_id: int | None = None,
+                 limit: int = Query(50, ge=1, le=100), before_id: int | None = Query(None, ge=1)):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().direct_message_inbox(actor, limit, before_id)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.get("/api/dm/users/{peer_id}/messages")
+def api_dm_history(peer_id: int, request: Request, viewer_id: int | None = None,
+                   limit: int = Query(50, ge=1, le=100), before_id: int | None = Query(None, ge=1)):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().direct_message_history(actor, peer_id, limit, before_id)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.post("/api/dm/users/{peer_id}/messages")
+def api_dm_send(peer_id: int, body: DirectMessageRequest, request: Request, viewer_id: int | None = None):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return repo().send_direct_message(actor, peer_id, body.body)
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
+
+
+@app.post("/api/dm/users/{peer_id}/read")
+def api_dm_read(peer_id: int, body: DirectMessageReadRequest, request: Request, viewer_id: int | None = None):
+    actor = direct_message_actor(request, viewer_id)
+    try:
+        return {"updated": repo().read_direct_messages(actor, peer_id, body.through_id)}
+    except ValueError as exc:
+        raise direct_message_error(exc) from exc
 
 
 @app.get("/api/users/{user_id}/notifications")
@@ -3105,12 +3230,8 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
     favorites = ([] if user['ban_status'] == 'silent_ban' and not own else
                  [_row_dict(g) for g in repository.get_user_favorites(user_id)
                   if int(g['individual_id']) not in owned_ids])
-    member = own or (viewer_id is not None and
-                     repository.get_user(viewer_id)[0] is not None)
-
     def visible(setting: str) -> bool:
-        level = user[setting]
-        return own or level == "Public" or (level == "Members" and member)
+        return repository.profile_field_visible(user, user_id, viewer_id, setting)
 
     public_user = _row_dict(user)
     public_user["ban_status"] = "normal"
@@ -3128,12 +3249,36 @@ def api_user_profile(user_id: int, request: Request, viewer_id: int | None = Non
         "user": public_user,
         "guitars": [_row_dict(row) for row in guitars],
         "favorites": favorites,
+        "social": repository.user_social_summary(user_id, viewer_id),
         "summary": ({**repository.get_user_summary(user_id, viewer_id),
                      "owned_count": sum(g["ownership_status"] == 'current_owner' for g in guitars),
                      "former_count": sum(g["ownership_status"] == 'former_owner' for g in guitars)}
                     if user["ban_status"] == 'silent_ban'
                     else repository.get_user_summary(user_id, viewer_id)),
     }
+
+
+@app.get("/api/users/{user_id}/connections/{direction}")
+def api_user_connections(user_id: int, direction: str, limit: int = Query(50, ge=1, le=100),
+                         offset: int = Query(0, ge=0)):
+    try:
+        return repo().list_user_connections(user_id, direction, limit, offset)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if str(exc) == "User not found" else 400, detail=str(exc)) from exc
+
+
+@app.put("/api/users/{user_id}/following/{target_id}")
+@app.delete("/api/users/{user_id}/following/{target_id}")
+def api_set_user_follow(user_id: int, target_id: int, request: Request, viewer_id: int | None = None):
+    actor_id = prototype_viewer(request, viewer_id)
+    if actor_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to follow users")
+    if actor_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only change your own follows")
+    try:
+        return {"following": repo().set_user_follow(actor_id, target_id, request.method == "PUT")}
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if str(exc) == "User not found" else 400, detail=str(exc)) from exc
 
 
 @app.get("/api/users/{user_id}/favorites")
@@ -3244,6 +3389,10 @@ def api_link_user_guitar(
     individual_id: int,
     request: UserGuitarLinkRequest,
 ) -> dict[str, Any]:
+    if request.ownership_status == 'current_owner':
+        individual,_=repo().get_individual(individual_id)
+        if not individual or individual['current_owner_user_id'] != user_id:
+            raise HTTPException(status_code=409,detail='現在の所有申請はAcquireの画像審議を利用してください。')
     repository = repo()
 
     try:
@@ -3802,6 +3951,123 @@ def main() -> None:
         threading.Timer(1.0, lambda: webbrowser.open(f"http://{args.host}:{args.port}")).start()
 
     uvicorn.run(app, host=args.host, port=args.port)
+
+
+
+
+@app.middleware('http')
+async def private_acquire_cache_control(request: Request, call_next):
+    response=await call_next(request)
+    if request.url.path.startswith(('/api/acquire-applications','/api/admin/acquire-applications','/api/listing-applications')):
+        response.headers['Cache-Control']='private, no-store'
+    return response
+
+
+# Production Acquire applications. Images are never mounted as public media.
+def acquire_actor(request: Request, viewer_id: int | None):
+    actor=prototype_viewer(request,viewer_id)
+    if actor is None: raise HTTPException(status_code=401,detail='Sign in to apply for Acquire')
+    return actor
+
+
+def acquire_error(exc):
+    return HTTPException(status_code=403 if isinstance(exc,PermissionError) else 409,detail=str(exc))
+
+
+@app.post('/api/listing-applications')
+def api_start_listing(request: Request, body: dict, viewer_id: int | None = None):
+    from pydantic import ValidationError
+    from ygc import listing_review
+    actor=acquire_actor(request,viewer_id)
+    try:return listing_review.start(repo(),actor,body)
+    except ValidationError as exc:raise HTTPException(status_code=422,detail='Listing入力項目を確認してください。') from exc
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.post('/api/individuals/{individual_id}/acquire-applications')
+def api_start_acquire(individual_id: int, request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=acquire_actor(request,viewer_id)
+    try:return review.start(repo(),actor,individual_id)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.get('/api/acquire-applications')
+def api_my_acquires(request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=acquire_actor(request,viewer_id)
+    try:return review.list_for(repo(),actor)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.get('/api/admin/acquire-applications')
+def api_admin_acquires(request: Request):
+    _require_console_admin(request)
+    from ygc import acquire_review as review
+    from ygc.listing_review import SCHEDULE_PROMPT
+    return {'applications':review.list_for(repo(),None,admin=True),'prompt':SCHEDULE_PROMPT}
+
+
+class AdminAcquireRequest(BaseModel):
+    operation: str = Field(pattern='^(cancel|retry|accept|reject|positive|negative|unverified)$')
+    reason: str = Field(min_length=1,max_length=2000)
+    expected_version: str = Field(pattern='^[a-f0-9]{64}$')
+
+
+@app.post('/api/admin/acquire-applications/{revision}/manage')
+def api_manage_acquire(revision: str, body: AdminAcquireRequest, request: Request):
+    _require_console_admin(request)
+    from ygc import acquire_review as review
+    try:return review.administer(repo(),revision,body.operation,body.reason,body.expected_version)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.get('/api/acquire-applications/{revision}')
+def api_acquire_detail(revision: str, request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=prototype_viewer(request,viewer_id)
+    try:
+        with review.transaction(repo()) as con:
+            review.expire(con)
+            return review.detail(con,revision,actor,_console_admin_authorized(request))
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.get('/api/acquire-applications/{revision}/images/{role}')
+def api_acquire_image(revision: str, role: str, request: Request, viewer_id: int | None = None):
+    import base64
+    from fastapi.responses import Response
+    from ygc import acquire_review as review
+    actor=prototype_viewer(request,viewer_id)
+    try:
+        with review.transaction(repo()) as con:
+            review.detail(con,revision,actor,_console_admin_authorized(request))
+            data=json.loads(review.find(con,revision)['images'] or '{}').get(role)
+            if not data:raise ValueError('画像がありません。')
+            return Response(base64.b64decode(data),media_type='image/jpeg',headers={'Cache-Control':'private, no-store'})
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.post('/api/acquire-applications/{revision}/submit')
+async def api_submit_acquire(revision: str, request: Request, viewer_id: int | None = None,
+    acquisition_date: str = Form(...), body: str = Form(''), closeup: UploadFile = File(...), overview: UploadFile = File(...)):
+    from ygc import acquire_review as review
+    actor=acquire_actor(request,viewer_id)
+    contents=[]
+    for upload in (closeup,overview):
+        data=await upload.read(12*1024*1024+1)
+        if len(data)>12*1024*1024:raise HTTPException(status_code=413,detail='画像は12MB以下です。')
+        contents.append(data)
+    try:return await run_in_threadpool(review.submit,repo(),actor,revision,acquisition_date,body,*contents)
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
+
+
+@app.post('/api/acquire-applications/{revision}/{operation}')
+def api_acquire_action(revision: str, operation: str, request: Request, viewer_id: int | None = None):
+    from ygc import acquire_review as review
+    actor=prototype_viewer(request,viewer_id)
+    try:return review.action(repo(),actor,revision,operation,_console_admin_authorized(request))
+    except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
 
 
 if __name__ == "__main__":

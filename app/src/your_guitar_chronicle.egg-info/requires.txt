@@ -3,6 +3,8 @@ typer<1,>=0.12
 rich<14,>=13
 fastapi<1,>=0.115
 uvicorn<1,>=0.30
+python-multipart<1,>=0.0.9
+Pillow<13,>=11
 
 [dev]
 pytest<9,>=8

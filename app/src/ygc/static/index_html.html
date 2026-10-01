@@ -11,7 +11,7 @@
 <script src="/assets/list-navigation.js?v=shared-ui-v2" defer></script>
 </head>
 <body>
-<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a></nav></header></div>
+<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#ownership-request">Ownership Request</a><a href="#direct-experiment">Authentication Test</a></nav></header></div>
 <main>
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
@@ -92,7 +92,48 @@ Gibson ES-335</textarea>
 <div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
 </section>
+<section class="console-domain" id="ownership-request" aria-labelledby="ownershipRequestHeading">
+<div class="domain-heading"><h2 id="ownershipRequestHeading">Ownership Request</h2><span class="sub">Acquire・Listing申請の確認と管理</span></div>
+<div class="panel"><div class="toolbar"><button onclick="loadProductionAcquires()">一覧を更新</button><input id="productionAcquireSearch" aria-label="申請検索" placeholder="申請ID / 申請者 / 個体 / シリアル" oninput="renderProductionAcquires()"><select id="productionAcquireFilter" aria-label="申請状態" onchange="renderProductionAcquires()"><option value="">すべての状態</option><option value="draft">写真提出待ち</option><option value="pending">審議待ち</option><option value="processing">審議中</option><option value="error">処理エラー</option><option value="accepted">採用</option><option value="rejected">不採用</option><option value="cancelled">取消</option><option value="closed">終了</option><option value="expired">提出期限切れ</option></select></div>
+<p id="productionAcquireStatus" role="status">読み込み中...</p><div class="table-wrap"><table><thead><tr><th>申請ID</th><th>申請者</th><th>個体</th><th>審議状態</th><th>Verification</th><th>提出日時</th></tr></thead><tbody id="productionAcquireRows"></tbody></table></div></div>
+<div class="panel"><div id="productionAcquireSummary">申請を選択してください。</div><div id="productionAcquireImages" style="display:flex;flex-wrap:wrap;gap:12px"></div>
+<p class="sub">審議の採用とOwnerによるVerificationは別の判断です。管理者の変更理由は申請者にも表示されます。</p>
+<label>変更理由<textarea id="productionAcquireReason" rows="2" maxlength="2000" style="width:100%"></textarea></label><div class="toolbar" id="productionAcquireActions"></div>
+<label>診断・変更履歴（AIの元診断を含む）<textarea id="productionAcquireDetail" readonly rows="12" style="width:100%"></textarea></label>
+<details><summary>定期タスクの指示文</summary><textarea id="productionAcquirePrompt" readonly rows="8" style="width:100%"></textarea></details></div></section>
+<section class="console-domain" id="direct-experiment" aria-labelledby="directHeading">
+<div class="domain-heading"><h2 id="directHeading">Authentication Test — GPT連携</h2></div>
+<h3>実験用キュー（Claimは変更しません）</h3>
+<div class="panel">
+<p class="sub">Mac内のYGCへ接続する複数申請の実験キューです。GoogleやAI APIキーは不要です。画像を準備後、デスクトップ側にMCPを接続して審議します。ChatGPTが画像を取得すると画像がChatGPTへ送られます。申請・画像・診断結果を実験専用の保存先に保持します。Claim・所有権には反映しません。</p>
+<div class="auth-test-fields">
+<label>実験申請ID<input id="directApplication" value="direct-test-001" maxlength="80"></label>
+<label>Expected serial<input id="directSerial" value="ISSB25003873" maxlength="160"></label>
+<label>Expected challenge<input id="directChallenge" value="N3G8PQTS" maxlength="40"></label>
+<label>近接画像<input id="directCloseup" type="file" accept="image/jpeg,image/png,image/webp"></label>
+<label>全体画像<input id="directOverview" type="file" accept="image/jpeg,image/png,image/webp"></label>
+<label>比較対象画像<input id="directReference" type="file" accept="image/jpeg,image/png,image/webp"></label>
+</div>
+<div class="toolbar"><button type="button" onclick="prepareDirectExperiment()">① テスト申請を追加</button><button type="button" onclick="inspectDirectExperiment()">② ローカル接続診断</button><button type="button" onclick="refreshDirectExperiment()">③ 一覧・結果を更新</button><button type="button" class="secondary" onclick="revokeDirectExperiment()">接続キーを失効（記録は保持）</button></div>
+<p class="sub">追加した申請は上書きされません。同じIDでもrevisionごとに記録します。接続キーと申請は再起動後も保持し、キーは明示的に失効するまで有効です。審議中は2時間確保し、時間切れは3回でエラーとして停止します。保存上限は100件・画像合計256MBです。</p>
+<button type="button" class="secondary" onclick="restoreDirectConnection()">保存済み接続設定を表示／接続を有効化</button>
+<label><input id="directAutoRefresh" type="checkbox" checked> 一覧・選択中の結果を15秒ごとに更新</label>
+<div class="table-wrap direct-queue-table"><table><thead><tr><th>申請ID / revision</th><th>状態・採否</th><th>受付 / 開始 / 完了 (UTC)</th><th>試行・操作</th></tr></thead><tbody id="directQueueRows"></tbody></table></div>
+<p class="sub">各定期実行の開始時点にある未審査申請を、全件順番に処理する指示です。途中で追加された申請は次回に回します。MCPツールとスケジュールの指示文を更新してください。接続診断は申請を確保せず、審議を開始しません。</p>
+<label>実験専用接続キー<input id="directToken" type="password" readonly autocomplete="off" style="width:100%"></label>
+<div class="toolbar"><button type="button" class="secondary" onclick="copyDirectToken()">接続キーをコピー</button><button id="directTokenToggle" type="button" class="secondary" aria-pressed="false" onclick="toggleDirectToken()">接続キーを表示</button><span id="directTokenStatus" class="sub" role="status"></span></div>
+<details><summary>デスクトップ側のMCP接続設定</summary>
+<p class="sub">CodexのMCP設定へ以下を追加し、PASTE_TOKENを上の接続キーに置き換えてください。既存設定は上書きせず、このサーバー項目だけ追加します。設定ファイルにキーを保存するため、ご自身のMacだけで使用してください。接続設定後に新しいチャットを開きます。ChatGPTデスクトップで同じ設定方式が使えるかは提供機能によります。</p>
+<textarea id="directConfig" readonly rows="9" style="width:100%"></textarea>
+</details>
+<label>接続後にChatGPT / Codexへ渡す指示<textarea id="directPrompt" readonly rows="7" style="width:100%"></textarea></label>
+<p id="directStatus" role="status" aria-live="polite"></p>
+<div class="toolbar"><button type="button" class="secondary" onclick="downloadDirectResult('json')">選択した申請のJSONを保存</button><button type="button" class="secondary" onclick="downloadDirectResult('txt')">診断文章を保存</button></div>
+<label>診断文章<textarea id="directReport" readonly rows="10" style="width:100%"></textarea></label>
+<label>準備内容・接続診断・審議結果<textarea id="directResult" readonly rows="14" style="width:100%"></textarea></label>
+</div></section>
 </main>
+
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
 <div class="toolbar"><h2 style="flex:1">Repeated</h2><button class="secondary" onclick="YGCOverlays.close('repeatedDialog')">Close</button></div>

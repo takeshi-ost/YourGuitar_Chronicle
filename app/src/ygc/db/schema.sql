@@ -384,3 +384,72 @@ CREATE TABLE IF NOT EXISTS individual_resolution_actions (
  action TEXT NOT NULL,
  created_at TEXT NOT NULL
 );
+
+-- Social relationships never participate in Claim/Observation evaluation.
+CREATE TABLE IF NOT EXISTS user_follows (
+ follower_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ followed_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY (follower_user_id, followed_user_id),
+ CHECK (follower_user_id <> followed_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_follows_followed ON user_follows(followed_user_id, follower_user_id);
+
+-- Private social messages, entirely independent of Claims and Evidence.
+CREATE TABLE IF NOT EXISTS direct_messages (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 2000),
+ created_at TEXT NOT NULL,
+ read_at TEXT,
+ CHECK(sender_user_id <> recipient_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dm_recipient_read ON direct_messages(recipient_user_id,read_at,id);
+CREATE INDEX IF NOT EXISTS idx_dm_sender_recipient ON direct_messages(sender_user_id,recipient_user_id,id);
+
+CREATE TABLE IF NOT EXISTS claim_transfers (
+ claim_id INTEGER PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+ from_user_id INTEGER NOT NULL,
+ to_user_id INTEGER NOT NULL,
+ state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','accepted','declined','cancelled')),
+ created_at TEXT NOT NULL,
+ resolved_at TEXT,
+ CHECK(from_user_id<>to_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_claim_transfers_to_state ON claim_transfers(to_user_id,state);
+CREATE TABLE IF NOT EXISTS claim_transfer_acceptance (
+ claim_id INTEGER PRIMARY KEY REFERENCES claim_transfers(claim_id) ON DELETE CASCADE,
+ accepted_by_user_id INTEGER NOT NULL,
+ accepted_at TEXT NOT NULL,
+ current_owner_user_id INTEGER NOT NULL
+);
+
+-- Private Acquire application and durable review Evidence, separate from experiment jobs.
+CREATE TABLE IF NOT EXISTS acquire_applications (
+ request_kind TEXT NOT NULL DEFAULT 'acquire', listing_payload TEXT,
+ revision TEXT PRIMARY KEY,
+ applicant_id INTEGER NOT NULL,
+ individual_id INTEGER REFERENCES individuals(id) ON DELETE SET NULL,
+ original_individual_id INTEGER NOT NULL,
+ serial TEXT NOT NULL, challenge TEXT NOT NULL,
+ expires_at REAL NOT NULL, created_at TEXT NOT NULL,
+ submitted_at TEXT, started_at TEXT, completed_at TEXT,
+ acquisition_date TEXT, body TEXT,
+ status TEXT NOT NULL DEFAULT 'draft',
+ images TEXT, image_meta TEXT, reference_source TEXT,
+ product_details TEXT, product_observations TEXT,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ lease_token TEXT, lease_until REAL,
+ error TEXT, received TEXT, result TEXT, report TEXT,
+ prompt_version TEXT NOT NULL,
+ claim_id INTEGER UNIQUE REFERENCES claims(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acquire_open_application
+ ON acquire_applications(applicant_id,individual_id)
+ WHERE status IN ('draft','pending','processing','error');
+CREATE TABLE IF NOT EXISTS acquire_application_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ revision TEXT NOT NULL REFERENCES acquire_applications(revision),
+ at TEXT NOT NULL, kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
+);
