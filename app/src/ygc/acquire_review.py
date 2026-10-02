@@ -143,6 +143,8 @@ def start(repo,user,individual_id,*,preview=False,draft=None):
                 WHERE a.applicant_id=? AND c.individual_id=? AND a.status='accepted'
                 AND c.status='active' AND c.verification_status='unverified' ORDER BY a.created_at DESC LIMIT 1''',(user,individual_id)).fetchone()
         if existing: return detail(con,existing['revision'],user)
+        from ygc import disputes
+        disputes.guard(con,individual_id)
         revision=draft['revision'] if draft else secrets.token_hex(16)
         challenge=draft['challenge'] if draft else ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
         expires_at=draft['expires_at'] if draft else time.time()+86400
@@ -252,6 +254,13 @@ def detail(con,revision,user,admin=False):
     if r['claim_id']:
         claim=con.execute('SELECT verification_status,individual_id FROM claims WHERE id=?',(r['claim_id'],)).fetchone()
         result['verification_status']=claim['verification_status'] if claim else None
+    if r['claim_id'] and r['request_kind']=='acquire' and (admin or user==r['applicant_id']):
+        from ygc import disputes
+        linked=con.execute('SELECT dispute_id FROM ownership_dispute_claims WHERE claim_id=?',(r['claim_id'],)).fetchone()
+        result['dispute_case_id']=linked[0] if linked else None
+        declined=con.execute('SELECT reason,acknowledged_at FROM ownership_declines WHERE claim_id=?',(r['claim_id'],)).fetchone()
+        result['decline_reason']=declined['reason'] if declined else None
+        result['can_request_dispute']=not linked and not (declined and declined['acknowledged_at']) and disputes.eligible(con,disputes.candidate(con,r['claim_id']))
     if admin:
         result['management_version']=management_version(con,r)
         result['admin_actions']=management_actions(r)
@@ -590,7 +599,10 @@ def call_tool(repo,name,args):
                 rows=con.execute("SELECT * FROM acquire_applications WHERE status='pending' AND request_kind=? AND revision IN ("+','.join('?' for _ in revisions)+') ORDER BY submitted_at,revision',[kind,*revisions]).fetchall()
             jobs=[]
             while rows and not jobs:
-                r=rows.pop(0);reason=invalidated(con,r)
+                r=rows.pop(0)
+                from ygc import disputes
+                if kind=='acquire' and disputes.active(con,r['individual_id']):continue
+                reason=invalidated(con,r)
                 if reason:
                     con.execute("UPDATE acquire_applications SET status='closed',completed_at=?,error=? WHERE revision=?",(utcnow(),reason,r['revision']))
                     event(con,r['revision'],'closed',reason);continue

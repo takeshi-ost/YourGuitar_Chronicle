@@ -2,7 +2,7 @@
 
 ## 記録と現在値
 
-- **Claim:** ギターについての意味のある主張・出来事。Listing、Ownership (Acquire / Transfer / Inherit / Release / Lost)、Identity Correction、Specification、Repair、Incident、Event、Mediaなど。ステータス、判定、作成者、日付を保持する。
+- **Claim:** ギターについての意味のある主張・出来事。Listing、Ownership (Acquire / Transfer / Release / Lost)、Identity Correction、Specification、Repair、Incident、Event、Mediaなど。ステータス、判定、作成者、日付を保持する。
 - **Individual:** 物理的な一個体を識別するレコード。現在のMaker / Model / Serial、Owner / LocationなどはObservationの判定結果を保存したSnapshot。意味情報をIndividualだけ直接変更しない。
 - **Observation:** 一個体につき一つの論理的なClaim調停機構。Claimの発生日・同日のClaim ID、承認・BAN、必須Evidenceから候補値と採否理由を計算し、Individualに現在値を反映する。過去の判定結果そのものは保存しない。
 - **Evidence:** Claimに紐付く根拠。外部掲載のListing ID、URL、取得日時、Owner / LocationなどはListingまたは再掲載AcquireのEvidence。ユーザーAcquireには取得日Evidenceを必須とする。旧`observations`テーブルは移行中のクロール記録・互換参照として残るが、現在値の判定元ではない。
@@ -16,7 +16,7 @@ Browser Consoleの「Observation判定」は読み取り専用のClaim×項目�
 ## 承認と所有状態
 
 - Listing Claimは掲載時点の主張として保持する。再出品が既存個体と確実に結び付く場合は新たなListing Claimを増やさずAcquire Claimで来歴を追加する。それぞれの外部掲載根拠はClaim Evidenceに保存する。
-- 現時点でAcquireはOwnerとLocationを設定し、Inherit / Release / Lostと旧TransferはOwnerとLocationをUnknownにする。新規ユーザー間TransferはFrom＝Current Ownerの申請とToのAccept Evidenceにより、ObservationがToへOwnerとLocationを移す。合意とVerificationは独立し、成立済みTransferは承認時のEvidenceを根拠にそれぞれ独立して時系列順（同日はClaim ID順）に適用し、過去のTransferの再評価結果へ依存させない。移転後Toは、自身を譲受人とするPositiveなTransferを通常Verificationで変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。LostはAutomation専用のOwnership Claimで、確認済みの外部掲載が現在値の唯一の根拠だったときだけ作る。意味は掲載由来の現在値が追跡不能になったことであり、所有放棄ではない。ユーザー操作ではLostを作成・Verification・編集・無効化できない。ユーザーが作るIncident / Lostとは区別する。旧Automation Releaseは履歴として残し、同じSnapshot効果で評価する。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
+- 現時点でAcquireはOwnerとLocationを設定し、Release / Lostと旧TransferはOwnerとLocationをUnknownにする。新規ユーザー間TransferはFrom＝Current Ownerの申請とToのAccept Evidenceにより、ObservationがToへOwnerとLocationを移す。合意とVerificationは独立し、成立済みTransferは承認時のEvidenceを根拠にそれぞれ独立して時系列順（同日はClaim ID順）に適用し、過去のTransferの再評価結果へ依存させない。移転後Toは、自身を譲受人とするPositiveなTransferを通常Verificationで変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。LostはAutomation専用のOwnership Claimで、確認済みの外部掲載が現在値の唯一の根拠だったときだけ作る。意味は掲載由来の現在値が追跡不能になったことであり、所有放棄ではない。ユーザー操作ではLostを作成・Verification・編集・無効化できない。ユーザーが作るIncident / Lostとは区別する。旧Automation Releaseは履歴として残し、同じSnapshot効果で評価する。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
 - Owner Verificationが必要な第三者のSpecification / Repair / Incident / Event / MediaなどはUnverifiedで開始する。適用対象のClaimはPositive時だけSnapshotやギャラリーに反映する。Negative / Unverifiedも表示方法を変えてChronicleに残す。現在のOwnerは管理者判定後も再判定できる。
 - 通常のOwner VerificationはCurrent Ownerが他ユーザーのClaimに対して行う。自分のClaimは判定できず、Listing、Identity Correction、AutomationのLostなどは通常ユーザーの判定対象外。管理者は別の強制判定操作で全種類のClaimを判定できる。
 - Former OwnerのAcquire / Releaseは同じペアIDを持ち、まとめて判定する。ユーザーAcquireは明示的な取得日と日付Evidenceを要する。Current Ownerがいないときは日付Evidenceを持つ新しいAcquireを自動でPositiveにし、Ownerがいる場合の第三者AcquireはOwner承認待ちにする。同日の競合は小さいClaim IDを先に評価する。
@@ -99,3 +99,11 @@ Claimの新規入力・編集とAcquire / Listingの申請日付は未来を受�
 基準時刻はUTC。ブラウザはIANAタイムゾーンを`X-YGC-Timezone`で送り、サーバーはその地域の「今日」と日付を照合する。未指定のAPIクライアントはUTC、不正なタイムゾーンは拒否する。
 日時付き入力はUTCの時点と比較しUTCへ正規化する。日付のみのClaimはユーザーの暦日として保持し、UTC午前0時に変換して日付をずらさない。
 画面の日付上限・初期日はローカル日付。日時付きClaimの表示はローカルへ変換する。既存デバッグ日付、クロール履歴、内部移行データはこの入力制約で自動修正・削除しない。
+
+### 廃止したOwnership種別
+
+Inheritは廃止し、新規作成APIと入力UIから除外する。移転にはTransferを使用する。過去DBのInheritは自動削除・Transfer変換せず、旧履歴の再評価で所有状態が変わらないよう読取互換のみ維持する。
+
+### 係争決定の例外
+
+現在所有を置き換えるAcquireのDecline・長期無回答に対する係争を実装する。係争中は対象個体の所有関係の変更を停止し、管理者の係争決定だけが同一トランザクション内で対象Claimを判定する。決定済みClaimは通常Ownerおよび通常の管理者強制判定から変更できず、理由付き再審議を経由する。Claim作成者は維持する。後のOwnerが過去の係争を通常Verificationで変更することもできない。詳細は[Ownership Disputes](OWNERSHIP_DISPUTES.md)。

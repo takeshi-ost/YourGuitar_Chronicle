@@ -454,3 +454,91 @@ CREATE TABLE IF NOT EXISTS acquire_application_events (
  revision TEXT NOT NULL REFERENCES acquire_applications(revision),
  at TEXT NOT NULL, kind TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
 );
+
+-- Disputes are separate from Claims; private evidence retains its submitting author.
+CREATE TABLE IF NOT EXISTS ownership_disputes (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ individual_id INTEGER NOT NULL REFERENCES individuals(id),
+ owner_id INTEGER NOT NULL REFERENCES users(id),
+ locked_owner_id INTEGER NOT NULL REFERENCES users(id),
+ status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','resolving','checking')),
+ version INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ decision TEXT, reason TEXT, winner_id INTEGER REFERENCES users(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_open_ownership_dispute
+ ON ownership_disputes(individual_id) WHERE status='open';
+CREATE TABLE IF NOT EXISTS ownership_dispute_claims (
+ dispute_id INTEGER NOT NULL REFERENCES ownership_disputes(id),
+ claim_id INTEGER NOT NULL UNIQUE REFERENCES claims(id),
+ applicant_id INTEGER NOT NULL REFERENCES users(id),
+ PRIMARY KEY(dispute_id,claim_id)
+);
+CREATE TABLE IF NOT EXISTS ownership_declines (
+ claim_id INTEGER PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+ owner_id INTEGER NOT NULL REFERENCES users(id), reason TEXT NOT NULL,
+ created_at TEXT NOT NULL, acknowledged_at TEXT
+);
+CREATE TABLE IF NOT EXISTS ownership_dispute_evidence (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ dispute_id INTEGER NOT NULL REFERENCES ownership_disputes(id),
+ claim_id INTEGER NOT NULL REFERENCES claims(id),
+ author_id INTEGER NOT NULL REFERENCES users(id),
+ explanation TEXT NOT NULL, summary TEXT NOT NULL,
+ published_summary TEXT, published_at TEXT,
+ filename TEXT, content_type TEXT, content BLOB,
+ created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ownership_dispute_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ dispute_id INTEGER NOT NULL REFERENCES ownership_disputes(id),
+ actor_id INTEGER REFERENCES users(id), kind TEXT NOT NULL,
+ note TEXT NOT NULL, created_at TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS dispute_claim_update BEFORE UPDATE ON claims
+ WHEN (EXISTS (SELECT 1 FROM ownership_disputes d WHERE d.individual_id=OLD.individual_id AND d.status='open')
+       AND OLD.claim_type IN ('ownership','listing','identity_correction'))
+ OR EXISTS (SELECT 1 FROM ownership_dispute_claims dc JOIN ownership_disputes d ON d.id=dc.dispute_id
+            WHERE dc.claim_id=OLD.id AND d.status NOT IN ('resolving','checking'))
+ BEGIN SELECT RAISE(ABORT,'Ownership dispute lock: use dispute reconsideration'); END;
+
+CREATE TRIGGER IF NOT EXISTS dispute_claim_delete BEFORE DELETE ON claims
+ WHEN (EXISTS (SELECT 1 FROM ownership_disputes d WHERE d.individual_id=OLD.individual_id AND d.status='open')
+       AND OLD.claim_type IN ('ownership','listing','identity_correction'))
+ OR EXISTS (SELECT 1 FROM ownership_dispute_claims dc JOIN ownership_disputes d ON d.id=dc.dispute_id
+            WHERE dc.claim_id=OLD.id AND d.status NOT IN ('resolving','checking'))
+ BEGIN SELECT RAISE(ABORT,'Ownership dispute lock: use dispute reconsideration'); END;
+
+CREATE TRIGGER IF NOT EXISTS dispute_claim_insert BEFORE INSERT ON claims
+ WHEN NEW.claim_type IN ('ownership','listing','identity_correction') AND EXISTS
+ (SELECT 1 FROM ownership_disputes WHERE individual_id=NEW.individual_id AND status='open')
+ BEGIN SELECT RAISE(ABORT,'Ownership dispute lock: new ownership Claims are paused'); END;
+CREATE TRIGGER IF NOT EXISTS dispute_owner_update BEFORE UPDATE OF current_owner_user_id ON individuals
+ WHEN EXISTS (SELECT 1 FROM ownership_disputes WHERE individual_id=OLD.id AND status='open'
+ AND NEW.current_owner_user_id IS NOT locked_owner_id)
+ BEGIN SELECT RAISE(ABORT,'Ownership dispute lock: Current Owner is frozen'); END;
+CREATE TRIGGER IF NOT EXISTS dispute_individual_delete BEFORE DELETE ON individuals
+ WHEN EXISTS (SELECT 1 FROM ownership_disputes WHERE individual_id=OLD.id)
+ BEGIN SELECT RAISE(ABORT,'Ownership dispute lock: retain the dispute history'); END;
+
+CREATE TABLE IF NOT EXISTS ownership_dispute_rounds (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ dispute_id INTEGER NOT NULL REFERENCES ownership_disputes(id),
+ number INTEGER NOT NULL,
+ phase TEXT NOT NULL CHECK(phase IN ('collecting','reviewing')),
+ request_reason TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL,
+ UNIQUE(dispute_id,number)
+);
+CREATE TABLE IF NOT EXISTS ownership_dispute_round_parties (
+ round_id INTEGER NOT NULL REFERENCES ownership_dispute_rounds(id),
+ claim_id INTEGER NOT NULL REFERENCES claims(id),
+ user_id INTEGER NOT NULL REFERENCES users(id),
+ submitted_at TEXT,
+ PRIMARY KEY(round_id,claim_id,user_id)
+);
+CREATE TABLE IF NOT EXISTS ownership_dispute_round_evidence (
+ evidence_id INTEGER PRIMARY KEY REFERENCES ownership_dispute_evidence(id),
+ round_id INTEGER NOT NULL REFERENCES ownership_dispute_rounds(id)
+);

@@ -11,7 +11,7 @@
 <script src="/assets/list-navigation.js?v=list-counts-v1" defer></script>
 </head>
 <body>
-<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#ownership-request">Ownership Request</a><a href="#direct-experiment">Authentication Test</a></nav></header></div>
+<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#ownership-disputes">Ownership Disputes</a><a href="#ownership-request">Ownership Request</a><a href="#direct-experiment">Authentication Test</a></nav></header></div>
 <main>
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
@@ -92,13 +92,14 @@ Gibson ES-335</textarea>
 <div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
 </section>
+<section class="console-domain" id="ownership-disputes"><h2 data-count-items="#disputeList > .dispute-row">Ownership Disputes</h2><select id="disputeStatusFilter" aria-label="Dispute status" onchange="YGCDisputes.refresh()"><option value="open">Under dispute</option><option value="resolved">Resolved</option><option value="">All cases</option></select><button onclick="YGCDisputes.refresh()">Refresh disputes</button><div id="disputeList"></div></section>
 <section class="console-domain" id="ownership-request" aria-labelledby="ownershipRequestHeading">
 <div class="domain-heading"><h2 id="ownershipRequestHeading" data-count-items="#productionAcquireRows > tr">Ownership Request</h2><span class="sub">Review and manage Acquire and Listing requests</span></div>
 <div class="panel"><div class="toolbar"><button onclick="loadProductionAcquires()">Refresh Requests</button><input id="productionAcquireSearch" aria-label="Search requests" placeholder="Request ID / applicant / guitar / serial" oninput="renderProductionAcquires()"><select id="productionAcquireFilter" aria-label="Request status" onchange="renderProductionAcquires()"><option value="">All statuses</option><option value="draft">Awaiting photos</option><option value="pending">Awaiting review</option><option value="processing">Under review</option><option value="error">Processing error</option><option value="accepted">Approved</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option><option value="closed">Closed</option><option value="expired">Submission expired</option></select></div>
 <p id="productionAcquireStatus" role="status">Loading...</p><div class="table-wrap"><table><thead><tr><th>Request ID</th><th>Applicant</th><th>Guitar</th><th>Review status</th><th>Verification</th><th>Submitted</th></tr></thead><tbody id="productionAcquireRows"></tbody></table></div></div>
 <div class="panel"><div id="productionAcquireSummary">Select a request.</div><div id="productionAcquireImages" style="display:flex;flex-wrap:wrap;gap:12px"></div>
 <p class="sub">Review approval and owner verification are separate decisions. The applicant can see the reason for an administrator override.</p>
-<label>Reason for change<textarea id="productionAcquireReason" rows="2" maxlength="2000" style="width:100%"></textarea></label><div class="toolbar" id="productionAcquireActions"></div>
+<label>Reason for change (required)<textarea required aria-describedby="productionAcquireActionStatus" id="productionAcquireReason" rows="2" maxlength="2000" style="width:100%"></textarea></label><div class="toolbar" id="productionAcquireActions"></div><p id="productionAcquireActionStatus" role="status" aria-live="polite"></p>
 <label>Report and history (including the original AI review)<textarea id="productionAcquireDetail" readonly rows="12" style="width:100%"></textarea></label>
 <details><summary>Scheduled Review Instructions</summary><textarea id="productionAcquirePrompt" readonly rows="8" style="width:100%"></textarea></details></div></section>
 <section class="console-domain" id="direct-experiment" aria-labelledby="directHeading">
@@ -147,4 +148,5 @@ Gibson ES-335</textarea>
 <div id="adminClaimPopup" onclick="closeAdminClaim(event)" role="dialog" aria-label="Claim Detail"><div id="adminClaimPopupContent"></div></div>
 <script>const CONSOLE_ADMIN_TOKEN="";</script>
 <script src="/assets/pages/console.js" defer></script>
+<script src="/assets/disputes.js" defer></script>
 </body></html>

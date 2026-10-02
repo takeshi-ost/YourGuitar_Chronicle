@@ -4,7 +4,7 @@ const fs=require('node:fs'),vm=require('node:vm');
 const html=require('./page_source.cjs')('app/src/ygc/static/index_html.html');
 const source=html.slice(html.indexOf('let productionAcquires='),html.indexOf('function statCard('));
 function setup(){
- const elements={};for(const id of ['productionAcquireSearch','productionAcquireFilter','productionAcquireRows','productionAcquireSummary','productionAcquireActions','productionAcquireDetail','productionAcquireReason','productionAcquireStatus','productionAcquirePrompt','productionAcquireImages'])elements[id]={value:'',innerHTML:'',textContent:''};
+ const elements={};for(const id of ['productionAcquireSearch','productionAcquireFilter','productionAcquireRows','productionAcquireSummary','productionAcquireActions','productionAcquireDetail','productionAcquireReason','productionAcquireStatus','productionAcquireActionStatus','productionAcquirePrompt','productionAcquireImages'])elements[id]={value:'',innerHTML:'',textContent:'',focus(){this.focused=true}};
  const row={revision:'a'.repeat(32),status:'accepted',verification_status:'unverified',claim_id:2,applicant_id:3,applicant_name:'<script>bad</script>',product_name:'Fender',original_individual_id:1,serial:'TEST',created_at:'2026-10-01',images:{},admin_actions:['reject','positive'],management_version:'b'.repeat(64)};
  const calls=[];const context=vm.createContext({document:{getElementById:id=>elements[id]},Date,URL,encodeURIComponent,CONSOLE_ADMIN_TOKEN:'test',selectedIndividualId:null,
  esc:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'),
@@ -23,6 +23,7 @@ test('Ownership Request is separate from experiments and safely shows owner appr
 test('Admin changes require a reason and send the displayed version',async()=>{
  const {context,elements,calls,row}=setup();vm.runInContext('renderProductionAcquireDetail(row)',context);
  await vm.runInContext("manageProductionAcquire(row.revision,'reject')",context);assert.equal(calls.length,0);
+ assert.match(elements.productionAcquireActionStatus.textContent,/Enter a reason/);assert.equal(elements.productionAcquireReason.focused,true);
  elements.productionAcquireReason.value='目視で確認';await vm.runInContext("manageProductionAcquire(row.revision,'reject')",context);
  const body=JSON.parse(calls[0][1].body);assert.equal(body.expected_version,row.management_version);assert.equal(body.operation,'reject');assert.equal(body.reason,'目視で確認');
  assert.match(calls[0][0],/\/api\/admin\/acquire-applications\/[a-f0-9]+\/manage$/);
@@ -33,4 +34,21 @@ test('Manual decision is distinct from original AI JSON and its reason is escape
  assert.match(elements.productionAcquireSummary.innerHTML,/Administrator review: Rejected/);
  assert.match(elements.productionAcquireSummary.innerHTML,/&lt;img/);
  assert.equal(JSON.parse(elements.productionAcquireDetail.value).result.adjudication.accepted,true);
+});
+
+
+test('Override approval reports the resulting owner-approval wait beside its button',async()=>{
+ const {context,elements,row}=setup();vm.runInContext('renderProductionAcquireDetail(row)',context);
+ elements.productionAcquireReason.value='Reviewed evidence';
+ await vm.runInContext("manageProductionAcquire(row.revision,'accept')",context);
+ assert.match(elements.productionAcquireActionStatus.textContent,/Change applied: Approved — Awaiting owner approval/);
+});
+
+test('Override errors remain next to the action and preserve the reason',async()=>{
+ const {context,elements,row}=setup();vm.runInContext('renderProductionAcquireDetail(row)',context);
+ elements.productionAcquireReason.value='Reviewed evidence';context.jfetch=async()=>{throw Error('Ownership dispute lock')};
+ await vm.runInContext("manageProductionAcquire(row.revision,'accept')",context);
+ assert.match(elements.productionAcquireActionStatus.textContent,/Could not apply change: Ownership dispute lock/);
+ assert.equal(elements.productionAcquireReason.value,'Reviewed evidence');
+ assert.equal(vm.runInContext('productionBusy',context),false);
 });
