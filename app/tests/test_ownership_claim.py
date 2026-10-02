@@ -51,8 +51,8 @@ def test_ownership_claim_acquire_starts_ownership(tmp_path: Path):
     assert refreshed["location_region"] == "Osaka"
 
 
-def test_release_and_inherit_end_ownership(tmp_path: Path):
-    for index, kind in enumerate(("release", "inherit"), start=1):
+def test_release_ends_ownership(tmp_path: Path):
+    for index, kind in enumerate(("release",), start=1):
         repository = Repository(tmp_path / f"chronicle-{kind}.db")
         repository.init_db()
 
@@ -108,7 +108,7 @@ def test_ownership_ending_kind_requires_current_owner(tmp_path: Path):
         media_storage_path="test/ownership-2.jpg",
     )
 
-    for kind in ("release", "inherit"):
+    for kind in ("release",):
         try:
             repository.create_ownership_claim(
                 other_user_id,
@@ -186,3 +186,18 @@ def test_backdated_release_keeps_effective_owner_in_owned_guitars(tmp_path: Path
         if int(row["individual_id"]) == individual_id
     )
     assert guitar["ownership_status"] == "current_owner"
+
+
+def test_inherit_cannot_be_created(tmp_path):
+    import pytest
+    repository = Repository(tmp_path / "retired.db")
+    repository.init_db()
+    owner = repository.create_user("Owner")
+    individual_id, _, _, _ = repository.create_initial_listing_claim(
+        owner, manufacturer="Fender", serial_number="RETIRED-1",
+        media_storage_path="test/photo.jpg", occurred_at="2026-01-01")
+    with pytest.raises(ValueError, match="ownership_kind"):
+        repository.create_ownership_claim(owner, individual_id, ownership_kind="inherit")
+    individual, _ = repository.get_individual(individual_id)
+    assert individual["current_owner_user_id"] == owner
+    assert not any(row["ownership_kind"] == "inherit" for row in repository.list_claims(individual_id))

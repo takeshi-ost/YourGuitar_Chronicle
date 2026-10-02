@@ -212,7 +212,7 @@ function renderProductionAcquireDetail(row){
   document.getElementById('productionAcquireActions').innerHTML=(row.admin_actions||[]).map(action=>'<button data-ui-action="'+(['accept','positive'].includes(action)?'primary':action==='cancel'?'danger':'neutral')+'" '+(productionBusy?'disabled ':'')+'class="secondary" onclick="manageProductionAcquire(\''+esc(row.revision)+'\',\''+action+'\')">'+ownershipActions[action]+'</button>').join('');
 }
 async function inspectProductionAcquire(revision){
-  const sequence=++productionDetailSequence;clearProductionImages();
+  const sequence=++productionDetailSequence;clearProductionImages();document.getElementById('productionAcquireActionStatus').textContent='';
   try{
     const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision));
     if(sequence!==productionDetailSequence)return;
@@ -228,18 +228,23 @@ async function inspectProductionAcquire(revision){
     }
   }catch(e){if(sequence===productionDetailSequence)document.getElementById('productionAcquireStatus').textContent=e.message}
 }
+function productionActionStatus(message){
+  document.getElementById('productionAcquireActionStatus').textContent=message;
+  document.getElementById('productionAcquireStatus').textContent=message;
+}
 async function manageProductionAcquire(revision,operation){
   if(productionBusy||!productionSelected||productionSelected.revision!==revision)return;
   const reason=document.getElementById('productionAcquireReason').value.trim();
-  if(!reason){document.getElementById('productionAcquireStatus').textContent='Enter a reason for this change.';return}
+  if(!reason){productionActionStatus('Enter a reason for this change. No changes have been made.');document.getElementById('productionAcquireReason').focus();return}
   const impact=operation==='accept'?(productionSelected.request_kind==='listing'?'Create or restore the guitar and Listing, with the applicant as initial owner.':'Create or restore the Acquire. An existing user owner must approve it; otherwise it becomes Positive automatically.'):operation==='reject'?'Set any existing Claim to Negative and recalculate ownership.':operation==='retry'?'Archive the original result and queue another GPT review.':operation==='cancel'?'Results from an in-progress review will no longer be accepted.':'Override Claim verification as an administrator and recalculate ownership.';
   if(!confirm(ownershipActions[operation]+'\n'+impact+'\nReason: '+reason))return;
-  productionBusy=true;renderProductionAcquireDetail(productionSelected);
+  productionBusy=true;productionActionStatus('Applying change…');renderProductionAcquireDetail(productionSelected);
   try{
     const row=await jfetch('/api/admin/acquire-applications/'+encodeURIComponent(revision)+'/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,reason,expected_version:productionSelected.management_version})});
     renderProductionAcquireDetail(row);document.getElementById('productionAcquireReason').value='';
+    productionActionStatus('Change applied: '+(ownershipStates[row.status]||row.status)+(row.status==='accepted'&&row.verification_status==='unverified'?' — Awaiting owner approval.':' .'));
     await loadProductionAcquires();await loadIndividuals();await loadUsers();if(selectedIndividualId)await showIndividual(selectedIndividualId);
-  }catch(e){document.getElementById('productionAcquireStatus').textContent='Could not apply change: '+e.message}
+  }catch(e){productionActionStatus('Could not apply change: '+e.message)}
   finally{productionBusy=false;if(productionSelected)renderProductionAcquireDetail(productionSelected)}
 }
 function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
@@ -621,8 +626,8 @@ function claimCard(c){
       if(t.accepted_at)body+='<div class="claim-memo">Evidence: Accepted by User #'+Number(t.accepted_by_user_id)+' · '+esc(displayInputDate(t.accepted_at))+' · Current Owner at acceptance: User #'+Number(t.current_owner_user_id)+'</div>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+ownerHtml+'.</strong></div>';
-    }else if(kind==='inherit'){
-      body='<div><strong>'+esc(party)+' inherited this product from '+ownerHtml+'.</strong></div>';
+    }else if(kind!=='acquire'){
+      body='<div><strong>Legacy Ownership Claim: '+esc(kind)+'</strong></div>';
     }else{
       body='<div><strong>'+ownerHtml+' became the owner of this product.</strong></div>';
     }

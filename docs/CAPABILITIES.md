@@ -24,7 +24,7 @@
 - Claimの投稿者、ユーザーに紐づく所有者、Transferの譲渡人・譲受人の名前はUser Profileへリンクする。カード・詳細ポップアップとBrowser Consoleで共通。IDを持たない外部掲載の名前や自由記入の旧所有者名はテキストで表示する。
 
 - 新しいギターを登録できる。手動登録も外部収集も、Listing Claimを起点とする同じ個体作成パイプラインを通る。個体の現在のMaker / Model / Finish / Year / Serial、Owner / LocationはClaimから作るSnapshotを表示する。
-- OwnershipはAcquire / Transfer / Inherit / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Inherit / Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。成立済みTransferは承認時のEvidenceに基づく独立した所有権根拠として時系列順に適用する。過去のTransferの否定によって後続を連鎖的に無効化しない。譲受人自身はPositiveなTransferのVerificationを変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
+- OwnershipはAcquire / Transfer / Releaseというタグを持つ一つのClaim種別。AcquireはOwnerとLocationを設定し、Releaseと旧TransferはUnknownに戻す。新規TransferはCurrent Ownerが相手ユーザーを検索して申請し、相手のAcceptをEvidenceとしてObservationが所有者を移す。承認者ID・承認日時・承認時点のCurrent Owner IDを保持する。合意とVerificationは独立する。成立済みTransferは承認時のEvidenceに基づく独立した所有権根拠として時系列順に適用する。過去のTransferの否定によって後続を連鎖的に無効化しない。譲受人自身はPositiveなTransferのVerificationを変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。
 - Specification / Repair / Incident（Damage / Lost / Theft）/ Event（Exhibition / Performance / Recording / Auction / Other）/ Media（画像）Claimを追加できる。本人が現在Ownerなら本人のClaimをPositiveにし、第三者の対象ClaimはUnverifiedから開始する。OwnerはPositive / Negative / Unverifiedに変更できる。Identity CorrectionはListingの訂正入口から作り、重複を検査する。
 - 元Ownerを主張するFormer Owner操作はAcquire / Releaseのペアを作り、Owner Verificationに従う。Claimの無効化は来歴を残すソフト削除。通常の表示とSnapshot評価から除外する。Listingは通常編集しない。
 - ClaimにGood / Bad投票とResponseを記録できる。Media Claimの画像とEvent Claimの任意画像は一つのClaimに最大10枚、JPEG / PNG / WebP / GIF、画像ごと最大12MB。ギャラリーに反映する条件はClaimの有効性と承認状態に従う。アップロード画像は画像枠やサムネイルから共通アルバムで開き、矢印・左右キーで移動する。Reverbの掲載画像は外部掲載へのリンクとして扱う。
@@ -40,7 +40,7 @@
 - ClaimのVerification強制変更・削除、アカウント情報とNormal / Silent BAN / BANの管理が可能。判定・管理操作を記録し、必要に応じて個体Snapshotを再構築する。管理権限は現時点でlocalhostとプロセス内トークンに限定。詳細は [console-claim-administration.md](console-claim-administration.md)。
 - Browser ConsoleのAuthentication Test（GPT連携）は複数申請の永続キュー（専用SQLite、最大100件・画像256MB）。接続キー・画像・診断文章・JSONを再起動後も保持し、申請一覧を15秒ごとに更新できる。MCPが1件ずつ原子的に確保し、2時間の審議期限と試行履歴で重複・古い結果を防止する。実行開始時点の未処理申請全件を順次審議し、途中追加分は次回に回す。エラー再試行・取消・終了済み申請削除・レポート保存に対応。Claim／所有権への反映やスケジュール自体の設定は行わない。詳細は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md)。
 
-- 正式Acquireは専用の申請・画像審議フローを通し、通過後のみClaimを追加する。24時間のChallenge提出期限、申請中表示、Owner承認待ち、非ユーザーOwner時の自動Positive、診断・写真の限定公開、再試行・取消・通知に対応。実験とは別のMCPツールを使い、正式EvidenceはメインDBへ保存する。Listingは下記の独自審議に対応済み。公開環境の本人認証・係争解決は別途対応。
+- 正式Acquireは専用の申請・画像審議フローを通し、通過後のみClaimを追加する。24時間のChallenge提出期限、申請中表示、Owner承認待ち、非ユーザーOwner時の自動Positive、診断・写真の限定公開、再試行・取消・通知に対応。実験とは別のMCPツールを使い、正式EvidenceはメインDBへ保存する。Listingは下記の独自審議に対応済み。公開環境の本人認証は別途対応。ローカルの係争対応は下記。
 
 - 新規Listingの画像審議：Serial・両Challenge・Maker/Model/Finishを確認し、通過後に個体と初期Ownerを登録。同じMaker・Serialは既存Acquireへ案内。Ownership RequestでAcquireと併せて管理。
 
@@ -76,3 +76,7 @@ Unanswered Requestsは例外として彩度の高い青緑背景（#007f83）・
 ### 年式統計
 
 Year DistributionはSnapshotの年式から`Circa`と`C.ha`を大文字小文字を区別せず除去し、前後空白を除いた値が4桁の数字だけの場合に集計する。同じ年は合算し、年の昇順で表示する。`1960-1962`などの範囲、年代、Unknownは集計しない。元の年式データは変更しない。
+
+### Ownership Disputes
+
+現在所有を置き換えるAcquireのDecline理由、異議申立て、無回答の確認依頼、双方の非公開Evidence提出に対応する。提出は各ラウンドで双方1回ずつとし、追加要求で次ラウンドへ進む。管理者は証拠が揃う前でも理由付きで裁定できる。Browser Consoleで要旨公開・資料要求・所有者の決定・再審議を行う。係争中の所有操作と決定済みClaimの変更をロックする。対象、制限、暫定設定と残作業は[OWNERSHIP_DISPUTES.md](OWNERSHIP_DISPUTES.md)を参照。

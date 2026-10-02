@@ -172,7 +172,7 @@ BAN、個体削除／Merge、シリアル変更、比較元Claimの無効化も�
 Chronicleには通常のAcquire情報だけを表示する。Evidenceの画像配信とJSONはprivate/no-store。
 申請者は **My Acquire申請・審議結果** で確認・取消・エラー再開できる。
 開いている申請の審議中表示は15秒ごとに更新し、結果とOwner承認待ちは通知にも記録する。
-Ownerの拒否や承認放置による自動移転はしない。係争解決は別機能として未実装。
+Ownerの拒否や承認放置による自動移転はしない。係争解決は別機能の[Ownership Disputes](OWNERSHIP_DISPUTES.md)へ接続する。
 
 ### MCPの接続と定期実行
 
@@ -197,7 +197,7 @@ WebUIとCodexを再起動して新しいツール定義を読み込み、Browser
 これは正式Acquireの業務フローを既存ローカル環境へ接続した実装であり、GCP公開運用の認証実装ではない。
 本人識別は既存PrototypeIdentityのまま。MCPもloopback＋共有キーの運用で、AI実行主体の暗号学的証明はない。
 公開前にIdentity Platform等で本人と審議担当を検証し、画像・申請・更新API全体を認可する必要がある。
-クラウドDB／オブジェクト保存、運用監視、係争解決は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に沿って別途進める。
+クラウドDB／オブジェクト保存と運用監視は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に沿って別途進める。ローカルの係争解決は [OWNERSHIP_DISPUTES.md](OWNERSHIP_DISPUTES.md) に記載する。
 
 ### 個体比較の採否緩和（2026-10-01）
 
@@ -313,7 +313,7 @@ GIF・WebP等のアニメーションは従来どおり拒否する。未対応�
 共通モーダル移行前のHTMLを期待していたプロフィールテスト1件を更新した。
 StarletteのTestClient依存に関する非推奨警告が1種類残るが、検証失敗はない。
 
-この確認はローカル運用を対象とする。公開サーバー向け本人認証・外部接続と係争解決は別途設計する。
+この確認はローカル運用を対象とする。公開サーバー向け本人認証・外部接続は別途設計する。係争フローはローカル実装済みで、公開環境への移行は別途検証する。
 コミット時は実データ、接続キー、ローカル定期タスク設定を含めない。
 
 ### main統合後の検証
@@ -336,11 +336,12 @@ Acquireの比較画像はListing項目・marketplace Evidenceを優先し、旧O
 
 ### Requestモーダルの保存と操作
 
-ウィンドウタイトルを最上部、操作ボタンを最下部へ配置する。Cancel以外の操作ボタンは共通確認モーダルでConfirm／Backを選ぶ。Cancelは再確認せず閉じる。
+ウィンドウタイトルを最上部、操作ボタンを最下部へ配置する。CancelとOK以外の操作ボタンは共通確認モーダルでConfirm／Backを選ぶ。CancelとOKは再確認せず閉じる。
 - Generate Challenge：署名付きの未保存フォームを発行する。申請DB・履歴・審議キューには追加しない。
 - Submit：写真を検証し、入力内容と写真を保存して審議待ちへ進める。
-- Keep Request：入力内容だけを保存して閉じる。選択した写真は保存しないため、再開時に選び直す。保存済みの審議中・結果画面では状態を変えず閉じる。
+- Keep Request：入力内容だけを保存して閉じる。選択した写真は保存しないため、再開時に選び直す。Acquireの写真提出後はこのボタンを表示しない。
 - Cancel：入力の変更を保存せず閉じる。保存済みの申請自体は取り消さない。Escapeによる閉じる操作も保存しない。
+- OK：Acquireの写真提出後（審議待ち・結果・エラーを含む）はフッターをこのボタンだけにする。Cancelと同じく、申請状態を変更せず閉じる。
 - Reflesh：保存済みの状態を再取得する。未保存フォームでは入力とChallengeを維持して写真選択を解除し、申請は作成しない。
 - Cansel Request：保存済みの下書きまたは未決着の申請を、従来の取消処理で停止する。
 
@@ -362,3 +363,13 @@ TopPageとUserProfileのメイン先頭に、操作ユーザー宛ての`Unanswe
 通知の既読とは独立し、Claim作成前の画像審議中申請は対象にしない。
 Accept / Declineは確認後、既存のTransfer応答またはPositive / Negative Verificationへ接続する。
 回答後・ページ読込時・表示中30秒ごとに更新し、未回答がなければ欄を隠す。
+
+### Acquire申請の入口
+
+非ユーザー所有（Owner不明を含む）の個体は、Product Detailの「If you are the rightful owner of this, you can claim it by providing some evidence!」から申請する。
+ユーザー所有の個体ではこの案内を表示せず、他ユーザーは「Let's add your Claim !!」→「Ownership」から同じAcquire申請フローを開く。Former Ownerの入口は維持する。
+Current Owner本人のOwnershipメニューは既存の譲渡・放棄等の操作を維持し、自分へのAcquire申請は提供しない。既存申請の状態表示と、審議・Owner承認の規則は変更しない。
+
+他ユーザー所有の個体でOwnershipを選ぶと、既存Ownerとユーザー間の係争の可能性を英語で警告する。Acknowledgeを選んだ場合だけAcquire申請画面へ進み、Backまたはモーダルを閉じた場合は進まない。この承諾自体は申請を保存しない。
+
+AcquireのDecline理由・異議申立て・係争ロックは[OWNERSHIP_DISPUTES.md](OWNERSHIP_DISPUTES.md)を参照。画像審議と係争審議は別であり、係争の結論は管理者が記録する。

@@ -30,6 +30,7 @@
   </div>
 </div>
 <main>
+<section id="ownershipDisputeNotice" class="unanswered-requests" hidden aria-labelledby="ownershipDisputeNoticeTitle"><h2 id="ownershipDisputeNoticeTitle" data-count-items="#disputeList > .unanswered-request">Ownership Disputes</h2><div id="disputeList"></div></section>
 <section id="unansweredRequests" class="unanswered-requests" hidden aria-labelledby="unansweredRequestsTitle"></section>
 
 <div class="grid">
@@ -290,7 +291,6 @@
       <select id="ownershipClaimKind" style="display:none" onchange="updateTransferFields()">
         <option value="acquire">Acquire</option>
         <option value="transfer">Transfer</option>
-        <option value="inherit">Inherit</option>
         <option value="release">Release</option>
       </select>
     </div>
@@ -345,5 +345,6 @@
 
 <div class="modal-backdrop" id="ownershipConfirmModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="ownershipConfirmTitle"><h3 id="ownershipConfirmTitle">Confirm</h3><p id="ownershipConfirmMessage"></p><div class="modal-actions"><button id="ownershipConfirmSubmit" data-ui-action="primary" type="button" onclick="resolveOwnershipConfirmation(true)">Confirm</button><button data-ui-action="close" type="button" class="secondary" onclick="resolveOwnershipConfirmation(false)">Back</button></div></div></div>
 
+<script src="/assets/disputes.js" defer></script>
 </body>
 </html>

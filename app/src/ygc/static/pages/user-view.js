@@ -204,12 +204,14 @@ async function loadUnansweredRequests(){
 async function answerOwnershipRequest(claimId,kind,accept,individualId){
   if(unansweredBusy||!activeUser?.user)return;
   const userId=activeUser.user.id;
+  const reason=kind==='acquire'&&!accept?prompt('Why are you declining this Acquire? Your reason will be shared with the applicant.'):null;
+  if(kind==='acquire'&&!accept&&!reason?.trim())return;
   if(!await confirmOwnershipAction(accept?'Accept':'Decline',accept?'Accept this ownership request?':'Decline this ownership request?'))return;
   if(activeUser?.user?.id!==userId)return;
   unansweredBusy=true;
   try{
     const url=kind==='transfer'?'/api/transfers/'+claimId+'/resolve?viewer_id='+Number(userId):'/api/claims/'+claimId+'/response';
-    const body=kind==='transfer'?{action:accept?'accept':'decline'}:{responder_user_id:userId,stance:accept?'positive':'negative'};
+    const body=kind==='transfer'?{action:accept?'accept':'decline'}:{responder_user_id:userId,stance:accept?'positive':'negative',reason};
     await jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     await refreshClaimViews(individualId);
   }catch(error){alert(error.message)}finally{unansweredBusy=false;await loadUnansweredRequests()}
@@ -243,6 +245,7 @@ async function loadActiveUser(){
   await loadNotifications();
   await loadDirectMessageInbox();
   await loadOwnershipAttention();
+  if(typeof YGCDisputes!=='undefined')await YGCDisputes.refresh();
   await loadUnansweredRequests();
   renderAccountHub();
   renderNotificationPanel();
@@ -379,13 +382,23 @@ function ownershipControlsHtml(individual){
     && PROFILE_USER_ID!==Number(activeUser.user.id)
     ? '<div class="sub">Signed in as '+esc(activeUser.user.display_name||('User #'+activeUser.user.id))+'</div>'
     : '';
+  if(individual.ownership_dispute_id)return actorNote+'<button type="button" class="owner-claim-card" onclick="YGCDisputes.open('+Number(individual.ownership_dispute_id)+')">Under dispute</button>';
   if(activeUser&&activeUser.user&&individual.current_owner_user_id!==null
      && Number(individual.current_owner_user_id)===Number(activeUser.user.id)){
     return actorNote;
   }
   if(individual.acquire_application)return actorNote+'<button onclick="viewAcquireApplication(\''+esc(individual.acquire_application.revision)+'\')">'+esc(acquireStatusLabel(individual.acquire_application))+'</button>';
+  if(individual.current_owner_user_id)return actorNote;
   const action=activeUser&&activeUser.user?'openOwnerClaim('+individualId+')':'requireAccount()';
   return actorNote+'<button type="button" class="owner-claim-card" onclick="'+action+'">If you are the rightful owner of this, you can claim it by providing some evidence!</button>';
+}
+
+function ownershipClaimMenuHtml(individual){
+  if(individual.ownership_dispute_id)return '<button disabled title="Ownership changes are paused while this guitar is under dispute">Ownership — paused</button>'+(activeUserOwns(individual.id)?'':'<button disabled title="Ownership changes are paused while this guitar is under dispute">Former Owner — paused</button>');
+  if(activeUserOwns(individual.id))return '<button onclick="chooseClaimType(\'ownership\')">Ownership</button>';
+  const acquire=individual.current_owner_user_id
+    ? '<button onclick="chooseClaimType(\'acquire\')">Ownership</button>' : '';
+  return acquire+'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>';
 }
 
 function productGalleryHtml(images,model){return YGCProductGallery.render(images,model,esc)}
@@ -498,8 +511,8 @@ function claimCardFull(c){
       if(t.state==='pending'&&activeUser?.user&&[t.from_user_id,t.to_user_id].includes(Number(activeUser.user.id)))body+='<button type="button" onclick="openTransferReview('+Number(c.id)+')">Review Transfer</button>';
     }else if(kind==='transfer'){
       body='<div><strong>'+esc(party)+' acquired this product from '+ownerHtml+'.</strong></div>';
-    }else if(kind==='inherit'){
-      body='<div><strong>'+esc(party)+' inherited this product from '+ownerHtml+'.</strong></div>';
+    }else if(kind!=='acquire'){
+      body='<div><strong>Legacy Ownership Claim: '+esc(kind)+'</strong></div>';
     }else{
       body='<div><strong>'+ownerHtml+' became the owner of this product.</strong></div>';
     }
@@ -662,13 +675,16 @@ async function refreshClaimViews(individualId){
 
 async function setClaimResponse(claimId,stance){
   if(!activeUser||!activeUser.user)return;
+  const claim=typeof currentClaims!=='undefined'?currentClaims.find(c=>Number(c.id)===Number(claimId)):null;
+  const reason=stance==='negative'&&claim?.claim_type==='ownership'&&claim.ownership_kind==='acquire'?prompt('Why are you declining this Acquire? Your reason will be shared with the applicant.'):null;
+  if(stance==='negative'&&claim?.claim_type==='ownership'&&claim.ownership_kind==='acquire'&&!reason?.trim())return;
   try{
     await jfetch('/api/claims/'+claimId+'/response',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         responder_user_id:Number(activeUser.user.id),
-        stance
+        stance,reason
       })
     });
     closeClaimPopup();
@@ -701,11 +717,12 @@ let acquireBusy=false;
 let acquireDisplayState=null;
 let acquireForm=null;
 let ownershipConfirmResolve=null;
-function confirmOwnershipAction(title,message){
+function confirmOwnershipAction(title,message,confirmLabel='Confirm'){
   if(ownershipConfirmResolve)return Promise.resolve(false);
   document.getElementById('ownershipConfirmTitle').textContent=title;
   document.getElementById('ownershipConfirmMessage').textContent=message;
   const submit=document.getElementById('ownershipConfirmSubmit');
+  submit.textContent=confirmLabel;
   submit.dataset.uiAction=/^(Cansel Request|Cancel Request|Delete|Release|Transfer)$/.test(title)?'danger':/^(Cancel|Close|Back)$/.test(title)?'close':/^(Accept|Submit|Keep Request|Save)$/.test(title)?'primary':'neutral';
   return new Promise(resolve=>{
     ownershipConfirmResolve=resolve;
@@ -717,11 +734,17 @@ function resolveOwnershipConfirmation(accepted){
   YGCOverlays.close('ownershipConfirmModal');if(done)done(accepted);
 }
 function requestFooter(row=null){
+  if(row&&row.request_kind!=='listing'&&row.status!=='draft'){
+    document.getElementById('acquireReviewActions').innerHTML='<button data-ui-action="close" onclick="cancelRequestWindow()">OK</button>';
+    return;
+  }
   const saved=row&&!row.unsaved;
   const terminal=row&&['accepted','rejected','cancelled','closed','expired'].includes(row.status);
   let buttons='';
   if(!row)buttons+='<button id="guitarSubmit" onclick="submitNewGuitar()">Generate Challenge</button>';
   if(!row||row.status==='draft')buttons+='<button data-ui-action="primary" id="acquireSubmit" onclick="submitAcquireApplication()" '+(!row?'disabled':'')+'>Submit</button>';
+  if(row?.dispute_case_id)buttons+='<button onclick="YGCDisputes.open('+Number(row.dispute_case_id)+')">Dispute Details</button>';
+  else if(row?.can_request_dispute)buttons+='<button onclick="YGCDisputes.list()">Review owner response / Appeal</button>';
   buttons+='<button onclick="requestRefresh()">Reflesh</button>';
   if(row?.status==='error')buttons+='<button onclick="actAcquireApplication(\'retry\')">Retry Review</button>';
   buttons+='<button data-ui-action="primary" onclick="keepAcquireRequest()">Keep Request</button><button data-ui-action="close" class="secondary" onclick="cancelRequestWindow()">Cancel</button>';
@@ -929,7 +952,7 @@ async function showIndividual(id,fromList=false){
   }else{
     out+='<img class="detail-image" src="/assets/no-picture.svg" alt="No picture"><span class="detail-source">No Picture</span>';
   }
-  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button class="add-claim-action" onclick="toggleAddClaimMenu(event,'+i.id+')">Let\'s add your Claim !!</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+(activeUserOwns(i.id)?'<button onclick="chooseClaimType(\'ownership\')">Ownership</button>':'<button onclick="chooseClaimType(\'former_owner\')">Former Owner</button>')+'</div></div></div>';
+  const chronicleAction='<div class="chronicle-toolbar"><div class="claim-menu-wrap"><button class="add-claim-action" onclick="toggleAddClaimMenu(event,'+i.id+')">Let\'s add your Claim !!</button><div class="claim-menu" id="addClaimMenu"><button onclick="chooseClaimType(\'specification_repair\')">Specification/Repair</button><button onclick="chooseClaimType(\'incident\')">Incident</button><button onclick="chooseClaimType(\'event\')">Event</button><button onclick="chooseClaimType(\'media\')">Media</button>'+ownershipClaimMenuHtml(i)+'</div></div></div>';
   out+=YGCProductDetail.render({individual:i,specifications:currentSpecifications||[],image:'',
     owner:currentSnapshotOwnerHtml(i),location:currentLocationHtml(i),ownership:ownershipControlsHtml(i),
     titleAction:favoriteButton(i.id),chronicleAction,fieldLabel:specificationFieldLabel,escape:esc});
@@ -963,7 +986,7 @@ function toggleAddClaimMenu(event,individualId){
   const menu=document.getElementById('addClaimMenu');
   if(menu)menu.classList.toggle('open');
 }
-function chooseClaimType(type){
+async function chooseClaimType(type){
   const menu=document.getElementById('addClaimMenu');
   if(menu)menu.classList.remove('open');
   if(type==='specification_repair')openSpecificationClaim(selectedIndividualId);
@@ -971,6 +994,12 @@ function chooseClaimType(type){
   else if(type==='event')openEventClaim(selectedIndividualId);
   else if(type==='media')openMediaClaim(selectedIndividualId);
   else if(type==='former_owner')openFormerOwnerClaim(selectedIndividualId);
+  else if(type==='acquire'){
+    const individualId=selectedIndividualId;
+    if(await confirmOwnershipAction('Ownership Claim Warning',
+      'This guitar already has an owner. Are you sure it belongs to you? This claim may lead to a dispute between users.',
+      'Acknowledge'))openOwnerClaim(individualId);
+  }
   else if(type==='ownership')openOwnershipClaim(selectedIndividualId,'add_claim');
 }
 
@@ -1241,7 +1270,7 @@ function configureOwnershipClaim(mode){
     fixed.innerHTML='<strong>Acquire</strong>';
     previousRow.style.display='';
   }else{
-    kind.innerHTML='<option value="transfer">Transfer</option><option value="release">Release</option><option value="inherit">Inherit</option>';
+    kind.innerHTML='<option value="transfer">Transfer</option><option value="release">Release</option>';
     kind.value='transfer';
     kind.style.display='block';
     fixed.style.display='none';

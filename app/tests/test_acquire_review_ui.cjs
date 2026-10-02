@@ -130,3 +130,80 @@ test('Request Cancel closes immediately without confirmation or server writes',a
   await vm.runInContext('cancelRequestWindow()',context);
   assert.equal(closed,true);assert.equal(calls.length,0);
 });
+
+test('Acquire entry respects registered owners and preserves owner and former-owner actions',async()=>{
+  const calls=[];
+  const context=vm.createContext({PROFILE_USER_ID:null,activeUser:{user:{id:2}},selectedIndividualId:7,
+    esc:String,activeUserOwns:()=>false,acquireStatusLabel:()=> 'Awaiting review',
+    document:{getElementById:()=>({classList:{remove(){}}})},
+    confirmOwnershipAction:async()=>true,
+    openOwnerClaim:id=>calls.push(['acquire',id]),
+    openOwnershipClaim:(id,mode)=>calls.push(['owner',id,mode])});
+  vm.runInContext(html.slice(html.indexOf('function ownershipControlsHtml('),html.indexOf('function productGalleryHtml(')),context);
+  vm.runInContext(html.slice(html.indexOf('async function chooseClaimType('),html.indexOf('function mediaImageInputs(')),context);
+  for(const owner of [null,undefined]){
+    context.guitar={id:7,current_owner_user_id:owner};
+    assert.match(vm.runInContext('ownershipControlsHtml(guitar)',context),/rightful owner/);
+    assert.doesNotMatch(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/>Ownership</);
+  }
+  context.guitar={id:7,current_owner_user_id:3};
+  assert.doesNotMatch(vm.runInContext('ownershipControlsHtml(guitar)',context),/rightful owner/);
+  assert.match(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/acquire.*Ownership.*Former Owner/);
+  await vm.runInContext("chooseClaimType('acquire')",context);
+  assert.deepEqual(calls,[['acquire',7]]);
+  context.guitar.acquire_application={revision:'abc'};
+  assert.match(vm.runInContext('ownershipControlsHtml(guitar)',context),/viewAcquireApplication.*Awaiting review/);
+  context.guitar.current_owner_user_id=2;context.activeUserOwns=()=>true;
+  assert.doesNotMatch(vm.runInContext('ownershipControlsHtml(guitar)',context),/rightful owner/);
+  assert.doesNotMatch(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/acquire|Former Owner/);
+  vm.runInContext("chooseClaimType('ownership')",context);
+  assert.deepEqual(calls[1],['owner',7,'add_claim']);
+  context.activeUser=null;context.activeUserOwns=()=>false;
+  assert.doesNotMatch(vm.runInContext('ownershipControlsHtml(guitar)',context),/rightful owner/);
+  context.guitar={id:7,current_owner_user_id:null};
+  assert.match(vm.runInContext('ownershipControlsHtml(guitar)',context),/requireAccount/);
+});
+
+
+test('Registered-owner warning gates Acquire and retains the selected guitar',async()=>{
+  const calls=[];let resolveConfirmation;
+  const context=vm.createContext({selectedIndividualId:7,
+    document:{getElementById:()=>({classList:{remove(){}}})},
+    confirmOwnershipAction:(...args)=>{calls.push(args);return new Promise(resolve=>{resolveConfirmation=resolve})},
+    openOwnerClaim:id=>calls.push(['open',id])});
+  vm.runInContext(html.slice(html.indexOf('async function chooseClaimType('),html.indexOf('function mediaImageInputs(')),context);
+  const cancelled=vm.runInContext("chooseClaimType('acquire')",context);
+  assert.equal(calls.length,1);
+  assert.match(calls[0][1],/already has an owner.*belongs to you.*dispute between users/);
+  assert.equal(calls[0][2],'Acknowledge');
+  resolveConfirmation(false);await cancelled;
+  assert.equal(calls.length,1);
+  const accepted=vm.runInContext("chooseClaimType('acquire')",context);
+  context.selectedIndividualId=9;
+  resolveConfirmation(true);await accepted;
+  assert.deepEqual(calls[2],['open',7]);
+});
+
+test('Dispute participants see a paused ownership menu and a detail link',()=>{
+ const context=vm.createContext({PROFILE_USER_ID:null,activeUser:{user:{id:2}},esc:String,activeUserOwns:()=>true});
+ vm.runInContext(html.slice(html.indexOf('function ownershipControlsHtml('),html.indexOf('function productGalleryHtml(')),context);
+ context.guitar={id:1,current_owner_user_id:2,ownership_dispute_id:8};
+ assert.match(vm.runInContext('ownershipControlsHtml(guitar)',context),/class="owner-claim-card".*YGCDisputes.open\(8\).*Under dispute/);
+ assert.match(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/button disabled.*Ownership — paused/);
+ assert.doesNotMatch(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/chooseClaimType/);
+ context.activeUserOwns=()=>false;
+ assert.match(vm.runInContext('ownershipClaimMenuHtml(guitar)',context),/Former Owner — paused/);
+});
+
+test('Submitted Acquire result footer has only OK with the existing close action',()=>{
+ const {context,elements}=setup();
+ for(const status of ['pending','processing','accepted','rejected','error']){
+  context.row={request_kind:'acquire',status,claim_id:3,dispute_case_id:1,can_request_dispute:true};
+  vm.runInContext('requestFooter(row)',context);
+  const actions=elements.acquireReviewActions.innerHTML;
+  assert.equal((actions.match(/<button/g)||[]).length,1);
+  assert.match(actions,/onclick="cancelRequestWindow\(\)"[^>]*>OK<\/button>/);
+ }
+ context.row={request_kind:'acquire',status:'draft'};vm.runInContext('requestFooter(row)',context);
+ assert.match(elements.acquireReviewActions.innerHTML,/Keep Request/);
+});

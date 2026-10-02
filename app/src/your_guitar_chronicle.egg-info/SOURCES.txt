@@ -13,6 +13,8 @@ src/ygc/crawl_service.py
 src/ygc/direct_experiment.py
 src/ygc/direct_mcp_bridge.py
 src/ygc/direct_queue.py
+src/ygc/dispute_routes.py
+src/ygc/disputes.py
 src/ygc/incremental_crawl.py
 src/ygc/listing_review.py
 src/ygc/observation_evaluator.py
@@ -38,6 +40,7 @@ src/ygc/matching/__init__.py
 src/ygc/matching/individual_matcher.py
 src/ygc/static/butterscotch-wood.webp
 src/ygc/static/cherry-wood.webp
+src/ygc/static/disputes.js
 src/ygc/static/index_html.html
 src/ygc/static/list-navigation.js
 src/ygc/static/overlays.js
@@ -86,6 +89,7 @@ tests/test_db_import.py
 tests/test_direct_experiment.py
 tests/test_direct_messages.py
 tests/test_discovery_following.py
+tests/test_disputes.py
 tests/test_event_claim.py
 tests/test_evidence_source_reads.py
 tests/test_former_owner_claims.py

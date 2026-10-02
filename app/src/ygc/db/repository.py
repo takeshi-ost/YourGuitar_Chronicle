@@ -460,6 +460,8 @@ class Repository:
             self._migrate_metadata_columns(
                 con
             )
+            from ygc.disputes import migrate_rounds
+            migrate_rounds(con)
 
     @staticmethod
     def _table_columns(
@@ -4098,9 +4100,9 @@ class Repository:
         body: str | None = None,
     ) -> tuple[int | None, int]:
         kind = ownership_kind.strip().lower()
-        if kind not in ("acquire", "transfer", "release", "inherit"):
+        if kind not in ("acquire", "transfer", "release"):
             raise ValueError(
-                "ownership_kind must be acquire, transfer, release, or inherit"
+                "ownership_kind must be acquire, transfer, or release"
             )
 
         if kind == "transfer":
@@ -4131,6 +4133,8 @@ class Repository:
 
     def _create_ownership_claim_in_connection(self, con, user_id, individual_id,
                                                kind, event_date, note, previous_owner_text, now):
+        if kind not in ("acquire", "release"):
+            raise ValueError("Unsupported ownership_kind; use the Transfer workflow for transfers")
         user = con.execute(
             """
             SELECT *
@@ -4159,7 +4163,7 @@ class Repository:
             (user_id, individual_id),
         ).fetchone()
 
-        ending_kinds = ("transfer", "release", "inherit")
+        ending_kinds = ("transfer", "release")
         if kind in ending_kinds and not ownership:
             raise ValueError(
                 "User is not the current owner of this Individual"
@@ -6327,13 +6331,16 @@ class Repository:
                 (individual_id,),
             )
             return {int(claim['id']) for claim in claims
-                    if self._owner_verification_denial(claim, viewer_user_id, True) is None}
+                    if self._owner_verification_denial(claim, viewer_user_id, True) is None
+                    and not con.execute('SELECT 1 FROM ownership_dispute_claims WHERE claim_id=?', (claim['id'],)).fetchone()
+                    and not (claim['claim_type']=='ownership' and con.execute("SELECT 1 FROM ownership_disputes WHERE individual_id=? AND status='open'", (individual_id,)).fetchone())}
 
     def set_claim_response(
         self,
         claim_id: int,
         responder_user_id: int,
         stance: str,
+        reason: str | None = None,
     ) -> bool:
         normalized = stance.strip().lower()
         if normalized not in (
@@ -6347,6 +6354,7 @@ class Repository:
 
         now = utcnow()
         with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
             claim = con.execute(
                 """
                 SELECT
@@ -6391,6 +6399,12 @@ class Repository:
             denial = self._owner_verification_denial(claim, responder_user_id, bool(owner))
             if denial:
                 raise ValueError(denial)
+
+            from ygc import disputes
+            if claim['claim_type'] in ('ownership','listing','identity_correction'):
+                disputes.guard(con, claim['individual_id'], claim_id)
+            if normalized == 'negative':
+                disputes.record_decline(con, claim_id, responder_user_id, reason)
 
             if is_former_owner_claim and self._former_owner_pair(con, claim):
                 con.execute(
@@ -6986,8 +7000,10 @@ class Repository:
             return [dict(claim_id=r['id'],individual_id=r['individual_id'],
                          kind=r['ownership_kind'],sender_id=r['author_user_id'],sender_name=r['sender_name'],
                          guitar=' / '.join(str(r[k]) for k in ('manufacturer','model','serial_number') if r[k]))
-                    for r in rows if r['ownership_kind']=='transfer' or
-                    self._owner_verification_denial(r,user_id,True) is None]
+                    for r in rows if (r['ownership_kind']=='transfer' or
+                    self._owner_verification_denial(r,user_id,True) is None)
+                    and not con.execute("SELECT 1 FROM ownership_disputes WHERE individual_id=? AND status='open'",(r['individual_id'],)).fetchone()
+                    and not con.execute('SELECT 1 FROM ownership_dispute_claims WHERE claim_id=?',(r['id'],)).fetchone()]
 
     def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
         """Active pending Acquire claims from both users and Automation."""

@@ -581,6 +581,7 @@ class FormerOwnerClaimRequest(ClaimDateRequest):
 
 
 class ClaimResponseRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=4000)
     responder_user_id: int = Field(ge=1)
     stance: str = Field(max_length=20)
 
@@ -2160,6 +2161,10 @@ def api_individual(individual_id: int, request: Request,
         with repository.connect() as con:
             pending=con.execute("SELECT a.revision,a.status,c.verification_status FROM acquire_applications a LEFT JOIN claims c ON c.id=a.claim_id WHERE a.individual_id=? AND a.applicant_id=? AND (a.status IN ('draft','pending','processing','error') OR (a.status='accepted' AND c.status='active' AND c.verification_status='unverified')) ORDER BY a.created_at DESC LIMIT 1",(individual_id,viewer_user_id)).fetchone()
             individual_data['acquire_application']=dict(pending) if pending else None
+            from ygc import disputes
+            case=disputes.active(con,individual_id)
+            if case and viewer_user_id in disputes.participants(con,case):
+                individual_data['ownership_dispute_id']=case['id']
     gallery_images = []
     for row in repo().list_media_assets(individual_id):
         item = _row_dict(row)
@@ -2944,6 +2949,7 @@ def api_claim_response(
             claim_id,
             request.responder_user_id,
             request.stance,
+            reason=request.reason,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -3982,7 +3988,7 @@ async def private_acquire_cache_control(request: Request, call_next):
         response=await call_next(request)
     finally:
         viewer_timezone.reset(token)
-    if request.url.path.startswith(('/api/acquire-applications','/api/admin/acquire-applications','/api/listing-applications','/api/ownership-drafts')):
+    if request.url.path.startswith(('/api/acquire-applications','/api/admin/acquire-applications','/api/listing-applications','/api/ownership-drafts','/api/ownership-dispute','/api/admin/ownership-dispute')):
         response.headers['Cache-Control']='private, no-store'
     return response
 
@@ -4176,6 +4182,21 @@ def api_acquire_action(revision: str, operation: str, request: Request, viewer_i
     try:return review.action(repo(),actor,revision,operation,_console_admin_authorized(request))
     except (ValueError,PermissionError) as exc:raise acquire_error(exc) from exc
 
+
+
+
+from ygc.dispute_routes import router as dispute_router
+app.include_router(dispute_router)
+
+@app.exception_handler(sqlite3.IntegrityError)
+async def dispute_integrity_error(request: Request, exc: sqlite3.IntegrityError):
+    if str(exc).startswith('Ownership dispute lock:'):
+        return JSONResponse({'detail':str(exc)},status_code=409)
+    return JSONResponse({'detail':'The operation conflicts with existing records.'},status_code=409)
+
+@app.get('/assets/disputes.js')
+def dispute_script():
+    return FileResponse(Path(__file__).with_name('static')/'disputes.js',media_type='text/javascript',headers={'Cache-Control':'no-store'})
 
 if __name__ == "__main__":
     main()
