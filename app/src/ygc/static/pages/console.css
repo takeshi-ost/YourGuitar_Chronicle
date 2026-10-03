@@ -128,3 +128,16 @@ main{max-width:1500px;margin:0 auto;padding:calc(var(--header-height,47px) + 14p
 .direct-queue-table table{min-width:680px}.direct-queue-table td,.direct-queue-table th{white-space:nowrap}.direct-queue-table td:nth-child(2){white-space:normal;min-width:110px;max-width:260px;overflow-wrap:anywhere}label:has(> #directAutoRefresh){display:flex;align-items:center;gap:6px;margin:12px 0}#directAutoRefresh{width:auto;display:inline-block;margin:0}
 .auth-test-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.auth-test-fields label{font-size:11px;color:var(--muted);min-width:0}.auth-test-fields input{display:block;width:100%;margin-top:5px}
 @media(max-width:800px){.auth-test-fields{grid-template-columns:1fr}}
+
+/* Detail panels remain in the page grid; only their contents scroll. */
+:root{--console-detail-height:calc(100dvh - var(--header-height,47px) - 28px)}
+.guitar-content>.detail-shell{height:var(--console-detail-height)}
+.guitar-content .detail-panel,.user-detail-panel{height:var(--console-detail-height);min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.guitar-content .detail-panel>.toolbar,.user-detail-panel>.toolbar{flex:0 0 auto}
+.guitar-content .detail-panel #detail,.user-detail-panel #accountPanel{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-wrap:anywhere}
+
+.console-list-column{min-width:0}
+@media(min-width:901px){
+  .guitar-content>.detail-shell,.user-content>.user-detail-panel{height:calc(var(--console-detail-height) + var(--detail-raised-space,0px))}
+  .guitar-content .detail-panel{height:100%}
+}
