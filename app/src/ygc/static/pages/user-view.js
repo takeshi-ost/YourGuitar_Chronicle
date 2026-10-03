@@ -327,6 +327,41 @@ function updateSortIndicators(){
     if(el)el.textContent=individualSortKey===key?(individualSortDirection===1?'▲':'▼'):'';
   }
 }
+// Use unfiltered counts; filtering never changes the outer list height.
+function sizeGuitarList(panel,count){
+  if(!panel)return;
+  panel.dataset.totalItems=String(count);
+  if(!panel._sizeObserver&&typeof ResizeObserver==='function'){
+    panel._sizeObserver=new ResizeObserver(()=>measureGuitarList(panel));
+    panel._sizeObserver.observe(panel);
+    for(const child of panel.children)if(!child.classList.contains('table-wrap'))panel._sizeObserver.observe(child);
+  }
+  measureGuitarList(panel);
+}
+function measureGuitarList(panel){
+  const wrap=panel.querySelector('.table-wrap'),table=wrap?.querySelector('table');
+  if(!table)return;
+  const probe=table.cloneNode(false);
+  probe.removeAttribute('id');
+  probe.style.cssText='position:absolute;visibility:hidden;pointer-events:none;width:'+table.getBoundingClientRect().width+'px';
+  probe.innerHTML='<tbody><tr><td>0</td><td class="favorite-cell"><button class="favorite-button">♡</button></td><td>Maker</td><td>Model</td><td>Finish</td><td>Year</td><td>Serial</td><td>0</td></tr></tbody>';
+  wrap.append(probe);
+  const rowHeight=probe.rows[0].getBoundingClientRect().height;
+  probe.remove();
+  const css=getComputedStyle(panel),wc=getComputedStyle(wrap);
+  const px=v=>parseFloat(v)||0;
+  let height=px(css.paddingTop)+px(css.paddingBottom)+px(css.borderTopWidth)+px(css.borderBottomWidth);
+  for(const child of panel.children){
+    if(child===wrap||getComputedStyle(child).display==='none')continue;
+    const style=getComputedStyle(child);
+    height+=child.getBoundingClientRect().height+px(style.marginTop)+px(style.marginBottom);
+  }
+  height+=(table.tHead?.getBoundingClientRect().height||0)+rowHeight*Math.max(1,Number(panel.dataset.totalItems)||0)+px(wc.borderTopWidth)+px(wc.borderBottomWidth)+2;
+  panel.style.setProperty('--list-content-height',Math.ceil(height)+'px');
+}
+window.addEventListener('resize',()=>document.querySelectorAll('[data-total-items]').forEach(measureGuitarList));
+document.fonts?.ready.then(()=>document.querySelectorAll('[data-total-items]').forEach(measureGuitarList));
+
 function renderIndividuals(){
   if(PROFILE_USER_ID)return;
   const q=document.getElementById('individualFilter').value.toLowerCase();
@@ -341,6 +376,7 @@ function renderIndividuals(){
   document.getElementById('individualBody').innerHTML=rows.map(x=>
     '<tr class="clickable'+(Number(x.id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+x.id+',true)"><td>'+x.id+'</td><td class="favorite-cell">'+favoriteButton(x.id)+'</td><td>'+esc(x.manufacturer)+'</td><td>'+esc(x.model)+'</td><td>'+esc(x.finish||'')+'</td><td>'+esc(x.year||'')+'</td><td class="mono">'+esc(x.serial_number)+'</td><td>'+x.claim_count+'</td></tr>'
   ).join('');
+  sizeGuitarList(document.getElementById('products'),individuals.length);
 }
 
 function currentSnapshotOwnerHtml(i){
@@ -1696,7 +1732,8 @@ function renderProfileGuitars(section){
   const filter=document.getElementById('profileFilter-'+section).value.trim().toLowerCase();
   const status=section==='owned'?'current_owner':'former_owner';
   const state=profileSort[section];
-  const rows=(section==='favorites'?profileFavorites:profileGuitars.filter(g=>g.ownership_status===status)).filter(g=>
+  const unfiltered=section==='favorites'?profileFavorites:profileGuitars.filter(g=>g.ownership_status===status);
+  const rows=unfiltered.filter(g=>
     [g.manufacturer,g.model,g.finish,g.year,g.serial_number].join(' ').toLowerCase().includes(filter)).sort((a,b)=>{
       const av=normalizeSortValue(state.key==='id'?a.individual_id:a[state.key],state.key);
       const bv=normalizeSortValue(state.key==='id'?b.individual_id:b[state.key],state.key);
@@ -1712,6 +1749,7 @@ function renderProfileGuitars(section){
     '<tr class="clickable'+(Number(g.individual_id)===Number(selectedIndividualId)?' selected':'')+'" onclick="showIndividual('+Number(g.individual_id)+',true)">'+
       '<td>'+Number(g.individual_id)+'</td><td class="favorite-cell">'+favoriteButton(g.individual_id)+'</td><td>'+esc(g.manufacturer)+'</td><td>'+esc(g.model||'')+'</td><td>'+esc(g.finish||'')+'</td><td>'+esc(g.year||'')+'</td><td class="mono">'+esc(g.serial_number||'')+'</td><td>'+Number(g.claim_count||0)+'</td></tr>'
   ).join(''):'<tr><td colspan="8" class="sub">'+(filter?'No matching guitars.':'No guitars yet.')+'</td></tr>';
+  sizeGuitarList(root.closest('.profile-list-panel'),unfiltered.length);
 }
 function renderUserChronicle(items){
   const root=document.getElementById('userChronicleList');

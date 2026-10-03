@@ -62,9 +62,9 @@ Gibson ES-335</textarea>
 
 <section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
 <div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product, Claim, and DB maintenance</span></div>
-<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">Backup</button><button data-ui-action="danger" class="secondary" onclick="openDatabaseImport()">Restore backup</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button data-ui-action="danger" class="danger" onclick="resetDatabase()">Reset DB</button></div><div class="sub">Backups include user data. Resetting the DB deletes guitar and user data.</div></div>
 <div class="domain-grid guitar-content">
 <section>
+<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">Backup</button><button data-ui-action="danger" class="secondary" onclick="openDatabaseImport()">Restore backup</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button data-ui-action="danger" class="danger" onclick="resetDatabase()">Reset DB</button></div><div class="sub">Backups include user data. Resetting the DB deletes guitar and user data.</div></div>
 <div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Clean and add Specifications</button></div><div class="sub">Cleans incorrect automated extractions and duplicate Finish values, then adds explicit specifications from saved Reverb details to guitars without a user owner.</div></div>
 <div class="panel">
 <div class="toolbar"><h2 data-count-items="#individualBody > tr.clickable" style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">Backfill existing DB (one time)</button><button class="secondary" onclick="loadIndividuals()">Refresh</button></div>
@@ -86,10 +86,12 @@ Gibson ES-335</textarea>
 </section>
 <section class="console-domain" id="user-db" aria-labelledby="userHeading">
 <div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">Search users and inspect account data</span></div>
+<div class="domain-grid user-content">
+<section class="console-list-column">
 <div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">Open Top Page as Guest</button><button data-ui-action="primary" onclick="createUser()">Create account</button><button class="secondary" onclick="loadUsers()">Refresh</button></div>
-<div class="domain-grid">
 <div class="panel"><div class="toolbar"><h2 data-count-items="#userBody > tr" style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
-<div class="panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
+</section>
+<div class="panel user-detail-panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
 </div>
 </section>
 <section class="console-domain" id="ownership-disputes"><h2 data-count-items="#disputeList > .dispute-row">Ownership Disputes</h2><select id="disputeStatusFilter" aria-label="Dispute status" onchange="YGCDisputes.refresh()"><option value="open">Under dispute</option><option value="resolved">Resolved</option><option value="">All cases</option></select><button onclick="YGCDisputes.refresh()">Refresh disputes</button><div id="disputeList"></div></section>

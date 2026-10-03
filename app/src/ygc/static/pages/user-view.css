@@ -30,7 +30,7 @@ h1{font-size:20px;margin:0;white-space:nowrap}.sub{color:var(--muted);font-size:
 .page-bottom-space{height:max(24px,calc(100vh - 108px - 390px));}
 main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) calc(clamp(290px,calc(28vw - 30px),400px) + 44px) 22px 22px}
 .grid{display:block}
-.left-column{display:flex;flex-direction:column;gap:12px;min-width:0}
+.left-column{display:flex;flex-direction:column;gap:16px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:0}
 .discovery-panel{min-height:0;overflow:hidden}
 .discovery-list{height:98px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#14171a}
@@ -158,8 +158,8 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .page-nav{margin-left:0;width:100%}
   .account-hub{grid-template-columns:1fr;gap:8px;height:auto}
   main{padding:14px 14px 22px}
-  .left-column{gap:12px}
-  .product-list-panel{height:520px}
+  .left-column{gap:16px}
+  .product-list-panel{height:520px;min-height:0;max-height:none}
   .detail-shell{display:none;position:fixed;top:auto;right:14px;bottom:14px;width:min(300px,calc(100vw - 28px));height:min(720px,calc(100dvh - var(--header-height,108px) - 28px));margin:0;z-index:950}
   .detail-shell.compact-open{display:block}
   .detail-panel{height:100%}
@@ -299,3 +299,20 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 #detail .claim-card{margin:8px 0 12px;width:100%;box-sizing:border-box}
 #detail .chronicle-toolbar .claim-menu-wrap{width:100%;margin-inline:0}
 #detail :is(.owner-claim-card,.add-claim-action){width:100%;margin-inline:0;box-sizing:border-box}
+
+/* Keep lists in document flow while sharing the fixed Detail viewport height. */
+@media(min-width:901px){
+  :root{--product-panel-height:calc(100dvh - var(--header-height,108px) - 28px)}
+  .detail-shell{height:var(--product-panel-height);bottom:auto}
+  .product-list-panel,.profile-mode .profile-list-panel{height:min(var(--list-content-height,var(--product-panel-height)),var(--product-panel-height));min-height:0;max-height:none;flex-shrink:0}
+  .profile-mode .profile-list-panel .table-wrap{flex:1;max-height:none}
+}
+
+.product-list-panel>.toolbar,.profile-list-panel>.toolbar,.profile-list-panel>.new-guitar-action{flex-shrink:0}
+
+/* Chronicle grows with its contents, up to the same viewport cap as guitar lists. */
+@media(min-width:901px){
+  .profile-mode #profile-chronicle{display:flex;flex-direction:column;min-height:0;max-height:var(--product-panel-height)}
+  .profile-mode #profile-chronicle>h2{flex-shrink:0}
+  .profile-mode #profile-chronicle .profile-activity-list{flex:0 1 auto;min-height:0;max-height:none}
+}

@@ -815,3 +815,15 @@ async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);d
 const header=document.querySelector('.sticky-header');
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
 (async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram();await loadProductionAcquires()})()
+
+// Fill the space freed by moving the action panel into the list column.
+for(const grid of document.querySelectorAll('.guitar-content,.user-content')){
+  const actions=grid.querySelector('.backup-actions,.domain-actions');
+  if(!actions)continue;
+  const sync=()=>{
+    const style=getComputedStyle(actions);
+    grid.style.setProperty('--detail-raised-space',(actions.getBoundingClientRect().height+(parseFloat(style.marginBottom)||0))+'px');
+  };
+  new ResizeObserver(sync).observe(actions);
+  sync();
+}

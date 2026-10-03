@@ -47,3 +47,10 @@ Console用トークンの埋込みだけは従来どおりサーバー生成HTML
 - Top PageのStatisticsはModel Distributionから始める。デスクトップのページ内リンク移動では、そのカード上端を固定Product Detail上端に合わせる。
 - `data-count-items`付きの一覧見出しには、表示中の行数を小さな`N items`として下端を揃えて表示する。空状態の行は数えない。
 - 画像アルバムは1枚でも中央の画像列を使用し、前後ボタン非表示時に画像が狭いナビゲーション列へ入らないようにする。
+
+## 2026-10: viewport-based panel heights
+
+- Top Page and User Profile guitar lists use their unfiltered item counts to determine content height, capped at Product Detail height (`100dvh - header height - 28px`) on widths above 900px. Filtering does not change the outer height. Resizing and toolbar changes trigger measurement; table rows currently use a single-line layout.
+- New discovery → Product List spacing is 16px.
+- User Chronicle grows naturally with its contents and uses the same desktop height cap, with internal scrolling. It currently has no filter. Compact layouts retain their independent sizing.
+- Browser Console Product Detail and User Detail have viewport-based heights and internal scrolling, while remaining in the page grid. Backup and User DB actions sit in the left column above their lists. On desktop, each Detail starts level with the action panel and gains its height plus bottom margin, preserving its prior bottom position. The resulting desktop height can exceed the viewport; the enclosing page also scrolls. Compact layouts stack the columns without this extra height.
