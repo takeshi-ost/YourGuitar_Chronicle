@@ -17,7 +17,8 @@ from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
 from ygc.reverb_adapter import is_brand_new, _category_text, to_listing_claim_data, to_provenance_observation
 
 
-CATEGORY_QUERY = {"all": "guitar", "electric": "electric guitar", "acoustic": "acoustic guitar"}
+CATEGORY_QUERY = {"electric": "electric guitar", "acoustic": "acoustic guitar"}
+CRAWL_CATEGORIES = (*CATEGORY_QUERY, "electric_acoustic")
 MAX_SUMMARIES = 2000
 MAX_RECHECKS = 5
 MIN_REQUEST_GAP = 0.5
@@ -25,12 +26,14 @@ DETAIL_FALLBACK_FIELDS = ("year", "product_type", "categories", "category", "con
 
 
 def _category_matches(item: dict, category: str, *, strict: bool = True) -> bool:
+    if category == "electric_acoustic":
+        return any(_category_matches(item, selected, strict=strict) for selected in CATEGORY_QUERY)
     value = (str(item.get("product_type") or "") + " " + _category_text(item))
     value = value.lower().replace("-", " ").replace("_", " ").strip()
     if not value.strip():
         return not strict  # Do not infer a category from a model/title.
-    return (category == "all" or category in value) and "guitar" in value and not any(
-        word in value for word in ("parts", "pedal", "amplifier", "case only")
+    return (category in ("electric", "acoustic") and category in value) and "guitar" in value and not any(
+        word in value for word in ("parts", "pedal", "amplifier", "case", "bass", "accessories")
     )
 
 
@@ -135,6 +138,12 @@ def _program(repository: Repository, key: tuple) -> dict:
 
 def program_status(repository: Repository, category: str, year_min: int,
                    year_max: int) -> dict:
+    if category == "electric_acoustic":
+        states = [program_status(repository, selected, year_min, year_max) for selected in CATEGORY_QUERY]
+        return {"processed": sum(s["processed"] for s in states),
+                "observations_created": sum(s["observations_created"] for s in states),
+                "finished": all(s["finished"] for s in states),
+                "updated_at": max((s["updated_at"] for s in states if s["updated_at"]), default=None)}
     with repository.connect() as con:
         row = con.execute(
             "SELECT * FROM crawl_programs WHERE source_site = 'reverb' "
@@ -151,8 +160,12 @@ def program_status(repository: Repository, category: str, year_min: int,
 
 def restart_program(repository: Repository, category: str,
                     year_min: int, year_max: int) -> dict:
-    if category not in CATEGORY_QUERY or not 1800 <= year_min <= year_max <= 2100:
+    if category not in CRAWL_CATEGORIES or not 1800 <= year_min <= year_max <= 2100:
         raise ValueError("Invalid category or manufacture-year range")
+    if category == "electric_acoustic":
+        for selected in CATEGORY_QUERY:
+            restart_program(repository, selected, year_min, year_max)
+        return program_status(repository, category, year_min, year_max)
     _program(repository, (category, year_min, year_max))
     _save_program(repository, (category, year_min, year_max), page_url=None,
                   pending_json=None, next_url=None, finished=0,
@@ -224,9 +237,30 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
 
 def advance_program(repository: Repository, collector: Any, category: str,
                     year_min: int, year_max: int,
-                    progress_callback: Callable[[dict], None] | None = None) -> dict:
-    if category not in CATEGORY_QUERY or year_min < 1800 or year_max > 2100 or year_min > year_max:
+                    progress_callback: Callable[[dict], None] | None = None,
+                    *, _summary_limit: int | None = None, _finalize: bool = True,
+                    _run_category: str | None = None, _run_id: int | None = None,
+                    _count_offset: dict | None = None) -> dict:
+    if category not in CRAWL_CATEGORIES or year_min < 1800 or year_max > 2100 or year_min > year_max:
         raise ValueError("Invalid category or manufacture-year range")
+    if category == "electric_acoustic":
+        totals: dict = {}
+        samples = []
+        combined_run_id = repository.start_run("reverb")
+        for selected in CATEGORY_QUERY:
+            if selected == "acoustic":
+                _pause(time.monotonic())  # Keep the request gap across both searches.
+            result = advance_program(repository, collector, selected, year_min, year_max,
+                progress_callback, _summary_limit=max(1, MAX_SUMMARIES // 2),
+                _finalize=selected == "acoustic", _run_category=category,
+                _run_id=combined_run_id, _count_offset=totals)
+            samples.extend(result.get("rejected_samples", []))
+            totals["rejected_samples"] = samples[:3]
+            for name, value in result.items():
+                if isinstance(value, int) and not isinstance(value, bool):
+                    totals[name] = totals.get(name, 0) + value
+        return {**totals, "rejected_samples": samples[:3],
+                **program_status(repository, category, year_min, year_max)}
     key = (category, year_min, year_max)
     program = _program(repository, key)
     counts = {"listing_pages_fetched": 0, "summaries_processed": 0,
@@ -243,21 +277,26 @@ def advance_program(repository: Repository, collector: Any, category: str,
               "confirmed_missing": 0, "unavailable_claims": 0,
               "owners_unknown": 0}
     rejected_samples: list[dict[str, str | None]] = []
-    run_id = repository.start_run("reverb")
+    run_id = _run_id if _run_id is not None else repository.start_run("reverb")
     last_request = 0.0
     phase = "listing"
     def checkpoint(current_phase: str) -> None:
         nonlocal phase
         phase = current_phase
-        repository.update_crawl_run(run_id, phase, counts, category, year_min, year_max)
+        combined_counts = {**counts, **{k: (_count_offset or {}).get(k, 0) + v
+                           for k, v in counts.items() if isinstance(v, int)}}
+        log_counts = {**combined_counts, "rejected_samples": (
+            (_count_offset or {}).get("rejected_samples", []) + rejected_samples)[:3]}
+        repository.update_crawl_run(run_id, phase, log_counts,
+                                   _run_category or category, year_min, year_max)
         if progress_callback:
-            progress_callback({**counts, "phase": phase, "run_id": run_id})
+            progress_callback({**combined_counts, "phase": phase, "run_id": run_id})
     checkpoint(phase)
     try:
         if not program["finished"]:
             pending = json.loads(program["pending_json"]) if program["pending_json"] else []
             known_ids = _known_listing_ids(repository, collector, pending)
-            while (counts["summaries_processed"] < MAX_SUMMARIES
+            while (counts["summaries_processed"] < (_summary_limit or MAX_SUMMARIES)
                    and not program["finished"]):
                 if not pending:
                     last_request = _pause(last_request)
@@ -385,28 +424,30 @@ def advance_program(repository: Repository, collector: Any, category: str,
             counts["candidate_checked"] = checked
             counts["candidate_total"] = total
             checkpoint("matching")
-        matches = reconcile_candidates(repository, progress_callback=matching_progress)
+        matches = reconcile_candidates(repository, progress_callback=matching_progress) if _finalize else {"new_observations": 0}
         counts.update(matches)
         counts["candidate_checked"] = counts.get("candidate_total", 0)
         _save_program(repository, key, observations_created=(
             program["observations_created"] + matches["new_observations"]
         ))
         checkpoint("availability")
-        rechecks, last_request = _recheck(repository, collector, last_request)
+        rechecks, last_request = (_recheck(repository, collector, last_request)
+                                 if _finalize else ({"rechecked": 0}, last_request))
         counts.update(rechecks)
         checkpoint("done")
-        repository.finish_run(
-            run_id, pages_discovered=counts["summaries_processed"],
-            pages_fetched=counts["details_fetched"] + rechecks["rechecked"],
-            observations_created=counts["new_observations"], status="ok",
-        )
+        if _finalize:
+            repository.finish_run(
+                run_id, pages_discovered=counts["summaries_processed"] + (_count_offset or {}).get("summaries_processed", 0),
+                pages_fetched=counts["details_fetched"] + rechecks["rechecked"] + (_count_offset or {}).get("details_fetched", 0),
+                observations_created=counts["new_observations"], status="ok",
+            )
         return {**counts, **matches, **rechecks, "rejected_samples": rejected_samples,
                 **program_status(repository, *key)}
     except Exception as exc:
         checkpoint("error")
         repository.finish_run(
-            run_id, pages_discovered=counts["summaries_processed"],
-            pages_fetched=counts["details_fetched"],
+            run_id, pages_discovered=counts["summaries_processed"] + (_count_offset or {}).get("summaries_processed", 0),
+            pages_fetched=counts["details_fetched"] + (_count_offset or {}).get("details_fetched", 0),
             observations_created=counts["new_observations"],
             status="error", error_message=str(exc),
         )

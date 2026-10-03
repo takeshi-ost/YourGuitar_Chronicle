@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const html=require('./page_source.cjs')('app/src/ygc/static/index_html.html');
-const source=html.slice(html.indexOf('let productionAcquires='),html.indexOf('function statCard('));
+const source=html.slice(html.indexOf('let productionAcquires='),html.indexOf('async function refreshStatus('));
 function setup(){
  const elements={};for(const id of ['productionAcquireSearch','productionAcquireFilter','productionAcquireRows','productionAcquireSummary','productionAcquireActions','productionAcquireDetail','productionAcquireReason','productionAcquireStatus','productionAcquireActionStatus','productionAcquirePrompt','productionAcquireImages'])elements[id]={value:'',innerHTML:'',textContent:'',focus(){this.focused=true}};
  const row={revision:'a'.repeat(32),status:'accepted',verification_status:'unverified',claim_id:2,applicant_id:3,applicant_name:'<script>bad</script>',product_name:'Fender',original_individual_id:1,serial:'TEST',created_at:'2026-10-01',images:{},admin_actions:['reject','positive'],management_version:'b'.repeat(64)};

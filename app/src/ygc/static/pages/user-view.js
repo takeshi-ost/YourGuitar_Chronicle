@@ -92,8 +92,8 @@ function renderAccountHub(){
       '</div>'+
       '<div></div>'+
       '<div class="account-hub-actions">'+
-        '<button class="account-hub-action" type="button" onclick="window.location.href=\'/user-view/edit\'">Sign In</button>'+
-        '<button data-ui-action="primary" class="account-hub-action primary" type="button" onclick="window.location.href=\'/user-view/edit\'">Create Account</button>'+
+        '<button class="account-hub-action" type="button" onclick="openAccountSignIn()">Sign In</button>'+
+        '<button data-ui-action="primary" class="account-hub-action primary" type="button" onclick="openAccountRegistration()">Create Account</button>'+
       '</div>';
     return;
   }
@@ -108,7 +108,7 @@ function renderAccountHub(){
     '<a class="account-hub-user account-hub-user-link" href="/users/'+Number(u.id)+'" aria-label="View '+esc(u.display_name||'User')+' profile">'+
       '<img class="account-hub-avatar" src="/api/users/'+u.id+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||'')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
       '<div class="account-hub-user-copy">'+
-        '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span><span class="account-hub-you">You</span></div>'+
+        '<div class="account-hub-name-row"><span class="account-hub-name">'+esc(u.display_name||'User')+'</span></div>'+
         '<div class="account-hub-location">'+esc(location)+'</div>'+
       '</div>'+
     '</a>'+
@@ -118,10 +118,87 @@ function renderAccountHub(){
       '<div class="account-hub-stat"><span class="account-hub-stat-value">'+claims+'</span><span class="account-hub-stat-label">Claims</span></div>'+
     '</div>'+
     '<div class="account-hub-actions">'+
-      '<button id="ownershipRequestAttention" class="account-hub-action" type="button" onclick="showAcquireApplications()" '+(ownershipAttention.attention_count?'':'hidden')+'>Check Requests</button>'+
       '<button class="account-hub-action" type="button" onclick="toggleNotifications()">Notifications <span class="account-hub-count" id="notificationCount">'+Number(notificationData.unread_count||0)+'</span></button>'+
       '<button class="account-hub-action" type="button" onclick="openDirectMessages()">Messages <span class="account-hub-count" id="directMessageCount">'+Number(dmInbox.unread_count||0)+'</span></button>'+
+      '<button class="account-hub-action" type="button" onclick="logoutUser(this)">SignOut</button>'+
     '</div>';
+}
+
+let registrationDocuments=null;
+async function openAccountRegistration(){
+  closeAccountRequired();
+  document.getElementById('accountRegistrationForm').reset();
+  document.getElementById('accountRegistrationStatus').textContent='';
+  YGCOverlays.open('accountRegistrationModal',{initialFocus:'#registrationEmail',onClose:()=>document.getElementById('accountRegistrationForm').reset()});
+  registrationDocuments=null;
+  document.getElementById('accountRegistrationSubmit').disabled=true;
+  try{registrationDocuments=(await jfetch('/api/local-auth/registration')).documents;document.getElementById('accountRegistrationSubmit').disabled=false}
+  catch(error){document.getElementById('accountRegistrationStatus').textContent=error.message}
+
+}
+function showRegistrationPolicy(kind){
+  const policy=registrationDocuments?.[kind];if(!policy)return;
+  document.getElementById('registrationPolicyTitle').textContent=policy.title;
+  document.getElementById('registrationPolicyContent').innerHTML='<p class="sub">Version: '+esc(policy.version)+'</p>'+policy.paragraphs.map(text=>'<p>'+esc(text)+'</p>').join('');
+  YGCOverlays.open('registrationPolicyModal');
+}
+let signInUserLoadSequence=0;
+async function openAccountSignIn(){
+  const sequence=++signInUserLoadSequence;
+  closeAccountRequired();
+  document.getElementById('accountSignInForm').reset();
+  document.getElementById('accountSignInStatus').textContent='';
+  const select=document.getElementById('signInUser');
+  const submit=document.getElementById('accountSignInSubmit');
+  select.disabled=true;submit.disabled=true;
+  select.innerHTML='<option value="">Loading users...</option>';
+  YGCOverlays.open('accountSignInModal',{initialFocus:'#signInEmail',onClose:()=>{++signInUserLoadSequence;document.getElementById('accountSignInForm').reset()}});
+  try{
+    const users=await jfetch('/api/users');
+    if(sequence!==signInUserLoadSequence)return;
+    select.innerHTML=users.length?users.map(user=>'<option value="'+Number(user.id)+'">#'+Number(user.id)+' · '+esc(user.display_name)+'</option>').join(''):'<option value="">No users available</option>';
+    const last=sessionStorage.getItem('ygc_last_user_id');
+    if(users.some(user=>String(user.id)===last))select.value=last;
+    select.disabled=!users.length;submit.disabled=!users.length;
+    if(!users.length)document.getElementById('accountSignInStatus').textContent='Create an account first to use test sign-in.';
+  }catch(error){if(sequence===signInUserLoadSequence)document.getElementById('accountSignInStatus').textContent=error.message}
+}
+let accountSignInBusy=false;
+async function submitAccountSignIn(event){
+  event.preventDefault();
+  if(accountSignInBusy)return;
+  const testUserId=Number(document.getElementById('signInUser').value);
+  if(!testUserId)return;
+  const button=document.getElementById('accountSignInSubmit');
+  accountSignInBusy=true;button.disabled=true;
+  try{
+    // The dummy adapter discards these transient values without sending/storing them.
+    await YGCAuth.signIn({email:document.getElementById('signInEmail').value,password:document.getElementById('signInPassword').value},{testUserId});
+    document.getElementById('accountSignInForm').reset();
+    location.assign('/user-view');
+  }catch(error){document.getElementById('accountSignInStatus').textContent=error.message}
+  finally{accountSignInBusy=false;button.disabled=false}
+}
+let accountRegistrationBusy=false;
+async function submitAccountRegistration(event){
+  event.preventDefault();
+  if(accountRegistrationBusy)return;
+  const form=document.getElementById('accountRegistrationForm');
+  const button=document.getElementById('accountRegistrationSubmit');
+  accountRegistrationBusy=true;button.disabled=true;
+  try{
+    // The credentials are intentionally neither read nor sent to the server.
+    if(!registrationDocuments)throw Error('Agreement documents are not available.');
+    await YGCAuth.register({account_type:document.getElementById('registrationAccountType').value,display_name:document.getElementById('registrationDisplayName').value.trim(),terms_accepted:document.getElementById('registrationTerms').checked,privacy_accepted:document.getElementById('registrationPrivacy').checked,terms_version:registrationDocuments.terms.version,privacy_version:registrationDocuments.privacy.version});
+    form.reset();
+    location.assign('/user-view');
+  }catch(error){document.getElementById('accountRegistrationStatus').textContent=error.message}
+  finally{accountRegistrationBusy=false;button.disabled=false}
+}
+async function logoutUser(button){
+  button.disabled=true;
+  try{await YGCLocalAuth.logout()}
+  catch(error){alert(error.message);button.disabled=false}
 }
 
 function renderNotificationPanel(){
@@ -169,6 +246,7 @@ async function openNotification(notificationId,individualId){
   if(item)item.is_read=1;
   notificationData.unread_count=Math.max(0,Number(notificationData.unread_count||0)-(item&&Number(item.is_read)===0?1:0));
   await loadNotifications();
+  if(typeof YGCImportantInformation!=='undefined')YGCImportantInformation.refresh();
   const panel=document.getElementById('notificationPanel');
   if(panel)YGCOverlays.close(panel);
   if(item&&item.notification_type?.startsWith('transfer_')&&item.claim_id){if(individualId)await showIndividual(Number(individualId),true);await openTransferReview(Number(item.claim_id));return}
@@ -179,6 +257,7 @@ async function markAllNotificationsRead(){
   try{
     await jfetch('/api/users/'+activeUser.user.id+'/notifications/read-all',{method:'POST'});
     await loadNotifications();
+    if(typeof YGCImportantInformation!=='undefined')YGCImportantInformation.refresh();
   }catch(e){
     alert('Could not mark the notification as read.\n'+e.message);
   }
@@ -193,8 +272,8 @@ async function loadUnansweredRequests(){
     const rows=await jfetch('/api/ownership-requests/unanswered?viewer_id='+Number(userId));
     if(sequence!==unansweredSequence||activeUser?.user?.id!==userId)return;
     section.hidden=!rows.length;
-    section.innerHTML='<h2 id="unansweredRequestsTitle" data-count-items="#unansweredRequests > .unanswered-request">Unanswered Requests</h2>'+rows.map(r=>
-      '<div class="unanswered-request"><p>'+YGCProductDetail.userLink(r.sender_id,r.sender_name,esc)+
+    section.innerHTML=rows.map(r=>
+      '<div class="unanswered-request"><p>'+(r.kind==='transfer'?'Transfer · ':'Acquire · ')+YGCProductDetail.userLink(r.sender_id,r.sender_name,esc)+
       (r.kind==='transfer'?' has offered to transfer ':' is claiming ownership of ')+
       '<a href="/users/'+Number(userId)+'?individual_id='+Number(r.individual_id)+'">'+esc(r.guitar||('Guitar #'+r.individual_id))+'</a>'+(r.kind==='transfer'?' to you.':'.')+
       '</p><div><button data-ui-action="primary" onclick="answerOwnershipRequest('+Number(r.claim_id)+',&quot;'+r.kind+'&quot;,true,'+Number(r.individual_id)+')">Accept</button> '+
@@ -214,7 +293,7 @@ async function answerOwnershipRequest(claimId,kind,accept,individualId){
     const body=kind==='transfer'?{action:accept?'accept':'decline'}:{responder_user_id:userId,stance:accept?'positive':'negative',reason};
     await jfetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     await refreshClaimViews(individualId);
-  }catch(error){alert(error.message)}finally{unansweredBusy=false;await loadUnansweredRequests()}
+  }catch(error){alert(error.message)}finally{unansweredBusy=false;await loadUnansweredRequests();if(typeof YGCImportantInformation!=='undefined')YGCImportantInformation.refresh()}
 }
 if(typeof setInterval==='function')setInterval(()=>{if(!document.hidden&&!unansweredBusy)loadUnansweredRequests()},30000);
 
@@ -223,7 +302,7 @@ async function loadActiveUser(){
   if(!id){
     activeUser=null;
     await loadUnansweredRequests();
-    if(!PROFILE_USER_ID)applyTheme('dark_default');
+    if(!PROFILE_USER_ID)applyTheme('sunburst_3ply');
     favoriteIds=new Set();
     notificationData={unread_count:0,notifications:[]};
     ownershipAttention={attention_count:0};++ownershipAttentionSequence;
@@ -238,7 +317,7 @@ async function loadActiveUser(){
   }catch(e){
     activeUser=null;
     await loadUnansweredRequests();
-    if(!PROFILE_USER_ID)applyTheme('dark_default');
+    if(!PROFILE_USER_ID)applyTheme('sunburst_3ply');
     favoriteIds=new Set();
     sessionStorage.removeItem(ACTIVE_USER_KEY);
   }
@@ -387,7 +466,7 @@ function currentSnapshotOwnerHtml(i){
   const listingUrl=String(i.current_owner_source_url||'').trim();
   const label=type==='shop'?name+' (Shop)':name;
   if(i.current_owner_user_id&&activeUser&&activeUser.user){
-    const you=Number(i.current_owner_user_id)===Number(activeUser.user.id)?'<span class="account-hub-you">You</span>':'';
+    const you=Number(i.current_owner_user_id)===Number(activeUser.user.id)?'':'';
     return '<a href="/users/'+Number(i.current_owner_user_id)+'">'+esc(label)+'</a>'+you;
   }
   if(type==='shop'&&listingUrl)return '<a href="'+esc(listingUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>';
@@ -779,9 +858,9 @@ function requestFooter(row=null){
   let buttons='';
   if(!row)buttons+='<button id="guitarSubmit" onclick="submitNewGuitar()">Generate Challenge</button>';
   if(!row||row.status==='draft')buttons+='<button data-ui-action="primary" id="acquireSubmit" onclick="submitAcquireApplication()" '+(!row?'disabled':'')+'>Submit</button>';
-  if(row?.dispute_case_id)buttons+='<button onclick="YGCDisputes.open('+Number(row.dispute_case_id)+')">Dispute Details</button>';
-  else if(row?.can_request_dispute)buttons+='<button onclick="YGCDisputes.list()">Review owner response / Appeal</button>';
-  buttons+='<button onclick="requestRefresh()">Reflesh</button>';
+  if(row?.dispute_case_id)buttons+='<button onclick="YGCDisputes.open('+Number(row.dispute_case_id)+')">Detail</button>';
+  else if(row?.can_request_dispute)buttons+='<button onclick="YGCDisputes.list()">Detail</button>';
+  if(!row||row.request_kind==='listing')buttons+='<button onclick="requestRefresh()">Reflesh</button>';
   if(row?.status==='error')buttons+='<button onclick="actAcquireApplication(\'retry\')">Retry Review</button>';
   buttons+='<button data-ui-action="primary" onclick="keepAcquireRequest()">Keep Request</button><button data-ui-action="close" class="secondary" onclick="cancelRequestWindow()">Cancel</button>';
   if(saved&&!terminal)buttons+='<button data-ui-action="danger" class="secondary" onclick="actAcquireApplication(\'cancel\')">Cansel Request</button>';
@@ -857,13 +936,12 @@ async function openAcquireApplication(individualId){
 }
 async function loadOwnershipAttention(){
   const userId=activeUser?.user?.id,sequence=++ownershipAttentionSequence;
-  if(!userId){ownershipAttention={attention_count:0};return}
+  if(!userId){ownershipAttention={attention_count:0};if(typeof YGCImportantInformation!=='undefined')YGCImportantInformation.refresh();return}
   try{
     const data=await jfetch('/api/acquire-applications/attention?viewer_id='+encodeURIComponent(userId));
     if(sequence!==ownershipAttentionSequence||activeUser?.user?.id!==userId)return;
     ownershipAttention=data;
-    const button=document.getElementById('ownershipRequestAttention');
-    if(button)button.hidden=!data.attention_count;
+    if(typeof YGCImportantInformation!=='undefined')YGCImportantInformation.refresh();
   }catch(error){/* Preserve the last known state during a connection failure. */}
 }
 async function acknowledgeOwnershipResult(row){
@@ -879,8 +957,8 @@ async function showAcquireApplications(){
   document.getElementById('acquireReviewTitle').textContent='Ownership Requests';
   document.getElementById('acquireReviewActions').innerHTML='<button data-ui-action="close" onclick="cancelRequestWindow()">Cancel</button>';
   try{
-    const rows=await jfetch('/api/acquire-applications'+acquireQuery());
-    document.getElementById('acquireReviewContent').innerHTML=(rows.length?rows.map(r=>'<p><button onclick="requestHistoryItem(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+(r.unread_result?' — New result':'')+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'No requests.');
+    const rows=(await jfetch('/api/acquire-applications'+acquireQuery())).filter(r=>['draft','pending','processing','error'].includes(r.status)||(r.status==='accepted'&&r.verification_status==='unverified'));
+    document.getElementById('acquireReviewContent').innerHTML=(rows.length?rows.map(r=>'<p><button onclick="requestHistoryItem(\''+esc(r.revision)+'\')">'+esc(r.request_kind==='listing'?'Listing '+(r.product_name||''):'Individual #'+r.original_individual_id)+' — '+esc(acquireStatusLabel(r))+(r.unread_result?' — New result':'')+'</button><br><small>'+esc(r.created_at)+'</small></p>').join(''):'No incomplete requests.');
     YGCOverlays.open('acquireReviewModal', {onClose: () => {acquireRevision=null;acquireForm=null}});
   }catch(e){alert(e.message)}
 }
@@ -1948,7 +2026,7 @@ async function loadUserConnections(){
 async function loadProfilePage(preferredIndividualId=null){
   const hero=document.getElementById('profileHero');
   if(!activeUser||!activeUser.user){
-    applyTheme('dark_default');
+    applyTheme('sunburst_3ply');
     hero.innerHTML='<div class="profile-name">Members only</div><div class="profile-meta">Sign in to view member profiles.</div><div class="profile-actions"><button onclick="location.href=\'/user-view/edit\'">Sign In / Create Account</button></div>';
     for(const section of ['owned','former','favorites','chronicle'])document.getElementById('profile-'+section).hidden=true;
     document.getElementById('detail').textContent='User Profile is available to members.';
@@ -1975,11 +2053,11 @@ async function loadProfilePage(preferredIndividualId=null){
     const stats=[['Owned',summary.owned_count],['Formerly Owned',summary.former_count],['Claims',summary.claim_count],['Followers',data.social.followers_count],['Following',data.social.following_count]];
     hero.innerHTML='<div class="profile-hero">'+
       '<img class="profile-avatar" src="'+(u.avatar_visible?'/api/users/'+Number(u.id)+'/avatar?viewer_id='+Number(activeUser.user.id)+'&v='+encodeURIComponent(u.updated_at||''):'/assets/no-icon.svg')+'" alt="'+esc(u.display_name||'User')+'" onerror="this.onerror=null;this.src=\'/assets/no-icon.svg\'">'+
-      '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' <span class="account-hub-you">You</span>':'')+'</div>'+
+      '<div class="profile-identity"><div class="profile-name">'+esc(u.display_name||'User')+(own?' ':'')+'</div>'+
       '<div class="profile-meta">'+profileMeta+'</div>'+
       '<div class="profile-bio'+(u.bio?'':' sub')+'">'+esc(u.bio||'Bio has not been added yet.')+'</div>'+
       '<div class="profile-stats">'+stats.map(x=>['Followers','Following'].includes(x[0])?'<button type="button" class="profile-stat" onclick="openUserConnections(\''+x[0].toLowerCase()+'\')"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</button>':'<span class="profile-stat"><strong>'+Number(x[1]||0)+'</strong> '+esc(x[0])+'</span>').join('')+'</div></div>'+
-      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button><button type="button" onclick="showAcquireApplications()">Ownership Requests</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
+      '<div class="profile-actions">'+(own?'<button onclick="location.href=\'/user-view/edit\'">User Settings</button>':'<button id="followUserButton" type="button" aria-pressed="'+Boolean(data.social.is_following)+'" onclick="toggleUserFollow('+Boolean(data.social.is_following)+')">'+(data.social.is_following?'Following':'Follow')+'</button><button type="button" onclick="openDirectMessages('+Number(u.id)+')">Message</button>')+'<span id="followUserStatus" class="sub" role="status"></span></div></div>';
     document.title=(u.display_name||'User')+' — Your Guitar Chronicle';
     renderProfileGuitars('owned');
     renderProfileGuitars('former');
@@ -1998,6 +2076,7 @@ async function loadProfilePage(preferredIndividualId=null){
 
 (async()=>{
   await loadActiveUser();
+  if(!activeUser&&new URLSearchParams(location.search).get('register')==='1'){history.replaceState(null,'','/user-view');openAccountRegistration()}
   if(PROFILE_USER_ID){
     setupProfileShell();
     await loadProfilePage();

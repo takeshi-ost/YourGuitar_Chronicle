@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import ipaddress
 import secrets
 import json
@@ -71,7 +72,17 @@ from ygc.reverb_adapter import (
 async def lifespan(_app: FastAPI):
     require_local_platform()
     local_repository(config.DB_PATH).init_db()
-    yield
+    stop_auto=threading.Event()
+    worker=threading.Thread(target=_auto_crawl_loop,args=(stop_auto,),daemon=True)
+    worker.start()
+    backup_worker=threading.Thread(target=_backup_loop,args=(stop_auto,),daemon=True)
+    backup_worker.start()
+    try:
+        yield
+    finally:
+        stop_auto.set()
+        worker.join(timeout=2)
+        backup_worker.join(timeout=2)
 
 
 app = FastAPI(title="Your Guitar Chronicle Phase 1", lifespan=lifespan)
@@ -204,6 +215,13 @@ def repo() -> Repository:
 
 
 def prototype_viewer(request: Request, claimed_id: int | None) -> int | None:
+    if os.getenv('YGC_IDENTITY_BACKEND', 'prototype') == 'local_dummy':
+        actor = getattr(request.state, 'local_actor', None)
+        if claimed_id is not None and (not actor or actor['id'] != claimed_id):
+            if not _console_admin_authorized(request):
+                raise HTTPException(status_code=403, detail='The requested user does not match the signed-in account.')
+            return claimed_id
+        return actor['id'] if actor else None
     bearer = request.headers.get("Authorization", "")
     try:
         actor = PrototypeIdentity().resolve(
@@ -424,7 +442,7 @@ class CrawlRequest(BaseModel):
 
 
 class CrawlAdvanceRequest(BaseModel):
-    category: str
+    category: str = Field(pattern="^(electric|acoustic|electric_acoustic)$")
     year_min: int = Field(ge=1800, le=2100)
     year_max: int = Field(ge=1800, le=2100)
 
@@ -656,6 +674,8 @@ def _run_batch(
     }
 
     try:
+        from ygc import crawl_backups
+        crawl_backups.create(api_export_db)
         with ReverbAPICollector(
             token=token,
             api_base=config.REVERB_API_BASE,
@@ -718,9 +738,15 @@ def _run_metadata_backfill(
         .list_listing_claims_for_backfill()
     )
     total = len(rows)
-
+    run_id = repository.start_run("reverb")
+    counts = {"target_claims": total, "claims_updated": 0, "processed": 0}
+    def checkpoint(phase):
+        repository.update_crawl_run(run_id, phase, counts, "metadata_backfill", None, None)
     try:
+        checkpoint("details")
         if total == 0:
+            checkpoint("done")
+            repository.finish_run(run_id, status="ok")
             _set_job(
                 job_id,
                 status="done",
@@ -832,6 +858,8 @@ def _run_metadata_backfill(
 
                     processed += 1
 
+                    counts.update(claims_updated=claims_updated, processed=processed)
+                    checkpoint("details")
                     _set_job(
                         job_id,
                         message=(
@@ -847,6 +875,9 @@ def _run_metadata_backfill(
                         ),
                     )
 
+        counts.update(claims_updated=claims_updated, processed=processed)
+        checkpoint("done")
+        repository.finish_run(run_id, pages_fetched=processed, status="ok")
         _set_job(
             job_id,
             status="done",
@@ -864,6 +895,8 @@ def _run_metadata_backfill(
         )
 
     except Exception as exc:
+        checkpoint("error")
+        repository.finish_run(run_id, status="error", error_message=str(exc))
         _set_job(
             job_id,
             status="error",
@@ -1185,7 +1218,7 @@ def sunburst_background() -> FileResponse:
 
 @app.get("/assets/theme-textures/{filename}")
 def theme_texture(filename: str) -> FileResponse:
-    if filename not in {"butterscotch-wood.webp", "cherry-wood.webp", "white-pearl.webp"}:
+    if filename not in {"butterscotch-wood.webp", "cherry-wood.webp", "white-pearl.webp", "rellic-black-wood.webp"}:
         raise HTTPException(status_code=404, detail="Theme asset not found")
     return FileResponse(Path(__file__).with_name("static") / filename, media_type="image/webp")
 
@@ -1241,10 +1274,10 @@ def api_statistics() -> dict[str, Any]:
 
 
 @app.get("/api/claims/unverified-acquires")
-def api_unverified_acquires(limit: int = 100, offset: int = 0) -> dict:
+def api_unverified_acquires(limit: int = 100, offset: int = 0, without_request: bool = False) -> dict:
     if not 1 <= limit <= 200 or offset < 0:
         raise HTTPException(status_code=400, detail="Invalid pagination")
-    return repo().unverified_acquires(limit, offset)
+    return repo().unverified_acquires(limit, offset, without_request=without_request)
 
 
 @app.get("/api/top-page-charts")
@@ -1409,12 +1442,18 @@ def api_export_db() -> FileResponse:
                     destination
                 )
 
+        # Social data belongs to the independent account backup.
+        if repository.account_db_path:
+            with sqlite3.connect(db_snapshot) as snapshot:
+                snapshot.execute('DELETE FROM user_follows')
+                snapshot.execute('DELETE FROM direct_messages')
+
         media_files = (
             [
                 path
                 for path
                 in MEDIA_DIR.rglob("*")
-                if path.is_file()
+                if path.is_file() and (not repository.account_db_path or not path.is_relative_to(MEDIA_DIR / 'users'))
             ]
             if MEDIA_DIR.is_dir()
             else []
@@ -1643,9 +1682,7 @@ async def api_import_db(
             work_root
             / "rollback.db"
         )
-        repository = Repository(
-            db_path
-        )
+        repository = repo()
         repository.init_db()
         with repository.connect() as source:
             with sqlite3.connect(
@@ -1715,9 +1752,7 @@ async def api_import_db(
                     exist_ok=True,
                 )
 
-            repository = Repository(
-                db_path
-            )
+            repository = repo()
             repository.init_db()
 
         except Exception as exc:
@@ -1853,9 +1888,7 @@ def api_reset_db(request: ResetDatabaseRequest) -> dict[str, Any]:
         exist_ok=True,
     )
 
-    repository = Repository(
-        config.DB_PATH
-    )
+    repository = repo()
     repository.init_db()
 
     return {
@@ -1974,10 +2007,12 @@ async def api_update_user_avatar(
             ),
         )
 
-    avatar_dir = MEDIA_DIR / "users"
+    avatar_root = 'account_media' if repository.account_db_path else 'media'
+    avatar_dir = config.DATA_DIR / avatar_root / "users"
     avatar_dir.mkdir(
         parents=True,
         exist_ok=True,
+        mode=0o700,
     )
     stored_name = (
         uuid.uuid4().hex
@@ -1988,7 +2023,7 @@ async def api_update_user_avatar(
         / stored_name
     )
     relative_storage_path = (
-        Path("media")
+        Path(avatar_root)
         / "users"
         / stored_name
     ).as_posix()
@@ -1997,6 +2032,7 @@ async def api_update_user_avatar(
         stored_path.write_bytes(
             image_bytes
         )
+        stored_path.chmod(0o600)
     except OSError as exc:
         raise HTTPException(
             status_code=500,
@@ -3178,6 +3214,15 @@ def api_read_notification(
 @app.get("/api/users")
 def api_users(request: Request) -> list[dict[str, Any]]:
     admin = _console_admin_authorized(request)
+    if os.getenv('YGC_IDENTITY_BACKEND', 'prototype') == 'local_dummy':
+        repository = repo()
+        with repository.connect() as con:
+            disabled = {row['id']:bool(row['disabled']) for row in con.execute('SELECT id,disabled FROM account_records')}
+        rows = repository.list_users()
+        if not admin:
+            return [{key: row[key] for key in ('id','display_name','account_type','theme')}
+                    for row in rows if row['ban_status'] != 'ban' and not disabled[row['id']]]
+        return [{**_row_dict(row), 'account_disabled':disabled[row['id']]} for row in rows]
     return [{**{key: value for key, value in _row_dict(row).items() if key != "date_of_birth" or admin},
              "ban_status": row["ban_status"] if admin else "normal"}
             for row in repo().list_users() if row["ban_status"] != "ban" or admin]
@@ -3227,8 +3272,12 @@ def api_user(
     if not user or (user["ban_status"] == "ban" and not _console_admin_authorized(request)):
         raise HTTPException(status_code=404, detail="User not found")
 
+    account_state = {}
+    if _console_admin_authorized(request) and os.getenv('YGC_IDENTITY_BACKEND', 'prototype') == 'local_dummy':
+        with repo().connect() as con:
+            account_state = {'account_disabled':bool(con.execute('SELECT disabled FROM account_records WHERE id=?',(user_id,)).fetchone()[0])}
     return {
-        "user": {**_row_dict(user), "ban_status": user["ban_status"] if _console_admin_authorized(request) else "normal"},
+        "user": {**_row_dict(user), **account_state, "ban_status": user["ban_status"] if _console_admin_authorized(request) else "normal"},
         "guitars": [_row_dict(row) for row in guitars],
         "summary": repo().get_user_summary(user_id),
     }
@@ -3667,6 +3716,8 @@ def api_backfill_cached_specifications(request: Request) -> dict[str, int]:
 def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> None:
     global _active_job_id
     try:
+        from ygc import crawl_backups
+        crawl_backups.create(api_export_db)
         with ReverbAPICollector(
             token=token, api_base=config.REVERB_API_BASE,
             timeout=config.REQUEST_TIMEOUT, delay=0.5,
@@ -3699,14 +3750,17 @@ def _run_incremental(job_id: str, request: CrawlAdvanceRequest, token: str) -> N
 
 @app.get("/api/crawl/program")
 def api_crawl_program(category: str, year_min: int, year_max: int) -> dict:
-    if category not in ("all", "electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+    if category not in ("electric", "acoustic", "electric_acoustic") or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return program_status(repo(), category, year_min, year_max)
 
 
 @app.get("/api/crawl/program/runs")
-def api_crawl_program_runs(category: str, year_min: int, year_max: int) -> list[dict]:
-    if category not in ("all", "electric", "acoustic") or not 1800 <= year_min <= year_max <= 2100:
+def api_crawl_program_runs(category: str | None = None, year_min: int | None = None,
+                           year_max: int | None = None) -> list[dict]:
+    if category is None:
+        return repo().crawl_run_log()
+    if category not in ("electric", "acoustic", "electric_acoustic") or year_min is None or year_max is None or not 1800 <= year_min <= year_max <= 2100:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     return repo().crawl_run_log(category, year_min, year_max)
 
@@ -3740,7 +3794,7 @@ def api_crawl_program_restart(request: CrawlAdvanceRequest) -> dict:
 @app.post("/api/crawl/advance")
 def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> dict:
     global _active_job_id
-    if request.category not in ("all", "electric", "acoustic") or request.year_min > request.year_max:
+    if request.category not in ("electric", "acoustic", "electric_acoustic") or request.year_min > request.year_max:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     token, _source = _request_token(http_request)
     if not token:
@@ -3762,17 +3816,32 @@ def api_crawl_advance(request: CrawlAdvanceRequest, http_request: Request) -> di
 
 def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
     global _active_job_id
+    repository = repo()
+    run_id = repository.start_run("reverb")
+    counts = {}
+    def checkpoint(current, phase="matching"):
+        counts.update(current)
+        repository.update_crawl_run(run_id, phase, counts, "cache_reprocess", request.year_min, request.year_max)
     try:
+        checkpoint({}, "backup")
+        from ygc import crawl_backups
+        crawl_backups.create(api_export_db)
         result = reprocess_details(
-            repo(), request.category, request.year_min, request.year_max,
-            progress_callback=lambda counts: _set_job(
-                job_id, message=f"Reprocessing saved details {counts['cached_processed']}/{counts['cached_total']}",
-                progress=min(0.95, counts["cached_processed"] / max(counts["cached_total"], 1)),
-            ),
+            repository, request.category, request.year_min, request.year_max,
+            progress_callback=lambda current: (checkpoint(current), _set_job(
+                job_id, message=f"Reprocessing saved details {current['cached_processed']}/{current['cached_total']}",
+                progress=min(0.95, current["cached_processed"] / max(current["cached_total"], 1)),
+                stage_counts=current,
+            )),
         )
+        checkpoint(result, "done")
+        repository.finish_run(run_id, pages_discovered=result["cached_processed"],
+                              observations_created=result["new_observations"], status="ok")
         _set_job(job_id, status="done", message="Saved details reprocessed",
                  progress=1.0, aggregate=result, finished_at=time.time())
     except Exception as exc:
+        checkpoint({}, "error")
+        repository.finish_run(run_id, status="error", error_message=str(exc))
         _set_job(job_id, status="error", error=str(exc), message=str(exc), finished_at=time.time())
     finally:
         with _jobs_lock:
@@ -3783,7 +3852,7 @@ def _run_cached_reprocess(job_id: str, request: CrawlAdvanceRequest) -> None:
 @app.post("/api/crawl/cache/reprocess")
 def api_reprocess_cached_details(request: CrawlAdvanceRequest) -> dict:
     global _active_job_id
-    if request.category not in ("all", "electric", "acoustic") or request.year_min > request.year_max:
+    if request.category not in ("electric", "acoustic", "electric_acoustic") or request.year_min > request.year_max:
         raise HTTPException(status_code=400, detail="Invalid category or year range")
     if not repo().claim_architecture_status()["ready"]:
         raise HTTPException(status_code=409, detail="Run Claim migration before reprocessing")
@@ -3967,7 +4036,10 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument('--identity-backend', choices=('local_dummy','prototype'),
+                        default=os.getenv('YGC_IDENTITY_BACKEND','local_dummy'))
     args = parser.parse_args()
+    os.environ['YGC_IDENTITY_BACKEND'] = args.identity_backend
 
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(f"http://{args.host}:{args.port}")).start()
@@ -4198,5 +4270,375 @@ async def dispute_integrity_error(request: Request, exc: sqlite3.IntegrityError)
 def dispute_script():
     return FileResponse(Path(__file__).with_name('static')/'disputes.js',media_type='text/javascript',headers={'Cache-Control':'no-store'})
 
-if __name__ == "__main__":
+
+
+# Local operations: the console authentication boundary remains unchanged.
+_OPERATIONS_STARTED = time.monotonic()
+
+class OperationsSettingsRequest(BaseModel):
+    mode: str = Field(pattern="^(normal|read_only|offline)$")
+    message: str = Field(default="", max_length=1000)
+    reason: str = Field(default="", max_length=2000)
+    expected_version: int = Field(ge=0)
+
+
+@app.get('/health/live')
+def operations_live():
+    return {'status': 'alive'}
+
+
+@app.get('/health/ready')
+def operations_ready():
+    from ygc import operations
+    try:
+        with sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True, timeout=2) as con:
+            con.execute('SELECT 1 FROM individuals LIMIT 1').fetchone()
+        available = operations.state()['mode'] != 'offline'
+    except (sqlite3.Error, OSError):
+        available = False
+    return JSONResponse({'status': 'ready' if available else 'unavailable'}, status_code=200 if available else 503)
+
+
+@app.get('/api/admin/operations')
+def operations_status(request: Request):
+    _require_console_admin(request)
+    from ygc import operations
+    database = 'available'
+    reviews = {}
+    last_crawl = None
+    last_gpt_answer = None
+    try:
+        with sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True, timeout=2) as con:
+            con.execute('SELECT 1 FROM individuals LIMIT 1').fetchone()
+            reviews = dict(con.execute('SELECT status,COUNT(*) FROM acquire_applications GROUP BY status'))
+            last_gpt_answer = con.execute("SELECT MAX(at) FROM (SELECT at FROM acquire_application_events WHERE kind='chatgpt_answer_received' UNION ALL SELECT json_extract(result,'$.completed_at') AS at FROM acquire_applications WHERE json_valid(result))").fetchone()[0]
+            last_crawl = con.execute("SELECT MAX(started_at) FROM crawl_runs WHERE source_site='reverb'").fetchone()[0]
+    except (sqlite3.Error, OSError):
+        database = 'unavailable'
+    with _jobs_lock:
+        jobs = [{k: j.get(k) for k in ('id','status','message','progress','started_at')} for j in list(_jobs.values())[-50:]]
+    return {'settings': operations.state(), 'history': operations.history(),
+            'checked_at': datetime.now(timezone.utc).isoformat(),
+            'uptime_seconds': int(time.monotonic()-_OPERATIONS_STARTED),
+            'database': database, 'media_directory': 'available' if MEDIA_DIR.is_dir() else 'not_created',
+            'jobs': jobs, 'reviews': reviews, 'chatgpt_review':operations.chatgpt_review(), 'last_gpt_answer_at':max(filter(None,[last_gpt_answer,operations.last_paused_answer()]),default=None), 'auto_crawl':operations.auto_crawl(), 'last_crawl_at':last_crawl, 'auto_crawl_message':_AUTO_CRAWL_MESSAGE, 'version': '0.2.0', 'deployment': 'local prototype'}
+
+
+@app.put('/api/admin/operations')
+def operations_save(body: OperationsSettingsRequest, request: Request):
+    _require_console_admin(request)
+    from ygc import operations
+    try:
+        return operations.update(body.mode, body.message.strip(), body.reason.strip() or 'Service mode set to '+body.mode, body.expected_version)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.middleware('http')
+async def operations_maintenance(request: Request, call_next):
+    path = request.url.path
+    # Keep the authenticated settings endpoint reachable to recover from maintenance.
+    exempt = path.startswith(('/health/', '/assets/')) or path.startswith('/api/admin/operations') or path in ('/', '/api/service-notice')
+    if not exempt:
+        from ygc import operations
+        try:
+            settings = await run_in_threadpool(operations.state)
+        except (sqlite3.Error, OSError):
+            return JSONResponse({'detail': 'Operations settings unavailable'}, status_code=503, headers={'Retry-After':'60','Cache-Control':'no-store'})
+        blocked = settings['mode'] == 'offline' or (settings['mode'] == 'read_only' and request.method not in ('GET','HEAD','OPTIONS'))
+        if blocked:
+            message = settings['message'] or 'The service is undergoing maintenance. Please try again later.'
+            if path.startswith('/api/'):
+                response = JSONResponse({'detail':message}, status_code=503)
+            else:
+                import html
+                response = HTMLResponse('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Maintenance</title><h1>Maintenance</h1><p>'+html.escape(message)+'</p></html>', status_code=503)
+            response.headers.update({'Retry-After':'60','Cache-Control':'no-store'})
+            return response
+    response = await call_next(request)
+    if path == '/api/admin/operations' or path.startswith('/health/'):
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.get('/api/service-notice')
+def api_service_notice():
+    from ygc import operations
+    state = operations.state()
+    return JSONResponse({'mode':state['mode'], 'message':state['message'], 'version':state['version']}, headers={'Cache-Control':'no-store'})
+
+
+@app.get('/api/important-information')
+def api_important_information(request: Request, viewer_id: int | None = None):
+    from ygc import important_information
+    actor = acquire_actor(request, viewer_id)
+    try:
+        result = important_information.for_user(repo(), actor)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    return JSONResponse(result, headers={'Cache-Control':'private, no-store'})
+
+
+@app.get("/assets/table-columns.js")
+def table_columns_asset():
+    return FileResponse(Path(__file__).with_name("static") / "table-columns.js", media_type="text/javascript", headers={"Cache-Control":"no-store"})
+
+
+_AUTO_CRAWL_TOKEN = ''
+_AUTO_CRAWL_MESSAGE = ''
+
+class AutoCrawlRequest(BaseModel):
+    enabled: bool
+    category: str = Field(pattern='^(electric|acoustic|electric_acoustic)$')
+    year_min: int = Field(ge=1800,le=2100)
+    year_max: int = Field(ge=1800,le=2100)
+    interval_seconds: int = Field(default=3600,ge=60,le=604800)
+
+@app.put('/api/admin/operations/auto-crawl')
+def operations_auto_crawl(body: AutoCrawlRequest, request: Request):
+    global _AUTO_CRAWL_TOKEN, _AUTO_CRAWL_MESSAGE
+    _require_console_admin(request)
+    from ygc import operations
+    if body.year_min>body.year_max:
+        raise HTTPException(422,'Invalid year range')
+    token,_ = _request_token(request)
+    if body.enabled and not token:
+        raise HTTPException(400,'Reverb API Token is not configured')
+    if body.enabled:
+        _AUTO_CRAWL_TOKEN=token
+    _AUTO_CRAWL_MESSAGE=''
+    return operations.set_auto_crawl(body.enabled,body.category,body.year_min,body.year_max,body.interval_seconds)
+
+
+def _auto_crawl_tick():
+    global _active_job_id, _AUTO_CRAWL_MESSAGE
+    from ygc import operations
+    settings=operations.auto_crawl()
+    if settings['category'] not in ('electric','acoustic','electric_acoustic'):
+        _AUTO_CRAWL_MESSAGE='Paused: save the Electric + Acoustic Guitars Auto Crawl settings.'
+        return
+    if not settings['enabled'] or operations.state()['mode']!='normal':return
+    token=_AUTO_CRAWL_TOKEN or config.REVERB_API_TOKEN
+    if not token:
+        _AUTO_CRAWL_MESSAGE='Paused: configure the server Reverb token or enable Auto Crawl again.'
+        return
+    if not repo().claim_architecture_status()['ready']:
+        _AUTO_CRAWL_MESSAGE='Paused: Claim migration is required.'
+        return
+    with _jobs_lock:
+        if _active_job_id and _jobs.get(_active_job_id,{}).get('status')=='running':return
+        if not operations.reserve_auto_crawl(time.time()):return
+        job_id=uuid.uuid4().hex[:12]
+        _jobs[job_id]={'id':job_id,'status':'running','message':'Auto Crawl: Reverb','progress':0.0,'started_at':time.time(),'query_results':[]}
+        _active_job_id=job_id
+    _AUTO_CRAWL_MESSAGE=''
+    request=CrawlAdvanceRequest(category=settings['category'],year_min=settings['year_min'],year_max=settings['year_max'])
+    threading.Thread(target=_run_incremental,args=(job_id,request,token),daemon=True).start()
+
+
+def _auto_crawl_loop(stop):
+    while not stop.wait(5):
+        try:
+            _auto_crawl_tick()
+        except Exception:
+            global _AUTO_CRAWL_MESSAGE
+            _AUTO_CRAWL_MESSAGE='Auto Crawl could not start. Check database and service settings.'
+
+
+class ChatGPTReviewRequest(BaseModel):
+    enabled: bool
+
+@app.put('/api/admin/operations/chatgpt-review')
+def operations_chatgpt_review(body: ChatGPTReviewRequest, request: Request):
+    _require_console_admin(request)
+    from ygc import operations
+    return operations.chatgpt_review(body.enabled)
+
+
+class BackupRetentionRequest(BaseModel):
+    target: str = Field(default='chronicle', pattern='^(chronicle|operations|authentication|accounts)$')
+    generations: int = Field(ge=1, le=100)
+    enabled: bool | None = None
+    interval_hours: int | None = Field(default=None, ge=1, le=168)
+
+class BackupSaveRequest(BaseModel):
+    target: str = Field(default='chronicle', pattern='^(chronicle|operations|authentication|accounts)$')
+
+@app.get('/api/admin/operations/backups')
+def saved_crawl_backups(request: Request):
+    _require_console_admin(request)
+    from ygc import crawl_backups
+    return {'generations': crawl_backups.retention(), 'policies': crawl_backups.policies(), 'backups': crawl_backups.listing()}
+
+@app.put('/api/admin/operations/backups')
+def save_crawl_backup_retention(body: BackupRetentionRequest, request: Request):
+    _require_console_admin(request)
+    from ygc import crawl_backups
+    policy = crawl_backups.configure(body.target, generations=body.generations, enabled=body.enabled, interval_hours=body.interval_hours)
+    return {'generations': policy['generations'], 'policy': policy}
+
+@app.post('/api/admin/operations/backups/save')
+def save_manual_backup(body: BackupSaveRequest, request: Request):
+    _require_console_admin(request)
+    from ygc import crawl_backups
+    if not _CRAWL_RESTORE_LOCK.acquire(blocking=False):
+        raise HTTPException(409, 'A backup or restore is already running.')
+    try:
+        with _jobs_lock:
+            if any(j.get('status') == 'running' for j in _jobs.values()):
+                raise HTTPException(409, 'Wait for background jobs to finish before saving a backup.')
+        return {'name': crawl_backups.create(api_export_db, body.target, 'manual')}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        _CRAWL_RESTORE_LOCK.release()
+
+@app.get('/api/admin/operations/backups/{name}/download')
+def download_saved_backup(name: str, request: Request):
+    _require_console_admin(request)
+    from ygc import crawl_backups
+    try:
+        path = crawl_backups.selected(name)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    folder = Path(tempfile.mkdtemp(prefix='ygc_backup_download_'))
+    try:
+        with crawl_backups._lock:
+            shutil.copyfile(path, folder / name)
+        return FileResponse(folder / name, filename=name, media_type='application/zip',
+                            headers={'Cache-Control':'private, no-store'},
+                            background=BackgroundTask(shutil.rmtree, folder, True))
+    except BaseException:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+
+
+def _require_restore_ready():
+    from ygc import operations
+    if operations.state()['mode'] == 'normal':
+        raise HTTPException(409, 'Enable read-only or offline maintenance before restoring a backup.')
+    with _jobs_lock:
+        if any(job.get('status') == 'running' for job in _jobs.values()):
+            raise HTTPException(409, 'Wait for background jobs to finish before restoring.')
+
+def _record_backup_restore(target):
+    from ygc import operations
+    con = operations.connect()
+    try:
+        with con:
+            mode = con.execute('SELECT mode FROM settings WHERE id=1').fetchone()[0]
+            con.execute('INSERT INTO events(occurred_at,mode,reason) VALUES (?,?,?)',
+                        (datetime.now(timezone.utc).isoformat(), mode, 'Backup restored: ' + target))
+    finally:
+        con.close()
+
+async def _restore_backup_payload(payload: bytes, target: str):
+    from ygc import crawl_backups, direct_experiment
+    _require_restore_ready()
+    if len(payload) > crawl_backups.MAX_BYTES:
+        raise HTTPException(413, 'Backup exceeds 512 MB.')
+    if target not in crawl_backups.TARGETS:
+        raise HTTPException(400, 'Invalid backup target.')
+    # Both targets and reasons are explicit; rotation applies only to this target.
+    try:
+        if crawl_backups.database_path(target).is_file():
+            await run_in_threadpool(crawl_backups.create, api_export_db, target, 'before_restore')
+        if target != 'chronicle':
+            def restore_aux():
+                with direct_experiment.LOCK, crawl_backups._lock:
+                    crawl_backups.restore_auxiliary(payload, target)
+            await run_in_threadpool(restore_aux)
+            _record_backup_restore(target)
+            return {'restored': True, 'target': target}
+        delivered = False
+        async def receive():
+            nonlocal delivered
+            if delivered:
+                return {'type': 'http.disconnect'}
+            delivered = True
+            return {'type': 'http.request', 'body': payload, 'more_body': False}
+        upload = Request({'type':'http', 'method':'POST', 'path':'/api/import-db', 'headers':[(b'content-length', str(len(payload)).encode())]}, receive)
+        result = await api_import_db(upload)
+        _record_backup_restore(target)
+        return {**result, 'target': target}
+    except (ValueError, sqlite3.Error, zipfile.BadZipFile) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+async def _restore_saved_crawl_backup(name: str, request: Request):
+    _require_console_admin(request)
+    from ygc import crawl_backups
+    _require_restore_ready()
+    try:
+        path = crawl_backups.selected(name)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if path.stat().st_size > crawl_backups.MAX_BYTES:
+        raise HTTPException(413, 'Backup exceeds 512 MB.')
+    payload = await run_in_threadpool(path.read_bytes)
+    return await _restore_backup_payload(payload, crawl_backups.metadata(path)['target'])
+
+_CRAWL_RESTORE_LOCK = threading.Lock()
+
+@app.post('/api/admin/operations/backups/import')
+async def restore_uploaded_backup(request: Request, target: str = 'chronicle'):
+    _require_console_admin(request)
+    _require_restore_ready()
+    if not _CRAWL_RESTORE_LOCK.acquire(blocking=False):
+        raise HTTPException(409, 'A backup or restore is already running.')
+    try:
+        from ygc import crawl_backups
+        payload = bytearray()
+        async for chunk in request.stream():
+            payload.extend(chunk)
+            if len(payload) > crawl_backups.MAX_BYTES:
+                raise HTTPException(413, 'Backup exceeds 512 MB.')
+        return await _restore_backup_payload(bytes(payload), target)
+    finally:
+        _CRAWL_RESTORE_LOCK.release()
+
+@app.post('/api/admin/operations/backups/{name}/restore')
+async def restore_saved_crawl_backup(name: str, request: Request):
+    _require_console_admin(request)
+    if not _CRAWL_RESTORE_LOCK.acquire(blocking=False):
+        raise HTTPException(409, 'A backup or restore is already running.')
+    try:
+        return await _restore_saved_crawl_backup(name, request)
+    finally:
+        _CRAWL_RESTORE_LOCK.release()
+
+
+def _backup_tick():
+    if not _CRAWL_RESTORE_LOCK.acquire(blocking=False):
+        return
+    try:
+        with _jobs_lock:
+            if any(j.get('status') == 'running' for j in _jobs.values()):
+                return
+        from ygc import crawl_backups
+        crawl_backups.scheduled_tick(api_export_db)
+    finally:
+        _CRAWL_RESTORE_LOCK.release()
+
+
+def _backup_loop(stop):
+    while not stop.wait(10):
+        try:
+            _backup_tick()
+        except Exception:
+            # Per-target failures are recorded by create; retry on the next tick.
+            pass
+
+from ygc.local_identity import install as install_local_identity
+install_local_identity(app, repo, _local_console_request, _console_admin_authorized)
+
+@app.get('/assets/important-information.js')
+def important_information_script():
+    return FileResponse(Path(__file__).with_name('static') / 'important-information.js', media_type='text/javascript', headers={'Cache-Control':'no-store'})
+
+
+@app.get('/assets/local-auth.js')
+def local_auth_script():
+    return FileResponse(Path(__file__).with_name('static') / 'local-auth.js', media_type='text/javascript', headers={'Cache-Control':'no-store'})
+
+if __name__ == '__main__':
     main()

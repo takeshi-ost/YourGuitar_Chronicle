@@ -31,9 +31,9 @@ def reprocess_details(repository: Repository, category: str, year_min: int,
                       year_max: int, progress_callback=None) -> dict:
     # Local import keeps the network crawler and offline processor independent.
     from ygc.reverb_adapter import is_brand_new
-    from ygc.incremental_crawl import CATEGORY_QUERY, _category_matches, _year_matches
+    from ygc.incremental_crawl import CRAWL_CATEGORIES, _category_matches, _year_matches
 
-    if category not in CATEGORY_QUERY or not 1800 <= year_min <= year_max <= 2100:
+    if category not in CRAWL_CATEGORIES or not 1800 <= year_min <= year_max <= 2100:
         raise ValueError("Invalid category or manufacture-year range")
     counts = {"cached_processed": 0, "cached_total": 0, "skipped_existing": 0,
               "skipped_new": 0, "skipped_scope": 0, "missing_identity": 0, "serial_candidates": 0}

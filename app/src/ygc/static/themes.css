@@ -64,7 +64,7 @@
 }
 :root[data-theme="black_pearl"] {
   color-scheme: light;
-  --bg:#111215;--panel:#f8f7f2;--surface:#eae9e4;--input:#fff;
+  --bg:#111215;--page-image:url('/assets/theme-textures/rellic-black-wood.webp');--panel:#f8f7f2;--surface:#eae9e4;--input:#fff;
   --line:#696d73;--text:#22262b;--muted:#5c626a;--accent:#465e81;
   --control:#dce0e5;--control-hover:#cbd2d9;
   --ply-border:2px solid #f9f9f4;--ply-shadow:inset 0 0 0 1px #17191c,inset 0 0 0 3px #fafaf5,inset 0 0 0 4px #17191c,0 8px 22px rgba(0,0,0,.36);
@@ -210,3 +210,22 @@
 :root[data-theme="surf_green_white"] .brand-logo-badge,
 :root[data-theme="vintage_white_gold"] .brand-logo-badge,
 :root[data-theme="lake_blue_pearl"] .brand-logo-badge{display:block}
+
+/* Rotate only the wallpaper layer; existing wood assets and content stay intact. */
+:root[data-theme]:is([data-theme="butterscotch_black"],[data-theme="cherry_red_black"]) body {
+  background-image:none;
+  isolation:isolate;
+}
+:root[data-theme]:is([data-theme="butterscotch_black"],[data-theme="cherry_red_black"]) body::before {
+  content:"";position:fixed;left:50%;top:50%;width:100vh;height:100vw;
+  transform:translate(-50%,-50%) rotate(90deg);z-index:-1;pointer-events:none;
+  background-image:var(--page-image);background-size:1672px 941px;background-position:center;background-repeat:repeat;
+}
+
+/* Reduce Cherry and Rellic motifs to 75% while keeping the aspect ratio. */
+:root[data-theme]:is([data-theme="cherry_red_black"]) body::before {
+  background-size:1254px 705.75px;
+}
+:root[data-theme]:is([data-theme="black_pearl"]) body {
+  background-size:1152px 768px;background-repeat:repeat;
+}

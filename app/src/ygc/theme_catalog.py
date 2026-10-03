@@ -9,7 +9,7 @@ THEMES = (
     ("surf_green_white", "Surf Green & White"),
     ("sonic_blue_white", "Sonic Blue & White"),
     ("fiesta_red_white", "Fiesta Red & White"),
-    ("black_pearl", "Black & Pearl"),
+    ("black_pearl", "Rellic Black & Pearl"),
     ("goldtop_cream", "Goldtop & Cream"),
     ("cherry_red_black", "Cherry Red & Black"),
     ("vintage_white_gold", "Vintage White & Gold"),

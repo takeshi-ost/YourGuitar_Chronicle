@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="sunburst_3ply">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -16,23 +16,21 @@
 </div>
 <main><section class="panel content-frame" aria-labelledby="profileHeading">
 <h2 id="profileHeading">User Profile</h2>
-<p class="sub">Required / Optional labels are planned. All fields are optional during this prototype. Followers visibility behaves like Private until following is implemented.</p>
+<p class="sub">Display Name is required. Other profile information is optional. Email and password belong to authentication and are not saved by the local dummy.</p>
 <div id="settings" hidden>
-<div class="settings-row"><div><div class="field-name">Display Name</div><div class="field-note">Required · Shown in Claims and User Chronicle</div></div><div class="field-value"><input id="displayName" maxlength="120" aria-label="Display Name"></div><div class="visibility-fixed">Public · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">User ID</div><div class="field-note">Required · Unique identifier</div></div><div class="field-value"><input id="userId" readonly aria-label="User ID"></div><div class="visibility-fixed">Public · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">Account Type</div><div class="field-note">Required · Account category</div></div><div class="field-value"><select id="accountType" aria-label="Account Type"><option value="user">User</option><option value="shop">Shop</option><option value="builder">Builder</option><option value="repairer">Repairer</option><option value="organization">Organization</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">UserName</div><div class="field-note">Required · For future authentication</div></div><div class="field-value"><input disabled placeholder="Coming soon" aria-label="UserName"><span class="sub">Available after authentication is implemented.</span></div><div class="visibility-fixed">Private · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">Email</div><div class="field-note">Required · Notifications and account management</div></div><div class="field-value"><input disabled type="email" placeholder="Coming soon" aria-label="Email"><span class="sub">Available after authentication is implemented.</span></div><div class="visibility-fixed">Private · Fixed</div></div>
+<div class="settings-row"><div><div class="field-name">Display Name</div><div class="field-note">Required · Shown in Claims and User Chronicle</div></div><div class="field-value"><input id="displayName" required maxlength="120" aria-label="Display Name"></div><div class="visibility-fixed">Public · Fixed</div></div>
+<div class="settings-row"><div><div class="field-name">User ID</div><div class="field-note">Automatic · Unique identifier</div></div><div class="field-value"><input id="userId" readonly aria-label="User ID"></div><div class="visibility-fixed">Public · Fixed</div></div>
+<div class="settings-row"><div><div class="field-name">Account Type</div><div class="field-note">Optional · Defaults to User</div></div><div class="field-value"><select id="accountType" aria-label="Account Type"><option value="user">User</option><option value="shop">Shop</option><option value="builder">Builder</option><option value="repairer">Repairer</option><option value="organization">Organization</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Date of Birth</div><div class="field-note">Optional · Personal information</div></div><div class="field-value"><input id="dateOfBirth" type="date" aria-label="Date of Birth"></div><select class="visibility" data-field="birth" aria-label="Date of Birth visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Residence</div><div class="field-note">Optional · Country / City</div></div><div class="field-value"><div style="display:flex;gap:8px"><input id="country" maxlength="80" placeholder="Country" aria-label="Country"><input id="city" maxlength="120" placeholder="City" aria-label="City"></div></div><select class="visibility" data-field="residence" aria-label="Residence visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Bio</div><div class="field-note">Optional · About you</div></div><div class="field-value"><textarea id="bio" maxlength="2000" aria-label="Bio"></textarea></div><select class="visibility" data-field="bio" aria-label="Bio visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Avatar</div><div class="field-note">Optional · Profile image</div></div><div class="field-value avatar-input"><img id="avatarPreview" alt="Current avatar"><input id="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Avatar"><span class="sub">12 MB maximum</span></div><select class="visibility" data-field="avatar" aria-label="Avatar visibility"></select></div>
 <div class="settings-row"><div><div class="field-name">Your signature guitar</div><div class="field-note">Optional · Guitar initially shown on your profile</div></div><div class="field-value"><select id="signatureGuitar" aria-label="Your signature guitar"><option value="">Select an owned guitar</option></select></div><div class="visibility-fixed">Public · Fixed</div></div>
 <div class="settings-row"><div><div class="field-name">Theme</div><div class="field-note">Color theme · Header remains consistent</div></div><div class="field-value"><select id="theme" aria-label="Theme" onchange="previewTheme(this.value)"></select><span class="sub">Preview the selected theme. Select Save to apply it.</span></div><div class="visibility-fixed">Public · Fixed</div></div>
-<div class="settings-row"><div><div class="field-name">Preferred Language</div><div class="field-note">Required · UI language</div></div><div class="field-value"><select id="language" disabled aria-label="Preferred Language"><option value="en">English</option><option value="ja">Japanese</option></select><span class="sub">Available when multiple UI languages are supported.</span></div><div class="visibility-fixed">Private · Fixed</div></div>
 <div class="settings-actions"><button data-ui-action="primary" id="saveButton" onclick="saveSettings()">Save</button><button data-ui-action="close" type="button" class="secondary" onclick="window.location.href=activeUser?'/users/'+activeUser.user.id:'/user-view'">Cancel</button><span class="sub" id="status" role="status"></span></div>
 </div><div id="emptyState" class="sub">Select a user to edit settings.</div>
 </section></main>
+<script src="/assets/local-auth.js" defer></script>
 <script src="/assets/pages/user-edit.js" defer></script>
 </body>
 </html>

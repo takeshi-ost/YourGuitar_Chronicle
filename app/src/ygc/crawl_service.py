@@ -11,7 +11,7 @@ from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository
 from ygc.db.source_records import known_listing_ids
-from ygc.incremental_crawl import _year_matches
+from ygc.incremental_crawl import _year_matches, _category_matches
 from ygc.reverb_adapter import (
     _guitar_category_state,
     to_listing_claim_data,
@@ -31,7 +31,7 @@ def _guitar_scope(item: dict) -> bool:
     product_type = str(item.get("product_type") or "").lower()
     if any(word in product_type for word in ("amp", "pedal", "parts", "case", "bass")):
         return False
-    return _guitar_category_state(item) is not False
+    return _category_matches(item,'electric') or _category_matches(item,'acoustic')
 
 
 def crawl_query(
@@ -53,7 +53,10 @@ def crawl_query(
         "ambiguous_matches",
         "detail_unavailable", "skipped_new",
     ), 0)
+    def checkpoint(phase):
+        repository.update_crawl_run(run_id, phase, {"query": query, **counts}, "manual", year_min, year_max)
     try:
+        checkpoint("listing")
         summaries = list(collector.iter_listing_summaries(
             query=query, limit=limit, year_min=year_min, year_max=year_max,
         ))
@@ -69,13 +72,14 @@ def crawl_query(
             if is_brand_new(item):
                 counts["skipped_new"] += 1
                 continue
-            if (_guitar_scope(item) and
+            if ((_guitar_scope(item) or not any(item.get(k) for k in ('product_type','categories','category'))) and
                     (year_min is None or year_max is None or
                      _year_matches(item, year_min, year_max, strict=False))):
                 candidates.append(item)
             else:
                 counts["skipped_non_target"] += 1
         counts["detail_candidates"] = len(candidates)
+        checkpoint("details")
 
         for item in collector.fetch_listing_details(candidates):
             counts["details_fetched"] += 1
@@ -110,6 +114,7 @@ def crawl_query(
                 if listing_id:
                     defer_listing(repository, str(listing_id), "missing_identity")
         counts.update(reconcile_candidates(repository))
+        checkpoint("done")
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_fetched"],
             pages_fetched=counts["details_fetched"],
@@ -117,6 +122,7 @@ def crawl_query(
         )
         return {"query": query, **counts}
     except Exception as exc:
+        checkpoint("error")
         repository.finish_run(
             run_id, pages_discovered=counts["summaries_fetched"],
             pages_fetched=counts["details_fetched"],

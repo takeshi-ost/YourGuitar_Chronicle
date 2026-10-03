@@ -120,3 +120,20 @@ def test_pending_pair_evaluates_release_together(repo):
             con.execute("INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,ownership_source,ownership_pair_id,value_text,verification_status,occurred_at,created_at,updated_at) VALUES (?,?,'ownership',?,'former_owner','test-pair',?,'unverified',?,?,?)",
                         (iid,other,kind,str(other),date,utcnow(),utcnow()))
     assert repo.unverified_acquires()['total']==0
+
+
+def test_pending_claims_without_request_keeps_legacy_and_excludes_request(repo):
+    _, iid, _ = seed(repo, 'Stratocaster')
+    other = repo.create_user('Other')
+    with repo.connect() as con:
+        cur = con.execute("INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,value_text,verification_status,occurred_at,created_at,updated_at) VALUES (?,?,'ownership','acquire',?,'unverified','2026-10-03',?,?)", (iid,other,str(other),utcnow(),utcnow()))
+        claim_id = cur.lastrowid
+        con.execute("INSERT INTO claim_source_evidence (claim_id,evidence_type,effective_date,date_basis,created_at) VALUES (?,'acquisition_date','2026-10-03','user_reported',?)", (claim_id,utcnow()))
+    assert repo.unverified_acquires(without_request=True)['total'] == 1
+    with repo.connect() as con:
+        con.execute("INSERT INTO acquire_applications (revision,applicant_id,individual_id,original_individual_id,serial,challenge,expires_at,created_at,prompt_version,status,claim_id) VALUES ('test',?,?,?,'123456','TEST',0,?,'test','accepted',?)", (other,iid,iid,utcnow(),claim_id))
+        before = list(con.iterdump())
+    assert repo.unverified_acquires()['total'] == 1
+    assert repo.unverified_acquires(without_request=True)['total'] == 0
+    with repo.connect() as con:
+        assert list(con.iterdump()) == before

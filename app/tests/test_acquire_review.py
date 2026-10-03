@@ -255,12 +255,14 @@ def test_actual_merge_closes_pending_source_and_preserves_formal_evidence(setup)
     assert detail(repo,r['revision'],b)['images']['closeup']
 
 
-def test_reverb_url_failure_is_not_waived(setup,monkeypatch):
+@pytest.mark.parametrize('image_host', ['images.reverb.com', 'rvb-img.reverb.com'])
+def test_reverb_url_failure_is_not_waived(setup,monkeypatch,image_host):
     import httpx
     repo,a,b,c,i=setup
     repo.create_ownership_claim(a,i,ownership_kind='release',occurred_at='2026-01-02')
     with repo.connect() as con:
         attach_reverb_evidence(con,i)
+        con.execute("UPDATE claim_source_evidence SET payload_json=replace(payload_json,'images.reverb.com',?) WHERE source_site='reverb'",(image_host,))
     client=httpx.Client
     monkeypatch.setattr(ar.httpx,'Client',lambda **kw:client(transport=httpx.MockTransport(lambda request:httpx.Response(404)),**kw))
     with pytest.raises(ValueError,match='取得できません'):submitted(setup)
@@ -272,7 +274,7 @@ def test_reverb_url_failure_is_not_waived(setup,monkeypatch):
 
 
 def test_unapproved_reference_hosts_and_redirects_do_not_fetch():
-    for url in ('http://images.reverb.com/a','https://127.0.0.1/a','https://images.reverb.com.evil.example/a'):
+    for url in ('http://images.reverb.com/a','https://127.0.0.1/a','https://images.reverb.com.evil.example/a','https://rvb-img.reverb.com.evil.example/a','https://rvb-img.reverb.com:444/a','https://user:password@rvb-img.reverb.com/a'):
         with pytest.raises(ValueError,match='URL'):ar.reference_bytes({'kind':'reverb','url':url},None)
 
 
@@ -549,3 +551,29 @@ def test_request_seen_does_not_hide_newer_result_and_is_actor_scoped(setup):
     response=client.get('/api/acquire-applications/attention?viewer_id='+str(b))
     assert response.status_code==200 and response.json()['attention_count']==1
     assert response.headers['cache-control']=='private, no-store'
+
+
+def test_paused_answers_do_not_change_processing_application(setup):
+    from ygc import operations
+    repo,a,b,c,i=setup
+    submitted(setup)
+    job=claim(repo)
+    answer=review(repo,job)
+    with repo.connect() as con:
+        before=dict(ar.find(con,job['revision']))
+        claims=[dict(r) for r in con.execute('SELECT * FROM claims')]
+    operations.chatgpt_review(False)
+    try:
+        result=ar.call_tool(repo,'ygc_submit_acquire_review',answer)
+        assert result['answer_received'] and not result['applied']
+        with repo.connect() as con:
+            assert dict(ar.find(con,job['revision']))==before
+            assert [dict(r) for r in con.execute('SELECT * FROM claims')]==claims
+        assert operations.last_paused_answer()
+        assert ar.call_tool(repo,'ygc_submit_acquire_review',answer)==result
+        failure=ar.call_tool(repo,'ygc_fail_acquire',dict(revision=job['revision'],lease_token=job['lease_token'],reason='Paused failure'))
+        assert failure['status']=='processing'
+        with repo.connect() as con:assert dict(ar.find(con,job['revision']))==before
+    finally:
+        operations.chatgpt_review(True)
+    with repo.connect() as con:assert dict(ar.find(con,job['revision']))==before

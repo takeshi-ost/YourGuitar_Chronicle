@@ -11,3 +11,6 @@ logs/*.log
 
 # Private review queue contains images and the MCP connection key.
 data/direct-review/
+
+# Runtime databases, sessions, uploads, and backup archives are local only.
+data/

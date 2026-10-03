@@ -126,6 +126,8 @@ def expire(con):
     for r in con.execute("SELECT revision FROM acquire_applications WHERE status='draft' AND expires_at<=?",(time.time(),)).fetchall():
         con.execute("UPDATE acquire_applications SET status='expired',completed_at=? WHERE revision=?",(utcnow(),r['revision']))
         event(con,r['revision'],'expired')
+    from ygc import operations
+    if not operations.chatgpt_review()['enabled']:return
     for r in con.execute("SELECT revision,attempts FROM acquire_applications WHERE status='processing' AND lease_until<=?",(time.time(),)).fetchall():
         status='error' if r['attempts']>=3 else 'pending'
         con.execute('UPDATE acquire_applications SET status=?,lease_token=NULL,lease_until=NULL,error=? WHERE revision=?',
@@ -239,7 +241,7 @@ def detail(con,revision,user,admin=False):
         if not r['original_individual_id']:result['original_individual_id']=None
     result['events']=[dict(e) for e in con.execute('SELECT id,at,kind,note FROM acquire_application_events WHERE revision=? ORDER BY id',(revision,))]
     result['review_event_id']=max((e['id'] for e in result['events']),default=0)
-    result['unread_result']=r['status'] in ('accepted','rejected','closed','error') and result['review_event_id']>r['seen_event_id']
+    result['unread_result']=r['status'] in ('accepted','rejected','closed','error','expired','cancelled') and result['review_event_id']>r['seen_event_id']
     applicant=con.execute('SELECT display_name FROM users WHERE id=?',(r['applicant_id'],)).fetchone()
     individual=con.execute('SELECT * FROM individuals WHERE id=?',(r['individual_id'],)).fetchone()
     result.update(applicant_id=r['applicant_id'],applicant_name=applicant[0] if applicant else '(deleted)',
@@ -361,7 +363,7 @@ def attention(repo,user):
             (SELECT COALESCE(MAX(e.id),0) FROM acquire_application_events e WHERE e.revision=a.revision) AS event_id
             FROM acquire_applications a LEFT JOIN claims c ON c.id=a.claim_id WHERE a.applicant_id=?""",(user,)).fetchall()
         pending=lambda r:r['status'] in ('pending','processing') or (r['status']=='accepted' and r['verification_status']=='unverified')
-        unread=lambda r:r['status'] in ('accepted','rejected','closed','error') and r['event_id']>r['seen_event_id']
+        unread=lambda r:r['status'] in ('accepted','rejected','closed','error','expired','cancelled') and r['event_id']>r['seen_event_id']
         return dict(pending_count=sum(pending(r) for r in rows),unread_count=sum(unread(r) for r in rows),
                     attention_count=sum(pending(r) or unread(r) for r in rows))
 
@@ -416,7 +418,7 @@ def reference_bytes(source,content):
         if path.stat().st_size>12*1024*1024:raise ValueError('比較画像が大きすぎます。')
         return path.read_bytes()
     url=urlsplit(source['url'])
-    if url.scheme!='https' or url.hostname not in ('images.reverb.com','photos.reverb.com') or url.port not in (None,443) or url.username or url.password:
+    if url.scheme!='https' or url.hostname not in ('images.reverb.com','photos.reverb.com','rvb-img.reverb.com') or url.port not in (None,443) or url.username or url.password:
         raise ValueError('比較画像URLを確認してください。Reverb画像配信先以外には接続しません。')
     try:
         with httpx.Client(timeout=20,follow_redirects=False,trust_env=False) as client:
@@ -501,9 +503,10 @@ def invalidated(con,r):
 
 
 def check_lease(con,key):
+    from ygc import operations
     r=find(con,key.revision)
     if not r['lease_token'] or not secrets.compare_digest(r['lease_token'],key.lease_token):raise ValueError('審議の確保が失効しています。')
-    if r['status'] not in TERMINAL and (r['status']!='processing' or r['lease_until']<=time.time()):raise ValueError('審議の確保が失効しています。')
+    if r['status'] not in TERMINAL and (r['status']!='processing' or (r['lease_until']<=time.time() and operations.chatgpt_review()['enabled'])):raise ValueError('審議の確保が失効しています。')
     return r
 
 
@@ -580,6 +583,23 @@ def apply_review(repo,con,r,review):
 
 
 def call_tool(repo,name,args):
+    from ygc import operations
+    if not operations.chatgpt_review()['enabled']:
+        normalized_name=name.replace('listing','acquire')
+        if normalized_name in ('ygc_submit_acquire_review','ygc_fail_acquire','ygc_acquire_product_details'):
+            key=Key.model_validate({k:args.get(k) for k in ('revision','lease_token')})
+            with repo.connect() as con:
+                row=find(con,key.revision)
+                expected='listing' if 'listing' in name else 'acquire'
+                if row['request_kind']!=expected:raise ValueError('Wrong review tool for application kind.')
+                if row['status']!='processing' or not row['lease_token'] or not secrets.compare_digest(row['lease_token'],key.lease_token):
+                    raise ValueError('審議の確保が失効しています。')
+                model=Review if normalized_name=='ygc_submit_acquire_review' else Failure if normalized_name=='ygc_fail_acquire' else ProductRequest
+                payload=model.model_validate(args).model_dump(exclude={'lease_token'})
+                operations.retain_paused_answer(key.revision,name,payload)
+                if normalized_name=='ygc_acquire_product_details':
+                    return {'product_details':json.loads(row['product_details'] or '{}'),'observations':payload['observations'],'paused':True}
+                return {'status':'processing','revision':key.revision,'claim_id':row['claim_id'],'paused':True,'answer_received':True,'applied':False}
     kind='listing' if 'listing' in name else 'acquire'
     if kind=='listing':
         from ygc.listing_review import PROMPT as prompt, PROMPT_VERSION as prompt_version
@@ -591,6 +611,9 @@ def call_tool(repo,name,args):
             key=Key.model_validate({k:args.get(k) for k in ('revision','lease_token')})
             if find(con,key.revision)['request_kind']!=kind:raise ValueError('申請種別に対応する審議ツールを使用してください。')
         if name=='ygc_pending_acquire':
+            from ygc import operations
+            if not operations.chatgpt_review()['enabled']:
+                return {'jobs':[],'remaining_revisions':[], 'instructions':'ChatGPT review is paused by the administrator. Leave pending applications unchanged.'}
             request=Pending.model_validate(args)
             revisions=request.remaining_revisions
             if revisions is None:revisions=[r[0] for r in con.execute("SELECT revision FROM acquire_applications WHERE status='pending' AND request_kind=? ORDER BY submitted_at,revision",(kind,))]
@@ -632,6 +655,7 @@ def call_tool(repo,name,args):
         if name=='ygc_submit_acquire_review':
             review=Review.model_validate(args);r=check_lease(con,review)
             apply_review(repo,con,r,review)
+            event(con,r['revision'],'chatgpt_answer_received')
             done=find(con,r['revision'])
             return {'status':done['status'],'revision':r['revision'],'claim_id':done['claim_id']}
         if name=='ygc_fail_acquire':
