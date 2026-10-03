@@ -1,0 +1,15 @@
+{
+  "defaultLocale": "en",
+  "languages": [
+    {
+      "code": "en",
+      "label": "English",
+      "dir": "ltr"
+    },
+    {
+      "code": "ja",
+      "label": "日本語",
+      "dir": "ltr"
+    }
+  ]
+}

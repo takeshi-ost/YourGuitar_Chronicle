@@ -309,6 +309,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 }
 
 .product-list-panel>.toolbar,.profile-list-panel>.toolbar,.profile-list-panel>.new-guitar-action{flex-shrink:0}
+@media(max-width:600px){.profile-list-panel>.toolbar>h2{flex-basis:100%}.profile-list-panel>.toolbar>input{min-width:0;width:100%;max-width:none}}
 
 /* Chronicle grows with its contents, up to the same viewport cap as guitar lists. */
 @media(min-width:901px){

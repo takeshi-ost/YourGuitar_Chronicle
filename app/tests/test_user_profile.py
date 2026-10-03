@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 import sqlite3
+import re
+import json
 from pathlib import Path
 
 from ygc import config
@@ -78,8 +80,10 @@ def test_profile_birth_and_location_visibility_for_each_viewer(tmp_path, monkeyp
         assert profile(member)["location_region"] is None
         assert profile(owner)["location_region"] == "Tokyo"
         html = client.get("/assets/pages/user-view.js").text
-        assert "...(u.date_of_birth?[['Date of Birth',u.date_of_birth]]:[])" in html
-        assert "...(locationText?[['Location',locationText]]:[])" in html
+        assert "...(u.date_of_birth?[[" in html and "u.date_of_birth]]:[])" in html
+        assert '"ui.date_of_birth_fdc739f5"' in html
+        assert "...(locationText?[[" in html and "locationText]]:[])" in html
+        assert '"ui.location_15b61974"' in html
         assert 'class="profile-meta-label"' in html
 
 
@@ -241,19 +245,21 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
     with TestClient(app) as client:
         page = client.get("/user-view/edit")
         assert page.status_code == 200
-        assert '<h2 id="profileHeading">User Profile</h2>' in page.text
+        markup = re.sub(r'<span data-i18n="[^"]+">([^<]*)</span>', r"\1", page.text)
+        assert '<h2 id="profileHeading">User Profile</h2>' in markup
         assert 'id="newGuitarModal"' not in page.text
         assert 'onclick="openNewGuitar()"' not in page.text
         assert 'window.location.href=\'/users/\'+id' in client.get("/assets/pages/user-edit.js").text
-        assert 'onclick="saveSettings()">Save</button><button data-ui-action="close" type="button" class="secondary"' in page.text
-        assert '>Cancel</button>' in page.text
+        assert 'onclick="saveSettings()">Save</button><button data-ui-action="close" type="button" class="secondary"' in markup
+        assert '>Cancel</button>' in markup
         profile = client.get(f"/users/{user_id}")
         assert profile.status_code == 200
         assert 'id="newGuitarModal"' not in profile.text
         assert 'id="acquireReviewModal"' in profile.text
         assert 'aria-label="Ownership Request"' in profile.text
-        assert "Let\\'s add your undiscovered new guitar!" in client.get("/assets/pages/user-view.js").text
-        assert "Let\\'s add your Claim !!" in client.get("/assets/pages/user-view.js").text
+        dictionary = json.loads((Path(__file__).parents[1] / "src/ygc/static/locales/en.json").read_text())
+        assert "Let's add your undiscovered new guitar!" in dictionary.values()
+        assert dictionary["claim.add"] == "Let's add your Claim !!"
         assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in client.get("/assets/pages/user-view.js").text
         assert 'Product Detail' not in page.text
         assert 'data-field="residence"' in page.text

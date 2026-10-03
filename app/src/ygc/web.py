@@ -1176,12 +1176,21 @@ def list_navigation_script() -> FileResponse:
 
 @app.get("/assets/overlays.js")
 def overlays_script() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("static") / "overlays.js", media_type="text/javascript")
+    return FileResponse(Path(__file__).with_name("static") / "overlays.js", media_type="text/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/ui-components.css")
 def ui_components_stylesheet() -> FileResponse:
     return FileResponse(Path(__file__).with_name("static") / "ui-components.css", media_type="text/css", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/assets/i18n.js")
+def localization_script() -> Response:
+    from .localization import ui_resources
+    resources = json.dumps(ui_resources(), ensure_ascii=True)
+    script = (Path(__file__).with_name("static") / "i18n.js").read_text(encoding="utf-8")
+    return Response("globalThis.YGCI18nResources=" + resources + ";\n" + script,
+                    media_type="text/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/assets/pages/{filename}")
@@ -4259,6 +4268,20 @@ def api_acquire_action(revision: str, operation: str, request: Request, viewer_i
 
 from ygc.dispute_routes import router as dispute_router
 app.include_router(dispute_router)
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exception_handlers import http_exception_handler
+
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_http_error(request: Request, exc: StarletteHTTPException):
+    from .localization import error_message_keys
+    key = error_message_keys().get(exc.detail) if isinstance(exc.detail, str) else None
+    if key and exc.status_code not in (204, 304) and exc.status_code >= 200:
+        return JSONResponse({'detail': exc.detail, 'message_key': key},
+                            status_code=exc.status_code, headers=exc.headers)
+    return await http_exception_handler(request, exc)
+
 
 @app.exception_handler(sqlite3.IntegrityError)
 async def dispute_integrity_error(request: Request, exc: sqlite3.IntegrityError):

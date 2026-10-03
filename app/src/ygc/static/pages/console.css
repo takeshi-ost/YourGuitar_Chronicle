@@ -195,3 +195,6 @@ main button.detail-record-link{background:transparent!important;border:0!importa
 #operationsStatus{font-size:24px;font-weight:800;line-height:1.3;margin:10px 0 4px}#operationsCheckedAt{margin:0 0 12px}
 
 .console-tool-dialog{width:min(1000px,94vw);max-width:94vw;max-height:88dvh;overflow:auto;padding:18px}.console-tool-dialog .crawl-controls{grid-template-columns:repeat(4,minmax(80px,1fr)) auto}.console-tool-dialog .table-wrap{max-height:48dvh;overflow:auto}.console-tool-dialog .panel:last-child{margin-bottom:0}.crawl-log-panel #crawlActiveJobs>.panel{margin-bottom:10px}#crawlLogStatus:empty{display:none}.console-tool-dialog textarea{width:100%}@media(max-width:700px){.console-tool-dialog .crawl-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.console-tool-dialog .crawl-controls>div:last-child{grid-column:1/-1}}
+
+#detail .chronicle-toolbar{margin:0 0 10px;padding:0 0 8px}
+#detail .observation-decision-action{display:block;width:100%;padding:10px 12px;text-align:center;white-space:normal}
