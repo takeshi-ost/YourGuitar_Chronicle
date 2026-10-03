@@ -2,8 +2,9 @@
 <html lang="en" data-theme="sunburst_3ply">
 <head>
 <meta charset="utf-8">
+<script src="/assets/i18n.js" defer></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your Guitar Chronicle — Top Page</title>
+<title data-i18n="ui.your_guitar_chronicle_top_page_8b19da7e">Your Guitar Chronicle — Top Page</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="/assets/ui-components.css">
 <link rel="stylesheet" href="/assets/pages/user-view.css">
@@ -19,24 +20,24 @@
 <body>
 <div class="sticky-header">
   <header>
-    <h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo brand-logo-script" src="/assets/logos/script.png?v=2" alt="Your Guitar Chronicle"><img class="brand-logo brand-logo-block" src="/assets/logos/block.png?v=2" alt=""><img class="brand-logo brand-logo-badge" src="/assets/logos/badge.png?v=2" alt=""></a> <span class="sub">Top Page</span></h1>
-    <nav class="page-nav" aria-label="Top Page sections">
-      <a href="#discovery">New Discovery</a>
-      <a href="#products">Products</a>
-      <a href="#statistics">Statistics</a>
-      <a href="#world-map">World Map</a>
+    <h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page" data-i18n-aria-label="ui.your_guitar_chronicle_top_page_8b19da7e"><img class="brand-logo brand-logo-script" src="/assets/logos/script.png?v=2" alt="Your Guitar Chronicle"><img class="brand-logo brand-logo-block" src="/assets/logos/block.png?v=2" alt=""><img class="brand-logo brand-logo-badge" src="/assets/logos/badge.png?v=2" alt=""></a> <span class="sub"><span data-i18n="ui.top_page_272373b6">Top Page</span></span></h1>
+    <nav class="page-nav" aria-label="Top Page sections" data-i18n-aria-label="ui.top_page_sections_e9411250">
+      <a href="#discovery"><span data-i18n="ui.new_discovery_220da9a0">New Discovery</span></a>
+      <a href="#products"><span data-i18n="ui.products_4edc8bfa">Products</span></a>
+      <a href="#statistics"><span data-i18n="ui.statistics_a656107e">Statistics</span></a>
+      <a href="#world-map"><span data-i18n="ui.world_map_5c711ffc">World Map</span></a>
     </nav>
   </header>
   <div class="account-hub" id="accountHub">
-    <div class="account-hub-empty">Loading user information...</div>
+    <div class="account-hub-empty"><span data-i18n="ui.loading_user_information_40bb879c">Loading user information...</span></div>
   </div>
 </div>
 <main>
-<section id="importantInformation" class="unanswered-requests" hidden aria-label="Important information">
+<section id="importantInformation" class="unanswered-requests" hidden aria-label="Important information" data-i18n-aria-label="ui.important_information_ce20f737">
 <section id="serviceNotice" hidden></section>
 <section id="accountAccessNotice" class="important-information-group" hidden></section>
-<section id="ownershipDisputeNotice" class="important-information-group" hidden aria-label="Unresolved ownership disputes"><div id="disputeList"></div></section>
-<section id="unansweredRequests" class="important-information-group" hidden aria-label="Unanswered ownership requests"></section>
+<section id="ownershipDisputeNotice" class="important-information-group" hidden aria-label="Unresolved ownership disputes" data-i18n-aria-label="ui.unresolved_ownership_disputes_8b00819e"><div id="disputeList"></div></section>
+<section id="unansweredRequests" class="important-information-group" hidden aria-label="Unanswered ownership requests" data-i18n-aria-label="ui.unanswered_ownership_requests_9b5c4ed2"></section>
 
 <section id="myOwnershipInformation" class="important-information-group" hidden></section>
 </section>
@@ -44,25 +45,25 @@
 <div class="grid">
 <section class="left-column content-frame">
   <div class="panel discovery-panel page-section" id="discovery">
-    <div class="toolbar"><h2 data-count-items="#newDiscoveryList > .discovery-item">New discovery</h2></div>
-    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px">Loading recent activity...</div></div>
+    <div class="toolbar"><h2 data-count-items="#newDiscoveryList > .discovery-item"><span data-i18n="ui.new_discovery_e3c13aa3">New discovery</span></h2></div>
+    <div class="discovery-list" id="newDiscoveryList"><div class="sub" style="padding:8px"><span data-i18n="ui.loading_recent_activity_b910043b">Loading recent activity...</span></div></div>
   </div>
   <div class="panel product-list-panel page-section" id="products">
     <div class="toolbar">
-      <h2 data-count-items="#individualBody > tr.clickable">Product List</h2>
-      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()">
+      <h2 data-count-items="#individualBody > tr.clickable"><span data-i18n="ui.product_list_a7042f80">Product List</span></h2>
+      <input id="individualFilter" style="max-width:320px" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()" data-i18n-placeholder="ui.maker_model_finish_year_serial_c99806fd">
     </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th>
-          <th class="favorite-cell" aria-label="Favorite">♡</th>
-          <th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th>
-          <th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th>
-          <th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th>
-          <th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th>
-          <th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th>
-          <th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th>
+          <th class="sortable" onclick="setIndividualSort('id')"><span data-i18n="ui.id_3843971d">ID</span><span class="sort-indicator" id="sort-id"></span></th>
+          <th class="favorite-cell" aria-label="Favorite" data-i18n-aria-label="ui.favorite_ea713ecd">♡</th>
+          <th class="sortable" onclick="setIndividualSort('manufacturer')"><span data-i18n="ui.maker_287f4955">Maker</span><span class="sort-indicator" id="sort-manufacturer"></span></th>
+          <th class="sortable" onclick="setIndividualSort('model')"><span data-i18n="ui.model_5e2c614c">Model</span><span class="sort-indicator" id="sort-model"></span></th>
+          <th class="sortable" onclick="setIndividualSort('finish')"><span data-i18n="ui.finish_a6c7a84b">Finish</span><span class="sort-indicator" id="sort-finish"></span></th>
+          <th class="sortable" onclick="setIndividualSort('year')"><span data-i18n="ui.year_89f68325">Year</span><span class="sort-indicator" id="sort-year"></span></th>
+          <th class="sortable" onclick="setIndividualSort('serial_number')"><span data-i18n="ui.serial_8ea09493">Serial</span><span class="sort-indicator" id="sort-serial_number"></span></th>
+          <th class="sortable" onclick="setIndividualSort('claim_count')"><span data-i18n="ui.claims_1c85c122">Claims</span><span class="sort-indicator" id="sort-claim_count"></span></th>
         </tr></thead>
         <tbody id="individualBody"></tbody>
       </table>
@@ -72,25 +73,25 @@
 
 </div>
 
-<aside class="detail-shell" id="productDetailShell" aria-label="Product Detail">
+<aside class="detail-shell" id="productDetailShell" aria-label="Product Detail" data-i18n-aria-label="ui.product_detail_8aa2f0e7">
   <div class="panel detail-panel">
-    <div class="detail-panel-heading"><h2>Product Detail</h2><button data-ui-action="close" type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()">×</button></div>
-    <div id="detail" class="sub">Select a row in Product List to view its history.</div>
+    <div class="detail-panel-heading"><h2><span data-i18n="ui.product_detail_8aa2f0e7">Product Detail</span></h2><button data-ui-action="close" type="button" class="compact-detail-close" aria-label="Close Product Detail" onclick="closeCompactDetail()" data-i18n-aria-label="ui.close_product_detail_b6c58b24">×</button></div>
+    <div id="detail" class="sub"><span data-i18n="ui.select_a_row_in_product_list_to_view_its_history_9833a49b">Select a row in Product List to view its history.</span></div>
   </div>
 </aside>
 
 <section class="section-stack page-section content-frame" id="statistics">
   <div class="dashboard-grid">
     <div class="dashboard-card">
-      <h2>Model Distribution</h2>
+      <h2><span data-i18n="ui.model_distribution_fc4035e5">Model Distribution</span></h2>
       <div class="chart-wrap"><canvas id="modelChart"></canvas></div>
     </div>
     <div class="dashboard-card">
-      <h2>Year Distribution</h2>
+      <h2><span data-i18n="ui.year_distribution_671a9b93">Year Distribution</span></h2>
       <div class="chart-wrap"><canvas id="yearChart"></canvas></div>
     </div>
     <div class="dashboard-card wide">
-      <h2>Listings — Last 30 Days</h2>
+      <h2><span data-i18n="ui.listings_last_30_days_98d69fd5">Listings — Last 30 Days</span></h2>
       <div class="chart-wrap"><canvas id="listingChart"></canvas></div>
     </div>
   </div>
@@ -98,16 +99,16 @@
 
 <section class="section-stack page-section content-frame" id="world-map">
   <div class="panel world-map-panel">
-    <h2>Current Product Locations</h2>
+    <h2><span data-i18n="ui.current_product_locations_ee2c6ad1">Current Product Locations</span></h2>
     <div class="world-map-wrap" id="worldMapWrap">
-      <svg class="world-map-svg" id="worldMapSvg" viewBox="0 0 1000 500" aria-label="World map showing current product locations"></svg>
+      <svg class="world-map-svg" id="worldMapSvg" viewBox="0 0 1000 500" aria-label="World map showing current product locations" data-i18n-aria-label="ui.world_map_showing_current_product_locations_47314667"></svg>
       <div class="world-map-tooltip" id="worldMapTooltip"></div>
       <div class="world-map-legend">
         <span>0</span>
         <span class="world-map-swatch" style="background:#20262a"></span>
         <span class="world-map-swatch" style="background:#6d5834"></span>
         <span class="world-map-swatch" style="background:#d0a45d"></span>
-        <span>More products</span>
+        <span><span data-i18n="ui.more_products_a2cc0a59">More products</span></span>
       </div>
     </div>
   </div>
@@ -115,265 +116,265 @@
 <div class="page-bottom-space" aria-hidden="true"></div>
 </main>
 <div class="modal-backdrop" id="notificationPanel"><div class="modal notification-modal" role="dialog" aria-modal="true" aria-labelledby="notificationTitle">
-  <h2 id="notificationTitle" data-count-items="#notificationList > .notification-item">Notifications</h2>
+  <h2 id="notificationTitle" data-count-items="#notificationList > .notification-item"><span data-i18n="header.notifications">Notifications</span></h2>
   <div class="notification-list" id="notificationList"></div>
-  <div class="modal-actions"><button type="button" onclick="markAllNotificationsRead()">Mark all read</button><button type="button" data-ui-action="close" onclick="YGCOverlays.close('notificationPanel')">Close</button></div>
+  <div class="modal-actions"><button type="button" onclick="markAllNotificationsRead()"><span data-i18n="ui.mark_all_read_3bc62a9e">Mark all read</span></button><button type="button" data-ui-action="close" onclick="YGCOverlays.close('notificationPanel')"><span data-i18n="action.close">Close</span></button></div>
 </div></div>
 
 
 <dialog id="transferReviewDialog" aria-labelledby="transferReviewTitle" style="width:min(480px,90vw);background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:18px">
-<h3 id="transferReviewTitle">Transfer</h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button data-ui-action="close" type="button" style="margin-top:10px" onclick="YGCOverlays.close('transferReviewDialog')">Close</button>
+<h3 id="transferReviewTitle"><span data-i18n="ui.transfer_dde8bef7">Transfer</span></h3><div id="transferReviewBody"></div><p id="transferReviewStatus" class="sub" role="status"></p><div id="transferReviewActions" style="display:flex;gap:6px;margin-top:12px"></div><button data-ui-action="close" type="button" style="margin-top:10px" onclick="YGCOverlays.close('transferReviewDialog')"><span data-i18n="action.close">Close</span></button>
 </dialog>
 <dialog id="directMessageDialog" aria-labelledby="directMessageTitle" style="width:min(800px,95vw);max-height:90vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
-<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle">Messages</h3><div><button type="button" onclick="refreshDirectMessages()">Refresh</button> <button data-ui-action="close" type="button" onclick="YGCOverlays.close('directMessageDialog')">Close</button></div></div>
-<div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)">Load more conversations</button></div>
-<div><div id="dmPeerTitle" style="margin-bottom:8px">Select a conversation, or use Message on a User Profile.</div><button id="dmOlder" type="button" hidden onclick="loadDirectMessageHistory(true)">Load older messages</button><div id="dmThread" class="dm-thread"></div>
-<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody">Message (up to 2000 characters)</label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button data-ui-action="primary" id="dmSend" type="submit">Send</button></form></div></div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="directMessageTitle"><span data-i18n="header.messages">Messages</span></h3><div><button type="button" onclick="refreshDirectMessages()"><span data-i18n="action.refresh">Refresh</span></button> <button data-ui-action="close" type="button" onclick="YGCOverlays.close('directMessageDialog')"><span data-i18n="action.close">Close</span></button></div></div>
+<div class="dm-layout"><div><div id="dmConversationList" class="dm-conversations"></div><button id="dmMoreConversations" type="button" hidden onclick="loadDirectMessageInbox(true)"><span data-i18n="ui.load_more_conversations_8806b16b">Load more conversations</span></button></div>
+<div><div id="dmPeerTitle" style="margin-bottom:8px"><span data-i18n="ui.select_a_conversation_or_use_message_on_a_user_profile_2f6dd130">Select a conversation, or use Message on a User Profile.</span></div><button id="dmOlder" type="button" hidden onclick="loadDirectMessageHistory(true)"><span data-i18n="ui.load_older_messages_f17671d8">Load older messages</span></button><div id="dmThread" class="dm-thread"></div>
+<form id="dmComposeForm" hidden onsubmit="event.preventDefault();sendDirectMessage()"><label class="sub" for="dmBody"><span data-i18n="ui.message_up_to_2000_characters_bd2419c0">Message (up to 2000 characters)</span></label><textarea id="dmBody" class="dm-compose" maxlength="2000" rows="3" required></textarea><button data-ui-action="primary" id="dmSend" type="submit"><span data-i18n="ui.send_f6f4688f">Send</span></button></form></div></div>
 <p id="dmStatus" class="sub" role="status"></p>
 </dialog>
 <dialog id="userConnectionsDialog" aria-labelledby="userConnectionsTitle" style="width:min(440px,90vw);max-height:80vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px">
-<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle" data-count-items="#userConnectionsList > a">Followers</h3><button data-ui-action="close" type="button" onclick="YGCOverlays.close('userConnectionsDialog')">Close</button></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><h3 id="userConnectionsTitle" data-count-items="#userConnectionsList > a"><span data-i18n="ui.followers_a145ab34">Followers</span></h3><button data-ui-action="close" type="button" onclick="YGCOverlays.close('userConnectionsDialog')"><span data-i18n="action.close">Close</span></button></div>
 <div id="userConnectionsList" style="max-height:55vh;overflow:auto"></div>
 <p id="userConnectionsStatus" class="sub" role="status"></p>
-<button id="userConnectionsMore" type="button" hidden onclick="loadUserConnections()">Load more</button>
+<button id="userConnectionsMore" type="button" hidden onclick="loadUserConnections()"><span data-i18n="ui.load_more_ac8991ef">Load more</span></button>
 </dialog>
 <div class="modal-backdrop" id="mediaClaimModal" onclick="closeMediaClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Media Claim</h2>
+    <h2><span data-i18n="ui.media_claim_2916c9fb">Media Claim</span></h2>
     <div class="sub" id="mediaClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row full">
-        <label class="form-label">Images <span class="sub">up to 10</span></label>
+        <label class="form-label"><span data-i18n="ui.images_be7e2f20">Images</span> <span class="sub"><span data-i18n="ui.up_to_10_f6ea8947">up to 10</span></span></label>
         <div class="media-image-inputs" id="mediaClaimImages"><div class="media-image-slot visible" id="mediaImageSlot0"><input class="media-image-input" data-index="0" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot1"><input class="media-image-input" data-index="1" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot2"><input class="media-image-input" data-index="2" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot3"><input class="media-image-input" data-index="3" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot4"><input class="media-image-input" data-index="4" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot5"><input class="media-image-input" data-index="5" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot6"><input class="media-image-input" data-index="6" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot7"><input class="media-image-input" data-index="7" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot8"><input class="media-image-input" data-index="8" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div><div class="media-image-slot" id="mediaImageSlot9"><input class="media-image-input" data-index="9" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="updateMediaImageSlots()"></div></div>
       </div>
       <div class="form-row">
-        <label class="form-label" for="mediaClaimDate">Date</label>
+        <label class="form-label" for="mediaClaimDate"><span data-i18n="ui.date_99c40ab4">Date</span></label>
         <input id="mediaClaimDate" type="date">
       </div>
       <div class="form-row full">
-        <label class="form-label" for="mediaClaimCaption">Caption</label>
-        <textarea id="mediaClaimCaption" maxlength="2000" placeholder="Caption or detail"></textarea>
+        <label class="form-label" for="mediaClaimCaption"><span data-i18n="ui.caption_87d296ec">Caption</span></label>
+        <textarea id="mediaClaimCaption" maxlength="2000" placeholder="Caption or detail" data-i18n-placeholder="ui.caption_or_detail_4edbe085"></textarea>
       </div>
     </div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeMediaClaim()">Cancel</button>
-      <button data-ui-action="primary" id="mediaClaimSubmit" onclick="submitMediaClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeMediaClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="mediaClaimSubmit" onclick="submitMediaClaim()"><span data-i18n="ui.add_claim_62b52157">Add Claim</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="eventClaimModal" onclick="closeEventClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Event Claim</h2>
+    <h2><span data-i18n="ui.event_claim_30ab2713">Event Claim</span></h2>
     <div class="sub" id="eventClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row">
-        <label class="form-label" for="eventClaimKind">Tag</label>
+        <label class="form-label" for="eventClaimKind"><span data-i18n="ui.tag_1503916a">Tag</span></label>
         <select id="eventClaimKind">
-          <option value="exhibition">Exhibition</option>
-          <option value="performance">Performance</option>
-          <option value="recording">Recording</option>
-          <option value="auction">Auction</option>
-          <option value="other">Other</option>
+          <option value="exhibition" data-i18n="ui.exhibition_cb98674f">Exhibition</option>
+          <option value="performance" data-i18n="ui.performance_442aded8">Performance</option>
+          <option value="recording" data-i18n="ui.recording_80e8dd1a">Recording</option>
+          <option value="auction" data-i18n="ui.auction_58d15462">Auction</option>
+          <option value="other" data-i18n="ui.other_f97e9da0">Other</option>
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label" for="eventClaimDate">Date</label>
+        <label class="form-label" for="eventClaimDate"><span data-i18n="ui.date_99c40ab4">Date</span></label>
         <input id="eventClaimDate" type="date">
       </div>
       <div class="form-row full">
-        <label class="form-label" for="eventClaimDetail">Detail</label>
-        <textarea id="eventClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
+        <label class="form-label" for="eventClaimDetail"><span data-i18n="action.detail">Detail</span></label>
+        <textarea id="eventClaimDetail" maxlength="2000" placeholder="What happened?" data-i18n-placeholder="ui.what_happened_c4dc542b"></textarea>
       </div>
       <div class="form-row full">
-        <label class="form-label" for="eventClaimImages">Images (optional, up to 10)</label>
+        <label class="form-label" for="eventClaimImages"><span data-i18n="ui.images_optional_up_to_10_2de235c9">Images (optional, up to 10)</span></label>
         <input id="eventClaimImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
       </div>
     </div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeEventClaim()">Cancel</button>
-      <button data-ui-action="primary" id="eventClaimSubmit" onclick="submitEventClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeEventClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="eventClaimSubmit" onclick="submitEventClaim()"><span data-i18n="ui.add_claim_62b52157">Add Claim</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="incidentClaimModal" onclick="closeIncidentClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Incident Claim</h2>
+    <h2><span data-i18n="ui.incident_claim_59c2907d">Incident Claim</span></h2>
     <div class="sub" id="incidentClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row">
-        <label class="form-label" for="incidentClaimKind">Tag</label>
+        <label class="form-label" for="incidentClaimKind"><span data-i18n="ui.tag_1503916a">Tag</span></label>
         <select id="incidentClaimKind">
-          <option value="damage">Damage</option>
-          <option value="lost">Incident Lost</option>
-          <option value="theft">Theft</option>
+          <option value="damage" data-i18n="ui.damage_0c874f58">Damage</option>
+          <option value="lost" data-i18n="ui.incident_lost_650d5700">Incident Lost</option>
+          <option value="theft" data-i18n="ui.theft_45429cb1">Theft</option>
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label" for="incidentClaimDate">Date</label>
+        <label class="form-label" for="incidentClaimDate"><span data-i18n="ui.date_99c40ab4">Date</span></label>
         <input id="incidentClaimDate" type="date">
       </div>
       <div class="form-row full">
-        <label class="form-label" for="incidentClaimDetail">Detail</label>
-        <textarea id="incidentClaimDetail" maxlength="2000" placeholder="What happened?"></textarea>
+        <label class="form-label" for="incidentClaimDetail"><span data-i18n="action.detail">Detail</span></label>
+        <textarea id="incidentClaimDetail" maxlength="2000" placeholder="What happened?" data-i18n-placeholder="ui.what_happened_c4dc542b"></textarea>
       </div>
     </div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeIncidentClaim()">Cancel</button>
-      <button data-ui-action="primary" id="incidentClaimSubmit" onclick="submitIncidentClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeIncidentClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="incidentClaimSubmit" onclick="submitIncidentClaim()"><span data-i18n="ui.add_claim_62b52157">Add Claim</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="specClaimModal" onclick="closeSpecificationClaim(event)">
   <div class="modal spec-scroll-modal" onclick="event.stopPropagation()">
-    <h2 id="specClaimTitle">Specification/Repair Claim</h2>
+    <h2 id="specClaimTitle"><span data-i18n="ui.specification_repair_claim_022acab6">Specification/Repair Claim</span></h2>
     <div class="sub" id="specClaimGuitar" style="margin-bottom:14px"></div>
 
     <div class="spec-kind">
-      <button id="specKindSpecification" type="button" class="active" onclick="setSpecificationKind('specification')">Specification</button>
-      <button id="specKindRepair" type="button" onclick="setSpecificationKind('repair')">Repair</button>
+      <button id="specKindSpecification" type="button" class="active" onclick="setSpecificationKind('specification')"><span data-i18n="ui.specification_39732416">Specification</span></button>
+      <button id="specKindRepair" type="button" onclick="setSpecificationKind('repair')"><span data-i18n="ui.repair_1196b6c5">Repair</span></button>
     </div>
 
     <div class="spec-add-wrap">
       <button type="button" class="spec-add-button" onclick="toggleSpecItemMenu(event)">＋</button>
       <div class="claim-menu spec-item-menu" id="specItemMenu"></div>
     </div>
-    <span class="sub" style="margin-left:8px">Add field</span>
+    <span class="sub" style="margin-left:8px"><span data-i18n="ui.add_field_5f42d901">Add field</span></span>
 
     <div class="spec-items" id="specClaimItems"></div>
 
     <div class="modal-grid">
       <div class="form-row">
-        <label class="form-label" for="specClaimDate">Date</label>
+        <label class="form-label" for="specClaimDate"><span data-i18n="ui.date_99c40ab4">Date</span></label>
         <input id="specClaimDate" type="date">
       </div>
       <div class="form-row full">
-        <label class="form-label" for="specClaimBody">Memo (optional)</label>
-        <textarea id="specClaimBody" maxlength="2000" placeholder="Specifications, replacements, adjustments, or repair details"></textarea>
+        <label class="form-label" for="specClaimBody"><span data-i18n="ui.memo_optional_eeaa8bef">Memo (optional)</span></label>
+        <textarea id="specClaimBody" maxlength="2000" placeholder="Specifications, replacements, adjustments, or repair details" data-i18n-placeholder="ui.specifications_replacements_adjustments_or_repair_details_394530d5"></textarea>
       </div>
     </div>
 
-    <div class="sub">All added fields are saved in one Claim. The latest value for each field appears in Specification.</div>
+    <div class="sub"><span data-i18n="ui.all_added_fields_are_saved_in_one_claim_the_latest_value_f_0f82b3bb">All added fields are saved in one Claim. The latest value for each field appears in Specification.</span></div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeSpecificationClaim()">Cancel</button>
-      <button data-ui-action="primary" id="specClaimSubmit" onclick="submitSpecificationClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeSpecificationClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="specClaimSubmit" onclick="submitSpecificationClaim()"><span data-i18n="ui.add_claim_62b52157">Add Claim</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="formerOwnerClaimModal" onclick="closeFormerOwnerClaim(event)">
   <div class="modal" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='TEXTAREA'){event.preventDefault();submitFormerOwnerClaim()}">
-    <h2>Former Owner</h2>
+    <h2><span data-i18n="ui.former_owner_68bdd82b">Former Owner</span></h2>
     <div class="sub" id="formerOwnerClaimGuitar" style="margin-bottom:14px"></div>
     <div class="modal-grid">
       <div class="form-row">
-        <label class="form-label" for="formerOwnerAcquisitionDate">Acquisition Date *</label>
+        <label class="form-label" for="formerOwnerAcquisitionDate"><span data-i18n="ui.acquisition_date_8092bf8e">Acquisition Date *</span></label>
         <input id="formerOwnerAcquisitionDate" type="date" required>
       </div>
       <div class="form-row">
-        <label class="form-label" for="formerOwnerReleaseDate">Release Date *</label>
+        <label class="form-label" for="formerOwnerReleaseDate"><span data-i18n="ui.release_date_1f9d6353">Release Date *</span></label>
         <input id="formerOwnerReleaseDate" type="date" required>
       </div>
       <div class="form-row full">
-        <label class="form-label" for="formerOwnerDetail">Detail (optional)</label>
-        <textarea id="formerOwnerDetail" maxlength="2000" placeholder="Ownership history detail"></textarea>
+        <label class="form-label" for="formerOwnerDetail"><span data-i18n="ui.detail_optional_2f8ed9c2">Detail (optional)</span></label>
+        <textarea id="formerOwnerDetail" maxlength="2000" placeholder="Ownership history detail" data-i18n-placeholder="ui.ownership_history_detail_0c79befd"></textarea>
       </div>
     </div>
-    <div class="sub">Creates an Acquire and a Release Claim. Once approved, the guitar appears in Formerly Owned Guitars.</div>
+    <div class="sub"><span data-i18n="ui.creates_an_acquire_and_a_release_claim_once_approved_the_g_1ddb0d2e">Creates an Acquire and a Release Claim. Once approved, the guitar appears in Formerly Owned Guitars.</span></div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeFormerOwnerClaim()">Cancel</button>
-      <button data-ui-action="primary" id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()">Add Claims</button>
+      <button data-ui-action="close" class="secondary" onclick="closeFormerOwnerClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="formerOwnerClaimSubmit" onclick="submitFormerOwnerClaim()"><span data-i18n="ui.add_claims_941403ca">Add Claims</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="ownershipClaimModal" onclick="closeOwnershipClaim(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Ownership</h2>
+    <h2><span data-i18n="ui.ownership_c7d3acc8">Ownership</span></h2>
     <div class="sub" id="ownershipClaimGuitar" style="margin-bottom:14px"></div>
     <div class="form-row">
-      <label class="form-label">Tag</label>
-      <div id="ownershipClaimFixedTag"><strong>Acquire</strong></div>
+      <label class="form-label"><span data-i18n="ui.tag_1503916a">Tag</span></label>
+      <div id="ownershipClaimFixedTag"><strong><span data-i18n="ui.acquire_910e23d5">Acquire</span></strong></div>
       <select id="ownershipClaimKind" style="display:none" onchange="updateTransferFields()">
-        <option value="acquire">Acquire</option>
-        <option value="transfer">Transfer</option>
-        <option value="release">Release</option>
+        <option value="acquire" data-i18n="ui.acquire_910e23d5">Acquire</option>
+        <option value="transfer" data-i18n="ui.transfer_dde8bef7">Transfer</option>
+        <option value="release" data-i18n="ui.release_e020e3c6">Release</option>
       </select>
     </div>
     <div class="form-row">
-      <label class="form-label" for="ownershipClaimDate">Date</label>
+      <label class="form-label" for="ownershipClaimDate"><span data-i18n="ui.date_99c40ab4">Date</span></label>
       <input id="ownershipClaimDate" type="date">
     </div>
     <div class="form-row" id="ownershipClaimPreviousRow">
-      <label class="form-label" for="ownershipClaimPrevious">Counterparty / related person (optional)</label>
-      <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ...">
+      <label class="form-label" for="ownershipClaimPrevious"><span data-i18n="ui.counterparty_related_person_optional_37fad3b2">Counterparty / related person (optional)</span></label>
+      <input id="ownershipClaimPrevious" placeholder="Former owner / Recipient / Family ..." data-i18n-placeholder="ui.former_owner_recipient_family_75fb6a45">
     </div>
     <div class="form-row" id="transferRecipientRow" hidden>
-      <div class="sub">From: you, the Current Owner. The recipient must Accept. No other Evidence is required.</div>
-      <label class="form-label" for="transferRecipientSearch">To: search by Display Name or User ID</label>
-      <div style="display:flex;gap:6px"><input id="transferRecipientSearch" maxlength="160" style="flex:1" oninput="transferSearchGeneration++;transferSelectedUser=null;transferSearchOffset=0;document.getElementById('transferSearchMore').hidden=true;document.getElementById('transferSelectedRecipient').textContent='';document.getElementById('transferSearchResults').innerHTML=''" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTransferRecipients()}"><button type="button" onclick="searchTransferRecipients()">Search</button></div>
+      <div class="sub"><span data-i18n="ui.from_you_the_current_owner_the_recipient_must_accept_no_ot_58dc157c">From: you, the Current Owner. The recipient must Accept. No other Evidence is required.</span></div>
+      <label class="form-label" for="transferRecipientSearch"><span data-i18n="ui.to_search_by_display_name_or_user_id_658cb9b2">To: search by Display Name or User ID</span></label>
+      <div style="display:flex;gap:6px"><input id="transferRecipientSearch" maxlength="160" style="flex:1" oninput="transferSearchGeneration++;transferSelectedUser=null;transferSearchOffset=0;document.getElementById('transferSearchMore').hidden=true;document.getElementById('transferSelectedRecipient').textContent='';document.getElementById('transferSearchResults').innerHTML=''" onkeydown="if(event.key==='Enter'){event.preventDefault();searchTransferRecipients()}"><button type="button" onclick="searchTransferRecipients()"><span data-i18n="ui.search_49c266ba">Search</span></button></div>
       <div id="transferSearchResults" style="max-height:140px;overflow:auto"></div>
       <div id="transferSelectedRecipient" class="sub"></div>
-      <button id="transferSearchMore" type="button" hidden onclick="searchTransferRecipients(true)">More candidates</button>
+      <button id="transferSearchMore" type="button" hidden onclick="searchTransferRecipients(true)"><span data-i18n="ui.more_candidates_d4148527">More candidates</span></button>
     </div>
     <div class="form-row">
-      <label class="form-label" for="ownershipClaimBody">Memo (optional)</label>
-      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Additional ownership details"></textarea>
+      <label class="form-label" for="ownershipClaimBody"><span data-i18n="ui.memo_optional_eeaa8bef">Memo (optional)</span></label>
+      <textarea id="ownershipClaimBody" maxlength="2000" placeholder="Additional ownership details" data-i18n-placeholder="ui.additional_ownership_details_50646a7c"></textarea>
     </div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" onclick="closeOwnershipClaim()">Cancel</button>
-      <button data-ui-action="primary" id="ownershipClaimSubmit" onclick="submitOwnershipClaim()">Add Claim</button>
+      <button data-ui-action="close" class="secondary" onclick="closeOwnershipClaim()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button data-ui-action="primary" id="ownershipClaimSubmit" onclick="submitOwnershipClaim()"><span data-i18n="ui.add_claim_62b52157">Add Claim</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="accountRequiredModal" onclick="closeAccountRequired(event)">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2>Join Your Guitar Chronicle</h2>
-    <div class="sub" style="margin-bottom:14px">This action requires an account. Sign in or create an account to continue.</div>
+    <h2><span data-i18n="ui.join_your_guitar_chronicle_231f59f7">Join Your Guitar Chronicle</span></h2>
+    <div class="sub" style="margin-bottom:14px"><span data-i18n="ui.this_action_requires_an_account_sign_in_or_create_an_accou_56334c92">This action requires an account. Sign in or create an account to continue.</span></div>
     <div class="modal-actions">
-      <button data-ui-action="close" class="secondary" type="button" onclick="closeAccountRequired()">Cancel</button>
-      <button class="secondary" type="button" onclick="openAccountSignIn()">Sign In</button>
-      <button data-ui-action="primary" type="button" onclick="openAccountRegistration()">Create Account</button>
+      <button data-ui-action="close" class="secondary" type="button" onclick="closeAccountRequired()"><span data-i18n="action.cancel">Cancel</span></button>
+      <button class="secondary" type="button" onclick="openAccountSignIn()"><span data-i18n="account.sign_in">Sign In</span></button>
+      <button data-ui-action="primary" type="button" onclick="openAccountRegistration()"><span data-i18n="account.create">Create Account</span></button>
     </div>
   </div>
 </div>
 
 <div class="modal-backdrop" id="accountSignInModal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountSignInTitle">
-    <h2 id="accountSignInTitle">Sign In</h2>
-    <p class="sub">Temporary sign-in. Your email address and password are not sent or saved.</p>
+    <h2 id="accountSignInTitle"><span data-i18n="account.sign_in">Sign In</span></h2>
+    <p class="sub"><span data-i18n="ui.temporary_sign_in_your_email_address_and_password_are_not__095bc1dc">Temporary sign-in. Your email address and password are not sent or saved.</span></p>
     <form id="accountSignInForm" autocomplete="off" novalidate onsubmit="submitAccountSignIn(event)">
-      <div class="form-row"><label class="form-label" for="signInEmail">Email address</label><input id="signInEmail" type="email" autocomplete="off" inputmode="email"></div>
-      <div class="form-row"><label class="form-label" for="signInPassword">Password</label><input id="signInPassword" type="password" autocomplete="off"></div>
-      <div class="form-row"><label class="form-label" for="signInUser">Test user</label><select id="signInUser" disabled><option value="">Loading users...</option></select></div>
+      <div class="form-row"><label class="form-label" for="signInEmail"><span data-i18n="ui.email_address_f2488fd4">Email address</span></label><input id="signInEmail" type="email" autocomplete="off" inputmode="email"></div>
+      <div class="form-row"><label class="form-label" for="signInPassword"><span data-i18n="ui.password_e7cf3ef4">Password</span></label><input id="signInPassword" type="password" autocomplete="off"></div>
+      <div class="form-row"><label class="form-label" for="signInUser"><span data-i18n="ui.test_user_ae3a6b13">Test user</span></label><select id="signInUser" disabled><option value="" data-i18n="ui.loading_users_904e120b">Loading users...</option></select></div>
       <div id="accountSignInStatus" class="sub" role="status" aria-live="polite"></div>
-      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountSignInModal')">Cancel</button><button id="accountSignInSubmit" data-ui-action="primary" type="submit">Sign In</button></div>
+      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountSignInModal')"><span data-i18n="action.cancel">Cancel</span></button><button id="accountSignInSubmit" data-ui-action="primary" type="submit"><span data-i18n="account.sign_in">Sign In</span></button></div>
     </form>
   </div>
 </div>
 
 <div class="modal-backdrop" id="accountRegistrationModal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountRegistrationTitle">
-    <h2 id="accountRegistrationTitle">Create Account</h2>
-    <p class="sub">Temporary registration. Your email address and password are not saved.</p>
+    <h2 id="accountRegistrationTitle"><span data-i18n="account.create">Create Account</span></h2>
+    <p class="sub"><span data-i18n="ui.temporary_registration_your_email_address_and_password_are_47a3f65f">Temporary registration. Your email address and password are not saved.</span></p>
     <form id="accountRegistrationForm" autocomplete="off" novalidate onsubmit="submitAccountRegistration(event)">
-      <div class="form-row"><label class="form-label" for="registrationEmail">Email address</label><input id="registrationEmail" type="email" autocomplete="off" inputmode="email"></div>
-      <div class="form-row"><label class="form-label" for="registrationPassword">Password</label><input id="registrationPassword" type="password" autocomplete="off"></div>
-      <div class="form-row"><label class="form-label" for="registrationDisplayName">Display Name · Required</label><input id="registrationDisplayName" maxlength="120" required placeholder="Name or nickname"></div>
-      <div class="form-row"><label class="form-label" for="registrationAccountType">Account Type</label><select id="registrationAccountType"><option value="user">User</option><option value="shop">Shop</option><option value="builder">Builder</option><option value="repairer">Repairer</option><option value="organization">Organization</option></select></div>
-      <p class="sub">Email and password are dummy inputs. Display Name, selected Account Type, and agreement records are saved.</p>
-      <p><label><input id="registrationTerms" type="checkbox"> I agree to the </label><button type="button" class="secondary" onclick="showRegistrationPolicy('terms')">Terms (local draft)</button></p>
-      <p><label><input id="registrationPrivacy" type="checkbox"> I agree to the </label><button type="button" class="secondary" onclick="showRegistrationPolicy('privacy')">Privacy notice (local draft)</button></p>
+      <div class="form-row"><label class="form-label" for="registrationEmail"><span data-i18n="ui.email_address_f2488fd4">Email address</span></label><input id="registrationEmail" type="email" autocomplete="off" inputmode="email"></div>
+      <div class="form-row"><label class="form-label" for="registrationPassword"><span data-i18n="ui.password_e7cf3ef4">Password</span></label><input id="registrationPassword" type="password" autocomplete="off"></div>
+      <div class="form-row"><label class="form-label" for="registrationDisplayName"><span data-i18n="ui.display_name_required_88a65705">Display Name · Required</span></label><input id="registrationDisplayName" maxlength="120" required placeholder="Name or nickname" data-i18n-placeholder="ui.name_or_nickname_0dbfe0b4"></div>
+      <div class="form-row"><label class="form-label" for="registrationAccountType"><span data-i18n="ui.account_type_dce81c5b">Account Type</span></label><select id="registrationAccountType"><option value="user" data-i18n="ui.user_b512d97e">User</option><option value="shop" data-i18n="ui.shop_d00aae6b">Shop</option><option value="builder" data-i18n="ui.builder_090940e7">Builder</option><option value="repairer" data-i18n="ui.repairer_c379163b">Repairer</option><option value="organization" data-i18n="ui.organization_d764d425">Organization</option></select></div>
+      <p class="sub"><span data-i18n="ui.email_and_password_are_dummy_inputs_display_name_selected__687a02bc">Email and password are dummy inputs. Display Name, selected Account Type, and agreement records are saved.</span></p>
+      <p><label><input id="registrationTerms" type="checkbox"> <span data-i18n="ui.i_agree_to_the_26a58d00">I agree to the</span> </label><button type="button" class="secondary" onclick="showRegistrationPolicy('terms')"><span data-i18n="ui.terms_local_draft_26da6d29">Terms (local draft)</span></button></p>
+      <p><label><input id="registrationPrivacy" type="checkbox"> <span data-i18n="ui.i_agree_to_the_26a58d00">I agree to the</span> </label><button type="button" class="secondary" onclick="showRegistrationPolicy('privacy')"><span data-i18n="ui.privacy_notice_local_draft_cb92f73b">Privacy notice (local draft)</span></button></p>
       <div id="accountRegistrationStatus" class="sub" role="status" aria-live="polite"></div>
-      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountRegistrationModal')">Cancel</button><button id="accountRegistrationSubmit" data-ui-action="primary" type="submit">Create Account</button></div>
+      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountRegistrationModal')"><span data-i18n="action.cancel">Cancel</span></button><button id="accountRegistrationSubmit" data-ui-action="primary" type="submit"><span data-i18n="account.create">Create Account</span></button></div>
     </form>
   </div>
 </div>
 
-<div class="modal-backdrop" id="registrationPolicyModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="registrationPolicyTitle"><h2 id="registrationPolicyTitle"></h2><div id="registrationPolicyContent"></div><div class="modal-actions"><button type="button" onclick="YGCOverlays.close('registrationPolicyModal')">Close</button></div></div></div>
+<div class="modal-backdrop" id="registrationPolicyModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="registrationPolicyTitle"><h2 id="registrationPolicyTitle"></h2><div id="registrationPolicyContent"></div><div class="modal-actions"><button type="button" onclick="YGCOverlays.close('registrationPolicyModal')"><span data-i18n="action.close">Close</span></button></div></div></div>
 
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
   <div class="claim-popup-modal" onclick="event.stopPropagation()">
@@ -381,11 +382,11 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request"><h2 id="acquireReviewTitle">Ownership Request</h2><div id="acquireReviewContent"></div><div id="acquireReviewActions" class="modal-actions ownership-request-actions"></div></div></div>
+<div class="modal-backdrop" id="acquireReviewModal"><div class="modal ownership-request-modal" role="dialog" aria-modal="true" aria-label="Ownership Request" data-i18n-aria-label="ui.ownership_request_b6662cab"><h2 id="acquireReviewTitle"><span data-i18n="ui.ownership_request_b6662cab">Ownership Request</span></h2><div id="acquireReviewContent"></div><div id="acquireReviewActions" class="modal-actions ownership-request-actions"></div></div></div>
 <script src="/assets/pages/user-view.js" defer></script>
 
 
-<div class="modal-backdrop" id="ownershipConfirmModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="ownershipConfirmTitle"><h3 id="ownershipConfirmTitle">Confirm</h3><p id="ownershipConfirmMessage"></p><div class="modal-actions"><button id="ownershipConfirmSubmit" data-ui-action="primary" type="button" onclick="resolveOwnershipConfirmation(true)">Confirm</button><button data-ui-action="close" type="button" class="secondary" onclick="resolveOwnershipConfirmation(false)">Back</button></div></div></div>
+<div class="modal-backdrop" id="ownershipConfirmModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="ownershipConfirmTitle"><h3 id="ownershipConfirmTitle"><span data-i18n="ui.confirm_eebdd24a">Confirm</span></h3><p id="ownershipConfirmMessage"></p><div class="modal-actions"><button id="ownershipConfirmSubmit" data-ui-action="primary" type="button" onclick="resolveOwnershipConfirmation(true)"><span data-i18n="ui.confirm_eebdd24a">Confirm</span></button><button data-ui-action="close" type="button" class="secondary" onclick="resolveOwnershipConfirmation(false)"><span data-i18n="ui.back_76900f1b">Back</span></button></div></div></div>
 
 <script src="/assets/disputes.js" defer></script>
 <script src="/assets/important-information.js" defer></script>

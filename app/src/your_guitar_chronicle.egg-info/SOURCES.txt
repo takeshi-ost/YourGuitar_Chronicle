@@ -22,6 +22,7 @@ src/ygc/important_information.py
 src/ygc/incremental_crawl.py
 src/ygc/listing_review.py
 src/ygc/local_identity.py
+src/ygc/localization.py
 src/ygc/observation_evaluator.py
 src/ygc/observation_matrix.py
 src/ygc/operations.py
@@ -48,6 +49,7 @@ src/ygc/matching/individual_matcher.py
 src/ygc/static/butterscotch-wood.webp
 src/ygc/static/cherry-wood.webp
 src/ygc/static/disputes.js
+src/ygc/static/i18n.js
 src/ygc/static/important-information.js
 src/ygc/static/index_html.html
 src/ygc/static/list-navigation.js
@@ -62,6 +64,10 @@ src/ygc/static/ui-components.css
 src/ygc/static/user_edit_html.html
 src/ygc/static/user_view_html.html
 src/ygc/static/white-pearl.webp
+src/ygc/static/locales/en.json
+src/ygc/static/locales/error-keys.json
+src/ygc/static/locales/ja.json
+src/ygc/static/locales/manifest.json
 src/ygc/static/logos/badge.png
 src/ygc/static/logos/block.png
 src/ygc/static/logos/script.png
@@ -112,6 +118,7 @@ tests/test_legacy_claim_migration.py
 tests/test_listing_claim_structure.py
 tests/test_listing_review.py
 tests/test_local_identity.py
+tests/test_localization.py
 tests/test_manual_claim_storage.py
 tests/test_matching.py
 tests/test_media_claim.py

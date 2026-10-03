@@ -13,5 +13,7 @@ def test_page_assets_are_served_without_exposing_other_files():
                 assert response.text.strip()
         for filename in ('schema.sql', 'web.py', 'unknown.js'):
             assert client.get('/assets/pages/' + filename).status_code == 404
-        assert client.get('/assets/overlays.js').status_code == 200
+        overlays = client.get('/assets/overlays.js')
+        assert overlays.status_code == 200
+        assert overlays.headers['cache-control'] == 'no-store'
         assert client.get('/assets/ui-components.css').status_code == 200

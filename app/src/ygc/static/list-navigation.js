@@ -117,7 +117,7 @@
         label.className = 'list-item-count';
         title.append(label);
       }
-      const text = count + ' items';
+      const text = globalThis.YGCI18n?.t('list.item_count',{count,formattedCount:globalThis.YGCI18n.number(count)},count+' items') ?? count+' items';
       if (label.textContent !== text) label.textContent = text;
     }
   }

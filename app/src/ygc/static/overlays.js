@@ -73,7 +73,10 @@ window.YGCOverlays = (() => {
   }, true);
   document.addEventListener('click', event => {
     const root = top()?.root;
-    if (root?.tagName !== 'DIALOG' || event.target !== root) return;
+    if (!root || event.target !== root) return;
+    // Custom overlays use a backdrop element; native dialogs expose their
+    // ::backdrop clicks on the dialog itself, so check its bounds separately.
+    if (root.tagName !== 'DIALOG') { close(root); return; }
     const rect = root.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right ||
         event.clientY < rect.top || event.clientY > rect.bottom) close(root);

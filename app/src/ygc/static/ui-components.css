@@ -116,3 +116,7 @@ button:is(.owner-claim-card,.add-claim-action,.new-guitar-action){border:3px dou
 .resizing-table-column,.resizing-table-column *{cursor:col-resize!important;user-select:none!important}
 .resizable-columns td{overflow:hidden;text-overflow:ellipsis}
 .column-resize-handle[hidden]{display:none!important}
+
+.language-picker{display:inline-flex;align-items:center;flex-shrink:0;margin-inline-start:8px}
+.language-picker select{width:auto;max-width:140px;padding:4px 6px;font:inherit;color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:6px}
+@media(max-width:900px){.language-picker{order:-1;margin-inline-start:0;margin-inline-end:8px}}

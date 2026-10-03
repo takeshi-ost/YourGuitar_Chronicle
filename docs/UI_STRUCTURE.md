@@ -17,6 +17,7 @@
 `YGCOverlays.open(elementOrId, options)` / `close(elementOrId)` を使い、各画面から直接 `classList` で開閉しない。フォームの初期値・送信・権限判定はページ側に置く。`options` には `opener`、`initialFocus`、`onClose` を指定できる。
 
 - Escapeは最前面だけを閉じる。モバイルの背後のProduct Detailへ同じEscapeを伝えない。
+- モーダル外側のクリックは最前面だけを閉じる。内容領域内のクリックでは閉じない。確認モーダルではキャンセル扱いとなる。閉じても送信済みのサーバー処理は中止しない。
 - Tab / Shift+Tabとプログラムによるフォーカス移動を表示中のダイアログ内に限定する。
 - 開く前のフォーカスとbodyのoverflowを保持し、最後のモーダルを閉じたときに復帰する。
 - 重ねて開いたモーダルの親を閉じる場合は子も閉じる。個別の後処理は`onClose`へ置く。
@@ -147,3 +148,22 @@ Butterscotch & Black／Cherry Red & Blackは既存壁紙レイヤーだけをCSS
 > Use case: photorealistic-natural. Asset type: website wallpaper texture. Generate one flat rectangular texture of heavily relic-worn BLACK guitar lacquer over natural brown ash wood, inspired by the attached black Strat-style guitar reference (NOT the golden wood texture image). Full-bleed texture only: no guitar silhouette, no neck, pickups, hardware, pickguard, borders, text, or watermark. Straight-on macro surface, evenly lit, matte black worn nitrocellulose finish with very large irregular chipped/abraded bare brown wood patches especially along both side edges and several smaller patches across the center; heavy scratches, tiny nicks, authentic jagged paint boundaries. Predominantly black, about 30-40 percent exposed warm brown wood. Exposed ash grain runs VERTICALLY. Natural age wear, not flames or decorative crackle. Landscape wallpaper around 1536x1024. Center somewhat darker for website panels but visibly heavily relic-worn throughout. Save generated output and return its local file path for integration into this repository.
 
 Butterscotchの壁紙は1672×941pxの元画像倍率、Cherryは1254×705.75px、Rellic Blackは1152×768px（後者2つは元画像の75%）で表示する。画面の縦横比による非等方な引き伸ばしを避け、広い画面では背景を繰り返して細部の密度を保つ。Sunburst & White自体の絵柄は変更しない。
+
+## UI language resources (2026-10-03)
+
+- English remains the default; Japanese is available as an automatically generated draft. Top Page, User Profile, User Settings and Browser Console have one header language selector, independent of authentication and account type. The selection uses browser-local `ygc_ui_language`; the browser's preferred language does not change the default English UI. On narrow screens the selector precedes the horizontally scrolling position links.
+- `static/locales/manifest.json` defines the default language and available BCP 47 codes, native labels and `ltr` / `rtl` directions. Add a `<code>.json` dictionary and a manifest entry to enable another language. Missing translations fall back to English. The selector waits for initial page loading to finish. A switch reloads the page so page-owned charts, menus and dialogs use the selected dictionary too; cancelled requests during that navigation do not clear the tab login. Save open forms before switching.
+- `/assets/i18n.js` bundles registered dictionaries with the shared `YGCI18n` runtime. There is no separate fetch race before page renderers run. Locale JSON files are included in the installed Python package.
+- Static UI text uses `data-i18n`; placeholder, accessible label, title and image alternative text use the corresponding `data-i18n-*` attributes. Nested labels keep their input elements. Dynamic renderers use `t(key, parameters, fallback)` for text and `html(...)` for escaped HTML text. Translation strings are plain text, never HTML or executable handlers. Keys remain stable when English wording changes; existing `ui.*` keys have a descriptive stem plus a disambiguating suffix.
+- Parameterized messages allow translators to reorder values. Plural entries use `Intl.PluralRules`; number/date formatting uses the selected locale. ISO dates for form inputs and protocol values keep their existing formats. List count wording preserves the current English display, including `1 items`.
+- User display names, guitar names, Claims, Evidence, descriptions, operator-authored maintenance messages, stored activity messages, raw logs and AI output retain their authored content. DB/API identifiers and authorization values are separate from translated labels. In particular visibility option values (`Public`, `Members`, `Followers`, `Private`) and connection directions (`followers`, `following`) are never translated.
+- Known API errors keep their existing status, headers and `detail`, adding `message_key` for localization. `error-keys.json` also maps known diagnostics returned directly by middleware; unmapped external/dynamic diagnostics retain their original detail. New user-facing API errors should register a stable key and use `message_params` when values are needed. Framework validation diagnostics remain raw unless a dedicated application message is provided.
+- Existing Japanese diagnostic wording in the local Console remains unchanged in the base dictionary; this change adds localization infrastructure, not a new translation or an editorial rewrite of existing diagnostic text.
+
+### 日本語辞書の編集
+
+- `app/src/ygc/static/locales/ja.json` は英語辞書を元にした自動翻訳の初稿です。人による確認・修正を前提とし、自動的に再生成して上書きする処理はありません。
+- 左側のキーは変更せず、右側の日本語だけを書き換えてください。例：`"header.notifications": "通知"`。英語は `en.json` で同じキーを確認できます。
+- `{count}`、`{time}`、`{formattedCount}` などの差し込み名は維持してください。複数形の項目は `one` / `other` の構造を残し、日本語の文言を修正します。改行は `\n`、引用符はJSONの規則で記述します。HTMLタグは入れません。
+- 保存後にページを再読み込みすると修正を反映します。ヘッダーの「日本語」で切り替え、Englishへ戻すこともできます。プロフィールなどの保存内容は翻訳しません。
+- ClaimとObservationはYGC内の固有概念として名称を残しています。Acquireは「取得」、Transferは「譲渡」、Disputeは「係争」、Positive / Negative / Unverifiedは「肯定 / 否定 / 未検証」を初稿の基本用語としています。
