@@ -10,7 +10,7 @@
   let pending=Promise.resolve();
   function accessIssue(message){sessionStorage.setItem('ygc_account_access_issue',message);window.dispatchEvent(new Event('ygc-account-access'))}
   function saveSession(result){
-    sessionStorage.removeItem('ygc_account_access_issue');window.dispatchEvent(new Event('ygc-account-access')); 
+    sessionStorage.removeItem('ygc_account_access_issue');window.dispatchEvent(new Event('ygc-account-access'));
     const session={user_id:result.user_id,app_user_id:result.app_user_id,provider:result.provider,
       localId:result.localId||result.subject,idToken:result.idToken||result.token,
       expiresIn:String(result.expiresIn||3600),refreshToken:result.refreshToken||null,
@@ -83,7 +83,7 @@
       if(session?.token)headers.set('Authorization','Bearer '+session.token);
     }
     const response=await originalFetch(input,{...options,headers});
-    if(response.status===401){sessionStorage.removeItem(key);const data=await response.clone().json().catch(()=>({}));accessIssue(data.detail||'Your session has expired. Please sign in again.')} 
+    if(response.status===401){sessionStorage.removeItem(key);const data=await response.clone().json().catch(()=>({}));accessIssue(data.detail||'Your session has expired. Please sign in again.')}
     return response;
   };
   // Image tags cannot attach Authorization; load private API images via fetch.
