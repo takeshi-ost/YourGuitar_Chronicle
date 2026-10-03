@@ -549,31 +549,19 @@ def test_failed_run_keeps_partial_counts_in_log(tmp_path):
 
 @pytest.mark.parametrize('category,expected', [
     ('electric-guitars',True),('acoustic-guitars',True),
-    ('guitar-parts',False),('amplifiers',False),('',False),
+    ('guitar-parts',False),('amplifiers',False),('',False),('electric-bass-guitars',False),
 ])
-def test_all_guitars_category(category,expected):
+def test_only_electric_and_acoustic_categories(category,expected):
     from ygc.incremental_crawl import _category_matches, CATEGORY_QUERY
     from ygc.platform_boundaries import CrawlStep
-    assert _category_matches({'product_type':category},'all') is expected
-    assert CATEGORY_QUERY['all']=='guitar'
-    CrawlStep('all',1950,2026)
+    assert any(_category_matches({'product_type':category},selected) for selected in ('electric','acoustic')) is expected
+    assert 'all' not in CATEGORY_QUERY
+    with pytest.raises(ValueError):CrawlStep('all',1950,2026)
 
 
-def test_all_guitars_collects_both_categories(tmp_path):
+def test_all_guitars_crawl_is_rejected(tmp_path):
     repo=Repository(tmp_path/'all.db');repo.init_db()
-    class MixedCollector(Collector):
-        def _get_json(self,url,params=None):
-            if params:
-                assert params['query']=='guitar'
-            result=super()._get_json(url,params)
-            if url.endswith('/2'):
-                result['product_type']='acoustic-guitars'
-            return result
-    acoustic={**_summary(2),'product_type':'acoustic-guitars'}
-    result=advance_program(repo,MixedCollector([{'listings':[_summary(1),acoustic]}]),'all',1970,1979)
-    assert result['details_fetched']==2
-    assert result['new_individuals']==2
-    assert result['skipped_category']==0
+    with pytest.raises(ValueError):advance_program(repo,Collector([]),'all',1970,1979)
 
 
 @pytest.mark.parametrize('condition,expected', [
@@ -597,11 +585,79 @@ def test_new_excluded_at_summary_and_detail_but_used_reissue_collected(tmp_path)
                 result['model']='1957 Reissue'
             return result
     c=Conditions([{'listings':[{**_summary(1),'condition':{'display_name':'Brand New'}},_summary(2),_summary(3)]}])
-    result=advance_program(repo,c,'all',1970,1979)
+    result=advance_program(repo,c,'electric',1970,1979)
     assert result['skipped_new']==2
     assert result['details_fetched']==2
     assert result['new_individuals']==1
     from ygc.crawl_detail_cache import reprocess_details
-    cached=reprocess_details(repo,'all',1970,1979)
+    cached=reprocess_details(repo,'electric',1970,1979)
     assert cached['skipped_new']==1
     assert cached['new_individuals']==0
+
+
+class CombinedCollector(Collector):
+    def _get_json(self, url, params=None):
+        if params:
+            self.requests.append(params['query'])
+            ids = (1, 2, 3) if params['query'] == 'electric guitar' else (2, 4, 5)
+            return {'listings': [{**_summary(n), 'product_type':
+                'acoustic-guitars' if n in (4, 5) else 'electric-guitars'} for n in ids]}
+        detail = super()._get_json(url, params)
+        if url.endswith(('/4', '/5')):
+            detail['product_type'] = 'acoustic-guitars'
+        return detail
+
+
+def test_combined_crawl_searches_both_deduplicates_and_resumes(tmp_path, monkeypatch):
+    from ygc.incremental_crawl import program_status
+    monkeypatch.setattr('ygc.incremental_crawl.MAX_SUMMARIES', 4)
+    repo = Repository(tmp_path / 'combined.db'); repo.init_db()
+    collector = CombinedCollector()
+    first = advance_program(repo, collector, 'electric_acoustic', 1970, 1979)
+    assert 'electric guitar' in collector.requests and 'acoustic guitar' in collector.requests
+    assert first['summaries_processed'] == 4
+    assert first['details_fetched'] == 3  # ID 2 occurs in both searches.
+    assert first['new_individuals'] == 3
+    assert not first['finished']
+    repo.init_db()
+    second = advance_program(repo, collector, 'electric_acoustic', 1970, 1979)
+    assert second['summaries_processed'] == 2
+    assert second['new_individuals'] == 2
+    assert second['processed'] == 6 and second['finished']
+    assert len(repo.list_individuals()) == 5
+    assert len(repo.crawl_run_log('electric_acoustic', 1970, 1979)) == 2
+    restarted = restart_program(repo, 'electric_acoustic', 1970, 1979)
+    assert restarted['processed'] == 0 and not restarted['finished']
+    assert program_status(repo, 'electric', 1970, 1979)['processed'] == 0
+    assert program_status(repo, 'acoustic', 1970, 1979)['processed'] == 0
+
+
+def test_combined_category_excludes_non_guitars():
+    from ygc.incremental_crawl import _category_matches
+    for category in ('electric-guitars', 'acoustic-guitars'):
+        assert _category_matches({'product_type': category}, 'electric_acoustic')
+    for category in ('electric-bass-guitars', 'acoustic-guitar-parts', 'amplifiers', ''):
+        assert not _category_matches({'product_type': category}, 'electric_acoustic')
+
+
+def test_combined_acoustic_failure_keeps_electric_cursor_and_combined_log(tmp_path):
+    repo = Repository(tmp_path / 'failure.db'); repo.init_db()
+    class FailsOnce(CombinedCollector):
+        failed = False
+        def _get_json(self, url, params=None):
+            if url.endswith('/4') and not self.failed:
+                self.failed = True
+                raise RuntimeError('temporary acoustic failure')
+            return super()._get_json(url, params)
+    collector = FailsOnce()
+    with pytest.raises(RuntimeError, match='acoustic'):
+        advance_program(repo, collector, 'electric_acoustic', 1970, 1979)
+    log = repo.crawl_run_log('electric_acoustic', 1970, 1979)[0]
+    assert log['status'] == 'error'
+    assert log['counts']['summaries_processed'] == 4
+    result = advance_program(repo, collector, 'electric_acoustic', 1970, 1979)
+    assert result['finished'] and result['new_individuals'] == 5
+    assert collector.requests.count('electric guitar') == 1
+    assert collector.requests.count('acoustic guitar') == 1
+    from ygc.crawl_detail_cache import reprocess_details
+    assert reprocess_details(repo, 'electric_acoustic', 1970, 1979)['skipped_existing'] == 5

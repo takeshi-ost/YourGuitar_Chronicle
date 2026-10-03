@@ -11,7 +11,7 @@ class Collector:
     def iter_listing_summaries(self, **kwargs):
         return [
             {"id": 1, "make": "Fender", "model": "Stratocaster",
-             "year": "1974", "title": "1974 Fender Stratocaster",
+             "product_type": "electric-guitars", "year": "1974", "title": "1974 Fender Stratocaster",
              "description": "Serial number 524436",
              "_links": {"web": {"href": "https://reverb.example/1"}}},
             {"id": 2, "make": "Fender", "model": "Stratocaster",
@@ -47,7 +47,7 @@ def test_crawl_only_registers_serial_bearing_guitars(tmp_path):
     class NoSerial(Collector):
         def iter_listing_summaries(self, **kwargs):
             return [{"id": 3, "make": "Fender", "model": "Stratocaster",
-                     "year": "1974", "title": "1974 Stratocaster"}]
+                     "product_type": "electric-guitars", "year": "1974", "title": "1974 Stratocaster"}]
 
     collector = NoSerial()
     first = crawl_query(repository, collector, "Fender", 10, year_min=1950, year_max=1980)

@@ -21,6 +21,8 @@ class ActorContext:
     provider: str
     subject: str | None
     verified: bool
+    app_user_id: str | None = None
+    tenant: str = ''
 
 
 class IdentityBoundary(Protocol):
@@ -42,8 +44,28 @@ class IdentityPlatformReplacement:
     def resolve(self, *, bearer_token: str | None,
                 prototype_user_id: int | None = None) -> ActorContext:
         # Future adapter: verify the Identity Platform ID token server-side;
-        # map (issuer/provider, subject) to users.id; ignore client user IDs.
+        # map (issuer, tenant, subject) via the account registry to app_user_id
+        # and the content participant ID; ignore client user IDs.
         raise PlatformAdapterRequired("Identity Platform token verification is not connected")
+
+
+class LocalDummyIdentity:
+    """Resolve a server-issued local session into the same principal contract."""
+    def __init__(self, repository):
+        self.repository = repository
+
+    def resolve(self, *, bearer_token: str | None = None,
+                prototype_user_id: int | None = None) -> ActorContext:
+        require_local_platform()
+        if os.getenv('YGC_IDENTITY_BACKEND') != 'local_dummy':
+            raise PlatformAdapterRequired('Local dummy identity requires explicit local_dummy mode')
+        if not bearer_token:
+            return ActorContext(None, 'local-dummy', None, False)
+        from ygc.accounts import resolve_session
+        account = resolve_session(self.repository, bearer_token)
+        if prototype_user_id is not None and prototype_user_id != account['id']:
+            raise PermissionError('The requested user does not match the signed-in account.')
+        return ActorContext(account['id'], 'local-dummy', 'local-' + account['app_user_id'], True, account['app_user_id'])
 
 
 @dataclass(frozen=True)
@@ -54,7 +76,7 @@ class CrawlStep:
     origin: str = "manual"
 
     def __post_init__(self) -> None:
-        if self.category not in ("all", "electric", "acoustic") or not 1800 <= self.year_min <= self.year_max <= 2100:
+        if self.category not in ("electric", "acoustic", "electric_acoustic") or not 1800 <= self.year_min <= self.year_max <= 2100:
             raise ValueError("Invalid crawl category or manufacture-year range")
         if self.origin not in ("manual", "scheduled"):
             raise ValueError("Invalid crawl origin")
@@ -97,6 +119,8 @@ def require_local_platform() -> None:
     }
     for key, expected in choices.items():
         actual = os.getenv(key, expected).strip().lower()
+        if key == 'YGC_IDENTITY_BACKEND' and actual == 'local_dummy':
+            continue
         if actual != expected:
             raise PlatformAdapterRequired(
                 f"{key}={actual!r} requires a GCP adapter and migration; "
@@ -107,4 +131,11 @@ def require_local_platform() -> None:
 def local_repository(db_path: Path):
     require_local_platform()
     from ygc.db.repository import Repository
-    return Repository(db_path)
+    from ygc import config
+    account_path = config.ACCOUNTS_DB_PATH if os.getenv('YGC_IDENTITY_BACKEND', 'prototype') == 'local_dummy' else None
+    if account_path is None and config.ACCOUNTS_DB_PATH.is_file():
+        import sqlite3
+        with sqlite3.connect(config.ACCOUNTS_DB_PATH.as_uri() + '?mode=ro', uri=True) as con:
+            if con.execute("SELECT 1 FROM sqlite_master WHERE name='account_records'").fetchone():
+                raise PlatformAdapterRequired('This data has split accounts; restart with YGC_IDENTITY_BACKEND=local_dummy to preserve account synchronization.')
+    return Repository(db_path, account_db_path=account_path)

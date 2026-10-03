@@ -42,8 +42,9 @@ _UNMIGRATED_LISTING_OBSERVATIONS = """
 
 
 class Repository:
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, account_db_path: Path | None = None):
         self.db_path = Path(db_path)
+        self.account_db_path = account_db_path
 
     def connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(
@@ -57,6 +58,9 @@ class Repository:
         con.execute(
             "PRAGMA foreign_keys = ON"
         )
+        if self.account_db_path and 'app_user_id' in self._table_columns(con, 'users'):
+            from ygc.accounts import attach_projection
+            attach_projection(con, self.account_db_path)
         return con
 
     @staticmethod
@@ -445,6 +449,12 @@ class Repository:
         )
 
     def init_db(self) -> None:
+        if self.account_db_path and not Path(self.account_db_path).exists() and self.db_path.is_file():
+            # Preserve the complete pre-split database before the first migration.
+            backup = self.db_path.parent / ('before_account_split_' + uuid.uuid4().hex + '.sqlite')
+            with sqlite3.connect(self.db_path) as source, sqlite3.connect(backup) as target:
+                source.backup(target)
+            backup.chmod(0o600)
         schema_path = Path(
             __file__
         ).with_name(
@@ -462,6 +472,9 @@ class Repository:
             )
             from ygc.disputes import migrate_rounds
             migrate_rounds(con)
+            if self.account_db_path:
+                from ygc.accounts import initialize
+                initialize(con, self.account_db_path)
 
     @staticmethod
     def _table_columns(
@@ -6845,15 +6858,21 @@ class Repository:
                         (phase, json.dumps(counts), category, year_min, year_max,
                          utcnow(), run_id))
 
-    def crawl_run_log(self, category: str, year_min: int, year_max: int,
+    def crawl_run_log(self, category: str | None = None,
+                      year_min: int | None = None, year_max: int | None = None,
                       limit: int = 20) -> list[dict]:
         import json
+        filters = ["source_site='reverb'"]
+        values = []
+        if category is not None:
+            filters.extend(("category=?", "year_min=?", "year_max=?"))
+            values.extend((category, year_min, year_max))
         with self.connect() as con:
             rows = con.execute("SELECT id,started_at,finished_at,status,phase,counts_json, "
-                               "error_message FROM crawl_runs WHERE source_site='reverb' "
-                               "AND category=? AND year_min=? AND year_max=? "
-                               "ORDER BY id DESC LIMIT ?",
-                               (category, year_min, year_max, limit)).fetchall()
+                               "category,year_min,year_max,pages_discovered,pages_fetched, "
+                               "observations_created,error_message FROM crawl_runs WHERE "
+                               + " AND ".join(filters) + " ORDER BY id DESC LIMIT ?",
+                               (*values, limit)).fetchall()
         return [{**dict(row), "counts": json.loads(row["counts_json"] or "{}")}
                 for row in rows]
 
@@ -7005,12 +7024,15 @@ class Repository:
                     and not con.execute("SELECT 1 FROM ownership_disputes WHERE individual_id=? AND status='open'",(r['individual_id'],)).fetchone()
                     and not con.execute('SELECT 1 FROM ownership_dispute_claims WHERE claim_id=?',(r['id'],)).fetchone()]
 
-    def unverified_acquires(self, limit: int = 100, offset: int = 0) -> dict:
+    def unverified_acquires(self, limit: int = 100, offset: int = 0,
+                            without_request: bool = False) -> dict:
         """Active pending Acquire claims from both users and Automation."""
         where = ("c.claim_type='ownership' AND c.ownership_kind='acquire' "
                  "AND c.status='active' AND c.verification_status='unverified' "
                  "AND EXISTS (SELECT 1 FROM users author WHERE author.id=c.author_user_id "
                  "AND author.ban_status='normal')")
+        if without_request:
+            where += " AND NOT EXISTS (SELECT 1 FROM acquire_applications a WHERE a.claim_id=c.id)"
         with self.connect() as con:
             rows = con.execute(
                 "SELECT c.id AS claim_id, c.individual_id, c.author_user_id, c.ownership_pair_id, "

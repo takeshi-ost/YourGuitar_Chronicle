@@ -22,14 +22,14 @@ const YGCDisputes=(()=>{
       const status=admin?(el('disputeStatusFilter')?.value??'open'):'open';
       const visible=rows.filter(r=>!status||r.status===status);
       if(!admin){
-        const actionable=options.filter(r=>r.status==='negative'||Date.now()-Date.parse(r.requested_at)>=r.wait_days*86400000);
+        const actionable=options.filter(r=>r.status==='unverified'&&Date.now()-Date.parse(r.requested_at)>=r.wait_days*86400000);
         target.parentElement.hidden=!visible.length&&!actionable.length;
-        target.innerHTML=visible.map(r=>'<div class="unanswered-request"><p>'+escape([r.manufacturer,r.model,r.serial_number].filter(Boolean).join(' '))+' — Under dispute</p><div><button onclick="YGCDisputes.open('+r.id+')">Dispute Details</button></div></div>').join('')+
-          actionable.map(r=>'<div class="unanswered-request"><p>Acquire #'+r.claim_id+' · Guitar #'+r.individual_id+' — '+(r.status==='negative'?'Declined':'Awaiting owner response')+'</p><div><button onclick="YGCDisputes.list()">Review owner response / Appeal</button></div></div>').join('');
+        target.innerHTML=visible.map(r=>'<div class="unanswered-request"><p>Dispute · '+escape([r.manufacturer,r.model,r.serial_number].filter(Boolean).join(' '))+' — Under dispute</p><div><button onclick="YGCDisputes.open('+r.id+')">Detail</button></div></div>').join('')+
+          actionable.map(r=>'<div class="unanswered-request"><p>Acquire #'+r.claim_id+' · Guitar #'+r.individual_id+' — '+(r.status==='negative'?'Declined':'Awaiting owner response')+'</p><div><button onclick="YGCDisputes.list()">Detail</button></div></div>').join('');
         return;
       }
       target.parentElement.hidden=false;
-      target.innerHTML=visible.length?visible.map(r=>'<div class="dispute-row"><strong>'+escape([r.manufacturer,r.model,r.serial_number].filter(Boolean).join(' '))+'</strong> — '+(r.status==='open'?'Under dispute':'Resolved')+' · Owner: '+escape(r.owner_name)+' · Applicant: '+escape((r.applicants||[]).map(a=>a.display_name).join(', '))+' · Started: '+escape(r.created_at)+' · Updated: '+escape(r.updated_at)+' <button onclick="YGCDisputes.open('+r.id+')">View dispute #'+r.id+'</button></div>').join(''):'No disputes.';
+      target.innerHTML=visible.length?visible.map(r=>'<tr class="dispute-row"><td>#'+Number(r.id)+'</td><td>'+(r.applicants||[]).map(a=>ownershipDetailLink('user',a.applicant_id,a.display_name+' (#'+a.applicant_id+')')).join(', ')+'</td><td>'+ownershipDetailLink('guitar',r.individual_id,[r.manufacturer,r.model].filter(Boolean).join(' ')+' (#'+Number(r.individual_id)+')')+'<br>'+escape(r.serial_number)+'</td><td>'+(r.status==='open'?'Under dispute':'Resolved')+'</td><td>'+ownershipDetailLink('user',r.owner_id,r.owner_name)+'</td><td>'+escape(r.created_at)+'<br>'+escape(r.updated_at)+'</td><td><button class="secondary" onclick="YGCDisputes.open('+Number(r.id)+')">Detail</button></td></tr>').join(''):'<tr><td colspan="7">No disputes.</td></tr>';
     }catch(e){if(admin){target.textContent=e.message}else{target.parentElement.hidden=false;target.textContent='Unable to load disputes. Please refresh.'}}
   }
   async function list(){

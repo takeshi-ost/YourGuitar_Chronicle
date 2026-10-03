@@ -316,3 +316,22 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
   .profile-mode #profile-chronicle>h2{flex-shrink:0}
   .profile-mode #profile-chronicle .profile-activity-list{flex:0 1 auto;min-height:0;max-height:none}
 }
+
+#accountRegistrationModal .modal{width:min(440px,calc(100vw - 28px));max-height:calc(100dvh - 28px);overflow-y:auto}
+#accountRegistrationForm input{width:100%}
+#accountSignInModal .modal{width:min(440px,calc(100vw - 28px));max-height:calc(100dvh - 28px);overflow-y:auto}
+#accountSignInForm input{width:100%}
+#accountSignInForm select{width:100%}
+
+#registrationPolicyModal .modal{width:min(560px,calc(100vw - 28px));max-height:calc(100dvh - 28px);overflow-y:auto}
+
+.important-information-group{margin-top:8px}.important-information-group[hidden],#serviceNotice[hidden]{display:none}.important-information-group h3,#serviceNotice h3{margin:4px 0;font-size:14px;color:#fff}#importantInformationTitle{font-size:16px}#serviceNotice p{white-space:pre-wrap;margin:4px 0}
+
+#importantInformation .important-information-group{margin-top:0}
+#importantInformation .unanswered-request{flex-wrap:nowrap}
+#importantInformation .unanswered-request p{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#importantInformation .unanswered-request>div{flex-shrink:0}
+@media(max-width:600px){#importantInformation .unanswered-request{flex-wrap:wrap}#importantInformation .unanswered-request p{white-space:normal;overflow:visible}}
+
+#importantInformation.maintenance-only>section:not(#serviceNotice){display:none}
+#importantInformation #serviceNotice .unanswered-request p{white-space:pre-wrap;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}

@@ -38,3 +38,104 @@ SQLite 固有の SQL・マイグレーション・同時書き込み処理は Po
 - 画像の永続化とアクセス制御、Reverb API トークンやその他のシークレットの安全な管理。SQLiteのバックアップ/復元UIはCloud SQL運用手順へ置換する。
 - Cloud Run Job の実装・ジョブ状態の永続化・Cloud Scheduler の認証付き起動と再試行設計。
 - 実環境での統合テスト、移行後のローカル依存の撤去。
+
+## GCP移行後の追加作業：Admin権限とAdmin Onlyモード
+
+2026-10-03の方針として、ローカル試作への実装は見送り、GCP移行後に本人認証・認可を整備したうえで追加する。
+
+- AdminはUser Type（user / shop / builder等）とは独立した権限として管理する。検証済みIdentity Platformの本人情報からユーザーと権限をサーバー側で解決し、画面のユーザー選択やクライアント指定IDだけでAdminとみなさない。
+- メンテナンスモードに「Admin Only」を追加し、認証済みAdminだけが閲覧・編集できるようにする。Guestと一般ユーザーにはメンテナンス案内を表示する。Adminによる編集にも、既存の業務上の制約・管理者操作の監査を適用する。
+- ページ表示だけでなく、直接API、画像・非公開Evidenceの取得にも同じアクセス制限を適用する。既存のEvidence閲覧権限を迂回するモードにしない。
+- モードと権限を共有永続ストアで管理し、複数インスタンスでも同じ制限を適用する。モード切替・Admin権限の付与／解除を監査記録に残す。
+- 認証済み管理者がモードを解除できる復旧経路を用意する。一般ユーザーによるID偽装、直接API・画像アクセス、権限解除後のアクセス、複数インスタンスへの反映を検証する。
+
+## 調査：アカウントとコンテンツの分離・独立復元（2026-10-03）
+
+以下はGoogle公式資料を確認した設計案。ローカルでのDB分離・ダミー認証・独立復元は末尾の手順で利用できる。Identity Platform接続とPostgreSQLへの移行は未実装。
+
+### 確認したGCPの仕様
+
+- Cloud Runの一般利用者認証にはIdentity Platformを利用でき、アプリ側でID tokenを検証する。一般利用者にCloud Run IAM権限を与える方式とは区別する。[Cloud Runの利用者認証](https://docs.cloud.google.com/run/docs/authenticating/end-users)
+- サーバーで署名・有効期限・発行者・対象プロジェクトを検証し、検証済みuidを取り出す。通常のトークン検証だけでは失効確認をしないため、失効確認を明示的に設計する。[ID token検証](https://firebase.google.com/docs/auth/admin/verify-id-tokens)、[セッション失効](https://firebase.google.com/docs/auth/admin/manage-sessions)
+- 複数のログイン手段を同じIdentity Platformアカウントへリンクできる。ログイン手段のgoogle.com等をサービス内の人のIDとして扱わない。[アカウントリンク](https://docs.cloud.google.com/identity-platform/docs/link-accounts)
+- tenantを使う場合はユーザー集合がtenantごとに分かれる。対応付けではプロジェクト／発行者、tenant（未使用なら明示的な空値）、uidを含める。tenant導入は現時点の必須条件ではない。[tenant管理](https://docs.cloud.google.com/identity-platform/docs/multi-tenancy-managing-tenants)
+- Admin等のCustom ClaimsはID tokenの更新時に反映される。即時のBAN・権限解除を古いtokenだけで判定しない。[Custom Claims](https://firebase.google.com/docs/auth/admin/custom-claims)
+- Identity Platformのユーザーimportは既存uidとの衝突時に既存ユーザーを置換する。コンテンツ復元に認証ユーザーのimportを組み合わせない。[ユーザー移行](https://docs.cloud.google.com/identity-platform/docs/migrating-users)
+- Cloud SQLの通常復元はインスタンスのDB群・設定等を対象とし、PITRは新しいインスタンスを作る。同一インスタンス内でDB名を分けても通常復元の単位が別になるわけではない。[復元の概要](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/restore)、[PITR](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/pitr)
+- PostgreSQLのSQL exportはDBを指定できる。DB別復旧には論理export/import、または別インスタンスへ復旧して必要なDBを取り出す手順を使う。[SQL export/import](https://docs.cloud.google.com/sql/docs/postgres/import-export/import-export-sql)
+
+### このプロジェクトへの設計案
+
+| 層 | 正として保持する情報 | コンテンツ復元時 |
+| --- | --- | --- |
+| Identity Platform | ログイン資格情報・認証uid・認証アカウントの状態 | 巻き戻さない |
+| アカウントDB（新設案） | 永続app_user_id、認証uidとの対応、プロフィール、公開設定、User Type、BAN・退会状態、Admin権限 | 巻き戻さない |
+| コンテンツDB（現Chronicle） | ギター・Claim・所有関係・申請・係争、投稿者／所有者の永続参照 | 独立して復元する |
+| 画像ストレージ | アカウント画像とコンテンツ画像の実体・参照先 | アカウント画像をコンテンツ復元で削除・上書きしない |
+
+以下はサービス固有の推奨であり、Googleがこのアプリのスキーマを規定しているものではない。
+
+1. Identity Platform uidとは別に変更・再利用しないapp_user_idを用意する。対応付けの正はアカウントDBとし、コンテンツ側のusersは参照用の行・必要な表示情報へ縮小する。パスワード等を自前のアカウントDBへ複写しない。
+2. 現users.idと新IDの移行対応を永続化する。復元で戻ったAUTOINCREMENT値から、新規登録者に既存人物の参照IDを割り当てない。表示名・メール・クライアント指定IDだけで既存利用者と認証アカウントを結び付けない。旧利用者への紐付け手順と確認証拠は別途設計する。
+3. コンテンツ復元後は、現在のアカウントDBから参照行と最新のBAN・退会・公開状態を補い、Snapshot再評価と整合性検査を経て再開する。新規アカウントは投稿がない状態でも利用可能にし、古いコンテンツ側の情報から現在の認可を上書きしない。
+4. アカウントDB復元でも、コンテンツやIdentity Platformに残るIDを別人へ再利用しない。復元後に欠けた対応は未解決として扱い、本人確認なしで再割当しない。削除／退会した人物への履歴参照を維持する最小レコード・匿名化の規則を決める。
+5. Current Owner、Claim作者、Owned／Formerly Ownedはコンテンツの評価結果である。認証成功やユーザーDB復元だけで所有権を付与しない。通常Ownerの他人Claim判定、自己判定禁止、Acquire承認前後、Transfer後の権限移動と、管理者の別経路を既存不変条件どおり検証する。
+6. Automation等のシステム主体と、実際にログインするアカウントを区別する。コンテンツ側の全users行を無条件にIdentity Platformのユーザーへ変換しない。
+7. DB間の同時更新には単一DBのトランザクションを前提にできない。アカウント登録後のコンテンツ参照行作成・プロフィール／BAN反映を冪等化し、失敗後の再同期と、正のアカウント状態を確認できない場合の認可を設計する。
+
+### 実装前に決めること
+
+- アカウントDBとコンテンツDBを同じCloud SQLインスタンス内の別DBにするか、別インスタンスにするか。同一インスタンスならDB別export/importの手順を用意し、インスタンス全体の復元をコンテンツだけの復元と誤認しない。
+- フォロー・お気に入り・DM・通知・signature_individual_idなど、アカウントとコンテンツの両方に関連する項目の正と復元方針。
+- ユーザー画像・投稿画像の保存先と保持単位。現media全体の置換をそのまま流用しない。
+- 登録・退会・BAN・Admin変更・認証アカウントリンクの監査、認証側とアカウントDB側の不一致の復旧手順。
+- コンテンツ復元後も新規登録者・最新BAN・プロフィールを維持するテスト、認証方法追加でも同一人物になるテスト、アカウントDB復元時のID衝突と未解決参照のテスト。
+
+Backups画面では、ローカル分離モードのGuitar / ChronicleとUser Accountsを個別に保存・復元できる。Cloud SQLの運用手順は引き続き別途実装する。
+
+## ローカル実装：アカウント分離とダミー認証
+
+`ygc-web` は標準で `local_dummy` を選択する。CLIや直接uvicornで起動する場合は `YGC_IDENTITY_BACKEND=local_dummy` を明示する。従来の未検証IDを利用する `prototype` モードは互換用として残し、ライブラリでの未指定時はこちらを使う。分離済みデータでprototypeへ戻す起動は拒否するため、以後は分離モードを継続する。
+
+```sh
+YGC_IDENTITY_BACKEND=local_dummy app/.venv/bin/ygc-web --no-browser
+```
+
+- `accounts.sqlite` はプロフィール・公開設定・User Type・BAN・固定 `app_user_id`・認証対応・権限の正を保持する。Follow・DMもこのDBが正。Automationを含む数値IDの予約は保持するが、システム主体はログインできない。
+- Chronicleの `users`・Follow・DMは既存のJOIN／業務処理を維持するための投影。アカウント変更と投影はSQLiteのATTACH＋TEMP triggerで同一トランザクションに保存する。新しい接続で現在のアカウント状態を反映する。SQLite DELETE journalを必要とし、WALの既存DBでは自動切替せず停止する。
+- 初回は `before_account_split_*.sqlite` を保存し、既存 `users.id` を維持してUUIDを割り当てる。既存のアバターを `account_media/users` へ複写する。数値IDとUUIDは変更・再利用できない。
+- Browser Consoleから指定ユーザー／GuestでTop Pageを開く操作は維持する。ダミーはloopbackでのみユーザー選択を認証成功として扱い、サーバー発行のランダムトークンをタブごとに保持する。サーバーにはハッシュと1時間の期限を保存する。ID偽装・失効セッション・BAN・無効アカウントを拒否する。ログイン／テスト登録は別Originから利用できない。
+- 利用者指定のquery・JSON・multipartの操作ID、本人設定・通知・お気に入りのパスIDをセッションと照合する。管理・Crawl・DB操作は従来のローカルConsole専用資格で別経路にする。ChatGPT MCPは独立した接続トークンで認証する。
+- `LocalDummyIdentity` は共通 `ActorContext` へアカウントを解決する。これはローカル試験用であり、Identity PlatformのJWT検証器ではない。`K_SERVICE`／`CLOUD_RUN_JOB`では起動前に拒否する。GCP移行時はトークン検証器と認証対応付けを実装する。
+- `role` は将来の管理権限用に保存するだけであり、Admin User TypeやAdmin Onlyモードは追加していない。現在の管理画面はConsole専用資格を使う。
+
+### 仮サインインと将来の認証差し替え
+
+GuestのSign Inはメールアドレス・パスワードのモーダルを開く。形式／空欄／重複チェックは行わない。画面は共通 `YGCAuth.signIn({email,password})` を呼び、現在のlocal_dummyアダプターは入力値を破棄する。フォーム末尾のTest userで既存ユーザーを選択する。HTTPに含めるのは選択したテストユーザーIDだけ。入力値をsessionStorage・DB・ログへ保存しない。キャンセル／成功時にフォームを消去する。
+
+プルダウンは最後にログアウトしたユーザーを初期選択し、該当しなければ先頭を選ぶ。既存ユーザーがいない場合は登録を案内する。選択したユーザーでログインし、メール文字列からユーザーを推測しない。選択後に無効化／BANされた場合は拒否し、別ユーザーへ自動切替しない。user_id未指定の旧API呼び出しだけは互換用の専用Local Sign In Userを利用できる。これは明示的なローカル試験用の動作である。
+
+`SignInResult` の応答はIdentity Platform RESTに合わせて `localId`、`idToken`、`expiresIn`（文字列）、`displayName`、`registered` を持つ。サービス側の `user_id`／`app_user_id` を追加する。ローカルidTokenはサーバー発行のランダムセッションであり、Google署名JWTではない。refreshTokenはnull、capabilities.refreshはfalseとし、未実装の更新機能を装わない。[Identity Platform RESTの認証応答](https://docs.cloud.google.com/identity-platform/docs/use-rest-api)
+
+本番化ではブラウザのproviderアダプターをIdentity Platform SDK／RESTへ差し替え、取得した実ID tokenをサーバーで検証する。サーバーの `IdentityPlatformReplacement` とアカウント対応付けも実装し、検証済みissuer／tenant／uidからサービスIDを解決する。正規化した認証結果を画面に渡す契約を維持する。GCPへの接続・JWT検証・refresh・実メール認証は引き続き未実装。
+
+### 保存・復元の単位
+
+Browser ConsoleのGuitar DB Management → Backupsで対象を選ぶ。各対象の手動保存・定期保存・保持世代・ダウンロード・復元を独立して操作する。閲覧／保存は通常モードでも可能、復元はメンテナンス中のみ。復元前に対象の現状を安全用バックアップとして保存する。
+
+| 対象 | 保存するもの | 復元の動作 |
+| --- | --- | --- |
+| Guitar / Chronicle | ギター・Claim・Evidence・申請・係争・コンテンツ画像。互換用users投影も含む | アカウントの正・アバター・Follow・DMを巻き戻さず、最新プロフィール／BANを反映して必要なSnapshotを再評価する |
+| User Accounts | アカウント・固定ID・認証対応・Follow・DM・アバター | コンテンツを置換しない。ローカルセッションは保存せず、復元時にも全破棄する |
+| Operations | 運用設定・履歴 | 既存の運用バックアップ仕様を維持 |
+| Authentication experiment | GPT実験のキュー・画像 | ユーザー認証DBとは別物。既存の実験バックアップ仕様を維持 |
+
+Crawl前の自動バックアップはGuitar / Chronicleだけ。お気に入り・通知・signature guitar・Owned／Formerly Ownedはコンテンツ側に残す。ユーザーDB復元でバックアップ後のアカウントが欠ける場合はIDを予約した無効レコードを保持し、別人への再割当を防ぐ。アカウント無効化はログインを止めるもので、過去のClaimのBAN判定を自動変更しない。
+
+別人のUUIDが同じ数値IDに存在するコンテンツ、未解決アカウント参照、認証subjectの再割当を伴うユーザーDB復元は拒否する。分離前の古いバックアップの復元には明示的なユーザー対応の移行が必要であり、表示名から推測して復元しない。GCP用の匿名化・退会・アカウントリンクの操作と監査、PostgreSQLでのDB間同期・独立復元は今後の実装対象。
+
+## 登録プロフィールと同意
+
+local_dummyの`POST /api/local-auth/register`は表示名、Account Type、Terms／Privacyへの同意と版のみ受け付ける。email/passwordなど未許可フィールドを拒否し、認証情報を送らない。アカウント作成・コンテンツへのユーザー投影・`accounts.account_consents`への版とサーバー時刻の記録は同一トランザクション。User Accountsバックアップに同意を含め、Chronicle復元から分離する。旧バックアップに同意がない場合は空テーブルを作り、既存ユーザーの同意を推定しない。
+
+公開前に暫定Terms／Privacyを正式文面・版に差し替える。Identity Platform移行時はメール／パスワードを認証SDKへ渡し、検証済みUIDにアカウントと同意を関連づける。メール確認済みトークンをサーバーで検証してClaim／所有権申請を許可する作業は未実装。local_dummyではメール確認を実施した扱いにしない。

@@ -257,7 +257,10 @@ def test_user_settings_layout_and_extended_account_types(tmp_path, monkeypatch):
         assert 'document.getElementById(\'newGuitarAction\').hidden=!own' in client.get("/assets/pages/user-view.js").text
         assert 'Product Detail' not in page.text
         assert 'data-field="residence"' in page.text
-        assert 'type="email"' in page.text
+        assert 'type="email"' not in page.text
+        assert '>UserName<' not in page.text
+        assert '>Preferred Language<' not in page.text
+        assert 'id="displayName" required' in page.text
         response = client.patch(f"/api/users/{user_id}", json={
             "display_name": "Builder", "account_type": "builder",
             "location_country": "JP", "location_region": "Tokyo",

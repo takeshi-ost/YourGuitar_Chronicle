@@ -177,7 +177,7 @@ def init_db():
 
 
 @app.command("crawl-step")
-def crawl_step(category: str = typer.Option(..., help="all, electric or acoustic"),
+def crawl_step(category: str = typer.Option("electric_acoustic", help="electric_acoustic (both), electric or acoustic"),
                year_min: int = typer.Option(...),
                year_max: int = typer.Option(...)) -> None:
     """One synchronous, resumable crawl step; suitable as a future Run Job entrypoint."""
@@ -188,6 +188,9 @@ def crawl_step(category: str = typer.Option(..., help="all, electric or acoustic
     repository.init_db()
     if not repository.claim_architecture_status()["ready"]:
         raise typer.BadParameter("Run Claim migration before crawling")
+    from ygc import crawl_backups
+    from ygc.web import api_export_db
+    crawl_backups.create(api_export_db)
     with ReverbAPICollector(token=config.REVERB_API_TOKEN,
                             api_base=config.REVERB_API_BASE,
                             timeout=config.REQUEST_TIMEOUT, delay=0.5,
@@ -452,6 +455,9 @@ def crawl(
             code=2
         )
 
+    from ygc import crawl_backups
+    from ygc.web import api_export_db
+    crawl_backups.create(api_export_db)
     with ReverbAPICollector(
         token=config.REVERB_API_TOKEN,
         api_base=config.REVERB_API_BASE,

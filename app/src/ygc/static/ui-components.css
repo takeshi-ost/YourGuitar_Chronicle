@@ -108,3 +108,11 @@ button:is(.owner-claim-card,.add-claim-action,.new-guitar-action){border:3px dou
 .dispute-overview dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 16px;margin:4px 0}.dispute-overview dt{font-weight:600}.dispute-overview dd{margin:0;overflow-wrap:anywhere}.dispute-round{border-top:1px solid var(--ui-line);margin-top:10px;padding-top:6px}.dispute-round h3{margin:2px 0 6px}.dispute-timeline{list-style:none;padding:0;margin:0}.dispute-timeline li{display:grid;grid-template-columns:155px 1fr;gap:12px;padding:4px 0}.dispute-timeline time{font-size:.85em;opacity:.75}.dispute-evidence p{margin:2px 0}.dispute-evidence details{margin:4px 0}.dispute-result{border-top:1px dashed var(--ui-line);padding-top:6px}.dispute-submission{margin-top:8px}@media(max-width:600px){.dispute-timeline li{grid-template-columns:1fr;gap:3px}.dispute-overview dl{grid-template-columns:1fr;gap:2px}.dispute-overview dd{margin-bottom:6px}}
 
 .dispute-modal{line-height:1.35}.dispute-modal p{margin:4px 0}.dispute-submission h3{margin:6px 0}.dispute-modal .modal-actions{margin-top:8px}
+
+/* Shared desktop column resize affordances. */
+.resizable-columns th{position:sticky;top:0;padding-right:14px}
+.column-resize-handle{position:absolute;right:0;top:0;bottom:0;width:9px;cursor:col-resize;touch-action:none;z-index:2;border-right:2px solid transparent}
+.column-resize-handle:hover,.column-resize-handle:focus-visible{border-right-color:var(--accent,#d0a45d);outline:none}
+.resizing-table-column,.resizing-table-column *{cursor:col-resize!important;user-select:none!important}
+.resizable-columns td{overflow:hidden;text-overflow:ellipsis}
+.column-resize-handle[hidden]{display:none!important}

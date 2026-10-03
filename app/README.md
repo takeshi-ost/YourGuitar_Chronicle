@@ -22,7 +22,9 @@ ygc init-db
 ygc-web
 ```
 
-表示されたlocalhostのURLを開く。`/` は管理用Browser Console、`/user-view` はゲストも閲覧できるTop Page。ローカルの操作用ユーザー選択は**ログインではない**。Browser Consoleの管理トークンは同じプロセス・localhostでだけ有効。
+表示されたlocalhostのURLを開く。`/` は管理用Browser Console、`/user-view` はゲストも閲覧できるTop Page。`ygc-web` はローカルダミー認証・アカウントDB分離モードで起動する。初回起動時に既存DBの安全用コピーを保存して移行し、以後は `accounts.sqlite` とChronicleを独立してバックアップ／復元できる。テストユーザーの選択で認証成功を代用するため、実際の本人確認を行うものではない。Browser Consoleの管理トークンは同じプロセス・localhostでだけ有効。
+
+CLIや `uvicorn ygc.web:app` も同じデータを扱う場合は `YGC_IDENTITY_BACKEND=local_dummy` を設定する。分離前の互換動作は `ygc-web --identity-backend prototype` で利用できるが、分離済みデータでは拒否する。詳しい保存対象・移行条件は [ローカル認証とアカウント分離](../docs/GCP_BOUNDARIES.md#ローカル実装アカウント分離とダミー認証) を参照。
 
 ## Reverbの収集
 

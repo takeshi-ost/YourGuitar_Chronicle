@@ -197,11 +197,22 @@ async function loadProductionAcquires(){
     if(productionSelected){const row=productionAcquires.find(r=>r.revision===productionSelected.revision);if(row)renderProductionAcquireDetail(row)}
   }catch(e){document.getElementById('productionAcquireStatus').textContent='Could not load: '+e.message}
 }
+function ownershipDetailLink(kind,id,label){
+  const number=Number(id);
+  if(!Number.isSafeInteger(number)||number<=0)return esc(label);
+  const action=kind==='user'?'showUserRecord':'showIndividual';
+  return '<button type="button" class="detail-record-link" onclick="'+action+'('+number+')">'+esc(label)+'</button>';
+}
 function renderProductionAcquires(){
   const query=document.getElementById('productionAcquireSearch').value.toLowerCase().trim();
   const status=document.getElementById('productionAcquireFilter').value;
-  const rows=productionAcquires.filter(r=>(!status||r.status===status)&&[r.revision,r.applicant_name,r.applicant_id,r.product_name,r.original_individual_id,r.serial].join(' ').toLowerCase().includes(query));
-  document.getElementById('productionAcquireRows').innerHTML=rows.map(r=>'<tr><td><button onclick="inspectProductionAcquire(\''+esc(r.revision)+'\')">'+esc(r.revision.slice(0,12))+'</button></td><td>'+esc(r.applicant_name)+' (#'+Number(r.applicant_id)+')</td><td>'+esc(r.request_kind==='listing'?'Listing: ':'Acquire: ')+esc(r.product_name)+(r.original_individual_id?' (#'+Number(r.original_individual_id)+')':' (Not registered)')+'<br>'+esc(r.serial)+'</td><td>'+esc(ownershipStates[r.status]||r.status)+'</td><td>'+esc(r.verification_status||'—')+(r.status==='accepted'&&r.verification_status==='unverified'?'<br>Awaiting owner approval':'')+'</td><td>'+esc(r.submitted_at||r.created_at)+'</td></tr>').join('')||'<tr><td colspan="6">No matching requests.</td></tr>';
+  const rows=productionAcquires.filter(r=>(!status||(status==='incomplete'?['draft','pending','processing','error'].includes(r.status)||(r.status==='accepted'&&r.verification_status==='unverified'):r.status===status))&&[r.revision,r.applicant_name,r.applicant_id,r.product_name,r.original_individual_id,r.serial].join(' ').toLowerCase().includes(query));
+  document.getElementById('productionAcquireRows').innerHTML=rows.map(r=>{
+    const guitarId=r.individual_id||r.original_individual_id;
+    const ownerId=r.current_owner_user_id;
+    const ownerName=typeof users!=='undefined'?users.find(u=>Number(u.id)===Number(ownerId))?.display_name:null;
+    return '<tr><td>'+esc(r.revision.slice(0,12))+'</td><td>'+ownershipDetailLink('user',r.applicant_id,r.applicant_name+' (#'+Number(r.applicant_id)+')')+'</td><td>'+ownershipDetailLink('guitar',guitarId,(r.request_kind==='listing'?'Listing: ':'Acquire: ')+r.product_name+(guitarId?' (#'+Number(guitarId)+')':' (Not registered)'))+'<br>'+esc(r.serial)+'</td><td>'+esc(ownershipStates[r.status]||r.status)+'</td><td>'+esc(r.verification_status||'—')+(r.status==='accepted'&&r.verification_status==='unverified'?'<br>Awaiting owner approval':'')+'</td><td>'+ownershipDetailLink('user',ownerId,ownerId?(ownerName||'User #'+Number(ownerId)):'Unknown')+'</td><td>'+esc(r.submitted_at||r.created_at)+'</td><td><button class="secondary" onclick="inspectProductionAcquire(\''+esc(r.revision)+'\')">Detail</button></td></tr>';
+  }).join('')||'<tr><td colspan="8">No matching requests.</td></tr>';
 }
 function clearProductionImages(){for(const url of productionImageUrls)URL.revokeObjectURL(url);productionImageUrls=[];document.getElementById('productionAcquireImages').innerHTML=''}
 function renderProductionAcquireDetail(row){
@@ -212,6 +223,12 @@ function renderProductionAcquireDetail(row){
   document.getElementById('productionAcquireActions').innerHTML=(row.admin_actions||[]).map(action=>'<button data-ui-action="'+(['accept','positive'].includes(action)?'primary':action==='cancel'?'danger':'neutral')+'" '+(productionBusy?'disabled ':'')+'class="secondary" onclick="manageProductionAcquire(\''+esc(row.revision)+'\',\''+action+'\')">'+ownershipActions[action]+'</button>').join('');
 }
 async function inspectProductionAcquire(revision){
+  productionSelected=null;
+  document.getElementById('productionAcquireSummary').textContent='Loading request…';
+  document.getElementById('productionAcquireActions').innerHTML='';
+  document.getElementById('productionAcquireDetail').value='';
+  document.getElementById('productionAcquireReason').value='';
+  YGCOverlays.open('productionAcquireDialog',{onClose:()=>{productionDetailSequence++;productionSelected=null;clearProductionImages()}});
   const sequence=++productionDetailSequence;clearProductionImages();document.getElementById('productionAcquireActionStatus').textContent='';
   try{
     const row=await jfetch('/api/acquire-applications/'+encodeURIComponent(revision));
@@ -226,7 +243,7 @@ async function inspectProductionAcquire(revision){
       const figure=document.createElement('figure'),caption=document.createElement('figcaption'),img=document.createElement('img');
       caption.textContent={closeup:'Close-up',overview:'Overview',reference:'Reference'}[role];img.src=url;img.alt=caption.textContent;img.style.cssText='max-width:100%;max-height:320px;object-fit:contain';figure.append(caption,img);document.getElementById('productionAcquireImages').append(figure);
     }
-  }catch(e){if(sequence===productionDetailSequence)document.getElementById('productionAcquireStatus').textContent=e.message}
+  }catch(e){if(sequence===productionDetailSequence)document.getElementById('productionAcquireActionStatus').textContent=e.message}
 }
 function productionActionStatus(message){
   document.getElementById('productionAcquireActionStatus').textContent=message;
@@ -247,10 +264,7 @@ async function manageProductionAcquire(revision,operation){
   }catch(e){productionActionStatus('Could not apply change: '+e.message)}
   finally{productionBusy=false;if(productionSelected)renderProductionAcquireDetail(productionSelected)}
 }
-function statCard(label,value,help=''){return '<span class="crawl-metric" title="'+esc(help)+'"><span class="label">'+esc(label)+'</span><span class="num">'+esc(value)+'</span></span>'}
-async function refreshStatus(){const d=await jfetch('/api/status');const s=d.stats;document.getElementById('cards').innerHTML=[
-statCard('Registered Guitars',s.individuals,'Total guitars in the DB, including user and crawl registrations.'),statCard('Serial Listings',s.serial_observations,'External Listings linked to guitars with serial numbers. Duplicate site and Listing ID pairs are excluded. Includes relistings represented by Acquire and pending owner confirmation.'),'<button class="secondary" onclick="openRepeated()">'+statCard('Repeated',s.repeated_individuals,'Groups of DB guitars with the same maker and serial. Select to inspect, merge, or delete.')+'</button>'
-].join('');const source=d.token_source==='browser'?'saved in browser':(d.token_source==='environment'?'environment':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token not set</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'Set by environment variable (value hidden)':'Enter token'}}
+async function refreshStatus(){const d=await jfetch('/api/status');const source=d.token_source==='browser'?'saved in browser':(d.token_source==='environment'?'environment':'');document.getElementById('tokenState').innerHTML=d.token_configured?'<span class="status good">Reverb Token OK'+(source?' / '+source:'')+'</span>':'<span class="status bad">Reverb Token not set</span>';const input=document.getElementById('tokenInput');if(document.activeElement!==input){input.value=storedToken();input.placeholder=d.token_source==='environment'?'Set by environment variable (value hidden)':'Enter token'}}
 let repeatedGroups=[];
 let repeatedBusy=false;
 function renderObservationMatrix(d){
@@ -293,6 +307,7 @@ async function openObservationDiagnostic(){
   }catch(e){body.textContent=e.message}
 }
 async function openRepeated(){
+  YGCOverlays.close('databaseMaintenanceDialog');
   const dialog=document.getElementById('repeatedDialog');
   YGCOverlays.open(dialog);
   const container=document.getElementById('repeatedGroups');
@@ -338,9 +353,9 @@ async function importDatabaseFile(input){
     });
     individuals=[];
     document.getElementById('detail').textContent='Select a row in Product List to view its history.';
-    document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='Backup restored';
-    document.getElementById('jobBar').style.width='0%';
+    consoleCrawlJobs.clear();
+    document.getElementById('crawlLogStatus').textContent='Backup restored';
+    await loadCrawlRunLog();
     await refreshStatus();
     await loadIndividuals();
     await loadUsers();
@@ -403,9 +418,9 @@ async function resetDatabase(){
     individuals=[];
     document.getElementById('individualBody').innerHTML='';
     document.getElementById('detail').textContent='Select a row in Product List to view its history.';
-    document.getElementById('jobResults').innerHTML='';
-    document.getElementById('jobMessage').textContent='DB reset complete';
-    document.getElementById('jobBar').style.width='0%';
+    consoleCrawlJobs.clear();
+    document.getElementById('crawlLogStatus').textContent='DB reset complete';
+    await loadCrawlRunLog();
     sessionStorage.removeItem(ACTIVE_USER_KEY);
     activeUser=null;
     await refreshStatus();
@@ -416,15 +431,15 @@ async function resetDatabase(){
     alert(e.message);
   }
 }
-async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals();await loadUnverifiedAcquires();await refreshStatus()}
+async function loadIndividuals(){individuals=await jfetch('/api/individuals');renderIndividuals();if(document.getElementById('pendingAcquireClaimsDialog').open)await loadUnverifiedAcquires();await refreshStatus()}
 let unverifiedAcquireOffset=0;
 async function loadUnverifiedAcquires(offset=unverifiedAcquireOffset){
   try{
-    const d=await jfetch('/api/claims/unverified-acquires?limit=100&offset='+Math.max(0,offset));
+    const d=await jfetch('/api/claims/unverified-acquires?without_request=true&limit=100&offset='+Math.max(0,offset));
     if(d.total>0&&offset>=d.total)return loadUnverifiedAcquires(Math.floor((d.total-1)/100)*100);
     unverifiedAcquireOffset=d.offset;
     document.getElementById('unverifiedAcquireTotal').textContent='('+d.total+')';
-    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">No Unverified Acquire Claims.</td></tr>';
+    document.getElementById('unverifiedAcquireBody').innerHTML=d.items.map(x=>'<tr class="clickable" onclick="YGCOverlays.close(\'pendingAcquireClaimsDialog\');showIndividual('+Number(x.individual_id)+')"><td>#'+Number(x.claim_id)+'</td><td>'+esc(x.manufacturer)+' '+esc(x.model||'')+'</td><td>'+esc(x.serial_number||'—')+'</td><td>'+esc(x.author_name)+'</td><td>'+esc(x.current_owner_name||'Unknown')+'</td><td>'+esc(x.proposed_owner||x.author_name)+'</td><td>'+esc(x.occurred_at||x.created_at)+'</td></tr>').join('')||'<tr><td colspan="7">No Unverified Acquire Claims.</td></tr>';
     document.getElementById('unverifiedAcquirePage').textContent=d.total?(d.offset+1)+'–'+(d.offset+d.items.length)+' / '+d.total:'0 / 0';
     document.getElementById('unverifiedAcquirePrev').disabled=d.offset===0||!d.total;
     document.getElementById('unverifiedAcquireNext').disabled=d.offset+d.items.length>=d.total;
@@ -434,6 +449,7 @@ function countList(title,rows){
   return '<div class="stat-group"><strong>'+esc(title)+'</strong>'+((rows&&rows.length)?rows.map(x=>'<div class="stat-line"><span>'+esc(x.label)+'</span><span>'+esc(x.count)+'</span></div>').join(''):'<div class="sub">—</div>')+'</div>';
 }
 async function loadStatistics(){
+  if(!document.getElementById('statisticsDialog').open)return;
   try{
     const d=await jfetch('/api/statistics');
     const s=d.summary||{};
@@ -473,6 +489,7 @@ function renderUserList(){
   document.getElementById('userCount').textContent=matches.length+' / '+users.length+' users';
 }
 async function showUserRecord(id){
+  scrollConsoleLayer('user-detail-window');
   selectedUserId=Number(id);
   renderUserList();
   updateOpenTopButton();
@@ -491,6 +508,7 @@ async function showUserRecord(id){
     }
     updateOpenTopButton();
     const meta=[['User ID',u.id],['Joined',u.created_at],['Updated',u.updated_at],['Owned',summary.owned_count||0],['Formerly Owned',summary.former_count||0],['Claims',summary.claim_count||0]];
+    if(u.app_user_id)meta.push(['Account ID',u.app_user_id],['Account Status',u.account_disabled?'Disabled':'Active']);
     if(!CONSOLE_ADMIN_TOKEN)meta.push(['Display Name',u.display_name],['Account Type',u.account_type],['BAN Status',u.ban_status||'normal'],['Country',u.location_country||'—'],['City / Region',u.location_region||'—'],['Bio',u.bio||'—'],...['birth','residence','bio','avatar'].map(key=>[key+' Visibility',u[key+'_visibility']||'—']),['Signature Guitar ID',u.signature_individual_id||'—'],['Theme',u.theme||'dark_default']);
     const guitars=data.guitars||[];
     panel.className='';
@@ -509,7 +527,7 @@ async function showUserRecord(id){
         '<div class="toolbar"><button data-ui-action="primary" type="submit">Save User</button></div></form>':'')+
       '<div class="toolbar" style="margin-top:12px"><a href="/users/'+Number(u.id)+'?prototype_user_id='+encodeURIComponent(sessionStorage.getItem(ACTIVE_USER_KEY)||'')+'" target="_blank" rel="noopener">User Profile</a></div>'+
       '<div class="detail-section">Guitars <small class="list-item-count">'+guitars.length+' items</small></div><div class="user-guitar-list">'+(guitars.map(g=>'<div class="user-guitar-row"><a href="#guitar-db" onclick="showIndividual('+Number(g.individual_id)+')">'+esc(g.manufacturer)+' '+esc(g.model||'')+' · '+esc(g.serial_number||'—')+'</a><span class="sub">'+esc(g.ownership_status||'')+'</span></div>').join('')||'<div class="sub">No guitars registered.</div>')+'</div>';
-    if(selectedIndividualId)showIndividual(selectedIndividualId).catch(e=>{
+    if(selectedIndividualId)showIndividual(selectedIndividualId,false).catch(e=>{
       document.getElementById('detail').textContent='Product Detail error: '+e.message;
     });
   }catch(e){panel.className='sub';panel.textContent='User Detail error: '+e.message}
@@ -542,11 +560,11 @@ async function createUser(){
 }
 function updateOpenTopButton(){
   const selected=users.find(u=>Number(u.id)===selectedUserId);
-  document.getElementById('openUserTopBtn').disabled=!selected||selected.ban_status==='ban';
+  document.getElementById('openUserTopBtn').disabled=!selected||selected.ban_status==='ban'||!!selected.account_disabled;
 }
 function openTopPageAsActiveUser(){
   const selected=users.find(user=>Number(user.id)===selectedUserId);
-  if(!selected||selected.ban_status==='ban')return;
+  if(!selected||selected.ban_status==='ban'||selected.account_disabled)return;
   window.open('/user-view?prototype_user_id='+encodeURIComponent(selected.id),'_blank','noopener');
 }
 function openTopPageAsGuest(){
@@ -712,7 +730,8 @@ function toggleDetailAccordion(id){
   YGCProductDetail.toggleAccordion(id);
 }
 let individualLoadSequence=0;
-async function showIndividual(id){
+async function showIndividual(id,reveal=true){
+  if(reveal)scrollConsoleLayer('product-detail-window');
   const sequence=++individualLoadSequence;
   const changedIndividual=selectedIndividualId!==Number(id);
   selectedIndividualId=Number(id);
@@ -780,8 +799,8 @@ async function deleteIndividual(individualId){
     alert('Could not delete the Individual.\n'+e.message);
   }
 }
-async function startBackfill(){if(!confirm('Fetch existing Reverb Listings again to fill missing Listing Claim details. Observations will not change. Continue?'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});pollJob(d.job_id)}catch(e){alert(e.message)}}
-async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function startBackfill(){if(!confirm('Fetch existing Reverb Listings again to fill missing Listing Claim details. Observations will not change. Continue?'))return;try{const d=await jfetch('/api/backfill-metadata',{method:'POST'});YGCOverlays.close('manualCrawlDialog');YGCOverlays.close('databaseMaintenanceDialog');scrollConsoleLayer('web-crawl');pollJob(d.job_id)}catch(e){alert(e.message)}}
+async function startCrawl(){const queries=document.getElementById('queries').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const minValue=document.getElementById('yearMin').value;const maxValue=document.getElementById('yearMax').value;const body={queries,limit:Number(document.getElementById('limit').value),workers:Number(document.getElementById('workers').value),year_min:minValue?Number(minValue):null,year_max:maxValue?Number(maxValue):null};const btn=document.getElementById('crawlBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});YGCOverlays.close('manualCrawlDialog');YGCOverlays.close('databaseMaintenanceDialog');scrollConsoleLayer('web-crawl');pollJob(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
 function programRequest(){return {category:document.getElementById('programCategory').value,year_min:Number(document.getElementById('programYearMin').value),year_max:Number(document.getElementById('programYearMax').value)}}
 function crawlStageSummary(c){
   const n=key=>Number(c[key]||0);
@@ -796,34 +815,264 @@ function crawlStageSummary(c){
 function renderCrawlStage(c){
   return '<table><tbody>'+crawlStageSummary(c).map(row=>'<tr><th>'+esc(row[0])+'</th><td>'+esc(row[1])+'</td><td class="sub">'+esc(row[2])+'</td></tr>').join('')+'</tbody></table>';
 }
+let crawlLogLoading=false;
+const consoleCrawlJobs=new Map();
+function renderActiveCrawlJobs(){
+  const jobs=new Map((typeof operationsData!=='undefined'&&operationsData?operationsData.jobs:[]).map(j=>[j.id,j]));
+  for(const [id,job] of consoleCrawlJobs)jobs.set(id,job);
+  document.getElementById('crawlActiveJobs').innerHTML=[...jobs.values()].filter(j=>j.status==='running').map(j=>'<div class="panel"><strong>'+esc(j.message||'Crawl running')+'</strong><div class="progress"><div class="bar" style="width:'+Math.max(0,Math.min(100,Number(j.progress||0)*100))+'%"></div></div>'+(j.stage_counts?renderCrawlStage(j.stage_counts):'')+'</div>').join('');
+}
+function crawlRunSummary(r){
+  const c=r.counts||{};
+  if(c.target_claims!==undefined)return 'Target Claims '+Number(c.target_claims)+' / updated '+Number(c.claims_updated||0);
+  if(c.cached_processed!==undefined)return 'Saved details '+Number(c.cached_processed)+' / new guitars '+Number(c.new_individuals||0)+' / history updated '+Number(c.existing_individuals_extended||0)+' / Needs review '+Number(c.ambiguous_matches||0)+' / skipped '+Number(c.skipped_scope||0);
+  if(!Object.keys(c).length)return 'Listings '+Number(r.pages_discovered||0)+' / fetched '+Number(r.pages_fetched||0)+' / registered '+Number(r.observations_created||0);
+  return 'Listings '+Number(c.summaries_processed??c.summaries_fetched??0)+' / details '+Number(c.details_fetched||0)+' / new guitars '+Number(c.new_individuals||0)+' / history updated '+Number(c.existing_individuals_extended||0)+' / Needs review '+Number(c.ambiguous_matches||0);
+}
+function crawlRunDetails(r,expanded){
+  const counts=r.counts||{};
+  const rows=Object.entries(counts).filter(([key,value])=>typeof value==='number').map(([key,value])=>'<tr><th>'+esc(key.replaceAll('_',' '))+'</th><td>'+Number(value)+'</td></tr>').join('');
+  const samples=(counts.rejected_samples||[]).map(x=>'#'+x.listing_id+' '+x.reason+' / '+(x.category||x.product_type||'Unknown category')).join(' · ');
+  if(!rows&&!samples)return '';
+  return '<details data-run="'+Number(r.id)+'" '+(expanded.has(String(r.id))?'open':'')+'><summary>Details</summary><table><tbody>'+rows+'</tbody></table>'+(samples?'<p>'+esc(samples)+'</p>':'')+'</details>';
+}
 async function loadCrawlRunLog(){
-  const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max)return;
+  renderActiveCrawlJobs();
+  if(crawlLogLoading)return;
+  crawlLogLoading=true;
   const el=document.getElementById('crawlRunLog');
   try{
-    const runs=await jfetch('/api/crawl/program/runs?'+new URLSearchParams(q));
-    el.innerHTML=runs.length?runs.map(r=>'<div class="panel"><strong>#'+Number(r.id)+' '+esc(r.started_at)+' / '+esc(r.status)+' / '+esc(r.phase||'legacy')+'</strong><div>'+esc(crawlStageSummary(r.counts||{}).map(row=>row.join(': ')).join(' · '))+'</div>'+(r.error_message?'<div class="status bad">'+esc(r.error_message)+'</div>':'')+'</div>').join(''):'No run log for this search range.';
+    const runs=await jfetch('/api/crawl/program/runs');
+    const names={electric_acoustic:'Electric + Acoustic Crawl',electric:'Electric Crawl',acoustic:'Acoustic Crawl',manual:'Manual Crawl',cache_reprocess:'Saved details reprocessing',metadata_backfill:'Listing metadata backfill'};
+    const expanded=new Set([...el.querySelectorAll('details[open]')].map(d=>d.dataset.run));
+    el.innerHTML=runs.length?runs.map(r=>'<div class="panel"><strong>#'+Number(r.id)+' '+esc(names[r.category]||'Crawl')+' / '+esc(r.status)+'</strong><div class="sub">'+esc(new Date(r.started_at).toLocaleString())+(r.year_min!=null?' / '+Number(r.year_min)+'–'+Number(r.year_max):'')+(r.counts?.query?' / '+esc(r.counts.query):'')+' / '+esc(r.phase||'legacy')+'</div><div>'+esc(crawlRunSummary(r))+'</div>'+crawlRunDetails(r,expanded)+(r.error_message?'<div class="status bad">'+esc(r.error_message)+'</div>':'')+'</div>').join(''):'No crawl runs yet.';
   }catch(e){el.textContent=e.message}
+  finally{crawlLogLoading=false}
 }
+function openManualCrawl(){YGCOverlays.open('manualCrawlDialog')}
+function openConsoleBackups(){YGCOverlays.open('consoleBackupsDialog');loadCrawlBackups()}
+function openDatabaseMaintenance(){YGCOverlays.open('databaseMaintenanceDialog')}
+function openStatistics(){YGCOverlays.open('statisticsDialog');loadStatistics()}
+function openPendingAcquireClaims(){YGCOverlays.open('pendingAcquireClaimsDialog');loadUnverifiedAcquires(0)}
 async function loadCrawlProgram(){const q=programRequest();if(!q.year_min||!q.year_max||q.year_min>q.year_max){document.getElementById('programState').textContent='Check the manufacture year range';return}try{const d=await jfetch('/api/crawl/program?'+new URLSearchParams(q));document.getElementById('programState').textContent='Listings processed '+d.processed+'  / '+(d.finished?'End of pages for this range':'Can resume')+(d.updated_at?' / Last run '+d.updated_at:'');await loadCrawlRunLog()}catch(e){document.getElementById('programState').textContent=e.message}}
 async function advanceCrawlProgram(){const q=programRequest();const btn=document.getElementById('programBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/advance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q)});pollCrawlProgram(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
-async function restartCrawlProgram(){try{await jfetch('/api/crawl/program/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});document.getElementById('programResult').textContent='The range can be scanned again from the beginning. Existing Observations and Claims are preserved.';await loadCrawlProgram()}catch(e){alert(e.message)}}
-async function pollCrawlProgram(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programState').textContent=d.message||d.status;document.getElementById('programProgress').innerHTML='<strong>'+esc(d.message||'Processing')+'</strong>'+renderCrawlStage(d.stage_counts||d.aggregate||{});if(d.status==='running'){setTimeout(()=>pollCrawlProgram(id),1000);return}document.getElementById('programBtn').disabled=false;if(d.status==='error'){await loadCrawlProgram();alert(d.error||'crawl error');return}const s=d.aggregate||{};const samples=(s.rejected_samples||[]).map(x=>'#'+x.listing_id+' '+x.reason+' (Listing year '+x.summary_year+' / Detail year '+x.detail_year+' / Product Type '+x.product_type+' / Category '+x.category+')').join(' | ');document.getElementById('programResult').textContent='This run: listings '+s.summaries_processed+'  / details '+s.details_fetched+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / serial candidates '+s.serial_candidates+'  / Serial or maker unknown '+s.missing_identity+'  / known '+s.skipped_existing+'  / availability checked '+s.rechecked+'  / unavailable confirmed '+s.confirmed_missing+'  / Lost '+s.unavailable_claims+'  / Owner Unknown '+s.owners_unknown+' .Skipped: Outside year range '+s.skipped_year+' / year unknown '+s.missing_year+' / wrong category '+s.skipped_category+' / category unknown '+s.missing_category+' / Detail unavailable '+s.detail_unavailable+(samples?'. Examples: '+samples:'');await loadCrawlProgram();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('programBtn').disabled=false;alert(e.message)}}
+async function pollConsoleCrawlJob(id,buttonId){
+  try{
+    const job=await jfetch('/api/jobs/'+id);
+    consoleCrawlJobs.set(id,job);
+    await loadCrawlRunLog();
+    if(job.status==='running'){setTimeout(()=>pollConsoleCrawlJob(id,buttonId),1000);return}
+    document.getElementById(buttonId).disabled=false;
+    document.getElementById('crawlLogStatus').textContent=job.status==='error'?'Failed: '+(job.error||job.message):(job.message||'Complete');
+    await loadCrawlProgram();await loadIndividuals();await loadStatistics();
+  }catch(e){document.getElementById(buttonId).disabled=false;document.getElementById('crawlLogStatus').textContent=e.message}
+}
+async function pollCrawlProgram(id){return pollConsoleCrawlJob(id,'programBtn')}
+async function pollJob(id){return pollConsoleCrawlJob(id,'crawlBtn')}
+async function reprocessCachedDetails(){const btn=document.getElementById('cacheReprocessBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/cache/reprocess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});YGCOverlays.close('databaseMaintenanceDialog');scrollConsoleLayer('web-crawl');pollCachedDetails(d.job_id)}catch(e){alert(e.message);btn.disabled=false}}
+async function pollCachedDetails(id){return pollConsoleCrawlJob(id,'cacheReprocessBtn')}
 async function loadReviewCandidates(){try{const rows=await jfetch('/api/crawl/candidates/review');document.getElementById('reviewCandidates').innerHTML=rows.length?rows.map(x=>'<div>'+esc(x.manufacturer)+' '+esc(x.model)+' / '+esc(x.serial_number)+' / Listing #'+esc(x.listing_id)+' / '+esc(x.reason)+'</div>').join(''):'No candidates for review'}catch(e){document.getElementById('reviewCandidates').textContent=e.message}}
-async function pollJob(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('jobBar').style.width=((d.progress||0)*100)+'%';document.getElementById('jobMessage').textContent=d.message||d.status;let resultHtml=(d.query_results||[]).map(x=>'<div class="sub">'+esc(x.query)+' — new guitars '+x.new_individuals+', history updated '+x.existing_individuals_extended+', Needs review '+x.ambiguous_matches+', details '+x.details_fetched+', Serial or maker unknown '+x.missing_identity+'</div>').join('');if(d.aggregate&&d.aggregate.target_claims!==undefined){resultHtml+='<div class="sub">Backfill — target '+d.aggregate.target_claims+', updated '+d.aggregate.claims_updated+'</div>'}document.getElementById('jobResults').innerHTML=resultHtml;if(d.status==='running'){setTimeout(()=>pollJob(id),1000)}else{document.getElementById('crawlBtn').disabled=false;await refreshStatus();await loadIndividuals();if(d.status==='error')alert(d.error||'crawl error')}}catch(e){document.getElementById('crawlBtn').disabled=false;alert(e.message)}}
-async function reprocessCachedDetails(){const btn=document.getElementById('cacheReprocessBtn');btn.disabled=true;try{const d=await jfetch('/api/crawl/cache/reprocess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(programRequest())});pollCachedDetails(d.job_id)}catch(e){btn.disabled=false;alert(e.message)}}
-async function pollCachedDetails(id){try{const d=await jfetch('/api/jobs/'+id);document.getElementById('programResult').textContent=d.message||d.status;if(d.status==='running'){setTimeout(()=>pollCachedDetails(id),1000);return}document.getElementById('cacheReprocessBtn').disabled=false;if(d.status==='error'){alert(d.error||'Reprocessing failed');return}const s=d.aggregate||{};document.getElementById('programResult').textContent='Saved details '+s.cached_processed+'  / new guitars '+s.new_individuals+'  / history updated '+s.existing_individuals_extended+'  / Needs review '+s.ambiguous_matches+'  / already registered '+s.skipped_existing+'  / outside or unknown range '+s.skipped_scope+'  / Serial or maker unknown '+s.missing_identity+' ';await refreshStatus();await loadIndividuals();await loadStatistics()}catch(e){document.getElementById('cacheReprocessBtn').disabled=false;alert(e.message)}}
+function scrollConsoleLayer(id){
+  const target=document.getElementById(id);
+  if(!target?.closest)return;
+  const layer=target.closest('.console-main-layer,.console-detail-layer');
+  if(!layer)return;
+  const offset=target.getBoundingClientRect().top-layer.getBoundingClientRect().top;
+  layer.scrollTo({top:layer.scrollTop+offset-parseFloat(getComputedStyle(layer).paddingTop||0),behavior:'auto'});
+}
 const header=document.querySelector('.sticky-header');
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',header.offsetHeight+'px')).observe(header);
-(async()=>{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram();await loadProductionAcquires()})()
+(async()=>{try{await refreshStatus();await loadIndividuals();await loadStatistics();await loadUsers();await loadCrawlProgram();await loadProductionAcquires()}catch(e){document.getElementById('tokenState').textContent=e.message}})()
 
-// Fill the space freed by moving the action panel into the list column.
-for(const grid of document.querySelectorAll('.guitar-content,.user-content')){
-  const actions=grid.querySelector('.backup-actions,.domain-actions');
-  if(!actions)continue;
-  const sync=()=>{
-    const style=getComputedStyle(actions);
-    grid.style.setProperty('--detail-raised-space',(actions.getBoundingClientRect().height+(parseFloat(style.marginBottom)||0))+'px');
-  };
-  new ResizeObserver(sync).observe(actions);
-  sync();
+let operationsData=null;
+let operationSelection='status';
+let operationsLoading=false;
+function selectOperation(name,button){
+  operationSelection=name;
+  document.querySelectorAll('.operations-menu button').forEach(b=>{b.setAttribute('aria-selected',String(b===button));b.tabIndex=b===button?0:-1});
+  document.getElementById('operationsDetail').setAttribute('aria-labelledby',button.id);
+  renderOperationsDetail();
 }
+async function loadOperations(){
+  if(operationsLoading)return;
+  operationsLoading=true;
+  try{
+    operationsData=await jfetch('/api/admin/operations');
+    const interval=document.getElementById('autoCrawlIntervalHours');
+    if(!interval.dataset.loaded){interval.value=operationsData.auto_crawl.interval_seconds/3600;interval.dataset.loaded='true'}
+    document.getElementById('operationsStatus').textContent=({normal:'Normal',read_only:'Read only',offline:'Offline'})[operationsData.settings.mode]||operationsData.settings.mode;
+    document.getElementById('operationsCheckedAt').textContent='Last checked: '+new Date(operationsData.checked_at).toLocaleString();
+    // Preserve unsaved maintenance edits during automatic refresh.
+    if(operationSelection!=='maintenance'||!document.getElementById('operationsMode'))renderOperationsDetail();
+    await loadCrawlRunLog();
+  }catch(e){document.getElementById('operationsStatus').textContent='Status unavailable: '+e.message}
+  finally{operationsLoading=false}
+}
+function renderOperationsDetail(){
+  const el=document.getElementById('operationsDetail'),d=operationsData;
+  if(!d){el.textContent='Refresh to load operations.';return}
+  const rows=items=>'<table><tbody>'+items.map(([k,v])=>'<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>').join('')+'</tbody></table>';
+  if(operationSelection==='status')el.innerHTML='<h3>Service status</h3>'+rows([['Web process','Responding'],['Database',d.database],['Media directory',d.media_directory],['Service mode',d.settings.mode],['Process uptime',d.uptime_seconds+' seconds'],['Last checked',new Date(d.checked_at).toLocaleString()]])+'<p class="sub">Storage reachability does not verify upload/download success. Reverb and AI connectivity are not probed.</p>';
+  if(operationSelection==='maintenance'){
+    el.innerHTML='<h3>Maintenance</h3><form class="operations-form" onsubmit="saveOperations(event)"><label>Service mode<select id="operationsMode" onchange="setMaintenanceMessage(this.value)"><option value="normal">Normal</option><option value="read_only">Read only — block new writes</option><option value="offline">Offline — block public access</option></select></label><label>Message to users<textarea id="operationsMessage" maxlength="1000"></textarea></label><p class="sub">Existing jobs continue. Settings persist after restart. The Console and these settings remain accessible.</p><button id="operationsSave" type="submit">Save settings</button><p id="operationsSaveStatus" role="status"></p></form>';
+    document.getElementById('operationsMode').value=d.settings.mode;
+    document.getElementById('operationsMessage').value=d.settings.message||maintenanceMessages[d.settings.mode];
+    el.dataset.version=d.settings.version;
+  }
+  if(operationSelection==='jobs')el.innerHTML='<h3>Background jobs</h3><h4>Crawl</h4><label><input id="autoCrawlReverb" type="checkbox" '+(d.auto_crawl.enabled?'checked ':'')+'onchange="toggleAutoCrawl(this)"> Reverb</label><p class="sub">Last run: '+(d.last_crawl_at?esc(new Date(d.last_crawl_at).toLocaleString()):'Never')+'</p><p class="sub">'+esc(d.auto_crawl_message||'')+'</p><p id="autoCrawlStatus" role="status"></p><h4>Acquire / Listing review</h4><label><input id="chatgptReviewEnabled" type="checkbox" '+(d.chatgpt_review.enabled?'checked ':'')+'onchange="toggleChatGPTReview(this)"> ChatGPT</label><p class="sub">Last answer: '+(d.last_gpt_answer_at?esc(new Date(d.last_gpt_answer_at).toLocaleString()):'Never')+'</p><p id="chatgptReviewStatus" role="status"></p>';
+  if(operationSelection==='history')el.innerHTML='<h3>Operation history</h3>'+(d.history.length?rows(d.history.map(h=>[new Date(h.occurred_at).toLocaleString()+' · '+h.mode,h.reason])):'<p>No settings changes.</p>')+'<p class="sub">Latest 100 changes by the local Console administrator.</p>';
+  if(operationSelection==='version')el.innerHTML='<h3>Version and deployment</h3>'+rows([['Application version',d.version],['Deployment',d.deployment]])+'<p class="sub">Cloud monitoring, backup automation and rollback controls are not connected.</p>';
+}
+async function saveOperations(event){
+  event.preventDefault();const button=document.getElementById('operationsSave'),status=document.getElementById('operationsSaveStatus');button.disabled=true;
+  try{
+    await jfetch('/api/admin/operations',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('operationsMode').value,message:document.getElementById('operationsMessage').value,expected_version:Number(document.getElementById('operationsDetail').dataset.version)})});
+    await loadOperations();renderOperationsDetail();document.getElementById('operationsSaveStatus').textContent='Settings saved.';
+  }catch(e){status.textContent=e.message}finally{button.disabled=false}
+}
+loadOperations();
+setInterval(()=>{if(!document.hidden&&document.getElementById('operationsAutoRefresh')?.checked)loadOperations()},15000);
+
+document.querySelectorAll('.page-nav,.ownership-nav').forEach(nav=>nav.addEventListener('click',event=>{
+  const link=event.target.closest('a[href^="#"]');if(!link)return;
+  event.preventDefault();const id=link.hash.slice(1);scrollConsoleLayer(id);
+  if(nav.classList.contains('main-position-links')){
+    const detailTarget={'web-crawl':'operations','guitar-db':'product-detail-window',ownership:'product-detail-window','user-db':'user-detail-window'}[id];
+    if(detailTarget)scrollConsoleLayer(detailTarget);
+  }
+  history.replaceState(null,'',link.hash);
+}));
+document.querySelector('.operations-menu').addEventListener('keydown',event=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  const tabs=[...document.querySelectorAll('.operations-menu [role="tab"]')];
+  const index=tabs.indexOf(document.activeElement);if(index<0)return;
+  event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+  tabs[next].focus();tabs[next].click();
+});
+if(location.hash)requestAnimationFrame(()=>scrollConsoleLayer(location.hash.slice(1)));
+
+const detailLayer=document.querySelector('.console-detail-layer');
+if(detailLayer&&typeof ResizeObserver==='function'){
+  const syncDetailWindowHeight=()=>{
+    const style=getComputedStyle(detailLayer);
+    const height=detailLayer.clientHeight-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0);
+    detailLayer.style.setProperty('--detail-window-height',Math.max(0,Math.floor(height))+'px');
+  };
+  new ResizeObserver(syncDetailWindowHeight).observe(detailLayer);
+  syncDetailWindowHeight();
+}
+
+async function toggleAutoCrawl(checkbox){
+  const enabled=checkbox.checked;checkbox.disabled=true;
+  try{
+    await jfetch('/api/admin/operations/auto-crawl',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled,...programRequest(),interval_seconds:autoCrawlIntervalSeconds()})});
+    await loadOperations();
+  }catch(e){checkbox.checked=!enabled;document.getElementById('autoCrawlStatus').textContent=e.message}
+  finally{checkbox.disabled=false}
+}
+
+function autoCrawlIntervalSeconds(){
+  const hours=Number(document.getElementById('autoCrawlIntervalHours').value);
+  if(!Number.isInteger(hours)||hours<1||hours>168)throw new Error('Enter an interval from 1 to 168 hours.');
+  return hours*3600;
+}
+async function saveAutoCrawlInterval(){
+  const status=document.getElementById('autoCrawlIntervalStatus');
+  try{
+    if(!operationsData)throw new Error('Refresh Operations first.');
+    await jfetch('/api/admin/operations/auto-crawl',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!!operationsData.auto_crawl.enabled,...programRequest(),interval_seconds:autoCrawlIntervalSeconds()})});
+    await loadOperations();status.textContent='Interval saved.';
+  }catch(e){status.textContent=e.message}
+}
+
+async function toggleChatGPTReview(checkbox){
+  const enabled=checkbox.checked;checkbox.disabled=true;
+  try{
+    await jfetch('/api/admin/operations/chatgpt-review',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    await loadOperations();
+  }catch(e){checkbox.checked=!enabled;document.getElementById('chatgptReviewStatus').textContent=e.message}
+  finally{checkbox.disabled=false}
+}
+
+let backupData=null;
+let backupImportTarget='chronicle';
+const backupTargetNames={accounts:'User Accounts',chronicle:'Guitar / Chronicle',operations:'Operations',authentication:'Authentication experiment'};
+async function loadCrawlBackups(){
+  try{
+    backupData=await jfetch('/api/admin/operations/backups');
+    renderBackupTarget();
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+}
+function renderBackupTarget(){
+  if(!backupData)return;
+  const target=document.getElementById('backupTarget').value;
+  const policy=backupData.policies.find(p=>p.target===target);
+  document.getElementById('crawlBackupGenerations').value=policy.generations;
+  document.getElementById('backupScheduledEnabled').checked=!!policy.enabled;
+  document.getElementById('backupIntervalHours').value=policy.interval_hours;
+  document.getElementById('backupScheduleStatus').textContent='Last save: '+(policy.last_at?new Date(policy.last_at).toLocaleString()+' / '+policy.last_status:'Never')+(policy.last_error?' / '+policy.last_error:'')+(policy.enabled?' · Next scheduled: '+new Date(policy.next_run*1000).toLocaleString():' · Periodic backup OFF');
+  const reasons={crawl:'Before Crawl',manual:'Manual',scheduled:'Scheduled',before_restore:'Before restore'};
+  const rows=backupData.backups.filter(b=>b.target===target);
+  document.getElementById('crawlBackupRows').innerHTML=rows.map(b=>'<tr><td>'+esc(new Date(b.created_at).toLocaleString())+'</td><td>'+esc(reasons[b.reason]||b.reason)+'</td><td>'+esc((b.size_bytes/1048576).toFixed(1))+' MB</td><td><button class="secondary" onclick="downloadSavedBackup(\''+esc(b.name)+'\')">Download</button> <button class="secondary" data-ui-action="danger" onclick="restoreCrawlBackup(\''+esc(b.name)+'\')">Restore</button></td></tr>').join('')||'<tr><td colspan="4">No saved backups for this target.</td></tr>';
+  document.getElementById('crawlBackupStatus').textContent='';
+}
+async function saveCrawlBackupRetention(){
+  try{
+    await jfetch('/api/admin/operations/backups',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('backupTarget').value,generations:Number(document.getElementById('crawlBackupGenerations').value),enabled:document.getElementById('backupScheduledEnabled').checked,interval_hours:Number(document.getElementById('backupIntervalHours').value)})});
+    await loadCrawlBackups();document.getElementById('crawlBackupStatus').textContent='Backup settings saved.';
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+}
+async function saveManualBackup(){
+  const button=document.getElementById('saveBackupButton');button.disabled=true;
+  try{
+    await jfetch('/api/admin/operations/backups/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:document.getElementById('backupTarget').value})});
+    await loadCrawlBackups();document.getElementById('crawlBackupStatus').textContent='Backup saved.';
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+  finally{button.disabled=false}
+}
+async function downloadSavedBackup(name){
+  try{
+    const response=await fetch('/api/admin/operations/backups/'+encodeURIComponent(name)+'/download',{headers:{'X-YGC-Console-Admin':CONSOLE_ADMIN_TOKEN}});
+    if(!response.ok)throw new Error((await response.json()).detail||'Download failed');
+    const url=URL.createObjectURL(await response.blob());const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+}
+async function refreshAfterBackupRestore(target){
+  if(target==='authentication'){
+    directSelectedRevision=null;directSelectedResult=null;
+    for(const id of ['directToken','directConfig','directPrompt','directReport','directResult'])document.getElementById(id).value='';
+    hideDirectToken();
+  }
+  await loadCrawlBackups();await loadOperations();
+  await Promise.allSettled([loadIndividuals(),loadUsers(),loadProductionAcquires()]);
+  document.getElementById('detail').textContent='Select a row in Product List to view its history.';
+  selectedIndividualId=null;
+  document.getElementById('crawlBackupStatus').textContent='Backup restored. Maintenance remains enabled.';
+}
+async function restoreCrawlBackup(name){
+  const backup=backupData?.backups.find(b=>b.name===name);
+  if(!confirm('Restore '+(backupTargetNames[backup?.target]||'this target')+'? Only this target will be replaced. Its current state will be backed up first.'))return;
+  try{
+    await jfetch('/api/admin/operations/backups/'+encodeURIComponent(name)+'/restore',{method:'POST'});
+    await refreshAfterBackupRestore(backup?.target);
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+}
+function openTargetBackupImport(){
+  backupImportTarget=document.getElementById('backupTarget').value;
+  const input=document.getElementById('targetBackupImportInput');input.value='';input.click();
+}
+async function restoreTargetBackupFile(input){
+  const file=input.files?.[0];if(!file)return;
+  if(!confirm('Restore '+backupTargetNames[backupImportTarget]+' from '+file.name+'? Only this target will be replaced. Its current state will be backed up first.'))return;
+  try{
+    await jfetch('/api/admin/operations/backups/import?target='+encodeURIComponent(backupImportTarget),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
+    await refreshAfterBackupRestore(backupImportTarget);
+  }catch(e){document.getElementById('crawlBackupStatus').textContent=e.message}
+  finally{input.value=''}
+}
+const maintenanceMessages={
+  normal:'The service is operating normally.',
+  read_only:'The service is under maintenance. Viewing is available, but changes are temporarily disabled.',
+  offline:'The service is temporarily unavailable for maintenance. Please try again later.'
+};
+function setMaintenanceMessage(mode){document.getElementById('operationsMessage').value=maintenanceMessages[mode]||''}

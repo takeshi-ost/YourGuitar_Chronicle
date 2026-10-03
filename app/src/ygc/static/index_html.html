@@ -9,103 +9,60 @@
 <script src="/assets/overlays.js" defer></script>
 <script src="/assets/product-detail.js?v=shared-ui-v2" defer></script>
 <script src="/assets/list-navigation.js?v=list-counts-v1" defer></script>
+<script src="/assets/table-columns.js" defer></script>
 </head>
 <body>
-<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><nav class="page-nav" aria-label="Browser Console sections"><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#ownership-disputes">Ownership Disputes</a><a href="#ownership-request">Ownership Request</a><a href="#direct-experiment">Authentication Test</a></nav></header></div>
-<main>
+<div class="sticky-header"><header><h1><a class="brand-link" href="/user-view" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo" src="/assets/logos/block.png?v=2" alt="Your Guitar Chronicle"></a> <span class="sub">Browser Console</span></h1><div class="console-position-links"><nav class="page-nav main-position-links" aria-label="Main sections"><span class="sub">Main</span><a href="#web-crawl">Web Crawl</a><a href="#guitar-db">Guitar DB</a><a href="#user-db">User DB</a><a href="#ownership">Ownership</a></nav><nav class="page-nav detail-position-links" aria-label="Detail sections"><span class="sub">Detail</span><a href="#operations">Operations</a><a href="#product-detail-window">Product Detail</a><a href="#user-detail-window">User Detail</a></nav></div></header></div>
+<main class="console-workspace">
+<div class="console-main-layer" tabindex="0" aria-label="Main">
 <section class="console-domain" id="web-crawl" aria-labelledby="crawlHeading">
 <div class="domain-heading"><h2 id="crawlHeading">Web Crawl</h2><span class="sub">Reverb collection and run status</span></div>
-<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Enter token"><button data-ui-action="primary" onclick="saveToken()">Save</button><button data-ui-action="danger" class="danger" onclick="clearToken()">Delete</button><span id="tokenState" class="sub"></span></div><div class="crawl-metrics" id="cards"></div></div>
+<div class="panel crawl-overview"><div class="token-controls"><label for="tokenInput">Reverb API Token</label><input id="tokenInput" type="text" autocomplete="off" spellcheck="false" placeholder="Enter token"><button data-ui-action="primary" onclick="saveToken()">Save</button><button data-ui-action="danger" class="danger" onclick="clearToken()">Delete</button><span id="tokenState" class="sub"></span></div></div>
 <div class="panel">
 <h2>Incremental Crawl</h2>
-<div class="sub">Search by manufacture year and category. Each run scans up to 2,000 listings through the end of a page and fetches all matching details. It checks up to five existing listings for availability. Category matching is a prototype using the search query and returned category.</div>
+<div class="toolbar"><label for="autoCrawlIntervalHours">Auto Crawl interval (hours)</label><input id="autoCrawlIntervalHours" type="number" min="1" max="168" step="1" value="1" style="width:90px"><button class="secondary" onclick="saveAutoCrawlInterval()">Save interval</button><span id="autoCrawlIntervalStatus" class="sub" role="status"></span></div>
+<div class="sub">Search by manufacture year and category. Each run searches both categories and scans up to 1,000 listings per category (2,000 total) and fetches all matching details. It checks up to five existing listings for availability. Category matching is a prototype using the search query and returned category.</div>
 <div class="crawl-controls" style="margin-top:10px">
-<div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="all">All Guitars</option><option value="electric">Electric Guitars</option><option value="acoustic">Acoustic Guitars</option></select></div>
+<div><div class="sub">Field</div><select id="programCategory" onchange="loadCrawlProgram()"><option value="electric_acoustic">Electric + Acoustic Guitars</option></select></div>
 <div><div class="sub">Year Min</div><input id="programYearMin" type="number" value="1950" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
 <div><div class="sub">Year Max</div><input id="programYearMax" type="number" value="1980" min="1800" max="2100" onchange="loadCrawlProgram()"></div>
-<div><button data-ui-action="primary" id="programBtn" onclick="advanceCrawlProgram()">Advance</button></div>
-<div><button class="secondary" onclick="restartCrawlProgram()">Restart Scan</button></div>
-<div><button id="cacheReprocessBtn" class="secondary" onclick="reprocessCachedDetails()">Reprocess saved details</button></div>
+<div><button data-ui-action="primary" id="programBtn" onclick="advanceCrawlProgram()">Crawl Now</button></div>
+
+<div><button class="secondary" onclick="openManualCrawl()">Manual Crawl</button></div>
 </div>
-<div class="sub">Reprocesses saved details from both crawl modes using the category and manufacture year above. This does not contact Reverb.</div>
+
 <div id="programState" class="sub" style="margin-top:8px">Checking status</div>
-<div id="programProgress" class="sub" role="status" aria-live="polite"></div>
-<div id="programResult" class="sub"></div>
-<div class="toolbar"><h3 data-count-items="#crawlRunLog > .panel" style="flex:1;margin-bottom:0">Crawl Run Log</h3><button class="secondary" onclick="loadCrawlRunLog()">Refresh</button></div>
-<div id="crawlRunLog" class="table-wrap sub"></div>
-<div class="sub" style="margin-top:8px"><button class="secondary" onclick="loadReviewCandidates()">Show candidates for review</button><div id="reviewCandidates"></div></div>
+
 </div>
-<div class="panel">
-<h2>Batch Crawl</h2>
-<div class="crawl-query">
-<div class="sub">One query per line</div>
-<textarea id="queries">Fender Stratocaster
-Fender Telecaster
-Fender Jazzmaster
-Fender Jaguar
-Gibson Les Paul
-Gibson SG
-Gibson ES-335</textarea>
-</div>
-<div class="crawl-controls">
-<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="None" min="1800" max="2100"></div>
-<div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
-<div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
-<div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
-<div><button data-ui-action="primary" id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
-</div>
-<div class="progress"><div class="bar" id="jobBar"></div></div>
-<div id="jobMessage" class="sub">Idle</div>
-<div id="jobResults" style="margin-top:12px"></div>
-</div>
+<div class="panel crawl-log-panel"><div class="toolbar"><h3 data-count-items="#crawlRunLog > .panel" style="flex:1;margin:0">Crawl Run Log</h3><button class="secondary" onclick="loadCrawlRunLog()">Refresh</button></div><p id="crawlLogStatus" class="sub" role="status"></p><div id="crawlActiveJobs" aria-live="polite"></div><div id="crawlRunLog" class="table-wrap sub"></div></div>
 </section>
 
 <section class="console-domain" id="guitar-db" aria-labelledby="guitarHeading">
 <div class="domain-heading"><h2 id="guitarHeading">Guitar DB Management</h2><span class="sub">Product, Claim, and DB maintenance</span></div>
-<div class="domain-grid guitar-content">
-<section>
-<div class="panel backup-actions"><div class="backup-buttons"><button class="secondary" onclick="exportDatabase()">Backup</button><button data-ui-action="danger" class="secondary" onclick="openDatabaseImport()">Restore backup</button><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button data-ui-action="danger" class="danger" onclick="resetDatabase()">Reset DB</button></div><div class="sub">Backups include user data. Resetting the DB deletes guitar and user data.</div></div>
-<div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Clean and add Specifications</button></div><div class="sub">Cleans incorrect automated extractions and duplicate Finish values, then adds explicit specifications from saved Reverb details to guitars without a user owner.</div></div>
+<div class="domain-actions panel"><button class="secondary" onclick="openConsoleBackups()">Backups</button><button class="secondary" onclick="openDatabaseMaintenance()">DB Maintenance</button><button class="secondary" onclick="openStatistics()">Statistics</button></div>
 <div class="panel">
-<div class="toolbar"><h2 data-count-items="#individualBody > tr.clickable" style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="startBackfill()">Backfill existing DB (one time)</button><button class="secondary" onclick="loadIndividuals()">Refresh</button></div>
+<div class="toolbar"><h2 data-count-items="#individualBody > tr.clickable" style="margin:0;flex:1">Product List</h2><input id="individualFilter" placeholder="maker / model / finish / year / serial" oninput="renderIndividuals()"><button class="secondary" onclick="loadIndividuals()">Refresh</button></div>
 <div class="table-wrap"><table><thead><tr><th class="sortable" onclick="setIndividualSort('id')">ID<span class="sort-indicator" id="sort-id"></span></th><th class="sortable" onclick="setIndividualSort('manufacturer')">Maker<span class="sort-indicator" id="sort-manufacturer"></span></th><th class="sortable" onclick="setIndividualSort('model')">Model<span class="sort-indicator" id="sort-model"></span></th><th class="sortable" onclick="setIndividualSort('finish')">Finish<span class="sort-indicator" id="sort-finish"></span></th><th class="sortable" onclick="setIndividualSort('year')">Year<span class="sort-indicator" id="sort-year"></span></th><th class="sortable" onclick="setIndividualSort('serial_number')">Serial<span class="sort-indicator" id="sort-serial_number"></span></th><th class="sortable" onclick="setIndividualSort('claim_count')">Claims<span class="sort-indicator" id="sort-claim_count"></span></th></tr></thead><tbody id="individualBody"></tbody></table></div>
 </div>
-<div class="panel">
-<div class="toolbar"><h2 data-count-items="#unverifiedAcquireBody > tr" style="margin:0;flex:1">Unverified Acquire</h2><span id="unverifiedAcquireTotal" hidden></span><button class="secondary" onclick="loadUnverifiedAcquires(0)">Refresh</button></div>
-<div class="sub">Shows only Unverified Acquire Claims that could change the current owner. Historical Claims and Claims for the same owner are excluded. Select a row to open Product Detail.</div>
-<div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
-<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">Previous</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">Next</button></div>
-</div>
-<div class="panel">
-<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">Refresh</button></div>
-<div id="statistics" class="sub">Calculating...</div>
-</div>
-</section>
-<aside class="detail-shell" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation decision</button></div><div id="detail" class="sub">Select a row in Product List to view its history.</div></div></aside>
-</div>
+
+
 </section>
 <section class="console-domain" id="user-db" aria-labelledby="userHeading">
 <div class="domain-heading"><h2 id="userHeading">User DB Management</h2><span class="sub">Search users and inspect account data</span></div>
-<div class="domain-grid user-content">
-<section class="console-list-column">
 <div class="domain-actions panel"><button class="secondary" onclick="openTopPageAsGuest()">Open Top Page as Guest</button><button data-ui-action="primary" onclick="createUser()">Create account</button><button class="secondary" onclick="loadUsers()">Refresh</button></div>
 <div class="panel"><div class="toolbar"><h2 data-count-items="#userBody > tr" style="margin:0;flex:1">Users</h2><input id="userFilter" aria-label="Search users" placeholder="ID / name / type / location" oninput="renderUserList()"></div><div class="table-wrap user-results"><table><thead><tr><th>ID</th><th>Display Name</th><th>Type</th><th>Residence</th><th>Owned</th></tr></thead><tbody id="userBody"></tbody></table></div><div id="userCount" class="sub" style="margin-top:8px"></div></div>
 </section>
-<div class="panel user-detail-panel"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
-</div>
-</section>
-<section class="console-domain" id="ownership-disputes"><h2 data-count-items="#disputeList > .dispute-row">Ownership Disputes</h2><select id="disputeStatusFilter" aria-label="Dispute status" onchange="YGCDisputes.refresh()"><option value="open">Under dispute</option><option value="resolved">Resolved</option><option value="">All cases</option></select><button onclick="YGCDisputes.refresh()">Refresh disputes</button><div id="disputeList"></div></section>
+<section class="console-domain ownership-domain" id="ownership" aria-labelledby="ownershipHeading">
+<div class="domain-heading"><h2 id="ownershipHeading">Ownership</h2></div>
+<nav class="ownership-nav" aria-label="Ownership sections"><a href="#ownership-request">Request</a><a href="#ownership-disputes">Disputes</a><a href="#direct-experiment">Authentication</a></nav>
 <section class="console-domain" id="ownership-request" aria-labelledby="ownershipRequestHeading">
-<div class="domain-heading"><h2 id="ownershipRequestHeading" data-count-items="#productionAcquireRows > tr">Ownership Request</h2><span class="sub">Review and manage Acquire and Listing requests</span></div>
-<div class="panel"><div class="toolbar"><button onclick="loadProductionAcquires()">Refresh Requests</button><input id="productionAcquireSearch" aria-label="Search requests" placeholder="Request ID / applicant / guitar / serial" oninput="renderProductionAcquires()"><select id="productionAcquireFilter" aria-label="Request status" onchange="renderProductionAcquires()"><option value="">All statuses</option><option value="draft">Awaiting photos</option><option value="pending">Awaiting review</option><option value="processing">Under review</option><option value="error">Processing error</option><option value="accepted">Approved</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option><option value="closed">Closed</option><option value="expired">Submission expired</option></select></div>
-<p id="productionAcquireStatus" role="status">Loading...</p><div class="table-wrap"><table><thead><tr><th>Request ID</th><th>Applicant</th><th>Guitar</th><th>Review status</th><th>Verification</th><th>Submitted</th></tr></thead><tbody id="productionAcquireRows"></tbody></table></div></div>
-<div class="panel"><div id="productionAcquireSummary">Select a request.</div><div id="productionAcquireImages" style="display:flex;flex-wrap:wrap;gap:12px"></div>
-<p class="sub">Review approval and owner verification are separate decisions. The applicant can see the reason for an administrator override.</p>
-<label>Reason for change (required)<textarea required aria-describedby="productionAcquireActionStatus" id="productionAcquireReason" rows="2" maxlength="2000" style="width:100%"></textarea></label><div class="toolbar" id="productionAcquireActions"></div><p id="productionAcquireActionStatus" role="status" aria-live="polite"></p>
-<label>Report and history (including the original AI review)<textarea id="productionAcquireDetail" readonly rows="12" style="width:100%"></textarea></label>
-<details><summary>Scheduled Review Instructions</summary><textarea id="productionAcquirePrompt" readonly rows="8" style="width:100%"></textarea></details></div></section>
+<div class="domain-heading"><h3 id="ownershipRequestHeading" data-count-items="#productionAcquireRows > tr">Request</h3><span class="sub">Review and manage Acquire and Listing requests</span></div>
+<div class="panel"><div class="toolbar"><button onclick="loadProductionAcquires()">Refresh Requests</button><button class="secondary" onclick="openPendingAcquireClaims()">Other Pending Acquire Claims</button><input id="productionAcquireSearch" aria-label="Search requests" placeholder="Request ID / applicant / guitar / serial" oninput="renderProductionAcquires()"><select id="productionAcquireFilter" aria-label="Request status" onchange="renderProductionAcquires()"><option value="incomplete" selected>Incomplete</option><option value="">All statuses</option><option value="draft">Awaiting photos</option><option value="pending">Awaiting review</option><option value="processing">Under review</option><option value="error">Processing error</option><option value="accepted">Approved</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option><option value="closed">Closed</option><option value="expired">Submission expired</option></select></div>
+<p id="productionAcquireStatus" role="status">Loading...</p><div class="table-wrap"><table><thead><tr><th>Request ID</th><th>Applicant</th><th>Guitar</th><th>Review status</th><th>Verification</th><th>Owner</th><th>Submitted</th><th>Details</th></tr></thead><tbody id="productionAcquireRows"></tbody></table></div></div>
+</section>
+<section class="console-domain" id="ownership-disputes"><div class="domain-heading"><h3 data-count-items="#disputeList > tr.dispute-row">Disputes</h3></div><div class="panel"><div class="toolbar"><button onclick="YGCDisputes.refresh()">Refresh disputes</button><select id="disputeStatusFilter" aria-label="Dispute status" onchange="YGCDisputes.refresh()"><option value="open">Under dispute</option><option value="resolved">Resolved</option><option value="">All cases</option></select></div><div class="table-wrap"><table><thead><tr><th>Dispute ID</th><th>Applicant</th><th>Guitar</th><th>Status</th><th>Owner</th><th>Started / Updated</th><th>Details</th></tr></thead><tbody id="disputeList"></tbody></table></div></div></section>
 <section class="console-domain" id="direct-experiment" aria-labelledby="directHeading">
-<div class="domain-heading"><h2 id="directHeading">Authentication Test — GPT連携</h2></div>
+<div class="domain-heading"><h3 id="directHeading">Authentication — GPT連携</h3></div>
 <h3 data-count-items="#directQueueRows > tr">実験用キュー（Claimは変更しません）</h3>
 <div class="panel">
 <p class="sub">Mac内のYGCへ接続する複数申請の実験キューです。GoogleやAI APIキーは不要です。画像を準備後、デスクトップ側にMCPを接続して審議します。ChatGPTが画像を取得すると画像がChatGPTへ送られます。申請・画像・診断結果を実験専用の保存先に保持します。Claim・所有権には反映しません。</p>
@@ -135,8 +92,60 @@ Gibson ES-335</textarea>
 <label>診断文章<textarea id="directReport" readonly rows="10" style="width:100%"></textarea></label>
 <label>準備内容・接続診断・審議結果<textarea id="directResult" readonly rows="14" style="width:100%"></textarea></label>
 </div></section>
+</section>
+</div>
+<aside class="console-detail-layer" tabindex="0" aria-label="Detail">
+<section class="panel operations-detail-panel" id="operations" aria-labelledby="operationsHeading"><div class="operations-overview"><div class="toolbar"><h2 id="operationsHeading">Operations</h2><button class="secondary" onclick="loadOperations()">Refresh</button></div><p id="operationsStatus" role="status">Loading…</p><p id="operationsCheckedAt" class="sub"></p><label><input type="checkbox" id="operationsAutoRefresh" checked> Refresh every 15 seconds</label></div>
+<div class="operations-menu" role="tablist" aria-label="Operations sections"><button id="operation-tab-status" role="tab" aria-controls="operationsDetail" tabindex="0" onclick="selectOperation('status',this)" aria-selected="true">Service status</button><button id="operation-tab-maintenance" role="tab" aria-controls="operationsDetail" tabindex="-1" onclick="selectOperation('maintenance',this)" aria-selected="false">Maintenance</button><button id="operation-tab-jobs" role="tab" aria-controls="operationsDetail" tabindex="-1" onclick="selectOperation('jobs',this)" aria-selected="false">Background jobs</button><button id="operation-tab-history" role="tab" aria-controls="operationsDetail" tabindex="-1" onclick="selectOperation('history',this)" aria-selected="false">Operation history</button><button id="operation-tab-version" role="tab" aria-controls="operationsDetail" tabindex="-1" onclick="selectOperation('version',this)" aria-selected="false">Version and deployment</button></div>
+<div id="operationsDetail" role="tabpanel" aria-labelledby="operation-tab-status" tabindex="0"></div><p class="sub operations-note">Settings apply to new HTTP requests. Work already running finishes normally. External monitoring, automated backups and cloud deployment are managed separately.</p></section>
+<aside class="detail-shell" id="product-detail-window" aria-label="Product Detail"><div class="panel detail-panel"><div class="toolbar"><h2 style="margin:0;flex:1">Product Detail</h2><button class="secondary" onclick="openObservationDiagnostic()">Observation decision</button></div><div id="detail" class="sub">Select a row in Product List to view its history.</div></div></aside>
+<div class="panel user-detail-panel" id="user-detail-window"><div class="toolbar user-detail-title"><h2 style="margin:0">User Detail</h2><button id="openUserTopBtn" class="secondary" onclick="openTopPageAsActiveUser()" disabled>Open Top Page as this user</button></div><div id="accountPanel" class="sub">Select a user from the list on the left.</div></div>
+</aside>
 </main>
 
+<dialog id="manualCrawlDialog" class="console-tool-dialog" aria-labelledby="manualCrawlDialogTitle"><div class="toolbar"><h2 id="manualCrawlDialogTitle" style="flex:1">Manual Crawl</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('manualCrawlDialog')">Close</button></div>
+<div class="crawl-query">
+<div class="sub">One query per line</div>
+<textarea id="queries">Fender Stratocaster
+Fender Telecaster
+Fender Jazzmaster
+Fender Jaguar
+Gibson Les Paul
+Gibson SG
+Gibson ES-335</textarea>
+</div>
+<div class="crawl-controls">
+<div><div class="sub">Year Min</div><input id="yearMin" type="number" placeholder="None" min="1800" max="2100"></div>
+<div><div class="sub">Year Max</div><input id="yearMax" type="number" value="1980" min="1800" max="2100"></div>
+<div><div class="sub">Limit / query</div><input id="limit" type="number" value="500" min="1" max="5000"></div>
+<div><div class="sub">Workers</div><input id="workers" type="number" value="6" min="1" max="12"></div>
+<div><button data-ui-action="primary" id="crawlBtn" onclick="startCrawl()">Start Crawl</button></div>
+</div>
+<p class="sub">Progress and results appear in Crawl Run Log. Closing this dialog keeps the crawl running.</p></dialog>
+<dialog id="consoleBackupsDialog" class="console-tool-dialog" aria-labelledby="consoleBackupsDialogTitle"><div class="toolbar"><h2 id="consoleBackupsDialogTitle" style="flex:1">Backups</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('consoleBackupsDialog')">Close</button></div>
+<p class="sub">Chronicle includes guitars, users, Claims, requests, disputes, Crawl history, and images. Other targets are saved separately. Crawl automatically saves Chronicle before making changes.</p>
+<div class="toolbar"><label for="backupTarget">Target</label><select id="backupTarget" onchange="renderBackupTarget()"><option value="chronicle">Guitar / Chronicle (content + images)</option><option value="accounts">User Accounts (profiles + social data + avatars)</option><option value="operations">Operations (settings + history)</option><option value="authentication">Authentication experiment (queue + images)</option></select><button id="saveBackupButton" class="secondary" onclick="saveManualBackup()">Save backup now</button><button class="secondary" onclick="openTargetBackupImport()">Restore from file</button><button class="secondary" onclick="loadCrawlBackups()">Refresh</button></div>
+<div class="panel"><h3>Backup settings</h3><div class="toolbar"><label><input id="backupScheduledEnabled" type="checkbox"> Periodic backup</label><label for="backupIntervalHours">Interval (hours)</label><input id="backupIntervalHours" type="number" min="1" max="168" value="24" style="width:80px"><label for="crawlBackupGenerations">Keep last</label><input id="crawlBackupGenerations" type="number" min="1" max="100" value="10" style="width:70px"><span>backups</span><button class="secondary" onclick="saveCrawlBackupRetention()">Save</button></div><p id="backupScheduleStatus" class="sub"></p><p class="sub">Retention is independent for each target. Chronicle retention covers manual, scheduled, Crawl, and pre-restore backups.</p></div>
+<p id="crawlBackupStatus" class="sub" role="status"></p><p class="sub">Restoring requires maintenance and no running jobs. The selected target is saved before replacement. Restoring Operations keeps maintenance active, preserves backup schedules, and turns Auto Crawl and GPT review OFF. Restoring Authentication revokes its connection key.</p>
+<div class="table-wrap"><table><thead><tr><th>Created</th><th>Reason</th><th>Size</th><th>Actions</th></tr></thead><tbody id="crawlBackupRows"></tbody></table></div>
+<input id="targetBackupImportInput" type="file" accept=".zip,.db" hidden onchange="restoreTargetBackupFile(this)"></dialog>
+<dialog id="databaseMaintenanceDialog" class="console-tool-dialog" aria-labelledby="databaseMaintenanceDialogTitle"><div class="toolbar"><h2 id="databaseMaintenanceDialogTitle" style="flex:1">DB Maintenance</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('databaseMaintenanceDialog')">Close</button></div><div class="panel"><h3>Claim and listing repair</h3><div class="toolbar"><button class="secondary" onclick="runClaimMigration()">Claim Migration</button><button class="secondary" onclick="startBackfill()">Backfill existing DB (one time)</button><button class="secondary" onclick="openRepeated()">Inspect duplicate guitars</button></div></div><div class="panel"><div class="toolbar"><h2 style="margin:0;flex:1">Cached Specification</h2><button id="backfillSpecificationsButton" class="secondary" onclick="backfillCachedSpecifications()">Clean and add Specifications</button></div><div class="sub">Cleans incorrect automated extractions and duplicate Finish values, then adds explicit specifications from saved Reverb details to guitars without a user owner.</div></div>
+<div class="panel"><h3>Saved Crawl details</h3><button id="cacheReprocessBtn" class="secondary" onclick="reprocessCachedDetails()">Reprocess saved details</button><p class="sub">Uses both categories and the manufacture-year range in Web Crawl. No Reverb requests. Progress and results appear in Crawl Run Log.</p><button class="secondary" onclick="loadReviewCandidates()">Show candidates for review</button><div id="reviewCandidates"></div></div><div class="panel"><h3>Reset database</h3><p class="sub">Deletes guitar and user data.</p><button data-ui-action="danger" class="danger" onclick="resetDatabase()">Reset DB</button></div></dialog>
+<dialog id="statisticsDialog" class="console-tool-dialog" aria-labelledby="statisticsDialogTitle"><div class="toolbar"><h2 id="statisticsDialogTitle" style="flex:1">Statistics</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('statisticsDialog')">Close</button></div><div class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">Statistics</h2><button class="secondary" onclick="loadStatistics()">Refresh</button></div>
+<div id="statistics" class="sub">Calculating...</div>
+</div></dialog>
+<dialog id="pendingAcquireClaimsDialog" class="console-tool-dialog" aria-labelledby="pendingAcquireClaimsDialogTitle"><div class="toolbar"><h2 id="pendingAcquireClaimsDialogTitle" style="flex:1">Other Pending Acquire Claims</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('pendingAcquireClaimsDialog')">Close</button></div><div class="panel">
+<div class="toolbar"><h2 data-count-items="#unverifiedAcquireBody > tr" style="margin:0;flex:1">Other Pending Acquire Claims</h2><span id="unverifiedAcquireTotal" hidden></span><button class="secondary" onclick="loadUnverifiedAcquires(0)">Refresh</button></div>
+<div class="sub">Only Automation and older Claims without an Ownership Request are shown. Shows only Unverified Acquire Claims that could change the current owner. Historical Claims and Claims for the same owner are excluded. Select a row to open Product Detail.</div>
+<div class="table-wrap"><table><thead><tr><th>Claim</th><th>Guitar</th><th>Serial</th><th>Author</th><th>Current Owner</th><th>Proposed Owner</th><th>Date</th></tr></thead><tbody id="unverifiedAcquireBody"></tbody></table></div>
+<div class="toolbar"><button id="unverifiedAcquirePrev" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset-100)">Previous</button><span id="unverifiedAcquirePage" class="sub"></span><button id="unverifiedAcquireNext" class="secondary" onclick="loadUnverifiedAcquires(unverifiedAcquireOffset+100)">Next</button></div>
+</div></dialog>
+<dialog id="productionAcquireDialog" aria-labelledby="productionAcquireDialogTitle"><div class="toolbar"><h2 id="productionAcquireDialogTitle" style="flex:1">Request Details</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('productionAcquireDialog')">Close</button></div><div class="request-detail-content"><div id="productionAcquireSummary">Loading request…</div><div id="productionAcquireImages" style="display:flex;flex-wrap:wrap;gap:12px"></div>
+<p class="sub">Review approval and owner verification are separate decisions. The applicant can see the reason for an administrator override.</p>
+<label>Reason for change (required)<textarea required aria-describedby="productionAcquireActionStatus" id="productionAcquireReason" rows="2" maxlength="2000" style="width:100%"></textarea></label><div class="toolbar" id="productionAcquireActions"></div><p id="productionAcquireActionStatus" role="status" aria-live="polite"></p>
+<label>Report and history (including the original AI review)<textarea id="productionAcquireDetail" readonly rows="12" style="width:100%"></textarea></label>
+<details><summary>Scheduled Review Instructions</summary><textarea id="productionAcquirePrompt" readonly rows="8" style="width:100%"></textarea></details></div></dialog>
 <input id="dbImportInput" type="file" accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3" style="display:none" onchange="importDatabaseFile(this)">
 <dialog id="repeatedDialog" style="width:min(1000px,94vw);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px">
 <div class="toolbar"><h2 style="flex:1" data-count-items="#repeatedGroups > section">Repeated</h2><button data-ui-action="close" class="secondary" onclick="YGCOverlays.close('repeatedDialog')">Close</button></div>

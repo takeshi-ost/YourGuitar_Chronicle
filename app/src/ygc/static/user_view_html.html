@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="sunburst_3ply">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -10,9 +10,11 @@
 
 
 <link rel="stylesheet" href="/assets/themes.css?v=claim-colors-v1">
+<script src="/assets/local-auth.js" defer></script>
 <script src="/assets/overlays.js" defer></script>
 <script src="/assets/product-detail.js?v=shared-ui-v2" defer></script>
 <script src="/assets/list-navigation.js?v=list-counts-v1" defer></script>
+<script src="/assets/table-columns.js" defer></script>
 </head>
 <body>
 <div class="sticky-header">
@@ -30,8 +32,14 @@
   </div>
 </div>
 <main>
-<section id="ownershipDisputeNotice" class="unanswered-requests" hidden aria-labelledby="ownershipDisputeNoticeTitle"><h2 id="ownershipDisputeNoticeTitle" data-count-items="#disputeList > .unanswered-request">Ownership Disputes</h2><div id="disputeList"></div></section>
-<section id="unansweredRequests" class="unanswered-requests" hidden aria-labelledby="unansweredRequestsTitle"></section>
+<section id="importantInformation" class="unanswered-requests" hidden aria-label="Important information">
+<section id="serviceNotice" hidden></section>
+<section id="accountAccessNotice" class="important-information-group" hidden></section>
+<section id="ownershipDisputeNotice" class="important-information-group" hidden aria-label="Unresolved ownership disputes"><div id="disputeList"></div></section>
+<section id="unansweredRequests" class="important-information-group" hidden aria-label="Unanswered ownership requests"></section>
+
+<section id="myOwnershipInformation" class="important-information-group" hidden></section>
+</section>
 
 <div class="grid">
 <section class="left-column content-frame">
@@ -327,11 +335,45 @@
     <div class="sub" style="margin-bottom:14px">This action requires an account. Sign in or create an account to continue.</div>
     <div class="modal-actions">
       <button data-ui-action="close" class="secondary" type="button" onclick="closeAccountRequired()">Cancel</button>
-      <button class="secondary" type="button" onclick="window.location.href='/user-view/edit'">Sign In</button>
-      <button data-ui-action="primary" type="button" onclick="window.location.href='/user-view/edit'">Create Account</button>
+      <button class="secondary" type="button" onclick="openAccountSignIn()">Sign In</button>
+      <button data-ui-action="primary" type="button" onclick="openAccountRegistration()">Create Account</button>
     </div>
   </div>
 </div>
+
+<div class="modal-backdrop" id="accountSignInModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountSignInTitle">
+    <h2 id="accountSignInTitle">Sign In</h2>
+    <p class="sub">Temporary sign-in. Your email address and password are not sent or saved.</p>
+    <form id="accountSignInForm" autocomplete="off" novalidate onsubmit="submitAccountSignIn(event)">
+      <div class="form-row"><label class="form-label" for="signInEmail">Email address</label><input id="signInEmail" type="email" autocomplete="off" inputmode="email"></div>
+      <div class="form-row"><label class="form-label" for="signInPassword">Password</label><input id="signInPassword" type="password" autocomplete="off"></div>
+      <div class="form-row"><label class="form-label" for="signInUser">Test user</label><select id="signInUser" disabled><option value="">Loading users...</option></select></div>
+      <div id="accountSignInStatus" class="sub" role="status" aria-live="polite"></div>
+      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountSignInModal')">Cancel</button><button id="accountSignInSubmit" data-ui-action="primary" type="submit">Sign In</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="accountRegistrationModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountRegistrationTitle">
+    <h2 id="accountRegistrationTitle">Create Account</h2>
+    <p class="sub">Temporary registration. Your email address and password are not saved.</p>
+    <form id="accountRegistrationForm" autocomplete="off" novalidate onsubmit="submitAccountRegistration(event)">
+      <div class="form-row"><label class="form-label" for="registrationEmail">Email address</label><input id="registrationEmail" type="email" autocomplete="off" inputmode="email"></div>
+      <div class="form-row"><label class="form-label" for="registrationPassword">Password</label><input id="registrationPassword" type="password" autocomplete="off"></div>
+      <div class="form-row"><label class="form-label" for="registrationDisplayName">Display Name · Required</label><input id="registrationDisplayName" maxlength="120" required placeholder="Name or nickname"></div>
+      <div class="form-row"><label class="form-label" for="registrationAccountType">Account Type</label><select id="registrationAccountType"><option value="user">User</option><option value="shop">Shop</option><option value="builder">Builder</option><option value="repairer">Repairer</option><option value="organization">Organization</option></select></div>
+      <p class="sub">Email and password are dummy inputs. Display Name, selected Account Type, and agreement records are saved.</p>
+      <p><label><input id="registrationTerms" type="checkbox"> I agree to the </label><button type="button" class="secondary" onclick="showRegistrationPolicy('terms')">Terms (local draft)</button></p>
+      <p><label><input id="registrationPrivacy" type="checkbox"> I agree to the </label><button type="button" class="secondary" onclick="showRegistrationPolicy('privacy')">Privacy notice (local draft)</button></p>
+      <div id="accountRegistrationStatus" class="sub" role="status" aria-live="polite"></div>
+      <div class="modal-actions"><button class="secondary" data-ui-action="close" type="button" onclick="YGCOverlays.close('accountRegistrationModal')">Cancel</button><button id="accountRegistrationSubmit" data-ui-action="primary" type="submit">Create Account</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="registrationPolicyModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="registrationPolicyTitle"><h2 id="registrationPolicyTitle"></h2><div id="registrationPolicyContent"></div><div class="modal-actions"><button type="button" onclick="YGCOverlays.close('registrationPolicyModal')">Close</button></div></div></div>
 
 <div class="modal-backdrop" id="claimPopupModal" onclick="closeClaimPopup(event)">
   <div class="claim-popup-modal" onclick="event.stopPropagation()">
@@ -346,5 +388,6 @@
 <div class="modal-backdrop" id="ownershipConfirmModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="ownershipConfirmTitle"><h3 id="ownershipConfirmTitle">Confirm</h3><p id="ownershipConfirmMessage"></p><div class="modal-actions"><button id="ownershipConfirmSubmit" data-ui-action="primary" type="button" onclick="resolveOwnershipConfirmation(true)">Confirm</button><button data-ui-action="close" type="button" class="secondary" onclick="resolveOwnershipConfirmation(false)">Back</button></div></div></div>
 
 <script src="/assets/disputes.js" defer></script>
+<script src="/assets/important-information.js" defer></script>
 </body>
 </html>

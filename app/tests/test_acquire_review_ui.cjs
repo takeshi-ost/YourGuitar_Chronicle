@@ -62,7 +62,7 @@ test('Reflesh keeps an unsaved Challenge and input without creating a request',a
   context.row={revision:'a'.repeat(32),status:'draft',unsaved:true,draft_token:'signed-preview',serial:'SERIAL',challenge:'KEEP1234',expires_at:1800000000,images:{}};
   elements.acquireDate={value:'2026-10-01'};elements.acquireBody={value:'Unsaved description'};
   vm.runInContext('acquireRevision=row.revision;renderAcquireApplication(row)',context);
-  assert.match(elements.acquireReviewActions.innerHTML,/>Reflesh<\/button>/);
+  assert.doesNotMatch(elements.acquireReviewActions.innerHTML,/>Reflesh<\/button>/);
   await vm.runInContext('requestRefresh()',context);
   assert.equal(calls.length,0);
   assert.equal(vm.runInContext('acquireForm.draft_token',context),'signed-preview');
@@ -113,7 +113,9 @@ test('Unanswered requests show addressed actions independently of notifications'
   vm.runInContext(html.slice(html.indexOf('let unansweredSequence='),html.indexOf('async function loadActiveUser()')),context);
   await vm.runInContext('loadUnansweredRequests()',context);
   assert.equal(elements.unansweredRequests.hidden,false);
-  assert.match(elements.unansweredRequests.innerHTML,/Unanswered Requests/);
+  assert.doesNotMatch(elements.unansweredRequests.innerHTML,/<h[23]/);
+  assert.match(elements.unansweredRequests.innerHTML,/Transfer ·/);
+  assert.match(elements.unansweredRequests.innerHTML,/Acquire ·/);
   assert.match(elements.unansweredRequests.innerHTML,/has offered to transfer/);
   assert.match(elements.unansweredRequests.innerHTML,/is claiming ownership of/);
   assert.match(elements.unansweredRequests.innerHTML,/>Accept<\/button>/);
