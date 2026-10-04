@@ -155,6 +155,38 @@ def run(port):
                 rejected(con, 'DELETE FROM individuals WHERE id=%s', (individual,))
                 # A non-ownership post remains writable while a dispute is open.
                 con.execute("INSERT INTO claims(individual_id,author_user_id,claim_type,created_at,updated_at) VALUES(%s,2,'event','now','now')", (individual,))
+            with connect(app,'chronicle') as con:
+                dispute=con.execute('SELECT id FROM ownership_disputes WHERE individual_id=%s',(individual,)).fetchone()['id']
+                con.execute("INSERT INTO ownership_dispute_evidence(dispute_id,claim_id,author_id,explanation,summary,content,created_at) VALUES(%s,%s,1,'Private explanation','',%s,'now')",(dispute,claim,bytes(range(256))))
+            from ygc.cloud_db_snapshot import snapshot,verify_snapshot
+            from ygc.cloud_backup_job import save,verify_latest
+            from test_cloud_avatar import Storage
+            from ygc.cloud_backup_routes import catalog
+            from ygc.db.postgres_operations import PostgresOperations
+            import hashlib
+            storage=Storage()
+            for target in TARGETS:
+                data,metadata=snapshot(app,target)
+                result=verify_snapshot(data,target,metadata['sha256'])
+                assert result['tables']==status(app,target)['tables']
+                assert save(app,storage,target,'fixture-execution')['read_back_verified']
+                assert verify_latest(app,storage,target)['verified']
+            assert len(storage.objects)==4
+            # Metadata records are scoped; callers never receive storage references.
+            with connect(app,'accounts') as con:
+                con.execute("UPDATE account_records SET role='admin' WHERE app_user_id='test-uuid'")
+            listing=catalog(PostgresOperations(app),'test-uuid','accounts')
+            assert len(listing['items'])==1 and listing['items'][0]['target']=='accounts'
+            assert 'object' not in listing['items'][0]
+            with connect(owner,'operations') as con:
+                con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(runtime)))
+            try:save(app,storage,'chronicle','failed-audit')
+            except psycopg.errors.InsufficientPrivilege:pass
+            else:raise AssertionError('Backup must fail when audit is denied.')
+            assert len(storage.objects)==4 and len(storage.deleted)==1
+            with connect(owner,'operations') as con:
+                con.execute(sql.SQL('GRANT INSERT ON events TO {}').format(sql.Identifier(runtime)))
+            print('PostgreSQL snapshots: all four targets, known schema/all tables/sequences, gzip integrity, independent save/read-back/catalog, audit rollback compensation passed.')
             with connect(owner, 'operations') as con:
                 con.execute("ALTER TABLE settings ADD COLUMN unexpected TEXT")
             try:

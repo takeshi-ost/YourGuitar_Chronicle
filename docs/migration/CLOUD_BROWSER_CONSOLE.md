@@ -39,3 +39,7 @@ GitHub Actionsの共通CIも成功した（run `37208270805`、実装コミッ�
 ## ギター閲覧の追加（2026-10-05）
 
 左のGuitar DB Managementと右のProduct Detailに、Admin用の一覧・検索・ページ送り・基本情報閲覧を追加した。Operationsと取得障害を分離し、左右独立スクロールを維持する。編集・画像・Chronicleは未接続。[仕様と確認範囲](CLOUD_GUITAR_BROWSER.md)を参照。
+
+## DB別バックアップ一覧（2026-10-05）
+
+Database backupsで対象を選び、保存時刻・版・テーブル／行数を閲覧する。現段階の保存はIAM専用Jobで、Console保存ボタン・定期保存・保持・復元は未接続。[保存基盤と検証](CLOUD_DATABASE_BACKUPS.md)を参照。

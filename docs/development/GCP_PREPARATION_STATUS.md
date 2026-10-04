@@ -157,3 +157,7 @@ Admin認証済みのConsoleから状態確認と4モードの変更を操作す�
 ## 2026-10-05：クラウドConsoleのギター閲覧
 
 Chronicleの個体一覧・検索・ページ送りと右側Product Detailの読み取りを追加。確認済みメール・正本Admin資格で全サービスモードから利用する。画像・Claim・編集・Crawl・バックアップ／復元は後続。[仕様と検証範囲](../migration/CLOUD_GUITAR_BROWSER.md)を参照。
+
+## 2026-10-05：DB別バックアップ保存基盤
+
+対象DBの論理スナップショット保存・読み戻し検証とConsoleの履歴を追加した。保存はIAM専用Jobで対象ごとに実行する。定期保存・世代保持・復元・Crawlへの接続は後続。[仕様と検証](../migration/CLOUD_DATABASE_BACKUPS.md)を参照。
