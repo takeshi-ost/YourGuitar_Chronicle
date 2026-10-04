@@ -1,6 +1,6 @@
 # PostgreSQL接続・初期スキーマ
 
-更新日：2026-10-04。実装ブランチ上の移行基盤。WebUIは引き続きSQLiteを使い、Cloud Runでローカル実装を拒否する起動制限も維持している。
+更新日：2026-10-04。main統合済みの移行基盤（後続ブランチにCLI修正・initializeを追加）。WebUIは引き続きSQLiteを使い、Cloud Runでローカル実装を拒否する起動制限も維持している。
 
 ## 今回の実装範囲
 
@@ -28,7 +28,7 @@ python scripts/run_tests.py --postgres-bin /path/to/postgresql18/bin
 
 ## Cloud SQLで初期化するとき
 
-現在のクラウドには4つの空DBがあるが、この処理はまだ実行していない。Cloud SQL Auth Proxyで `your-guitar-chronicle-staging:asia-northeast1:ygc-staging-db` への接続を用意した後、以下を実行する。ProxyのIAM認証と、DBユーザーのパスワード認証は別。
+実接続で4DBが空であることを確認済みだが、この処理はまだ実行していない。接続確認と、パスワード入力1回で4対象を処理する新しいinitialize手順は[Cloud SQL初期化](CLOUD_SQL_INITIALIZATION.md)を参照。以下は対象別に処理する場合のコマンド。Cloud SQL Auth Proxyで `your-guitar-chronicle-staging:asia-northeast1:ygc-staging-db` への接続を用意した後、以下を実行する。ProxyのIAM認証と、DBユーザーのパスワード認証は別。
 
 ```bash
 export YGC_POSTGRES_HOST=127.0.0.1

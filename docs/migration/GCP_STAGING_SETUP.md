@@ -90,3 +90,7 @@ PR #16の認証検証はmainへ統合済み。後続ブランチにGoogle認証�
 ## ブラウザ認証の追加（2026-10-04）
 
 PR #17のアプリ登録APIはmainへ統合済み。後続ブランチに公式Web SDKの接続部品と明示設定時のみ提供するステージング確認画面を追加した。[ブラウザ認証](CLOUD_BROWSER_AUTH.md)を参照。現行TopPageの仮認証、Cloud Runの現行WebUI起動拒否は維持し、実GCPへの配置・登録はまだ行っていない。
+
+## Cloud SQL実接続と初期化準備（2026-10-04）
+
+PR #18のブラウザ認証はmainへ統合済み。公式Auth ProxyとSecret Managerのversion 1でygc_appから4DBの読取り接続に成功し、空のpublicスキーマと制限付き権限を確認した。認証用にfirebaseauth.users.getのみの独自ロールを実行用サービスアカウントへ付与済み。DBテーブル初期化は未実施。migrateのCLI分岐不具合を修正し、4DBのinitializeコマンドと実CLI統合テストを後続ブランチへ追加した。[実行手順・検証と残作業](CLOUD_SQL_INITIALIZATION.md)を参照。

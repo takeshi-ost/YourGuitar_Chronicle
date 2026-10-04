@@ -35,3 +35,69 @@ def test_invalid_configuration(monkeypatch, key, value):
     monkeypatch.setenv(key, value)
     with pytest.raises(ValueError):
         PostgresSettings.from_environment('test-only')
+
+
+@pytest.mark.parametrize('prompt', [False, True])
+def test_migrate_cli_calls_migration_after_loading_credentials(monkeypatch, capsys, prompt):
+    from unittest.mock import Mock
+    from ygc.db import postgres
+    settings = PostgresSettings('localhost', 'owner', 'private-test-password')
+    load = Mock(return_value=settings)
+    migrate = Mock(return_value=[2])
+    monkeypatch.setattr(postgres.PostgresSettings, 'from_environment', load)
+    monkeypatch.setattr(postgres, 'migrate', migrate)
+    status = Mock(side_effect=AssertionError('migrate must not merely return status'))
+    monkeypatch.setattr(postgres, 'status', status)
+    monkeypatch.setattr('getpass.getpass', Mock(return_value='private-test-password'))
+    assert postgres.main(['migrate', '--target', 'accounts', *(['--password-prompt'] if prompt else [])]) == 0
+    load.assert_called_once_with('private-test-password' if prompt else None)
+    migrate.assert_called_once_with(settings, 'accounts', 'ygc_app')
+    assert json.loads(capsys.readouterr().out) == {'target': 'accounts', 'applied': [2]}
+
+
+def test_initialize_cli_reads_password_once_and_does_not_print_it(monkeypatch, capsys):
+    from unittest.mock import Mock
+    from ygc.db import postgres
+    settings = PostgresSettings('localhost', 'owner', 'private-test-password')
+    monkeypatch.setattr(postgres.PostgresSettings, 'from_environment', Mock(return_value=settings))
+    initialize = Mock(return_value=[{'target': 'accounts', 'version': 2}])
+    monkeypatch.setattr(postgres, 'initialize', initialize)
+    prompt = Mock(return_value='private-test-password')
+    monkeypatch.setattr('getpass.getpass', prompt)
+    assert postgres.main(['initialize', '--password-prompt']) == 0
+    initialize.assert_called_once_with(settings, 'ygc_app')
+    prompt.assert_called_once()
+    output = capsys.readouterr().out
+    assert 'private-test-password' not in output
+    assert json.loads(output)['databases'][0]['version'] == 2
+
+
+def test_cli_error_does_not_echo_password(monkeypatch, capsys):
+    from ygc.db import postgres
+    def reject(*args):
+        raise ValueError('private-test-password')
+    monkeypatch.setattr(postgres.PostgresSettings, 'from_environment', reject)
+    assert postgres.main(['migrate', '--target', 'accounts']) == 1
+    assert 'private-test-password' not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('args', [['migrate'], ['status'], ['bootstrap'], ['initialize','--target','accounts']])
+def test_cli_rejects_incomplete_or_ambiguous_scope(args):
+    from ygc.db import postgres
+    with pytest.raises(SystemExit) as error:
+        postgres.main(args)
+    assert error.value.code == 2
+
+
+def test_initialize_validates_all_revisions_before_writes(monkeypatch):
+    from unittest.mock import Mock
+    from ygc.db import postgres
+    def check(target):
+        if target == 'authentication':
+            raise ValueError('Broken packaged migration')
+    monkeypatch.setattr(postgres, 'schema_versions', check)
+    bootstrap = Mock()
+    monkeypatch.setattr(postgres, 'bootstrap', bootstrap)
+    with pytest.raises(ValueError):
+        postgres.initialize(object())
+    bootstrap.assert_not_called()

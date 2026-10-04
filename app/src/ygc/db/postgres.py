@@ -173,25 +173,44 @@ def status(settings, target):
         return {'target': target, 'version': row['version'], 'tables': len(expected['tables'])}
 
 
-def main():
+def initialize(settings, runtime_user='ygc_app'):
+    """Bootstrap and migrate four stores; committed targets are safe to resume."""
+    # Validate every packaged revision before making the first change.
+    for target in TARGETS:
+        schema_versions(target)
+    results = []
+    for target in TARGETS:
+        created = bootstrap(settings, target, runtime_user)
+        applied = migrate(settings, target, runtime_user)
+        results.append({**status(settings, target), 'initialized': created, 'applied': applied})
+    return results
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('status', 'bootstrap', 'migrate'))
-    parser.add_argument('--target', choices=TARGETS, required=True)
+    parser.add_argument('operation', choices=('status', 'bootstrap', 'migrate', 'initialize'))
+    parser.add_argument('--target', choices=TARGETS)
     parser.add_argument('--runtime-user', default='ygc_app')
     parser.add_argument('--password-prompt', action='store_true', help='Read the DB password privately instead of from the environment')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.operation != 'initialize' and args.target is None:
+        parser.error('--target is required for this operation')
+    if args.operation == 'initialize' and args.target is not None:
+        parser.error('initialize operates on all four targets; omit --target')
     try:
         if args.password_prompt:
             from getpass import getpass
             password = getpass('Database password (not saved): ')
-        elif args.operation == 'migrate':
-            print(json.dumps({'target': args.target, 'applied': migrate(settings, args.target, args.runtime_user)}))
         else:
             password = None
         settings = PostgresSettings.from_environment(password)
         if args.operation == 'bootstrap':
             created = bootstrap(settings, args.target, args.runtime_user)
             print(json.dumps({'target': args.target, 'initialized': created}))
+        elif args.operation == 'migrate':
+            print(json.dumps({'target': args.target, 'applied': migrate(settings, args.target, args.runtime_user)}))
+        elif args.operation == 'initialize':
+            print(json.dumps({'databases': initialize(settings, args.runtime_user)}))
         else:
             print(json.dumps(status(settings, args.target)))
     except Exception as exc:

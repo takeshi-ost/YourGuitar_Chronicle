@@ -49,6 +49,50 @@ def rejected(con, query, params=None):
     raise AssertionError('Expected database rejection: ' + query)
 
 
+def initialization_checks(port):
+    """Exercise the actual CLI, not just direct bootstrap/migration functions."""
+    prefix = 'ygctest_init_' + uuid.uuid4().hex[:10] + '_'
+    runtime = prefix + 'app'
+    owner = PostgresSettings('127.0.0.1', 'postgres', 'ygc-tests-only', port, prefix)
+    app = PostgresSettings('127.0.0.1', runtime, 'ygc-tests-only', port, prefix)
+    env = os.environ.copy()
+    env.update(YGC_POSTGRES_HOST='127.0.0.1', YGC_POSTGRES_PORT=str(port),
+               YGC_POSTGRES_USER='postgres', YGC_POSTGRES_PASSWORD='ygc-tests-only',
+               YGC_POSTGRES_PREFIX=prefix)
+    created = []
+    import json
+    def command(*args):
+        result = subprocess.run([sys.executable, '-m', 'ygc.db.postgres', *args],
+                                env=env, capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+    with psycopg.connect(host='127.0.0.1', port=port, dbname='postgres', user='postgres',
+                        password='ygc-tests-only', autocommit=True) as admin:
+        try:
+            admin.execute(sql.SQL('CREATE ROLE {} LOGIN PASSWORD {}').format(sql.Identifier(runtime), sql.Literal('ygc-tests-only')))
+            for target in TARGETS:
+                name = owner.database(target)
+                admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
+                created.append(name)
+            # Resume after one target was committed by an earlier attempt.
+            assert bootstrap(owner, 'chronicle', runtime)
+            initialized = command('initialize', '--runtime-user', runtime)['databases']
+            assert [row['target'] for row in initialized] == list(TARGETS)
+            assert [row['version'] for row in initialized] == [2, 2, 1, 1]
+            assert [row['initialized'] for row in initialized] == [False, True, True, True]
+            with connect(app, 'accounts') as con:
+                con.execute("INSERT INTO account_records(app_user_id,display_name,created_at,updated_at) VALUES('fixture-kept','Keep profile','now','now')")
+            repeated = command('initialize', '--runtime-user', runtime)['databases']
+            assert all(not row['initialized'] and not row['applied'] for row in repeated)
+            with connect(app, 'accounts') as con:
+                assert con.execute("SELECT display_name FROM account_records WHERE app_user_id='fixture-kept'").fetchone()['display_name'] == 'Keep profile'
+            assert command('migrate', '--target', 'accounts', '--runtime-user', runtime) == {'target': 'accounts', 'applied': []}
+            print('PostgreSQL CLI: initialize all stores, resume partial initialization, preserve existing data and execute migrate passed.')
+        finally:
+            for name in reversed(created):
+                admin.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
+            admin.execute(sql.SQL('DROP ROLE IF EXISTS {}').format(sql.Identifier(runtime)))
+
+
 def run(port):
     prefix = 'ygctest_' + uuid.uuid4().hex[:12] + '_'
     runtime = prefix+'app'
@@ -141,6 +185,7 @@ if __name__ == '__main__':
     group.add_argument('--port', type=int)
     args = parser.parse_args()
     with server(args.postgres_bin, args.port) as port:
+        initialization_checks(port)
         run(port)
         from postgres_account_checks import run as account_checks
         account_checks(port)
