@@ -1228,5 +1228,15 @@
   "guitars.field_location_country": "Country",
   "guitars.field_location_region": "Region",
   "guitars.field_current_owner_name": "Current Owner",
-  "guitars.field_current_owner_type": "Owner type"
+  "guitars.field_current_owner_type": "Owner type",
+  "backups.heading": "Database backups",
+  "backups.scope": "Saved database snapshots. Saving currently uses an IAM Job; scheduling, retention and restore are not yet connected.",
+  "backups.target": "Database",
+  "backups.at": "Saved at (UTC)",
+  "backups.version": "Schema version",
+  "backups.tables": "Tables",
+  "backups.rows": "Rows",
+  "backups.loaded": "Showing up to 50 saved snapshots.",
+  "backups.empty": "No saved snapshots for this database.",
+  "backups.failed": "Backup catalog unavailable. Refresh to retry."
 }

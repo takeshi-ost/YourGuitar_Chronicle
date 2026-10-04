@@ -1228,5 +1228,15 @@
   "guitars.field_location_country": "国",
   "guitars.field_location_region": "地域",
   "guitars.field_current_owner_name": "現在の所有者",
-  "guitars.field_current_owner_type": "所有者の種類"
+  "guitars.field_current_owner_type": "所有者の種類",
+  "backups.heading": "DBバックアップ",
+  "backups.scope": "保存済みのDBスナップショットです。保存は現在IAM Jobで実行します。定期保存・世代保持・復元は未接続です。",
+  "backups.target": "対象DB",
+  "backups.at": "保存日時（UTC）",
+  "backups.version": "スキーマ版",
+  "backups.tables": "テーブル数",
+  "backups.rows": "行数",
+  "backups.loaded": "保存済みスナップショットを最大50件表示しています。",
+  "backups.empty": "このDBの保存済みスナップショットはありません。",
+  "backups.failed": "バックアップ一覧を取得できません。再読み込みしてください。"
 }

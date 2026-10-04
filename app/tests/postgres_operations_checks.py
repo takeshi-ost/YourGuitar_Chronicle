@@ -123,6 +123,13 @@ def run(port):
                 version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
                 assert len(guitars.list(aid)['items'])==25
             print('PostgreSQL guitar reads: bounded keyset pages, literal wildcard search, fixed fields, missing IDs, Admin mode matrix and member refusal passed.')
+            # Populated v2 projection rows contain timezone-aware timestamps.
+            from ygc.cloud_db_snapshot import snapshot,verify_snapshot
+            assert accounts.drain_projection()>0
+            for target in ('accounts','chronicle'):
+                data,meta=snapshot(app,target)
+                assert verify_snapshot(data,target,meta['sha256'])['schema_version']==2
+            print('PostgreSQL snapshots v2: populated outbox/receipts with timestamp precision passed.')
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

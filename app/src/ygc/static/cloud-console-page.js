@@ -1,13 +1,15 @@
+import {createBackupBrowser} from './cloud-console-backups.js';
 import {createGuitarBrowser} from './cloud-console-guitars.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const modes={normal:'ui.normal_a7248eeb',read_only:'ui.read_only_8ac76735',offline:'ui.offline_a1794783',admin_only:'console.admin_only'};
 const defaultMessage=mode=>mode==='normal'?'':t('console.default_'+mode);
 let auth,settings=null,authorized=false,busy=false;
+const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 $('consoleStatus').removeAttribute('data-i18n');
 function controls(){
-  guitars.render();
+  guitars.render();backups.render();
   $('consoleControls').hidden=!authorized;
   $('consoleRefresh').disabled=busy||!authorized;
   $('operationsSave').disabled=busy||!authorized||!settings;
@@ -15,7 +17,7 @@ function controls(){
   $('consoleSignOut').hidden=!auth?.signedIn;
   $('consoleSignOut').disabled=busy;
 }
-function clear(){authorized=false;guitars.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
+function clear(){authorized=false;guitars.clear();backups.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
 function error(error){
   settings=null;
   if([401,403].includes(error.status)||error.code==='sign_in_required')clear();
@@ -84,7 +86,7 @@ await action(async()=>{
   if(!state?.user){$('consoleStatus').textContent=t('console.sign_in_required');return}
   if(state.user.role!=='admin'||state.identity?.email_verified!==true){$('consoleStatus').textContent=t('console.admin_required');return}
   // UI eligibility never replaces the server's canonical Admin check.
-  authorized=true;await refresh();await guitars.refresh();if(!authorized)return;
+  authorized=true;await refresh();await guitars.refresh();if(!authorized)return;await backups.refresh();if(!authorized)return;
   $('consoleIdentity').textContent=state.user.display_name;
   $('consoleStatus').textContent=t('console.ready');
 });

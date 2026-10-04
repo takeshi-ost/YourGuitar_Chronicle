@@ -1,4 +1,5 @@
 """Cloud Console UI journeys; Google and stores are replaced only in this fixture."""
+import json
 import os
 import socket
 import threading
@@ -35,7 +36,12 @@ def main():
         def access(self, kind, actor):
             if self.fail:raise self.fail
             if actor!='admin-uuid':raise PermissionError()
-            yield
+            class CatalogConnection:
+                def execute(self,query,params):
+                    target=params[1]
+                    records=[{'reason':json.dumps(dict(kind='db_backup_v1',backup_id='fixture',target=target,created_at='2026-10-05T00:00:00Z',schema_version=2,tables=42 if target=='chronicle' else 8,rows=3))}] if target in ('chronicle','accounts') else []
+                    return SimpleNamespace(fetchall=lambda:records)
+            yield CatalogConnection(),dict(self.row),{}
         def details(self, actor):
             calls.append(('read',actor))
             if self.fail:raise self.fail
@@ -63,6 +69,8 @@ def main():
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
                 return rows[individual_id-1]
     app.include_router(guitar_router(verifier,Guitars()))
+    from ygc.cloud_backup_routes import backup_router
+    app.include_router(backup_router(verifier,ops))
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -93,6 +101,11 @@ def main():
                 expect(page.locator('#contentStorageStatus')).to_have_text('Read access confirmed')
                 expect(page.locator('#accountsStorageStatus')).to_have_text('Status unavailable. Refresh to try again.')
                 expect(page.locator('#consoleIdentity')).to_have_text('<b>Operator</b>');assert page.locator('#consoleIdentity b').count()==0
+                expect(page.locator('#backupRows tr')).to_have_count(1)
+                expect(page.locator('#backupRows')).to_contain_text('42')
+                page.locator('#backupTarget').select_option('accounts');expect(page.locator('#backupRows')).to_contain_text('8')
+                page.locator('#backupTarget').select_option('operations');expect(page.locator('#backupRows tr')).to_have_count(0)
+                expect(page.locator('#backupStatus')).to_have_text('No saved snapshots for this database.')
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
                 assert page.locator('#guitarRows img').count()==0
                 page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)
