@@ -1,23 +1,47 @@
 export function createBackupBrowser({request,authorized,onUnauthorized}){
   const $=id=>document.getElementById(id),t=k=>YGCI18n.t(k);
-  let busy=false,epoch=0;
-  function render(){$('backupBrowser').hidden=!authorized();$('backupTarget').disabled=$('backupRefresh').disabled=busy||!authorized()}
-  function clear(){epoch++;$('backupRows').replaceChildren();$('backupStatus').textContent='';render()}
+  let busy=false,epoch=0,timer=null,available=false,pending=false;
+  function render(){
+    $('backupBrowser').hidden=!authorized();
+    $('backupTarget').disabled=$('backupRefresh').disabled=busy||!authorized();
+    $('backupSave').disabled=busy||pending||!available||!authorized();
+  }
+  function clear(){epoch++;clearTimeout(timer);timer=null;available=false;pending=false;$('backupRows').replaceChildren();$('backupStatus').textContent='';$('backupSaveStatus').textContent='';render()}
+  function display(state){
+    pending=['starting','running','unknown'].includes(state.state)&&!state.retry_allowed;
+    $('backupSaveStatus').textContent=state.state==='idle'?'':t('backups.'+state.state);
+    if(pending&&authorized())timer=setTimeout(()=>refresh(),5000);
+  }
   async function refresh(){
     if(busy||!authorized())return;
-    busy=true;const current=++epoch;render();
+    clearTimeout(timer);timer=null;busy=true;const current=++epoch;render();
     try{
-      const result=await request('/api/admin/backups?'+new URLSearchParams({target:$('backupTarget').value}));
+      const target=$('backupTarget').value;
+      const result=await request('/api/admin/backups?'+new URLSearchParams({target}));
       if(current!==epoch)return;
+      available=result.save_available===true;
       $('backupRows').replaceChildren();
       for(const row of result.items){const tr=document.createElement('tr');for(const value of [row.created_at,row.schema_version,row.tables,row.rows]){const td=document.createElement('td');td.textContent=String(value);tr.append(td)}$('backupRows').append(tr)}
       $('backupStatus').textContent=t(result.items.length?'backups.loaded':'backups.empty');
+      if(available){const state=await request('/api/admin/backups/save-status?'+new URLSearchParams({target}));if(current===epoch)display(state)}
     }catch(error){
       if(current!==epoch)return;
       clear();if([401,403].includes(error.status))onUnauthorized(error);
       $('backupStatus').textContent=t('backups.failed');
     }finally{busy=false;render()}
   }
-  $('backupRefresh').onclick=()=>refresh();$('backupTarget').onchange=()=>{clear();refresh()};
+  async function save(){
+    if(busy||pending||!available||!authorized())return;
+    clearTimeout(timer);timer=null;busy=true;const current=++epoch;render();
+    try{
+      const result=await request('/api/admin/backups/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:$('backupTarget').value,request_id:crypto.randomUUID()})});
+      if(current===epoch)display(result);
+    }catch(error){
+      if(current!==epoch)return;
+      if([401,403].includes(error.status)){clear();onUnauthorized(error)}
+      else {$('backupSaveStatus').textContent=t(error.status===409?'backups.busy':'backups.unknown');pending=true;timer=setTimeout(()=>refresh(),5000)}
+    }finally{busy=false;render()}
+  }
+  $('backupSave').onclick=()=>save();$('backupRefresh').onclick=()=>refresh();$('backupTarget').onchange=()=>{clear();refresh()};
   return {render,clear,refresh};
 }

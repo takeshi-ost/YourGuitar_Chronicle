@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_backup_job import KIND
+from ygc.cloud_backup_control import BackupBusy
 from ygc.db.postgres import TARGETS
 
 
@@ -19,10 +20,9 @@ def catalog(operations,actor,target):
                 'limit':50,'scope':'database_snapshot','restore_available':False}
 
 
-def backup_router(verifier,operations):
+def backup_router(verifier,operations,control=None):
     router=APIRouter();headers={'Cache-Control':'private, no-store'}
-    @router.get('/api/admin/backups')
-    async def listing(request:Request):
+    async def actor(request):
         try:identity=await run_in_threadpool(verifier.verify,bearer_token=bearer_token(request))
         except HTTPException:raise
         except PermissionError:raise HTTPException(401,'Identity verification failed.',headers=headers) from None
@@ -31,11 +31,50 @@ def backup_router(verifier,operations):
             if not identity.email_verified:raise PermissionError()
             account=await run_in_threadpool(verifier.accounts.resolve_identity,issuer=identity.issuer,subject=identity.subject,tenant=identity.tenant)
             if account['role']!='admin':raise PermissionError()
-            query=request.query_params
-            if set(query)!={'target'} or len(query.getlist('target'))!=1:raise ValueError()
-            result=await run_in_threadpool(catalog,operations,account['app_user_id'],query['target'])
-            return JSONResponse(result,headers=headers)
-        except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
+            return account['app_user_id']
         except PermissionError:raise HTTPException(403,'A verified active administrator is required.',headers=headers) from None
-        except Exception:raise HTTPException(503,'Backup catalog unavailable.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Account status unavailable.',headers=headers) from None
+
+    def target_query(request):
+        query=request.query_params
+        if set(query)!={'target'} or len(query.getlist('target'))!=1 or query['target'] not in TARGETS:raise ValueError()
+        return query['target']
+
+    async def execute(function,*args):
+        try:
+            return JSONResponse(await run_in_threadpool(function,*args),headers=headers)
+        except BackupBusy:raise HTTPException(409,'A save is already pending for this database.',headers=headers) from None
+        except ValueError:raise HTTPException(400,'Invalid backup request.',headers=headers) from None
+        except PermissionError:raise HTTPException(403,'A verified active administrator is required.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Backup operation unavailable.',headers=headers) from None
+
+    @router.get('/api/admin/backups')
+    async def listing(request:Request):
+        admin=await actor(request)
+        try:
+            target=target_query(request)
+        except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
+        result=await execute(catalog,operations,admin,target)
+        # Availability is deployment configuration, never inferred from client privileges.
+        body=json.loads(result.body);body['save_available']=control is not None
+        return JSONResponse(body,headers=headers)
+
+    @router.post('/api/admin/backups/save')
+    async def save(request:Request):
+        admin=await actor(request)
+        if control is None:raise HTTPException(503,'Manual saving is not configured.',headers=headers)
+        try:
+            if request.query_params or len(await request.body())>1024:raise ValueError()
+            data=await request.json()
+            if not isinstance(data,dict) or set(data)!={'target','request_id'}:raise ValueError()
+        except (ValueError,TypeError):raise HTTPException(400,'Select one database and request UUID.',headers=headers) from None
+        return await execute(control.start,admin,data['target'],data['request_id'])
+
+    @router.get('/api/admin/backups/save-status')
+    async def status(request:Request):
+        admin=await actor(request)
+        if control is None:raise HTTPException(503,'Manual saving is not configured.',headers=headers)
+        try:target=target_query(request)
+        except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
+        return await execute(control.status,admin,target)
     return router

@@ -130,6 +130,22 @@ def run(port):
                 data,meta=snapshot(app,target)
                 assert verify_snapshot(data,target,meta['sha256'])['schema_version']==2
             print('PostgreSQL snapshots v2: populated outbox/receipts with timestamp precision passed.')
+            # Intent persists before dispatch; retries and target conflicts do not invoke twice.
+            from ygc.cloud_backup_control import BackupControl,BackupBusy
+            from ygc.cloud_backup_job import save
+            from unittest.mock import Mock
+            from test_cloud_avatar import Storage
+            job_client=Mock();job_client.start.return_value='private-operation';job_client.status.return_value='running'
+            controls=BackupControl(operations,job_client);token=str(uuid.uuid4())
+            assert controls.start(aid,'accounts',token)['state']=='running'
+            assert controls.start(aid,'accounts',token)['state']=='running'
+            assert job_client.start.call_count==1
+            rejected(BackupBusy,lambda:controls.start(aid,'accounts',str(uuid.uuid4())))
+            rejected(PermissionError,lambda:controls.start(bid,'chronicle',str(uuid.uuid4())))
+            store=Storage()
+            assert save(app,store,'accounts','fixture',request_id=token)['saved']
+            assert controls.status(aid,'accounts')['state']=='succeeded'
+            print('PostgreSQL manual backup: persistent intent, repeated UUID, per-target conflict, member denial and committed archive success passed.')
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

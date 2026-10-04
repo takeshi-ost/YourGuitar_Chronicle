@@ -66,4 +66,26 @@ Cloud Build `cc661a88-031b-4199-9ec0-3beb544ddb21` 成功。デプロイした�
 | Chronicle（42テーブル） | `ygc-staging-db-backup-pdbgf` | `ygc-staging-db-backup-ts87w` |
 | Accounts（8テーブル） | `ygc-staging-db-backup-pmwcc` | `ygc-staging-db-backup-lxc79` |
 
-OperationsとAuthenticationの保存は隔離試験で確認し、実ステージングではまだ実行していない。匿名アクセスではConsole/静的資産/readyが正常応答し、バックアップ一覧等の管理APIが401になることを確認した。実URLのデスクトップ・モバイル表示も確認済み。サービスモードはデプロイ前後ともOfflineを維持した。復元・初期化・Crawl・定期保存は実行していない。Adminによる実Consoleの保存一覧確認は利用者確認を待つ。
+OperationsとAuthenticationの保存は隔離試験で確認し、実ステージングではまだ実行していない。匿名アクセスではConsole/静的資産/readyが正常応答し、バックアップ一覧等の管理APIが401になることを確認した。実URLのデスクトップ・モバイル表示も確認済み。サービスモードはデプロイ前後ともOfflineを維持した。復元・初期化・Crawl・定期保存は実行していない。Adminによる実Consoleの保存一覧は利用者確認済みで、保存基盤のPR #28はmainへマージ済み。
+
+## Console手動保存の接続（実環境は未接続）
+
+「今すぐ保存 / Save now」で選択した1DBの保存を開始し、5秒間隔の状態確認と再読み込み後の継続確認を行う。保存対象切替・SignOutで古い画面のポーリングを停止する。公開URLのAPI入口でも、確認済みIdentity Platformトークン・Accounts正本のAdmin・操作中の役割再確認を必須とする。全モードでAdminの保存を許可する。保存は読取専用Snapshotで、復元権限とは別。
+
+対象と正規UUIDだけを受け付け、Job名・プロジェクト・リージョン・実行引数・資格情報をブラウザから指定させない。サーバー側で既定Jobに固定し、保存対象と要求UUIDだけを引数・環境変数に上書きする。Job定義の既定操作は検証のまま変更しない。
+
+Operations eventsに要求UUID・操作主体・対象・時刻をコミットしてから非冪等のJob起動APIを呼ぶ。同じUUIDの再送は再起動せず、他の対象や操作主体への使い回しを拒否する。同じDBの未完了要求は10分間、新しい起動を拒否する。Google側の通信失敗は「結果未確認」とし、自動で再起動しない。台帳記録と要求UUIDの一致を成功条件とし、Job終了だけでは成功にしない。Job側のDB別advisory lockも維持する。
+
+10分経過しても確認できない場合は、新しい明示操作を許可する。長いプロビジョニングや通信の不確定性に対する無期限のexactly-once保証ではない。保存履歴を確認してから再試行する。Job状態参照に失敗しても保存要求を消さない。HTTP応答へOperation/Execution名、内部例外、生データを返さない。
+
+### 必要なIAMと現在の停止理由
+
+アプリ用SA `ygc-staging-app` に、既存の非公開Job `ygc-staging-db-backup` 単体で `run.jobs.run`、`run.jobs.runWithOverrides`、`run.executions.get` を許可するカスタムロールを付与する予定。Operation参照には別のカスタムロールで `run.operations.get` だけをプロジェクトに付与する。Job編集・削除・キャンセル・他Job起動・IAM編集・新しいSecret参照を追加しない。既存カスタムロールがあれば内容一致を確認し、別の権限を上書きしない。
+
+呼出し形式はGoogle公式の [Job実行API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.jobs/run)、[Operation参照API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.operations/get)、[Execution形式](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.jobs.executions)に合わせる。API応答のOperation完了とJob実処理完了を区別し、ExecutionのcompletionTimeと件数も確認する。
+
+自動承認レビューがこの永続IAM変更を「具体的な権限範囲への明示承認が不足」として拒否したため、IAM付与と実環境接続は未実行。利用者の明示承認後に権限を設定し、統一検証／Cloud Build成功のイメージで既存JobとWebを更新、実SAで起動・状態参照と匿名拒否・Offline維持を検証する。`--enable-backup-controls` により `YGC_BACKUP_REGION` を明示したデプロイだけで操作を有効にする。未設定の既存デプロイでは一覧だけを提供し、保存APIを503で拒否する。
+
+定期保存・世代保持・復元・Crawl接続は引き続き後続作業。現ステージングの保存ボタンが使用可能になったとは扱わない。
+
+追加実装の統一検証はPython649件・JavaScript71件・共通ブラウザ・隔離PostgreSQLが成功。ブラウザで選択DBだけの開始、保存中のボタン無効化、再読み込み後の結果確認を検証した。PostgreSQLでは起動前の永続記録、同じUUIDの再送、DB別の未完了拒否、一般ユーザー拒否、要求UUIDと保存台帳の一致を確認した。Google APIはこの段階ではモックで形式と不正リソース拒否を検証し、実SAによるJob起動はIAM承認後の確認事項として残す。

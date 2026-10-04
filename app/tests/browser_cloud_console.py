@@ -70,7 +70,20 @@ def main():
                 return rows[individual_id-1]
     app.include_router(guitar_router(verifier,Guitars()))
     from ygc.cloud_backup_routes import backup_router
-    app.include_router(backup_router(verifier,ops))
+    backup_calls=[]
+    class BackupControl:
+        states={}
+        def start(self,actor,target,token):
+            with ops.access('admin_write',actor):
+                backup_calls.append((actor,target,token))
+                self.states[target]=dict(target=target,request_id=token,state='running',created_at='now')
+                return self.states[target]
+        def status(self,actor,target):
+            with ops.access('admin_read',actor):
+                if target not in self.states:return dict(target=target,state='idle')
+                self.states[target]['state']='succeeded'
+                return self.states[target]
+    app.include_router(backup_router(verifier,ops,BackupControl()))
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -106,6 +119,16 @@ def main():
                 page.locator('#backupTarget').select_option('accounts');expect(page.locator('#backupRows')).to_contain_text('8')
                 page.locator('#backupTarget').select_option('operations');expect(page.locator('#backupRows tr')).to_have_count(0)
                 expect(page.locator('#backupStatus')).to_have_text('No saved snapshots for this database.')
+                page.locator('#backupTarget').select_option('accounts')
+                expect(page.locator('#backupSave')).to_be_enabled()
+                page.locator('#backupSave').click()
+                expect(page.locator('#backupSaveStatus')).to_have_text('Saving this database…')
+                expect(page.locator('#backupSave')).to_be_disabled()
+                page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
+                page.locator('#backupTarget').select_option('accounts')
+                expect(page.locator('#backupSaveStatus')).to_have_text('Saved and read-back verified.')
+                expect(page.locator('#backupSave')).to_be_enabled()
+                assert len(backup_calls)==1 and backup_calls[0][:2]==('admin-uuid','accounts')
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
                 assert page.locator('#guitarRows img').count()==0
                 page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)

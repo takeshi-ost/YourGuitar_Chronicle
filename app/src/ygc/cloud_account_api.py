@@ -18,7 +18,7 @@ from ygc.identity_platform import IdentityPlatformIdentity
 from ygc.cloud_account_page import install, public_config
 
 
-def create_app(settings, *, project_id, tenant='', web_config=None, storage=None):
+def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None):
     config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
@@ -33,6 +33,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
             yield
         finally:
             verifier.close()
+            if backup_client is not None:
+                backup_client.close()
             if storage is not None:
                 storage.close()
 
@@ -42,7 +44,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     operations = PostgresOperations(settings)
     app.include_router(operations_router(verifier, operations, storage))
     app.include_router(avatar_router(verifier, operations, storage))
-    app.include_router(backup_router(verifier,operations))
+    from ygc.cloud_backup_control import BackupControl
+    app.include_router(backup_router(verifier,operations,BackupControl(operations,backup_client) if backup_client is not None else None))
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
     @app.get('/health')
     def health():

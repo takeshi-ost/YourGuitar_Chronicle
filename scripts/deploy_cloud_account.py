@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--service', default='ygc-staging-accounts')
     parser.add_argument('--secret', default='ygc-staging-db-password')
     parser.add_argument('--secret-version', default='1')
+    parser.add_argument('--enable-backup-controls', action='store_true')
     parser.add_argument('--gcloud', default='gcloud')
     args = parser.parse_args()
     if '@sha256:' not in args.image:
@@ -56,6 +57,8 @@ def main():
            'YGC_POSTGRES_HOST': '/cloudsql/' + instance, 'YGC_POSTGRES_USER': 'ygc_app',
            'YGC_POSTGRES_PREFIX': 'ygc_', 'YGC_FIREBASE_API_KEY': key,
            'YGC_FIREBASE_AUTH_DOMAIN': args.project + '.firebaseapp.com'}
+    if args.enable_backup_controls:
+        env['YGC_BACKUP_REGION'] = args.region
     with tempfile.TemporaryDirectory(prefix='ygc-cloud-deploy-') as directory:
         path = Path(directory) / 'env.json'
         path.write_text(json.dumps(env))
