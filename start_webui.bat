@@ -27,7 +27,7 @@ if errorlevel 1 goto :error
 
 echo.
 echo [3/4] Updating editable install...
-python -m pip install -e ".[dev]"
+python ../scripts/install_dependencies.py
 if errorlevel 1 goto :error
 
 echo.

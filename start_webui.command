@@ -24,7 +24,7 @@ source .venv/bin/activate
 
 echo
 echo "[3/4] Updating editable install..."
-python -m pip install -e ".[dev]"
+python ../scripts/install_dependencies.py
 
 echo
 echo "[4/4] Starting WebUI..."
