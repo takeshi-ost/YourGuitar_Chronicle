@@ -189,3 +189,6 @@ if __name__ == '__main__':
         run(port)
         from postgres_account_checks import run as account_checks
         account_checks(port)
+
+        from postgres_operations_checks import run as operations_checks
+        operations_checks(port)

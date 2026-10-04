@@ -34,7 +34,7 @@ Operations DBのサービスモードはofflineのまま。この独立した認
 
 ## 稼働確認
 
-`GET /health` はプロセスの稼働、`GET /ready` はAccounts・Chronicle双方のDB接続を確認する。正常時は `{"status":"ok"}`。DB接続失敗時のreadyは503と汎用メッセージで、資格情報や接続エラーの内容を返さない。起動時のスキーマ照合失敗はサービス起動を止める。
+`GET /health` はプロセスの稼働、`GET /ready` はAccounts・Chronicle・OperationsのDB接続を確認する。正常時は `{"status":"ok"}`。DB接続失敗時のreadyは503と汎用メッセージで、資格情報や接続エラーの内容を返さない。起動時のスキーマ照合失敗はサービス起動を止める。
 
 Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を繰り返さないよう、DB接続をlivenessの条件にはしない。初回の実URL確認で `/healthz` がGoogle側の404になったため、外部監視にも使える `/health` を採用した。
 
@@ -53,3 +53,7 @@ Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を�
 ## メール確認追加後の配置
 
 認証画面をリビジョン `ygc-staging-accounts-00003-ncs` へ更新した。確認メール送信と、新しいJWTによる確認状態更新を追加。操作・実配置・検証範囲は[メール確認](EMAIL_VERIFICATION.md)を参照。Accounts同期Jobの配置イメージ・スケジュールは変更していない。
+
+## 管理API基盤追加後の配置
+
+リビジョン `ygc-staging-accounts-00004-6sz` へ更新し、公開サービス状態と認証済みAdminのOperations APIを追加した。readyはOperationsを含む3DBの接続を確認する。BrowserConsole自体は未配置。[クラウド管理API](CLOUD_OPERATIONS_ACCESS.md)に実装範囲・初回Admin用の非公開Jobを記載した。
