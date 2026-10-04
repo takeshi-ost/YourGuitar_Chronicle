@@ -1,6 +1,6 @@
 # Cloud SQLへの接続確認と初期化
 
-更新日：2026-10-04。Cloud SQLへの接続は確認済み。4DBのテーブル初期化はまだ実行していない。ローカルの実DBを移送しない。
+更新日：2026-10-04。Cloud SQLの4DB初期化と制限付きアプリユーザーによる確認が完了。ローカルの実DBを移送しない。
 
 ## 実接続で確認したこと
 
@@ -55,6 +55,21 @@ YGC_POSTGRES_HOST=127.0.0.1 YGC_POSTGRES_PORT=55432 YGC_POSTGRES_USER=postgres a
 
 Python513件・JavaScript65件と使い捨てPostgreSQL 18の統合検証が通過。実CLI経由で部分初期化からの再開、全対象の移行、再実行での既存データ保持、migrateの実行を確認した。依存整合・スキーマ生成物・actionlintも通過。CLIのみの変更のため今回はブラウザを再実行していない。
 
-Cloud SQLの初期化、制限ユーザーのテーブル権限確認、認証確認画面用の起動設定・コンテナ・Cloud Run配置、実認証、Chronicle投影Worker、現行WebUIの移植はまだ残る。
+認証確認画面用の起動設定・コンテナ・Cloud Run配置、実認証、Chronicle投影Worker、現行WebUIの移植はまだ残る。
 
 関連：[スキーマ仕様](POSTGRES_BOOTSTRAP.md)、[構築状況](GCP_STAGING_SETUP.md)。公式参照：[Cloud SQL Auth Proxy](https://docs.cloud.google.com/sql/docs/postgres/connect-auth-proxy)、[Identity Platformの権限](https://docs.cloud.google.com/identity-platform/docs/access-control)。
+
+## 実Cloud SQLの初期化完了（2026-10-04）
+
+ユーザーがpostgresパスワードをターミナルで非表示入力し、initializeを実行。4対象すべてinitialized=true、Accounts／Chronicleの002移行適用を報告した。その後、エージェントがygc_appとSecret Manager version 1で接続し、読取り専用トランザクションで以下を独立確認した。
+
+| DB | 版 | 業務テーブル数 | 確認結果 |
+| --- | --- | --- | --- |
+| Chronicle | 2 | 42 | 個体0・参加者0 |
+| Accounts | 2 | 8 | アカウント0 |
+| Operations | 1 | 7 | offline、Auto Crawl・GPT反映・定期バックアップOFF |
+| Authentication | 1 | 3 | スキーマ一致 |
+
+各対象のSQLチェックサムとテーブル／列構造が配布定義に一致し、全業務テーブルのSELECT／INSERT／UPDATE／DELETE権限があることを確認した。publicスキーマのCREATEとスキーマ版テーブルのUPDATEは許可されていない。テーブル数はygc_schema_versionを除く。ユーザー・ギター・ローカルデータの移送は行っていない。
+
+これは実DB接続・スキーマ・付与権限・初期値の確認であり、Cloud Run配置や実Googleユーザーによる認証・アプリ操作の成功を示すものではない。接続確認用の一時Proxyは確認後に停止した。

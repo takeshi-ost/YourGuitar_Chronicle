@@ -94,3 +94,11 @@ PR #17のアプリ登録APIはmainへ統合済み。後続ブランチに公式W
 ## Cloud SQL実接続と初期化準備（2026-10-04）
 
 PR #18のブラウザ認証はmainへ統合済み。公式Auth ProxyとSecret Managerのversion 1でygc_appから4DBの読取り接続に成功し、空のpublicスキーマと制限付き権限を確認した。認証用にfirebaseauth.users.getのみの独自ロールを実行用サービスアカウントへ付与済み。DBテーブル初期化は未実施。migrateのCLI分岐不具合を修正し、4DBのinitializeコマンドと実CLI統合テストを後続ブランチへ追加した。[実行手順・検証と残作業](CLOUD_SQL_INITIALIZATION.md)を参照。
+
+## Cloud SQL初期化完了（2026-10-04）
+
+PR #19のCLI修正はmainへ統合済み。ユーザーがinitializeを実行し、エージェントが制限付きygc_appで独立確認した。Chronicleは版2／42テーブル、Accountsは版2／8、Operationsは版1／7、Authenticationは版1／3。個体・参加者・アカウントは0、Operationsはoffline、Auto Crawl・GPT反映・定期バックアップはOFF。スキーマ一致と業務テーブルの読書き権限、CREATEと版UPDATEの禁止を確認済み。詳細は[初期化結果](CLOUD_SQL_INITIALIZATION.md)を参照。Cloud Runへの配置と実Google認証は未実施。
+
+## 2026-10-04：認証確認画面のCloud Run配置
+
+Cloud Runへ認証確認画面だけを配置した。専用コンテナ・限定したビルド対象・実行／ビルド資格の分離・Secret Manager連携を整備。現在の構成、実URL、検証範囲、残る実ユーザー認証試験とWebUI移行は[Cloud Run認証確認画面](CLOUD_RUN_ACCOUNT_STAGING.md)を参照。上記の未配置・未初期化の記述は、その時点の履歴である。
