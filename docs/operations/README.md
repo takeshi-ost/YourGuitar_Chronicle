@@ -196,3 +196,7 @@ Other Pending Acquire Claimsは正式申請一覧とは別に、承認でCurrent
 競合・ロック・実行中ジョブなどで拒否された場合は、エラーを確認して最新の一覧・詳細を再取得する。モーダルの外側クリックやEscapeで閉じても、開始済み処理は取り消されない。未保存の編集は失われる場合がある。
 
 所有状態に影響する操作の後は、Current Owner、Owned / Formerly Owned、判定権限を組み合わせて確認する。通常ユーザーの自己Claim禁止、Acquire承認前後の権限移動、Transferの独立評価、管理者の別経路は[設計上の不変条件と遷移例](../architecture/CLAIM_CENTERED_ARCHITECTURE.md)を基準にする。
+
+## GCPステージングのConsole
+
+クラウド版は現在、認証済みAdminによるOperationsの状態確認とメンテナンスモード変更に対応する。ここに記載したローカルのデータ管理操作はまだ移行していない。[クラウドConsoleの操作と接続範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。

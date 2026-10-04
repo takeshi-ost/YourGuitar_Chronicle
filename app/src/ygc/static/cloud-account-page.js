@@ -11,6 +11,7 @@ function render(){
   $('sendVerification').hidden=verified;
   $('sendVerification').disabled=$('refreshVerification').disabled=busy||!registered;
   $('accountSummary').hidden=!registered;
+  $('consoleLink').hidden=!(registered&&verified&&state.user.role==='admin');
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
   $('authActions').hidden=registered||resume;
   $('signOut').hidden=!auth?.signedIn;
