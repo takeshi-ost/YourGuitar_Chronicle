@@ -44,7 +44,8 @@ def reviewed(repository, kind):
 
 
 def sign_out(page):
-    page.locator('#accountHub button[onclick="logoutUser(this)"]').click()
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.locator('#accountHub button[onclick="logoutUser(this)"]').click()
     expect(page.locator('#accountHub button[onclick="openAccountSignIn()"]')).to_be_visible()
 
 
@@ -53,7 +54,8 @@ def sign_in(page, user_id):
     page.locator('#signInUser').select_option(str(user_id))
     page.locator('#signInEmail').fill('discarded@example.invalid')
     page.locator('#signInPassword').fill('not-a-real-secret')
-    page.locator('#accountSignInSubmit').click()
+    with page.expect_navigation(wait_until='domcontentloaded'):
+        page.locator('#accountSignInSubmit').click()
     expect(page.locator('#accountHub button[onclick="logoutUser(this)"]')).to_be_visible()
 
 
@@ -80,7 +82,8 @@ def main(repository):
         page.locator('#registrationAccountType').select_option('shop')
         page.locator('#registrationTerms').check()
         page.locator('#registrationPrivacy').check()
-        page.locator('#accountRegistrationSubmit').click()
+        with page.expect_navigation(wait_until='domcontentloaded'):
+            page.locator('#accountRegistrationSubmit').click()
         expect(page.locator('#accountHub button[onclick="logoutUser(this)"]')).to_be_visible()
         with repository.connect() as con:
             user = con.execute("SELECT id FROM users WHERE display_name='Journey Applicant'").fetchone()[0]
