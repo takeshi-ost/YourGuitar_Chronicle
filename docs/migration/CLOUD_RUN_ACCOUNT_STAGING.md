@@ -9,7 +9,7 @@
 - Cloud Run：`ygc-staging-accounts`。1 vCPU / 512 MiB、リクエスト課金、最小0・最大1、同時処理8、タイムアウト30秒。
 - 実行用サービスアカウント：`ygc-staging-app`。鍵ファイルなし。Cloud SQLのUnix socketを使い、DBパスワードはSecret Manager `ygc-staging-db-password` のversion 1を環境変数として受け取る。
 - Web画面は公開。Accountsの参照・登録は、サーバーで検証したIdentity PlatformのBearerトークンが必要。Cloud Runの公開権限はYGCのAdmin権限ではない。
-- Identity Platformの許可ドメインとWebキーのHTTPリファラー許可に上記ホストだけを追加。既存の許可とAPI対象制限を保持した。もう一つのCloud Run生成URLは認証試験用の許可に追加していない。
+- Identity Platformの許可ドメインとWebキーのHTTPリファラー許可に上記ホストを追加。確認リンクの403修正後、WebキーのHTTPリファラーには当該プロジェクトのFirebase authDomainも追加済み。既存の許可とAPI対象制限を保持した。もう一つのCloud Run生成URLは認証試験用の許可に追加していない。
 - データは初期化済みのCloud SQLを利用。起動時はスキーマ照合だけで、DDL・マイグレーション・SQLiteへの代替接続・Crawl・定期処理を実行しない。
 
 Operations DBのサービスモードはofflineのまま。この独立した認証確認画面は、そのモードによる公開サービスの閲覧制御とは別の移行試験用画面。一般サービスを公開済みと扱わない。
@@ -38,7 +38,7 @@ Operations DBのサービスモードはofflineのまま。この独立した認
 
 Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を繰り返さないよう、DB接続をlivenessの条件にはしない。初回の実URL確認で `/healthz` がGoogle側の404になったため、外部監視にも使える `/health` を採用した。
 
-最終配置：リビジョン `ygc-staging-accounts-00002-trh`。ビルド `3ffbab7c-ef73-4ff1-a789-64b281cd7b82`、イメージdigest `sha256:cfab45e0d15d15f804991bf6811bac348fc05f0866dbc9e6bceddad8e62b4fb4`。
+初回構成確定時の配置：リビジョン `ygc-staging-accounts-00002-trh`。ビルド `3ffbab7c-ef73-4ff1-a789-64b281cd7b82`、イメージdigest `sha256:cfab45e0d15d15f804991bf6811bac348fc05f0866dbc9e6bceddad8e62b4fb4`。
 
 ## 検証範囲と残作業
 
@@ -49,3 +49,7 @@ Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を�
 2026-10-04、利用者が一般メールアドレスによるCreate Account・再読込み後のログイン維持・SignOut・Sign Inを確認した。これは利用者による実環境試験結果であり、エージェントによる代理登録ではない。失効・無効化の確認は残る。まだ実ユーザーをエージェントが作成したり、メールを送信したりしていない。規約・プライバシー本文はステージング草案。Accounts投影ワーカーは[専用Jobとして配置済み](ACCOUNT_PROJECTION_JOB.md)。公開前の正式版整備と、残りのWebUI/API・Storage・Crawl等のJobs移行は別途必要。
 
 公式参照：[Cloud Runコンテナ要件](https://docs.cloud.google.com/run/docs/container-contract)、[Secret Managerの設定](https://docs.cloud.google.com/run/docs/configuring/services/secrets)、[専用ビルドアカウント](https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts)。
+
+## メール確認追加後の配置
+
+認証画面をリビジョン `ygc-staging-accounts-00003-ncs` へ更新した。確認メール送信と、新しいJWTによる確認状態更新を追加。操作・実配置・検証範囲は[メール確認](EMAIL_VERIFICATION.md)を参照。Accounts同期Jobの配置イメージ・スケジュールは変更していない。

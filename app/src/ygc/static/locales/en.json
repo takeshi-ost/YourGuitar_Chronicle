@@ -1168,5 +1168,11 @@
   "cloud.policy_changed": "The policy version has changed. Review the current documents and agree again.",
   "cloud.failed": "Could not complete the account request. Please try again or SignOut.",
   "cloud.policy_version": "Version: {version}",
-  "cloud.working": "Processing..."
+  "cloud.working": "Processing...",
+  "cloud.verify_email": "Send verification email",
+  "cloud.refresh_verification": "Check verification status",
+  "cloud.email_verified": "Email address verified.",
+  "cloud.email_unverified": "Your email address is not verified yet.",
+  "cloud.verification_sent": "Verification email sent. Open the link in your email, then check verification status here.",
+  "cloud.verification_pending": "Your email address is still unverified. Open the link in your email, then check again."
 }

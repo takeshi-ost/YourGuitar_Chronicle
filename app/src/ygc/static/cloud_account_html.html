@@ -16,6 +16,11 @@
 <div id="authActions"><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
 <p id="accountSummary" hidden></p>
 <button id="signOut" type="button" hidden data-i18n="account.sign_out">SignOut</button>
+<section id="emailVerification" hidden aria-labelledby="verificationStatus">
+<p id="verificationStatus"></p>
+<button id="sendVerification" type="button" data-i18n="cloud.verify_email">Send verification email</button>
+<button id="refreshVerification" type="button" data-i18n="cloud.refresh_verification">Check verification status</button>
+</section>
 <form id="cloudAccountForm">
   <fieldset id="credentialsFields">
     <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>

@@ -77,15 +77,16 @@ def main():
         request(config_url + '?updateMask=authorizedDomains', 'PATCH',
                 {'authorizedDomains': domains + [domain]})
     refs = restrictions['browserKeyRestrictions'].get('allowedReferrers', [])
-    if url + '/*' not in refs:
+    required_refs = [url + '/*', 'https://' + env['YGC_FIREBASE_AUTH_DOMAIN'] + '/*']
+    if not set(required_refs).issubset(refs):
         cli('services', 'api-keys', 'update', args.api_key_resource,
-            '--allowed-referrers=' + ','.join(refs + [url + '/*']), '--quiet', '--format=value(name)')
+            '--allowed-referrers=' + ','.join(dict.fromkeys(refs + required_refs)), '--quiet', '--format=value(name)')
     actual = json.loads(cli('services', 'api-keys', 'describe', args.api_key_resource, '--format=json'))
     if actual.get('restrictions', {}).get('apiTargets') != restrictions['apiTargets']:
         raise RuntimeError('API restrictions changed unexpectedly; service remains private.')
     if domain not in request(config_url).get('authorizedDomains', []):
         raise RuntimeError('Identity Platform domain update failed; service remains private.')
-    if url + '/*' not in actual['restrictions']['browserKeyRestrictions']['allowedReferrers']:
+    if not set(required_refs).issubset(actual['restrictions']['browserKeyRestrictions']['allowedReferrers']):
         raise RuntimeError('Browser API key restriction update failed; service remains private.')
     # This page is public; every account read/write still verifies an Identity Platform token.
     cli('run', 'services', 'add-iam-policy-binding', args.service, '--region=' + args.region,

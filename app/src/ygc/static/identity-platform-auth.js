@@ -12,14 +12,14 @@
       const result=pending.catch(()=>{}).then(async()=>{await ready();return action()});
       pending=result;return result;
     }
-    async function api(path,options={}){
+    async function api(path,options={},forceRefresh=false){
       const url=new URL(path,origin);
       if(url.origin!==origin||!url.pathname.startsWith('/api/'))throw Error('Only same-origin API requests are allowed.');
       await ready();
       const user=auth.currentUser;
       if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
       const headers=new Headers(options.headers||{});
-      headers.set('Authorization','Bearer '+await user.getIdToken());
+      headers.set('Authorization','Bearer '+await user.getIdToken(forceRefresh));
       return request(url.href,{...options,headers,credentials:'omit',redirect:'error',cache:'no-store'});
     }
     async function result(response){
@@ -31,10 +31,10 @@
       }
       return data;
     }
-    async function me(){
+    async function me(forceRefresh=false){
       account=null;
       if(!auth.currentUser)return null;
-      const response=await api('/api/auth/me');
+      const response=await api('/api/auth/me',{},forceRefresh);
       if(response.status===409){
         const data=await response.json();
         if(data.code==='registration_required')return {registration_required:true};
@@ -75,6 +75,26 @@
         account=await result(await api('/api/auth/register',{method:'POST',
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
         return account;
+      })},
+      requestEmailVerification({language='en'}={}){return serial(async()=>{
+        const user=auth.currentUser;
+        if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
+        const current=await me(true);
+        if(!current?.user||auth.currentUser!==user)throw Error('Complete registration before verifying email.');
+        if(current.identity.email_verified===true)return {account:current,sent:false};
+        if(typeof language!=='string'||language.length>63||!/^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$/.test(language))throw Error('Invalid language.');
+        auth.languageCode=language;
+        await sdk.sendEmailVerification(user,{url:new URL('/account',origin).href});
+        return {account:current,sent:true};
+      })},
+      refreshVerification(){return serial(async()=>{
+        account=null;
+        const user=auth.currentUser;
+        if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
+        await sdk.reload(user);
+        if(auth.currentUser!==user)throw Error('The signed-in account changed.');
+        // Force a new JWT: SDK emailVerified alone cannot authorize an app action.
+        return me(true);
       })},
       logout(){return serial(async()=>{await sdk.signOut(auth);account=null})},
       authorizedFetch:api,
