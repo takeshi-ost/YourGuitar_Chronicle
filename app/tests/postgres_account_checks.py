@@ -112,11 +112,78 @@ def run(port):
                 assert con.execute('SELECT COUNT(*) AS n FROM individuals').fetchone()['n'] == 0
                 con.execute("INSERT INTO users(id,display_name,created_at,updated_at,app_user_id) VALUES(999,'unknown','now','now','unknown-uuid')")
             raises(ValueError, store.reconcile_projection)
+            cloud_registration_checks(app, store)
             print('PostgreSQL accounts: migration/repeat, concurrent registration, rollback, live authority, crash retry, UUID conflict, Observation/BAN/Transfer and content-reset reconciliation passed.')
         finally:
             for name in reversed(created):
                 admin.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
             admin.execute(sql.SQL('DROP ROLE IF EXISTS {}').format(sql.Identifier(role)))
+
+
+def cloud_registration_checks(settings, store):
+    """HTTP enrollment and live authorization against a real disposable registry."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from ygc.cloud_account_routes import account_router
+    from ygc.cloud_registration import DOCUMENTS
+    from ygc.identity_platform import VerifiedIdentity
+    from ygc.registration_fields import ACCOUNT_TYPES
+
+    class TestVerifier:
+        accounts = store
+
+        def verify(self, *, bearer_token):
+            # Test-only trusted results replace external Google verification.
+            if not bearer_token.startswith('test-session-'):
+                raise PermissionError('Invalid test credential')
+            return VerifiedIdentity('verified-http-test-issuer', bearer_token, '', True)
+
+    api = FastAPI()
+    api.include_router(account_router(TestVerifier(), DOCUMENTS))
+    with TestClient(api) as client:
+        def headers(kind):
+            return {'Authorization': 'Bearer test-session-' + kind}
+
+        def body(kind, **changes):
+            return {'display_name': 'N' * 120, 'account_type': kind, 'terms_accepted': True,
+                    'privacy_accepted': True, 'terms_version': DOCUMENTS['terms']['version'],
+                    'privacy_version': DOCUMENTS['privacy']['version'], **changes}
+
+        assert client.get('/api/auth/me', headers=headers('user')).status_code == 409
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            replies = list(pool.map(lambda _: client.post('/api/auth/register',
+                                headers=headers('user'), json=body('user')), range(3)))
+        assert all(reply.status_code == 200 for reply in replies)
+        assert len({reply.json()['user']['app_user_id'] for reply in replies}) == 1
+        registered = [replies[0].json()['user']]
+        for kind in ACCOUNT_TYPES[1:]:
+            reply = client.post('/api/auth/register', headers=headers(kind), json=body(kind))
+            assert reply.status_code == 200
+            registered.append(reply.json()['user'])
+        for kind, user in zip(ACCOUNT_TYPES, registered):
+            repeat = client.post('/api/auth/register', headers=headers(kind),
+                                 json=body(kind, display_name='Do not overwrite'))
+            assert repeat.json()['user'] == user
+            assert user['role'] == 'member' and user['account_type'] == kind
+        ids = [user['id'] for user in registered]
+        with connect(settings, 'accounts') as con:
+            assert con.execute('SELECT COUNT(*) AS n FROM account_projection_outbox WHERE account_id=ANY(%s)',
+                               (ids,)).fetchone()['n'] == 5
+            assert con.execute('SELECT COUNT(*) AS n FROM account_consents WHERE app_user_id=ANY(%s)',
+                               ([user['app_user_id'] for user in registered],)).fetchone()['n'] == 10
+            con.execute('UPDATE account_records SET disabled=1 WHERE id=%s', (ids[0],))
+        assert client.get('/api/auth/me', headers=headers('user')).status_code == 403
+        assert client.post('/api/auth/register', headers=headers('user'), json=body('user')).status_code == 403
+        assert client.post('/api/auth/register', headers=headers('shop'),
+                           json=body('shop', role='admin')).status_code == 400
+        assert client.get('/api/auth/me', headers={'Authorization': 'Bearer invalid'}).status_code == 401
+        assert store.drain_projection() > 0
+        with connect(settings, 'chronicle') as con:
+            rows = con.execute('SELECT id,display_name,account_type FROM users WHERE id=ANY(%s) ORDER BY id', (ids,)).fetchall()
+            assert len(rows) == 5
+            assert {row['account_type'] for row in rows} == set(ACCOUNT_TYPES)
+            assert all(len(row['display_name']) == 120 for row in rows)
+    print('PostgreSQL cloud enrollment: HTTP registration/login, concurrent retry, consent atomicity, five account types, 120-character names, authority rejection and projection passed.')
 
 
 def transitions(app, store, a, b, c):

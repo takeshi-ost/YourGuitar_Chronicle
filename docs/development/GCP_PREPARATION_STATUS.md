@@ -111,3 +111,7 @@ Accounts正本・再試行可能な投影、Owner Verification・Transfer・Admi
 ## 認証検証境界の追加（2026-10-04）
 
 PR #15のPostgreSQL基盤はmainへマージ済み。続く実装ブランチに公式SDKによるID token検証とAccounts正本への対応付けを追加した。[認証検証の仕様・前提・残作業](../migration/IDENTITY_PLATFORM_VERIFICATION.md)を参照。WebUI・実GCPとの接続はまだ行っていない。
+
+## アプリ登録APIの追加（2026-10-04）
+
+PR #16の認証検証はmainへ統合済み。後続ブランチにGoogle認証後のアプリ登録・ログイン確認APIを追加し、ローカル／クラウドのプロフィール入力条件を統一した。手順・再試行・同意草案・未接続範囲は[クラウド登録API](../migration/CLOUD_ACCOUNT_REGISTRATION.md)を参照。現行WebUIと実GCPへの接続はまだ行っていない。

@@ -5,8 +5,17 @@ No registration or linking by email happens during token resolution.
 import os
 import re
 import uuid
+from dataclasses import dataclass
 
 from ygc.platform_boundaries import ActorContext
+
+
+@dataclass(frozen=True)
+class VerifiedIdentity:
+    issuer: str
+    subject: str
+    tenant: str
+    email_verified: bool
 
 
 class IdentityPlatformIdentity:
@@ -44,8 +53,8 @@ class IdentityPlatformIdentity:
             self._delete_app(self._app)
             self._app = None
 
-    def resolve(self, *, bearer_token: str | None,
-                prototype_user_id: int | None = None) -> ActorContext:
+    def verify(self, *, bearer_token: str | None) -> VerifiedIdentity:
+        """Verify before enrollment; this alone does not authorize content actions."""
         self._reject_emulator()
         if self._app is None:
             raise RuntimeError('Identity verifier has been closed.')
@@ -63,8 +72,18 @@ class IdentityPlatformIdentity:
                 or claims.get('iss') != issuer or claims.get('aud') != self.project_id
                 or not isinstance(subject, str) or not subject or len(subject) > 128):
             raise PermissionError('Identity token does not match the configured project and tenant.')
-        account = self.accounts.resolve_identity(issuer=issuer, tenant=self.tenant, subject=subject)
+        return VerifiedIdentity(issuer, subject, self.tenant, claims.get('email_verified') is True)
+
+    def account_for_token(self, *, bearer_token: str | None):
+        identity = self.verify(bearer_token=bearer_token)
+        account = self.accounts.resolve_identity(issuer=identity.issuer, tenant=identity.tenant,
+                                                  subject=identity.subject)
+        return identity, account
+
+    def resolve(self, *, bearer_token: str | None,
+                prototype_user_id: int | None = None) -> ActorContext:
+        identity, account = self.account_for_token(bearer_token=bearer_token)
         if prototype_user_id is not None and prototype_user_id != account['id']:
             raise PermissionError('The requested user does not match the signed-in account.')
-        return ActorContext(account['id'], 'identity-platform', subject, True,
+        return ActorContext(account['id'], 'identity-platform', identity.subject, True,
                             account['app_user_id'], self.tenant)

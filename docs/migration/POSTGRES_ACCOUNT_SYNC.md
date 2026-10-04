@@ -1,6 +1,6 @@
 # PostgreSQLのAccounts同期と所有判定
 
-更新日：2026-10-04。実装ブランチのDB層。Webルート・Identity Platformの実認証・クラウド配置は未接続。
+更新日：2026-10-04。PR #15でDB層をmainへ統合済み。所有権Webルート・実GCP・クラウド配置は未接続。後続の認証検証・[登録API](CLOUD_ACCOUNT_REGISTRATION.md)は別部品として追加する。
 
 ## 正本と同期
 

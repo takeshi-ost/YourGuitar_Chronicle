@@ -12,6 +12,11 @@ from contextlib import contextmanager
 from psycopg import sql
 from ygc.db.postgres import connect, status
 from ygc.theme_catalog import THEME_IDS
+from ygc.registration_fields import ACCOUNT_TYPES, DISPLAY_NAME_MAX
+
+
+class AccountNotRegistered(PermissionError):
+    """Verified identity has no canonical application account yet."""
 
 PROFILE_FIELDS = frozenset((
     'display_name', 'location_country', 'location_region', 'bio', 'date_of_birth',
@@ -44,7 +49,7 @@ class PostgresAccounts:
     def ensure_identity(self, *, issuer, subject, display_name, tenant='', account_type='user', consents=()):
         """Idempotently reserve a participant for an already verified identity."""
         name = str(display_name).strip()
-        if not issuer or not subject or not name or len(name) > 100 or account_type not in ('user', 'shop'):
+        if not issuer or not subject or not name or len(name) > DISPLAY_NAME_MAX or account_type not in ACCOUNT_TYPES:
             raise ValueError('Invalid account registration.')
         self.check_schema()
         with connect(self.settings, 'accounts') as con:
@@ -83,6 +88,8 @@ class PostgresAccounts:
             account = con.execute('''SELECT a.* FROM identity_links i JOIN account_records a
                 ON a.app_user_id=i.app_user_id WHERE i.issuer=%s AND i.tenant=%s AND i.subject=%s''',
                 (issuer, tenant, subject)).fetchone()
+            if not account:
+                raise AccountNotRegistered('Application registration is required.')
             return self._active(account)
 
     def update_profile(self, app_user_id, changes):
@@ -92,7 +99,7 @@ class PostgresAccounts:
         changes = dict(changes)
         if 'display_name' in changes:
             changes['display_name'] = str(changes['display_name'] or '').strip()
-            if not changes['display_name'] or len(changes['display_name']) > 100:
+            if not changes['display_name'] or len(changes['display_name']) > DISPLAY_NAME_MAX:
                 raise ValueError('Invalid display name.')
         for key, value in changes.items():
             if key.endswith('_visibility') and value not in ('Public', 'Members', 'Followers', 'Private'):
