@@ -47,7 +47,7 @@ def main():
                         return SimpleNamespace()
                     if query.startswith('INSERT INTO events'):return SimpleNamespace()
                     target=params[1]
-                    records=[{'reason':json.dumps(dict(kind='db_backup_v1',backup_id='fixture',target=target,created_at='2026-10-05T00:00:00Z',schema_version=2,tables=42 if target=='chronicle' else 8,rows=3))}] if target in ('chronicle','accounts') else []
+                    records=[{'reason':json.dumps(dict(kind='db_backup_v1',backup_id='00000000-0000-4000-8000-000000000001',target=target,created_at='2026-10-05T00:00:00Z',schema_version=2,tables=42 if target=='chronicle' else 8,rows=3))}] if target in ('chronicle','accounts') else []
                     return SimpleNamespace(fetchall=lambda:records)
             yield CatalogConnection(),dict(self.row),{}
         def details(self, actor):
@@ -91,7 +91,17 @@ def main():
                 if target not in self.states:return dict(target=target,state='idle')
                 self.states[target]['state']='succeeded'
                 return self.states[target]
-    app.include_router(backup_router(verifier,ops,BackupControl()))
+    maintenance_calls=[]
+    class Maintenance:
+        def start(self,actor,data):
+            with ops.access('admin_write',actor):
+                assert ops.row['mode']!='normal'
+                assert data['confirmation']==data['target']
+                maintenance_calls.append(data)
+                return dict(state='running',target=data['target'],action=data['action'])
+        def status(self,actor,target):
+            return dict(state='succeeded' if maintenance_calls else 'idle',target=target)
+    app.include_router(backup_router(verifier,ops,BackupControl(),Maintenance()))
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -142,6 +152,20 @@ def main():
                 expect(page.locator('#backupSaveStatus')).to_have_text('Saved and read-back verified.')
                 expect(page.locator('#backupSave')).to_be_enabled()
                 assert len(backup_calls)==1 and backup_calls[0][:2]==('admin-uuid','accounts')
+                page.locator('#backupRows button').first.click()
+                expect(page.locator('#backupDialog')).to_be_visible()
+                expect(page.locator('#backupConfirm')).to_be_disabled()
+                page.mouse.click(2,2);expect(page.locator('#backupDialog')).to_be_hidden();assert not maintenance_calls
+                page.locator('#backupRows button').first.click()
+                page.locator('#backupConfirmation').fill('chronicle');expect(page.locator('#backupConfirm')).to_be_disabled()
+                page.locator('#backupConfirmation').fill('accounts');page.locator('#backupConfirm').click()
+                expect(page.locator('#backupMaintenanceStatus')).to_have_text('Applying database maintenance…')
+                expect(page.locator('#backupReset')).to_be_disabled()
+                expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
+                assert len(maintenance_calls)==1 and maintenance_calls[0]['action']=='restore'
+                page.locator('#backupReset').click();page.locator('#backupConfirmation').fill('accounts');page.locator('#backupConfirm').click()
+                expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
+                assert len(maintenance_calls)==2 and maintenance_calls[-1]['backup_id'] is None
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
                 assert page.locator('#guitarRows img').count()==0
                 page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)

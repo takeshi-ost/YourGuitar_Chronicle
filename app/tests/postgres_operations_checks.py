@@ -23,7 +23,7 @@ def run(port):
     with psycopg.connect(host='127.0.0.1',port=port,dbname='postgres',user='postgres',password='ygc-tests-only',autocommit=True) as admin:
         try:
             admin.execute(sql.SQL('CREATE ROLE {} LOGIN PASSWORD {}').format(sql.Identifier(role),sql.Literal('ygc-tests-only')))
-            for target in ('accounts','chronicle','operations'):
+            for target in ('accounts','chronicle','operations','authentication'):
                 name = owner.database(target)
                 admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
                 created.append(name)
@@ -143,7 +143,8 @@ def run(port):
             assert job_client.start.call_count==1
             rejected(BackupBusy,lambda:controls.start(aid,'accounts',str(uuid.uuid4())))
             rejected(PermissionError,lambda:controls.start(bid,'chronicle',str(uuid.uuid4())))
-            store=Storage()
+            avatar_store=store
+            store=Storage();store.next_id=avatar_store.next_id
             assert save(app,store,'accounts','fixture',request_id=token)['saved']
             assert controls.status(aid,'accounts')['state']=='succeeded'
             print('PostgreSQL manual backup: persistent intent, repeated UUID, per-target conflict, member denial and committed archive success passed.')
@@ -165,6 +166,10 @@ def run(port):
             assert save(app,store,'accounts','scheduled-repeat',scheduled=True)['skipped']
             configure(operations,aid,'accounts',10,False,24)
             print('PostgreSQL backup policy: independent persistent settings, strict Admin gate, exact archive pruning and disabled scheduled save passed.')
+            from postgres_maintenance_checks import run as maintenance_checks
+            store.objects.update(avatar_store.objects)
+            maintenance_checks(app,accounts,operations,store,aid,bid)
+            version=operations.details(aid)['version']
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

@@ -19,11 +19,11 @@ def test_retention_verifies_and_deletes_only_excess_objects_for_selected_target(
     store=Storage();data,sha=archive();rows=[]
     for i in range(3):
         ref=store.put('accounts',data,content_type='application/gzip')
-        rows.insert(0,dict(id=i+1,reason=json.dumps({'kind':KIND,'target':'accounts','object':asdict(ref),'sha256':sha},separators=(',',':'))))
+        rows.insert(0,dict(id=i+1,reason=json.dumps({'kind':KIND,'backup_id':str(i),'target':'accounts','object':asdict(ref),'sha256':sha},separators=(',',':'))))
     image=store.put('accounts',b'image',content_type='image/jpeg')
     con=Mock()
     def execute(sql,params):
-        return SimpleNamespace(fetchone=lambda:{'generations':2},fetchall=lambda:rows)
+        return SimpleNamespace(fetchone=lambda:{'generations':2},fetchall=lambda:[] if isinstance(params[0],str) and 'maintenance_request' in params[0] else rows)
     con.execute.side_effect=execute
     @contextmanager
     def connect(settings,target):assert target=='operations';yield con
@@ -36,8 +36,9 @@ def test_retention_verifies_and_deletes_only_excess_objects_for_selected_target(
 
 def test_retention_never_deletes_wrong_scope_or_non_backup(monkeypatch):
     store=Storage();ref=store.put('accounts',b'image',content_type='image/jpeg')
-    rows=[{'id':1,'reason':'{}'},{'id':2,'reason':json.dumps({'object':asdict(ref),'sha256':'bad'})}]
+    rows=[{'id':1,'reason':'{}'},{'id':2,'reason':json.dumps({'backup_id':'2','object':asdict(ref),'sha256':'bad'})}]
     con=Mock();con.execute.return_value.fetchone.return_value={'generations':1};con.execute.return_value.fetchall.return_value=rows
+    con.execute.side_effect=lambda sql,params:SimpleNamespace(fetchone=lambda:{'generations':1},fetchall=lambda:[] if isinstance(params[0],str) and 'maintenance_request' in params[0] else rows)
     @contextmanager
     def connect(settings,target):yield con
     monkeypatch.setattr(policy,'connect',connect)
