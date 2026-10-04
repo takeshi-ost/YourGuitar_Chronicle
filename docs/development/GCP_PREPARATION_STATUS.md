@@ -172,7 +172,9 @@ DB別保存基盤と保存履歴（PR #28）はmainへマージ、利用者の�
 
 - 完了：DB別の手動保存と完了状態・履歴追加の利用者確認、PR #29の統合。
 - 完了：DB別の保持世代・定期保存設定、毎時IAM Schedulerと期限到達DBだけの保存。PR #30のCI成功・統合・配置。4DBの定期保存はOFFのまま。
-- 実装・隔離試験済み：対象DBだけの復元と保護用保存、Accountsの登録・認証・現在権限維持、Chronicle初期化後の最新参加者再投影、Operationsのモード・台帳保持、Authentication試験DBの初期化。実配置・管理者ブラウザの受入を確認して更新する。
+- 実装・隔離試験済み：対象DBだけの復元と保護用保存、Accountsの登録・認証・現在権限維持、Chronicle初期化後の最新参加者再投影、Operationsのモード・台帳保持、Authentication試験DBの初期化。PR #31をCI成功後にmainへ統合し実配置済み。管理者ブラウザの復元/初期化受入は未完了。
 - 残る：実クラウドでの復元・初期化と権限/サービスモードの受入、定期保存・世代削除の実動作確認、画像付きChronicleの復元アダプター、Reverb CrawlのPostgreSQL Job移植とCrawl前Chronicle保存、クラウドコンテンツ編集の接続。
 
 [DBバックアップの現在仕様・復元の制約](../migration/CLOUD_DATABASE_BACKUPS.md#現在の到達点と復元初期化2026-10-05)を参照。全DB一括リセットやGoogle認証ユーザー削除は行わない。残る管理者認証・受入が必要な段階では中断し、利用者にブラウザで確認する操作を列挙する。
+
+PR #31のWeb revision `ygc-staging-accounts-00013-5fb` とIAM専用メンテナンスJobを配置し、4DBの読み取り接続・匿名拒否・Offline維持を確認した。Computer Useのアクセシビリティ/画面収録許可待ちにより管理者ブラウザ試験で中断。再開時の[受入一覧](../migration/DB_OPERATIONS_ACCEPTANCE.md)に実操作を記載した。Reverb資格情報Secretも未作成で、Crawlは未接続。
