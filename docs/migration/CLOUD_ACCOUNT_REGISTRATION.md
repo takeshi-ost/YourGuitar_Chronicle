@@ -34,7 +34,7 @@ meは未登録なら409と `code=registration_required` を返す。自動登録
 
 `cloud_registration.py` にステージング試験用のTerms／Privacy草案を置く。Googleで実認証を行うこと、YGC側の保存項目、テスト中のリセットを明記する。local-draftの「メール・パスワードを送信しない」説明を実登録に流用しない。一般公開前に正式文書へ変更し、版も更新する。
 
-Googleの認証登録とYGCのDBトランザクションを一括コミットできない。Googleアカウント作成後にアプリ登録が失敗した場合、その認証アカウントを勝手に削除しない。ログインを維持／再ログインして、アプリ登録APIだけを再試行する。ブラウザ側の案内・再試行フローは後続の組込みで実装する。
+Googleの認証登録とYGCのDBトランザクションを一括コミットできない。Googleアカウント作成後にアプリ登録が失敗した場合、その認証アカウントを勝手に削除しない。ログインを維持／再ログインして、アプリ登録APIだけを再試行する。ブラウザ側の案内・再試行フローは後続ブランチの[認証確認画面](CLOUD_BROWSER_AUTH.md)に実装した。現行TopPageへの組込みは未完了。
 
 Chronicleへの投影は登録トランザクションとは別。Workerによる投影完了までコンテンツの変更は既存の同期境界で拒否される。認証成功を投影完了やOwner資格の付与と混同しない。
 
@@ -44,6 +44,6 @@ Chronicleへの投影は登録トランザクションとは別。Workerによ�
 
 Googleへの署名・失効検証は[認証検証](IDENTITY_PLATFORM_VERIFICATION.md)の公式SDKテストで別途確認する。
 
-残る作業は、ブラウザのGoogle SDK・フォーム／認証表示の切替、メール確認、全WebルートのPostgreSQL移植と認可、投影Workerの配置、実サービスアカウントのユーザー照会権限とCloud SQL接続確認。まだ実ユーザー登録は開始していない。
+後続ブランチにGoogle SDKと確認画面を追加した。残る作業は、現行TopPageのフォーム／認証表示の切替、メール確認、全WebルートのPostgreSQL移植と認可、投影Workerの配置、実サービスアカウントのユーザー照会権限とCloud SQL接続確認。まだ実ユーザー登録は開始していない。
 
 公式参照：[ブラウザのメール・パスワード認証](https://firebase.google.com/docs/auth/web/password-auth)、[サーバーでのID token検証](https://firebase.google.com/docs/auth/admin/verify-id-tokens)。

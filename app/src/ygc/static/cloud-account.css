@@ -1,0 +1,9 @@
+body{margin:0;background:#f5f6f7;color:#202a33;font:15px/1.6 Arial,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 24px;background:#252b30;color:white}
+h1{font-size:22px;margin:0}.page-nav{display:flex;align-items:center;gap:8px}
+main{max-width:540px;margin:24px auto;padding:24px;background:white;border:1px solid #a2adb7;border-radius:12px}
+fieldset{border:0;margin:16px 0;padding:0}label{display:block;margin-top:12px}input:not([type=checkbox]),select{box-sizing:border-box;width:100%;padding:10px;border-radius:6px;font:inherit}
+button{padding:8px 12px;border:1px solid #a2adb7;border-radius:6px;font:inherit;cursor:pointer}.agreement{display:inline}.agreement input{margin-right:8px}
+dialog{width:min(560px,calc(100vw - 64px));max-height:calc(100dvh - 64px);overflow:auto;padding:24px}
+[hidden]{display:none!important}#status{min-height:1.6em}#accountSummary{overflow-wrap:anywhere}
+@media(max-width:620px){header{padding:12px;flex-wrap:wrap}main{margin:16px 12px;padding:16px}}

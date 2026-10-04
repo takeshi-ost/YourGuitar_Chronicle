@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="sunburst_3ply">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-i18n="cloud.account_title">Your Guitar Chronicle — Account</title>
+<link rel="stylesheet" href="/assets/cloud-account.css"><link rel="stylesheet" href="/assets/ui-components.css">
+<script src="/assets/i18n.js" defer></script><script src="/assets/overlays.js" defer></script>
+<script src="/assets/identity-platform-auth.js" defer></script>
+<script src="/assets/cloud-account-page.js" type="module"></script>
+</head>
+<body>
+<header><h1>Your Guitar Chronicle</h1><nav class="page-nav" aria-label="Language"></nav></header>
+<main>
+<p data-i18n="cloud.staging">Staging account test. Test data may be reset.</p>
+<p data-i18n="cloud.credentials_notice">Your email and password are sent to Google for authentication.</p>
+<div id="authActions"><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
+<p id="accountSummary" hidden></p>
+<button id="signOut" type="button" hidden data-i18n="account.sign_out">SignOut</button>
+<form id="cloudAccountForm">
+  <fieldset id="credentialsFields">
+    <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>
+    <label for="password" data-i18n="ui.password_e7cf3ef4">Password</label><input id="password" type="password" autocomplete="current-password" required>
+  </fieldset>
+  <fieldset id="profileFields" hidden>
+    <label for="displayName" data-i18n="ui.display_name_required_88a65705">Display Name · Required</label><input id="displayName" maxlength="120">
+    <label for="accountType" data-i18n="ui.account_type_dce81c5b">Account Type</label>
+    <select id="accountType"><option value="user" data-i18n="ui.user_b512d97e">User</option><option value="shop" data-i18n="ui.shop_d00aae6b">Shop</option><option value="builder" data-i18n="ui.builder_090940e7">Builder</option><option value="repairer" data-i18n="ui.repairer_c379163b">Repairer</option><option value="organization" data-i18n="ui.organization_d764d425">Organization</option></select>
+    <p><label class="agreement"><input id="terms" type="checkbox"><span data-i18n="cloud.agree_terms">I agree to the Terms.</span></label> <button id="viewTerms" type="button" data-i18n="cloud.view_terms">View Terms</button></p>
+    <p><label class="agreement"><input id="privacy" type="checkbox"><span data-i18n="cloud.agree_privacy">I agree to the Privacy notice.</span></label> <button id="viewPrivacy" type="button" data-i18n="cloud.view_privacy">View Privacy notice</button></p>
+  </fieldset>
+  <button id="submit" type="submit" data-ui-action="primary" disabled data-i18n="account.sign_in">Sign In</button>
+</form>
+<p id="status" role="status" aria-live="polite" data-i18n="cloud.loading">Loading authentication...</p>
+</main>
+<dialog id="policyDialog" aria-labelledby="policyTitle"><h2 id="policyTitle"></h2><div id="policyContent"></div><button id="closePolicy" type="button" data-ui-action="close" data-i18n="action.close">Close</button></dialog>
+</body></html>
