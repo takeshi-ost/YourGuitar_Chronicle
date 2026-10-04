@@ -78,3 +78,7 @@ DBパスワードとシークレット値の一致は接続試験まで未確認
 ## Accounts同期・所有判定の移植（実装ブランチ）
 
 [Accounts同期・所有判定](POSTGRES_ACCOUNT_SYNC.md)を追加。正本更新と同期待ち記録、再試行可能な投影、Owner Verification・Transfer・Admin強制判定の共有処理をPostgreSQLで検証する。002移行も追加したが、Cloud SQLには001／002ともまだ適用していない。実認証・Webルート・クラウドWorkerは未接続。
+
+## 認証検証境界の追加（2026-10-04）
+
+PR #15のPostgreSQL基盤はmainへマージ済み。続く実装ブランチに公式SDKによるID token検証とAccounts正本への対応付けを追加した。[認証検証の仕様・前提・残作業](IDENTITY_PLATFORM_VERIFICATION.md)を参照。WebUI・実GCPとの接続はまだ行っていない。

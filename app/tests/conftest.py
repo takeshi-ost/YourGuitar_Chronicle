@@ -8,7 +8,9 @@ _test_storage = tempfile.TemporaryDirectory(prefix='ygc-pytest-')
 atexit.register(_test_storage.cleanup)
 _test_root = Path(_test_storage.name)
 for _key in list(os.environ):
-    if _key.startswith('YGC_') or _key in ('REVERB_API_TOKEN', 'K_SERVICE', 'CLOUD_RUN_JOB'):
+    if _key.startswith('YGC_') or _key in ('REVERB_API_TOKEN', 'K_SERVICE', 'CLOUD_RUN_JOB',
+                           'FIREBASE_AUTH_EMULATOR_HOST', 'GOOGLE_APPLICATION_CREDENTIALS',
+                           'GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT'):
         del os.environ[_key]
 os.environ.update(
     YGC_DATA_DIR=str(_test_root), YGC_DB_PATH=str(_test_root / 'chronicle.db'),

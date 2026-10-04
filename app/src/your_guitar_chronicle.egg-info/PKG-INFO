@@ -16,3 +16,5 @@ Provides-Extra: browser
 Requires-Dist: playwright<2,>=1.50; extra == "browser"
 Provides-Extra: postgres
 Requires-Dist: psycopg[binary]<4,>=3.3; extra == "postgres"
+Provides-Extra: identity
+Requires-Dist: firebase-admin<8,>=7; extra == "identity"

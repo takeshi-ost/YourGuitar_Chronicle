@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--runtime', action='store_true', help='Install runtime dependencies only')
     parser.add_argument('--browser', action='store_true', help='Include Playwright browser test dependencies')
     parser.add_argument('--postgres', action='store_true', help='Include PostgreSQL connection and migration tools')
+    parser.add_argument('--identity', action='store_true', help='Include Identity Platform server verification')
     args = parser.parse_args()
     if args.runtime and args.browser:
         parser.error('--runtime and --browser cannot be combined')
@@ -24,6 +25,8 @@ def main():
         groups.append('browser')
     if args.postgres:
         groups.append('postgres')
+    if args.identity:
+        groups.append('identity')
     extras = '[' + ','.join(groups) + ']' if groups else ''
     subprocess.run([sys.executable, '-m', 'pip', 'install',
                     '--constraint', str(APP / 'constraints.txt'),

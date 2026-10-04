@@ -107,3 +107,7 @@ Admin Onlyモードは合意済みの移行後追加項目。詳細と配置判�
 Accounts正本・再試行可能な投影、Owner Verification・Transfer・Admin強制判定のDB層を追加。参加者の同期待ちを検出して書込みを拒否する。詳細・残る未移植範囲は[PostgreSQL同期と所有判定](../migration/POSTGRES_ACCOUNT_SYNC.md)。Cloud SQLやWebUIへの接続はまだ行っていない。
 
 今回の追加検証：Python445件・JavaScript55件とブラウザ検証が通過。PostgreSQLでは同時登録・中断再試行・停止アカウント・投影待ち拒否に加え、共有処理によるOwner判定・自己判定禁止・Transfer受領・Admin別経路・A→B→C後の先行Transfer否定／無効化／削除を確認した。これらはローカルの使い捨てDBでの結果であり、Cloud SQL接続試験や今回変更のGitHub CI成功を表すものではない。
+
+## 認証検証境界の追加（2026-10-04）
+
+PR #15のPostgreSQL基盤はmainへマージ済み。続く実装ブランチに公式SDKによるID token検証とAccounts正本への対応付けを追加した。[認証検証の仕様・前提・残作業](../migration/IDENTITY_PLATFORM_VERIFICATION.md)を参照。WebUI・実GCPとの接続はまだ行っていない。
