@@ -18,6 +18,7 @@ src/ygc/direct_mcp_bridge.py
 src/ygc/direct_queue.py
 src/ygc/dispute_routes.py
 src/ygc/disputes.py
+src/ygc/identity_platform.py
 src/ygc/important_information.py
 src/ygc/incremental_crawl.py
 src/ygc/listing_review.py
@@ -127,6 +128,7 @@ tests/test_disputes.py
 tests/test_event_claim.py
 tests/test_evidence_source_reads.py
 tests/test_former_owner_claims.py
+tests/test_identity_platform.py
 tests/test_important_information.py
 tests/test_incident_claim.py
 tests/test_incremental_crawl.py

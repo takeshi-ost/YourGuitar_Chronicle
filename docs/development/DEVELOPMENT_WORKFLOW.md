@@ -53,4 +53,4 @@ PR #14の統合後main `aa27c21` でもCI成功。Python435件、JavaScript55件
 
 ## PostgreSQL移行基盤の検証
 
-接続・4スキーマ・権限・再実行の検証手順は[PostgreSQL初期化](../migration/POSTGRES_BOOTSTRAP.md)。ローカルは `--postgres-bin /path/to/postgresql18/bin` で一時クラスタを使う。依存の全固定検査には `scripts/install_dependencies.py --browser --postgres` で全extrasを導入する。WebUIのPostgreSQL移植とは別段階。
+接続・4スキーマ・権限・再実行の検証手順は[PostgreSQL初期化](../migration/POSTGRES_BOOTSTRAP.md)。ローカルは `--postgres-bin /path/to/postgresql18/bin` で一時クラスタを使う。依存の全固定検査には `scripts/install_dependencies.py --browser --postgres --identity` で全extrasを導入する。WebUIのPostgreSQL移植とは別段階。

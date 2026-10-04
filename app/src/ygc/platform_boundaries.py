@@ -1,7 +1,7 @@
 """Local adapters and explicit replacement contracts for a future GCP deployment.
 
 A prototype user ID is an assertion from the browser, NOT authentication.
-No cloud SDK or simulated credential verifier is installed here.
+Production verification is provided by ygc.identity_platform.
 """
 from __future__ import annotations
 
@@ -41,12 +41,10 @@ class PrototypeIdentity:
 
 
 class IdentityPlatformReplacement:
-    def resolve(self, *, bearer_token: str | None,
-                prototype_user_id: int | None = None) -> ActorContext:
-        # Future adapter: verify the Identity Platform ID token server-side;
-        # map (issuer, tenant, subject) via the account registry to app_user_id
-        # and the content participant ID; ignore client user IDs.
-        raise PlatformAdapterRequired("Identity Platform token verification is not connected")
+    """Compatibility entry point; explicit project and canonical store required."""
+    def __new__(cls, accounts, *, project_id: str, tenant: str = ''):
+        from ygc.identity_platform import IdentityPlatformIdentity
+        return IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
 
 
 class LocalDummyIdentity:

@@ -5,87 +5,198 @@ annotated-doc==0.0.5
     #   fastapi
     #   typer
 annotated-types==0.8.0
-    # via pydantic
+    # via
+    #   pydantic
 anyio==4.15.1
     # via
     #   httpx
     #   starlette
+cachecontrol==0.14.4
+    # via firebase-admin
 certifi==2026.7.22
     # via
     #   httpcore
     #   httpx
+    #   requests
+cffi==2.1.1 ; platform_python_implementation != 'PyPy'
+    # via cryptography
+charset-normalizer==3.5.2
+    # via requests
 click==8.5.0
-    # via uvicorn
+    # via
+    #   uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
     # via
     #   pytest
     #   typer
+cryptography==50.0.2
+    # via
+    #   google-auth
+    #   pyjwt
 fastapi==0.141.1
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
+firebase-admin==7.7.0
     # via your-guitar-chronicle (app/pyproject.toml)
+google-api-core==2.40.0
+    # via
+    #   firebase-admin
+    #   google-cloud-core
+    #   google-cloud-firestore
+    #   google-cloud-storage
+google-auth==2.59.1
+    # via
+    #   google-api-core
+    #   google-cloud-core
+    #   google-cloud-firestore
+    #   google-cloud-storage
+google-cloud-core==2.8.0
+    # via
+    #   google-cloud-firestore
+    #   google-cloud-storage
+google-cloud-firestore==2.34.0 ; platform_python_implementation != 'PyPy'
+    # via firebase-admin
+google-cloud-storage==3.16.0
+    # via firebase-admin
+google-crc32c==1.9.0
+    # via
+    #   google-cloud-storage
+    #   google-resumable-media
+google-resumable-media==2.11.0
+    # via google-cloud-storage
+googleapis-common-protos==1.75.5
+    # via
+    #   google-api-core
+    #   grpcio-status
 greenlet==3.5.6
-    # via playwright
+    # via
+    #   playwright
+grpcio==1.84.0 ; platform_python_implementation != 'PyPy'
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+    #   grpcio-status
+grpcio-status==1.84.0 ; platform_python_implementation != 'PyPy'
+    # via google-api-core
 h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-httpcore==1.0.9
+h2==4.4.1
     # via httpx
+hpack==4.2.0
+    # via h2
+httpcore==1.0.9
+    # via
+    #   httpx
 httpx==0.28.1
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
+    #   firebase-admin
+hyperframe==6.1.0
+    # via h2
 idna==3.20
     # via
     #   anyio
     #   httpx
+    #   requests
 iniconfig==2.3.0
-    # via pytest
+    # via
+    #   pytest
 markdown-it-py==4.2.0
-    # via rich
+    # via
+    #   rich
 mdurl==0.1.2
-    # via markdown-it-py
+    # via
+    #   markdown-it-py
+msgpack==1.2.3
+    # via cachecontrol
+opentelemetry-api==1.45.0
+    # via google-api-core
 packaging==26.3
     # via
     #   pytest
     #   wheel
 pillow==12.3.0
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 playwright==1.63.0
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 pluggy==1.6.0
-    # via pytest
+    # via
+    #   pytest
+proto-plus==1.29.0
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+protobuf==7.36.2
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+    #   googleapis-common-protos
+    #   grpcio-status
+    #   proto-plus
 psycopg==3.3.6
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 psycopg-binary==3.3.6 ; implementation_name != 'pypy'
-    # via psycopg
+    # via
+    #   psycopg
+pyasn1==0.6.4
+    # via pyasn1-modules
+pyasn1-modules==0.4.2
+    # via google-auth
+pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
 pydantic==2.13.5
-    # via fastapi
+    # via
+    #   fastapi
 pydantic-core==2.46.5
-    # via pydantic
+    # via
+    #   pydantic
 pyee==13.0.1
-    # via playwright
+    # via
+    #   playwright
 pygments==2.21.0
     # via
     #   pytest
     #   rich
+pyjwt==2.15.1
+    # via firebase-admin
 pytest==8.4.2
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 python-multipart==0.0.32
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
+requests==2.34.2
+    # via
+    #   cachecontrol
+    #   google-api-core
+    #   google-cloud-storage
 rich==13.9.4
     # via
     #   your-guitar-chronicle (app/pyproject.toml)
     #   typer
 setuptools==84.0.0
-    # via -r app/build-requirements.txt
+    # via
+    #   -r app/build-requirements.txt
 shellingham==1.5.4
-    # via typer
+    # via
+    #   typer
 starlette==1.7.0
-    # via fastapi
+    # via
+    #   fastapi
 typer==0.27.2
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 typing-extensions==4.16.0
     # via
     #   anyio
     #   fastapi
+    #   grpcio
+    #   opentelemetry-api
     #   psycopg
     #   pydantic
     #   pydantic-core
@@ -97,8 +208,13 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
 tzdata==2026.5 ; sys_platform == 'win32'
-    # via psycopg
+    # via
+    #   psycopg
+urllib3==2.8.0
+    # via requests
 uvicorn==0.54.0
-    # via your-guitar-chronicle (app/pyproject.toml)
+    # via
+    #   your-guitar-chronicle (app/pyproject.toml)
 wheel==0.48.0
-    # via -r app/build-requirements.txt
+    # via
+    #   -r app/build-requirements.txt

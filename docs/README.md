@@ -13,7 +13,7 @@
 | データの意味・保存構造を知る | [Claim設計](architecture/CLAIM_CENTERED_ARCHITECTURE.md)、[DB構造](architecture/DATABASE_STRUCTURE.md) | 不変条件と評価規則／物理DB・テーブル・正本・復元境界 |
 | 管理者として運用する | [運用ガイド](operations/README.md)、[Claim管理](operations/console-claim-administration.md) | 管理画面の操作と実施条件 |
 | 実装・検証する | [UI構造](development/UI_STRUCTURE.md)、[開発手順](development/DEVELOPMENT_WORKFLOW.md)、[GCP移行前の整備状況](development/GCP_PREPARATION_STATUS.md) | ファイル責務、共通部品、テスト・依存・CI |
-| GCP・旧DBから移行する | [GCP境界](migration/GCP_BOUNDARIES.md)、[構築状況](migration/GCP_STAGING_SETUP.md)、[PostgreSQL初期化](migration/POSTGRES_BOOTSTRAP.md)、[Accounts同期・所有判定](migration/POSTGRES_ACCOUNT_SYNC.md)、[Observation移行](migration/TEMP_OBSERVATION_MIGRATION_PLAN.md) | 現行との差、未実装、移行条件 |
+| GCP・旧DBから移行する | [GCP境界](migration/GCP_BOUNDARIES.md)、[構築状況](migration/GCP_STAGING_SETUP.md)、[PostgreSQL初期化](migration/POSTGRES_BOOTSTRAP.md)、[Accounts同期・所有判定](migration/POSTGRES_ACCOUNT_SYNC.md)、[認証検証](migration/IDENTITY_PLATFORM_VERIFICATION.md)、[Observation移行](migration/TEMP_OBSERVATION_MIGRATION_PLAN.md) | 現行との差、未実装、移行条件 |
 | 過去の判断・検証をたどる | [引継ぎ](history/HANDOFF_2026-10-03.md)、[SNS記録](history/SNS_IMPLEMENTATION_LOG.md)、[審議検証](history/OWNERSHIP_REVIEW_VALIDATION.md)、[壁紙生成](history/WALLPAPER_GENERATION.md) | 当時の日付・件数・判断。現行仕様ではない |
 
 ## 文書を更新するとき
@@ -22,4 +22,4 @@
 
 同じ仕様の詳細を複数の文書へ複写せず、主文書へリンクする。例外は所有権・判定権限の不変条件で、関連機能は設計文書の条件を満たすことを明示する。新機能は機能一覧とfeatures索引を更新し、操作入口・保存先が増えた場合は各ガイドとDB構造も更新する。
 
-過去の実装・検証記録はhistoryへ置く。公開環境でのIdentity Platform認証、管理者権限、PostgreSQL、Cloud Storage、クラウドジョブはmigrationで扱う未実装作業。ローカル版と将来案を同じ確定仕様として記述しない。
+過去の実装・検証記録はhistoryへ置く。公開環境でのIdentity Platform認証、管理者権限、PostgreSQL、Cloud Storage、クラウドジョブはmigrationで実装段階と未接続範囲を管理する。ローカル版と将来案を同じ確定仕様として記述しない。
