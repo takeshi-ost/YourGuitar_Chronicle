@@ -22,19 +22,19 @@ def main():
         expect(page.locator('#guitarMaker')).to_be_focused()
         assert page.evaluate('document.body.style.overflow') == 'hidden'
         page.keyboard.press('Shift+Tab')
-        assert page.evaluate("document.activeElement.closest('#newGuitarModal') !== null")
+        assert page.evaluate("document.activeElement.closest('#acquireReviewModal') !== null")
         page.keyboard.press('Tab')
         expect(page.locator('#guitarMaker')).to_be_focused()
         # Even a programmatic background focus cannot escape the modal.
         page.evaluate("document.getElementById('newGuitarAction').focus()")
-        assert page.evaluate("document.activeElement.closest('#newGuitarModal') !== null")
+        assert page.evaluate("document.activeElement.closest('#acquireReviewModal') !== null")
         page.evaluate("YGCOverlays.open('eventClaimModal')")
         page.keyboard.press('Escape')
         expect(page.locator('#eventClaimModal')).not_to_be_visible()
-        expect(page.locator('#newGuitarModal')).to_be_visible()
+        expect(page.locator('#acquireReviewModal')).to_be_visible()
         assert page.evaluate('document.body.style.overflow') == 'hidden'
         page.keyboard.press('Escape')
-        expect(page.locator('#newGuitarModal')).not_to_be_visible()
+        expect(page.locator('#acquireReviewModal')).not_to_be_visible()
         expect(page.locator('#newGuitarAction')).to_be_focused()
         assert page.evaluate('document.body.style.overflow') == ''
         # All feature overlays use the same lifecycle, without submitting data.

@@ -9,11 +9,23 @@ Python 3.12以降を用意して、この `app` ディレクトリで実行す�
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-python -m pip install -e '.[dev]'
-python -m pytest -q
+python ../scripts/install_dependencies.py
 ```
 
-フロントエンドの回帰テストはNode.jsで実行する。リポジトリ直下で `node --test app/tests/*.cjs` を実行する。PythonとJavaScriptのテストはいずれもReverbトークンを必要としない。
+## テスト
+
+Python 3.12以降とNode.jsを用意し、リポジトリ直下で実行する。
+
+```bash
+app/.venv/bin/python scripts/run_tests.py
+```
+
+Windowsでは `app\.venv\Scripts\python.exe scripts/run_tests.py`。仮想環境を有効化済みなら `python scripts/run_tests.py` でもよい。Node.jsがPATHにない場合は `--node /path/to/node` を指定する。PythonとJavaScriptを両方実行し、いずれかの失敗は終了コード1で返す。テストは実データ・認証情報を継承せず、一時ディレクトリを終了時に削除する。Reverbトークンは不要。
+
+ブラウザ検証も実行する場合は、`app` 内で `python ../scripts/install_dependencies.py --browser`、`python -m playwright install chromium` を実行してから、共通コマンドに `--browser` を付ける。既存Chromeを使う場合は `--browser-executable /path/to/chrome` も指定できる。専用の一時DB・画像・ローカルサーバーを自動生成し、終了時に停止・削除する。既存の起動中サーバーには接続しない。ローカル通信が禁止された実行環境では、通信を許可して実行する必要がある。
+
+個別のPythonテストは `app` 内の `python -m pytest tests/test_ui_assets.py -q` などでも実行できる。`tests/conftest.py` がアプリの読み込み前に保存先を一時領域へ切り替え、各テストにも独立したDB・画像・ログ領域を用意する。呼び出し元の `YGC_DATA_DIR`／DBパスは使用しない。
+
 
 macOSはリポジトリ直下の `start_webui.command`、Windowsは `start_webui.bat` でも起動できる。手動起動は次の通り。
 
@@ -50,3 +62,21 @@ Reverb Personal Access Tokenを読み取りに必要な最小権限で用意し�
 既定のSQLiteは `app/data/chronicle.db`、画像は `app/data/media` に保存される。保存先は `YGC_DATA_DIR` / `YGC_DB_PATH`、Reverbへの間隔は `YGC_REQUEST_DELAY` などで変更できる。**DBと画像を一緒にバックアップする**。管理画面のエクスポート／復元はローカル試作用である。
 
 Cloud Runではこの構成を動かさず、未実装のGCPアダプターを要求して起動を止める。交換箇所と残作業は [GCP_BOUNDARIES.md](../docs/GCP_BOUNDARIES.md)。
+
+## 依存関係の固定
+
+`constraints.txt` が直接・間接依存の固定バージョンを持つ。`pyproject.toml` は必要なライブラリと対応範囲を定義する。セットアップと起動スクリプトは `scripts/install_dependencies.py` を使い、pip自体、実行時依存、ビルド時依存を固定する。通常は開発用、`--runtime` は実行用のみ、`--browser` はブラウザ検証用も追加する。既存環境の追加パッケージは削除しないため、本番・CIは新しい仮想環境を使用する。
+
+依存更新は起動時には行わない。変更が必要なときに、リポジトリ直下で次を実行し、固定ファイルの差分と共通テストを確認する。再生成にはuvが必要だが、通常のインストールにuvは不要。
+
+```bash
+uv pip compile app/pyproject.toml app/build-requirements.txt --all-extras --universal --python-version 3.12 --output-file app/constraints.txt
+```
+
+既存バージョンは再生成時にも優先する。意図的に更新する場合だけ `--upgrade-package パッケージ名` を追加する。ビルド依存を変える場合は `pyproject.toml` と `build-requirements.txt` も揃える。OS固有の依存はマーカーで管理する。Pythonは現在検証済みの3.12を基準とし、Windows/Linuxの実機検証とCIは別途実施する。Node.jsはPython依存に含まず、JavaScriptテスト用に別途用意する。
+
+## PR自動チェック
+
+`.github/workflows/pr-checks.yml` はmain向けPRの作成・更新、mainへのpush、手動実行で動く。Ubuntu 24.04、Python 3.12、Node.js 24で、固定依存とPlaywrightのChromiumをインストールし、`python scripts/run_tests.py --browser` を実行する。実データ・GCP・Reverbへの接続情報は不要。新しい更新が届いたら同じPRの古い実行はキャンセルする。
+
+GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。自動チェックを必須のマージ条件にする場合はmainの保護ルールでこの名前をRequired status checksへ追加する。ワークフローだけではマージを禁止しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。

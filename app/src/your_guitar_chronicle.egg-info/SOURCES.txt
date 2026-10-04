@@ -135,6 +135,7 @@ tests/test_reverb_adapter.py
 tests/test_reverb_claim_persistence.py
 tests/test_reverb_collector.py
 tests/test_serial_extractor.py
+tests/test_test_isolation.py
 tests/test_transfer_claim.py
 tests/test_ui_assets.py
 tests/test_user_follows.py

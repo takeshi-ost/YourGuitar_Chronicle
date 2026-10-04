@@ -123,7 +123,10 @@ def test_pending_pair_evaluates_release_together(repo):
 
 
 def test_pending_claims_without_request_keeps_legacy_and_excludes_request(repo):
-    _, iid, _ = seed(repo, 'Stratocaster')
+    owner = repo.create_user('Owner')
+    iid, _, _, _ = repo.create_initial_listing_claim(
+        owner, manufacturer='Fender', model='Stratocaster', serial_number='123456',
+        media_storage_path='media/test.jpg', occurred_at='2026-01-01')
     other = repo.create_user('Other')
     with repo.connect() as con:
         cur = con.execute("INSERT INTO claims (individual_id,author_user_id,claim_type,ownership_kind,value_text,verification_status,occurred_at,created_at,updated_at) VALUES (?,?,'ownership','acquire',?,'unverified','2026-10-03',?,?)", (iid,other,str(other),utcnow(),utcnow()))

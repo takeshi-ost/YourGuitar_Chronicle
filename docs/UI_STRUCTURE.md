@@ -28,6 +28,8 @@ Console用トークンの埋込みだけは従来どおりサーバー生成HTML
 
 ## 検証
 
+共通の入口は `python scripts/run_tests.py`（リポジトリ直下）。PythonとJavaScriptを一時保存先で実行する。`--browser` を追加すると専用の一時サーバー・DB・画像を生成してブラウザ検証も実行する。依存関係と個別実行は `app/README.md` の「テスト」を参照。通常のpytestも `tests/conftest.py` で読み込み前から保存先を隔離する。
+
 既存のJavaScriptテストは `app/tests/page_source.cjs` でページ固有アセットを読み込み、表示・操作の回帰を確認する。Pythonテストはアセットの配信と許可リストも確認する。
 
 `app/tests/browser_ui_components.py` は明示実行するPlaywrightテスト。実行先はuser ID 1と画像付きindividual ID 1のある検証専用サーバーを使う。既存レコードは変更しない。`YGC_BROWSER_URL`、`YGC_BROWSER_EXECUTABLE` で接続先とChromium実行ファイルを指定できる。フォーカス、Tab移動、重ね合わせ、Escape、スクロール復帰、モバイルのアルバム、native dialogを検証する。
