@@ -143,3 +143,9 @@ Cloud Runへ認証確認画面だけを配置した。専用コンテナ・限�
 ## 2026-10-04：クラウド管理APIの基盤
 
 確認済みメール・Accounts正本のAdmin資格による管理API、4モードのアクセス判定、競合検出と監査記録、IAMで実行する初回Admin付与Jobを実装。BrowserConsole・コンテンツAPI・復元／リセット・自動ジョブへの接続は残る。[実装範囲と初回Admin手順](../migration/CLOUD_OPERATIONS_ACCESS.md)を参照。
+
+## 2026-10-04：クラウドConsoleのOperations接続
+
+Admin認証済みのConsoleから状態確認と4モードの変更を操作する画面を追加した。左右独立スクロール、辞書参照、競合・資格解除・障害時の保存停止をブラウザで検証。データ管理・復元／リセット・ジョブ制御は未接続。[操作と検証範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。
+
+2026-10-04、利用者がクラウドBrowserConsoleの実操作を確認した。実装コミットに対する共通CIも成功。詳細なモード・競合の受入とデータ管理機能の移行は残る。

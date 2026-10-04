@@ -1,6 +1,6 @@
 # 管理者権限とメンテナンス制御の最終仕様・ローカル維持方針
 
-2026-10-04の方針整理。クラウドの管理API・モード判定・初回Admin付与Jobは実装済み。BrowserConsole、コンテンツAPI、復元・リセット、ジョブ排他への接続は未実装。実装範囲は[クラウド管理API](CLOUD_OPERATIONS_ACCESS.md)を参照。メンテナンス中にReset DBを実行できず、Normalへ戻す必要があった不整合を解消するための仕様である。
+2026-10-04の方針整理。クラウドの管理API・モード判定・初回Admin付与Jobは実装済み。[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)の状態確認・モード操作を接続した。BrowserConsoleのデータ管理、コンテンツAPI、復元・リセット、ジョブ排他への接続は未実装。実装範囲は[クラウド管理API](CLOUD_OPERATIONS_ACCESS.md)を参照。メンテナンス中にReset DBを実行できず、Normalへ戻す必要があった不整合を解消するための仕様である。
 
 ## 基本方針
 

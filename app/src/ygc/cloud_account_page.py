@@ -24,6 +24,10 @@ def install(app, config):
     def account_page():
         return FileResponse(STATIC / 'cloud_account_html.html', headers={'Cache-Control': 'no-store'})
 
+    @app.get('/console')
+    def console_page():
+        return FileResponse(STATIC / 'cloud_console_html.html', headers={'Cache-Control': 'no-store'})
+
     @app.get('/assets/i18n.js')
     def i18n():
         from ygc.localization import ui_resources
@@ -35,6 +39,6 @@ def install(app, config):
     @app.get('/assets/{filename}')
     def asset(filename: str):
         if filename not in ('identity-platform-auth.js', 'cloud-auth-loader.js',
-                            'cloud-account-page.js', 'cloud-account.css', 'ui-components.css', 'overlays.js'):
+                            'cloud-account-page.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')
         return FileResponse(STATIC / filename, headers={'Cache-Control': 'no-store'})

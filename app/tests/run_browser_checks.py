@@ -40,6 +40,8 @@ def main():
                 journeys(repository)
                 from browser_cloud_account import main as cloud_account
                 cloud_account()
+                from browser_cloud_console import main as cloud_console
+                cloud_console()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

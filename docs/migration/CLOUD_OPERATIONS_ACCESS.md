@@ -1,6 +1,6 @@
 # クラウド管理APIと初回Admin
 
-2026-10-04。管理者権限とメンテナンスの基盤を実装した。[最終仕様](ADMIN_AND_MAINTENANCE.md)の一部であり、BrowserConsoleや一般コンテンツAPIへの接続はまだ含まない。
+2026-10-04。管理者権限とメンテナンスの基盤を実装した。[最終仕様](ADMIN_AND_MAINTENANCE.md)の一部であり、[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)からステータス・モード操作への接続を追加した。一般コンテンツAPIへの接続はまだ含まない。
 
 ## 管理資格とAPI
 
@@ -30,7 +30,7 @@ Identity PlatformのBearerトークンを検証し、Googleのメール確認済
 
 共通検証：Python554件、JavaScript71件、ブラウザの認証・既存操作・27モーダル、実PostgreSQLの4DBが通過。管理APIの不正資格・偽装入力、全モード／利用者の組合せ、初回付与の反復・拒否、version競合、監査失敗時のロールバック、権限解除のロックを確認。所有権・BAN・Transfer等の既存遷移検証も通過した。
 
-残るのはBrowserConsoleへの接続、コンテンツ・画像の全入口への認可、バックアップ・復元／リセット・Crawl・審議反映・各ジョブの停止と排他、実Adminのブラウザ操作試験。API配置だけでメンテナンス中のDBリセットを可能にしたとは扱わない。ローカル仕様は維持する。
+残るのはBrowserConsoleのデータ管理操作、コンテンツ・画像の全入口への認可、バックアップ・復元／リセット・Crawl・審議反映・各ジョブの停止と排他、実Adminのブラウザ操作試験。API配置だけでメンテナンス中のDBリセットを可能にしたとは扱わない。ローカル仕様は維持する。
 
 ## ステージング配置
 
@@ -44,6 +44,6 @@ Identity PlatformのBearerトークンを検証し、Googleのメール確認済
 
 2026-10-04、利用者から運営用メールの認証完了を受け、dry-run `ygc-staging-admin-bootstrap-mdpvd` が登録・メール確認済みの対応確認に成功。実付与 `ygc-staging-admin-bootstrap-kqptv` の結果は `status=ok, dry_run=false, granted=true`。専用Jobは付与後にdry-run設定へ戻した。サービスモードはOfflineを維持する。
 
-Admin資格はAccounts正本から読み取る。Chronicleにはroleを複製せず、プロフィール等の既存投影と版数を同期する。BrowserConsoleのクラウド画面への接続と、実AdminのBearerによるブラウザ操作試験は引き続き残る。
+Admin資格はAccounts正本から読み取る。Chronicleにはroleを複製せず、プロフィール等の既存投影と版数を同期する。BrowserConsoleのデータ管理機能の接続と、実AdminのBearerによるブラウザ操作試験は引き続き残る。
 
 同期Job `ygc-staging-account-projection-5mjw4` が成功。Google主体から固定IDを解決した読み取り専用のDB検証で、有効なAdmin資格、初回付与監査1件、Chronicleの固定IDと最新投影版数の一致を確認した。実ユーザーの認証トークンを取得・代理使用する試験は行っていない。

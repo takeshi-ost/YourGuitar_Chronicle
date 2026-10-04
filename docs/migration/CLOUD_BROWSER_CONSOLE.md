@@ -1,0 +1,37 @@
+# クラウドBrowserConsoleのOperations接続
+
+2026-10-04。認証確認サービスに `/console` を追加し、[管理API](CLOUD_OPERATIONS_ACCESS.md)へ接続した。これは段階的なクラウド移行用Consoleであり、ローカル版のデータ管理機能をすべて配置したものではない。
+
+## 管理者の操作
+
+1. 同じタブの[アカウント画面](https://ygc-staging-accounts-rgmjxrs5kq-an.a.run.app/account)で、メール確認済みの運営用YGCアカウントにSign Inする。
+2. 表示されたBrowser Consoleリンクから `/console` を開く。URLを直接開くことも可能。未認証・未確認・非Adminの場合は案内のみで操作できない。
+3. 右Detail層最上部のOperationsで現在のモードを確認する。Service statusタブでWeb応答・Accounts / Chronicle / Operations DB接続・確認時刻を表示する。
+4. MaintenanceタブでNormal / Read only / Offline / Admin Onlyを選び、必要に応じて案内メッセージを編集して保存する。Reasonは要求しない。モード変更時は日英の定型文を設定し、Normalは空とする。
+5. 他の管理操作で設定が更新されていた場合は保存を拒否し、Refresh後に再編集する。Refreshは未保存入力を現在のサーバー設定で置き換える。自動更新は行わない。
+
+左右に位置リンクを持ち、デスクトップでは左Mainと右Detailが独立してスクロールする。狭い画面では縦に並べる。言語変更・再読み込み後もSDKのタブ内セッションを使い、保存済みのモードを再取得する。ConsoleにもSignOutを設けた。
+
+## 認証と保存の境界
+
+Consoleの静的な外枠は公開されるが、管理データや操作者の情報をHTMLへ埋め込まない。操作欄の表示はサーバーの認証結果を使い、各管理APIは新しいGoogle ID tokenとAccounts正本の資格を再検証する。ブラウザが申告したrole・user_id・Consoleトークンは送らない。表示名・メッセージはテキスト／textareaとして表示し、HTMLとして解釈しない。
+
+保存は現在のversionを送る。409では未保存入力を維持して再取得を促し、Saveを停止する。401 / 403では管理表示を消す。DB障害等でも保存を停止し、Refreshで再取得する。モード変更によるAdminの入口封鎖は行わない。監査と権限解除の競合制御は管理API側の責務であり、[管理API仕様](CLOUD_OPERATIONS_ACCESS.md)を参照。
+
+## 実装・確認範囲
+
+ローカル版の巨大なConsoleスクリプトを読み込まず、専用HTML・CSS・モジュールを使う。Google SDK・認証アダプター・辞書は認証画面と共有し、アセットは明示許可リストで配信する。
+
+ブラウザ試験でGuest・一般ユーザー・未確認Adminの拒否、Adminによるモード保存と再読込み、同時更新の409、DB障害からの再取得、資格解除後の403、SignOut、タブのキーボード操作、表示内容のHTML非解釈、左右独立スクロール、日英・モバイル表示を確認した。Google操作とDBは当該ブラウザ試験内だけの代替であり、実ユーザーによる操作試験とは区別する。
+
+残るのはコンテンツ・画像・Crawl・審議・バックアップ・復元／リセット等のAPIと画面の移行、ジョブ排他、全モード・権限解除・ジョブ競合を含む実環境の詳細受入試験。Service statusはDB接続確認であり、Storage・Reverb・GPTの疎通や全テーブルの健全性を保証しない。これらの未接続操作をクラウド画面へボタンだけ追加しない。
+
+検証結果：Python555件、JavaScript71件、共通ブラウザ操作と新Consoleの操作検証、実PostgreSQLの4DB・権限／所有判定・Operations検証が通過した。辞書の空キーを検出して修正し、Python全体と関連ブラウザを再確認した。
+
+## 配置記録
+
+Cloud Build `6f72c649-1e98-4700-8abc-5115a8b9eacb` が成功。イメージ `account-api@sha256:22e39fc80ee8ae36a7ec0a60b110f5700d84e11bb14bf40a8db9e5662cffb19e` を `ygc-staging-accounts-00005-j25` へ配置した。DBスキーマとモード、初回Admin・同期Jobの配置は変更していない。
+
+実URLのConsole・許可アセット・readyが200、無認証の管理APIが401。公式SDKが初期化された匿名ブラウザで管理欄が非表示になり、認証画面が利用可能であることとデスクトップ／モバイル表示を確認した。OperationsのOfflineを維持。続いて利用者が実環境のBrowserConsole操作を確認した（2026-10-04）。これは利用者による確認結果であり、エージェントによる代理ログインではない。個々のモード・競合等の詳細受入試験をすべて完了したとは扱わない。
+
+GitHub Actionsの共通CIも成功した（run `37208270805`、実装コミット `16e102e`）。mainへの統合状況はPR #22 / #23 / #24とGit履歴で確認する。

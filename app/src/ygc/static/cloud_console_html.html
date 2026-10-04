@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title data-i18n="console.title">Your Guitar Chronicle — Browser Console</title>
+<link rel="stylesheet" href="/assets/cloud-account.css"><link rel="stylesheet" href="/assets/cloud-console.css">
+<script src="/assets/i18n.js" defer></script><script src="/assets/identity-platform-auth.js" defer></script>
+<script src="/assets/cloud-console-page.js" type="module"></script></head>
+<body><header><h1>Your Guitar Chronicle <small data-i18n="ui.browser_console_bc10c95d">Browser Console</small></h1><nav class="page-nav"><a href="/account" data-i18n="console.account">Account</a><button id="consoleSignOut" hidden data-i18n="account.sign_out">SignOut</button></nav></header>
+<main class="console-workspace">
+<section class="console-main-layer" tabindex="0" data-i18n-aria-label="ui.main_eb814be3" aria-label="Main">
+<nav><a href="#consoleAccount" data-i18n="console.account">Account</a></nav>
+<section class="panel" id="consoleAccount"><h2 data-i18n="console.access">Administrator access</h2><p id="consoleIdentity"></p><p id="consoleStatus" role="status" data-i18n="cloud.loading">Loading authentication...</p><a href="/account" data-i18n="console.account_help">Sign in or verify your email on the Account page.</a></section>
+<section class="panel"><h2 data-i18n="console.available">Available operations</h2><p data-i18n="console.scope">Service status and maintenance modes are available here. Data management, backups and background jobs are not yet connected.</p></section>
+</section>
+<aside class="console-detail-layer" tabindex="0" data-i18n-aria-label="action.detail" aria-label="Detail">
+<nav><a href="#operations" data-i18n="ui.operations_358cc201">Operations</a></nav>
+<section class="panel operations-detail-panel" id="operations"><div class="toolbar"><h2 data-i18n="ui.operations_358cc201">Operations</h2><button id="consoleRefresh" disabled data-i18n="action.refresh">Refresh</button></div>
+<p id="operationsStatus" role="status">—</p>
+<div id="consoleControls" hidden>
+<div class="operations-menu" role="tablist" data-i18n-aria-label="ui.operations_sections_ee5b2249" aria-label="Operations sections">
+<button id="statusTab" role="tab" aria-controls="servicePanel" aria-selected="true" data-i18n="ui.service_status_cce5eda3">Service status</button>
+<button id="maintenanceTab" role="tab" aria-controls="maintenancePanel" aria-selected="false" tabindex="-1" data-i18n="ui.maintenance_17ccfa5b">Maintenance</button></div>
+<section id="servicePanel" role="tabpanel" aria-labelledby="statusTab"><dl><dt data-i18n="ui.web_process_1549c7be">Web process</dt><dd id="webStatus"></dd><dt data-i18n="console.databases">Accounts / Chronicle / Operations databases</dt><dd id="databaseStatus"></dd><dt data-i18n="ui.last_checked_0c0c351a">Last checked</dt><dd id="checkedAt"></dd></dl></section>
+<section id="maintenancePanel" role="tabpanel" aria-labelledby="maintenanceTab" hidden><form id="maintenanceForm">
+<label for="operationsMode" data-i18n="ui.service_mode_b4e3ac32">Service mode</label>
+<select id="operationsMode"><option value="normal" data-i18n="ui.normal_a7248eeb">Normal</option><option value="read_only" data-i18n="ui.read_only_8ac76735">Read only</option><option value="offline" data-i18n="ui.offline_a1794783">Offline</option><option value="admin_only" data-i18n="console.admin_only">Admin Only</option></select>
+<label for="operationsMessage" data-i18n="ui.message_to_users_97162fcd">Message to users</label><textarea id="operationsMessage" maxlength="2000"></textarea>
+<p data-i18n="console.mode_notice">The administrator entry remains accessible in every mode. A mode change does not stop jobs already running.</p>
+<button id="operationsSave" disabled data-i18n="ui.save_settings_7f3a3b14">Save settings</button>
+</form></section></div></section></aside></main></body></html>

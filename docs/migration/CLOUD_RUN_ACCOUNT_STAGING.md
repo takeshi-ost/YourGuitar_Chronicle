@@ -57,3 +57,7 @@ Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を�
 ## 管理API基盤追加後の配置
 
 リビジョン `ygc-staging-accounts-00004-6sz` へ更新し、公開サービス状態と認証済みAdminのOperations APIを追加した。readyはOperationsを含む3DBの接続を確認する。BrowserConsole自体は未配置。[クラウド管理API](CLOUD_OPERATIONS_ACCESS.md)に実装範囲・初回Admin用の非公開Jobを記載した。
+
+## クラウドConsoleの追加
+
+認証画面から有効・メール確認済みAdminにBrowser Consoleリンクを表示し、`/console` でOperationsの状態確認とモード変更を操作できるようにした。過去の「BrowserConsole未配置」は当該配置時点の記録。現時点の接続範囲は[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)を参照。コンテンツ管理・Crawl・バックアップ等はまだ未配置。
