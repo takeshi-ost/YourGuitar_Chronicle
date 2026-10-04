@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--node', default='node', help='Node.js executable (default: node on PATH)')
     parser.add_argument('--browser', action='store_true', help='Also run Chromium UI checks; requires .[browser] and installed Chromium')
     parser.add_argument('--browser-executable', help='Optional Chrome/Chromium executable')
+    parser.add_argument('--browser-artifacts', type=Path, help='Keep screenshots and traces of failed disposable browser checks here')
     args = parser.parse_args()
     node = shutil.which(args.node)
     if not node:
@@ -37,6 +38,8 @@ def main():
         checks = [('Python', [sys.executable, '-m', 'pytest', 'app/tests', '-q']),
                   ('JavaScript', [node, '--test', *map(str, sorted((ROOT / 'app/tests').glob('test_*.cjs')))])]
         if args.browser:
+            if args.browser_artifacts:
+                env['YGC_BROWSER_ARTIFACTS'] = str(args.browser_artifacts.resolve())
             if args.browser_executable:
                 env['YGC_BROWSER_EXECUTABLE'] = args.browser_executable
             checks.append(('Browser', [sys.executable, str(ROOT / 'app/tests/run_browser_checks.py')]))

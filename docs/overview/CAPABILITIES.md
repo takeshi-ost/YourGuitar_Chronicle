@@ -15,7 +15,7 @@
 | 状態確認、メンテナンス、対象別バックアップ | あり | [サービス運用](../features/SERVICE_OPERATIONS.md) |
 | Claimを変更しないGPT実験キュー | あり | [Authentication Test](../features/AUTHENTICATION_TEST.md) |
 | テーマ、日英UI切替 | あり | [テーマ](../features/USER_THEMES.md)、[言語切替](../features/LOCALIZATION.md) |
-| 実際の認証・アカウント作成 | ダミーのみ | [GCP移行境界](../migration/GCP_BOUNDARIES.md) |
+| 本人認証・Google認証アカウント作成 | 未実装（ローカル登録・ダミーセッションあり） | [GCP移行境界](../migration/GCP_BOUNDARIES.md) |
 | PostgreSQL、Cloud Storage、クラウド定期ジョブ | 未実装 | [GCP移行境界](../migration/GCP_BOUNDARIES.md) |
 
 ローカルのセッション・公開範囲設定は公開環境の本人確認や全API認可を保証しない。旧Observation互換処理の撤去は[移行残作業](../migration/TEMP_OBSERVATION_MIGRATION_PLAN.md)で管理する。

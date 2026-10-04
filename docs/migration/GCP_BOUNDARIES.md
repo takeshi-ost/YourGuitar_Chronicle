@@ -24,6 +24,8 @@ SQLite 固有の SQL・マイグレーション・同時書き込み処理は Po
 
 `K_SERVICE` / `CLOUD_RUN_JOB` が設定された環境、または `YGC_PLATFORM_TARGET` 等で未実装のバックエンドを指定した環境では、ローカル DB を開く前に `PlatformAdapterRequired` で停止する。クラウド上でローカル SQLite や未検証の利用者 ID をそのまま運用しないためのガードであり、デプロイ可能になったという意味ではない。
 
+ローカル開発基盤の完了状況・残作業とデータ移行前の準備は[GCP移行前の整備状況](../development/GCP_PREPARATION_STATUS.md)を参照。
+
 ## 移行前に確定すること
 
 1. 更新／閲覧APIごとにGuest、本人、現在Owner、管理者の権限を表にし、ブラウザから届く `user_id` / `viewer_id` を本人証明にしない。プロフィールの直接API・画像配信も含めて検査する。
@@ -33,7 +35,7 @@ SQLite 固有の SQL・マイグレーション・同時書き込み処理は Po
 
 ## 移行時に残る作業
 
-- Identity Platform のトークン検証と利用者対応付け、全エンドポイントの認可と管理権限の検証。Sign In / Create Accountは現在画面上の導線だけ。
+- Identity Platform のトークン検証と利用者対応付け、全エンドポイントの認可と管理権限の検証。Sign Inはダミーセッション、Create Accountはローカルアカウント・Profile・同意を保存するが、Google認証ユーザーは作成しない。
 - PostgreSQL スキーマ・データ移行・接続プール・Claim の同時更新とカーソル排他。
 - 画像の永続化とアクセス制御、Reverb API トークンやその他のシークレットの安全な管理。SQLiteのバックアップ/復元UIはCloud SQL運用手順へ置換する。
 - Cloud Run Job の実装・ジョブ状態の永続化・Cloud Scheduler の認証付き起動と再試行設計。

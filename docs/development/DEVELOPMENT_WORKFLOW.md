@@ -33,16 +33,20 @@ uv pip compile app/pyproject.toml app/build-requirements.txt --all-extras --univ
 
 `.github/workflows/pr-checks.yml` はmain向けPRの作成・更新、mainへのpush、手動実行で動く。Ubuntu 24.04、Python 3.12、Node.js 24で、固定依存とPlaywrightのChromiumをインストールし、`python scripts/run_tests.py --browser` を実行する。実データ・GCP・Reverbへの接続情報は不要。新しい更新が届いたら同じPRの古い実行はキャンセルする。
 
-GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。自動チェックを必須のマージ条件にする場合はmainの保護ルールでこの名前をRequired status checksへ追加する。ワークフローだけではマージを禁止しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。
+GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。ブラウザ失敗時は `browser-failure-diagnostics` artifactにスクリーンショット・Playwright trace・ページエラーを保存し、7日間保持する。実データ・実認証情報を使わない専用テスト環境の記録。2026-10-04にmainの保護ルールへこのチェックを登録済み。PR経由と最新mainに対するチェック成功を管理者にも要求する。他者レビュー承認は必須ではなく、強制push・ブランチ削除は許可しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。
 
 テストの後片付け：pytestの `tmp_path` とキャッシュも専用の一時保存先にまとめ、成功・失敗・通常のCtrl+C中断でPythonプロセスが終了した際に削除する。削除対象を安全に限定するため、独自の `--basetemp` 指定は受け付けない。OSによる強制終了（SIGKILL）や電源断では終了処理が走らず、一時領域が残る場合がある。以前の実行で残った領域は今回の自動削除対象に含めない。
 
-## 残る整備
+## 残る整備と確認済み状態
 
-- mainの保護ルール：PRとチェック成功を必須にする設定は未適用。
-- pyprojectと固定ファイルの更新漏れを自動検出するチェック。
-- 日本語切替・ログイン・申請から承認までの操作を正式なブラウザテストへ追加。
-- 失敗画面・操作記録の保存。
-- Windowsでの実機検証。
+残作業の優先度・完了条件・移行作業との区別は[GCP移行前の整備状況](GCP_PREPARATION_STATUS.md)で管理する。
 
-GitHub CIの実行ID 37168107661ではPython 431件、JavaScript 55件、Chromium検証が成功した。後片付けの追加テストによって件数は増えているため、件数は固定の合格条件にしない。
+PR #13の統合後main `aea72cf` でもCI成功。Python433件、JavaScript55件、Chromium検証が通過した。件数は固定の合格条件にしない。mainの保護ルールは適用済み。依存整合検査・主要操作のブラウザテスト・失敗artifactはPR #14で実装・CI検証済み（未マージ）。Windows実機確認は残る。
+
+## 追加した移行前チェック
+
+ブラウザ依存まで導入した環境で `python scripts/check_dependencies.py` を実行する。直接・任意依存の固定漏れ、定義範囲との不一致、ビルド定義とbuild-requirementsの差、インストール済みパッケージの間接依存の固定漏れを検出する。CIでは依存導入直後に実行する。OS非該当パッケージのインストール確認は行わず、ビルドバックエンドはpipの隔離環境に入るためファイル定義を照合する。全OSの解決結果を再生成して一致比較する検査ではない。
+
+ブラウザの定常検証には日本語切替・再読込、ローカル登録と同意、入力メール／パスワードの送信禁止、既存ユーザーのサインイン・SignOut、Listing提出から新規登録、Acquire提出からOwner承認を含める。GPTの観察結果だけを固定のテストデータで供給する。外部のGPT・Identity Platform・Reverbへ接続する検証ではない。
+
+ローカルで診断を残す場合は共通コマンドへ `--browser-artifacts /path/to/diagnostics` を付ける。成功時には診断ファイルを生成せず、失敗時に保存する。指定先は自動削除対象の一時DBとは別に保持する。ブラウザの実行・記録は `browser_diagnostics.py` で共通化する。

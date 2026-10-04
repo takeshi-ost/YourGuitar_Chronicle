@@ -1,5 +1,6 @@
 """Read-only backdrop checks against a disposable server (run explicitly)."""
 import os
+from browser_diagnostics import diagnostic_page
 from playwright.sync_api import sync_playwright, expect
 
 
@@ -8,9 +9,7 @@ def main():
     executable = os.environ.get('YGC_BROWSER_EXECUTABLE')
     errors = []
     checked = 0
-    with sync_playwright() as p:
-        browser = p.chromium.launch(**({'executable_path': executable} if executable else {}))
-        page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+    with sync_playwright() as p, diagnostic_page(p, 'browser_modal_dismissal') as page:
         page.on('pageerror', lambda error: errors.append(str(error)))
         for path in ('/user-view', '/'):
             page.goto(base + path)
@@ -60,7 +59,6 @@ def main():
         page.mouse.click(2, 2)
         page.wait_for_function('window.confirmationResult === false')
         assert not errors, errors
-        browser.close()
     print(f'{checked} modal backdrops: inside clicks, outside dismissal, cleanup, nesting and confirmation cancellation passed')
 
 

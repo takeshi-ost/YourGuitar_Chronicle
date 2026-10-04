@@ -10,7 +10,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ygc-browser-tests-') as directory:
         root = Path(directory)
         for key in list(os.environ):
-            if ((key.startswith('YGC_') and key != 'YGC_BROWSER_EXECUTABLE')
+            if ((key.startswith('YGC_') and key not in ('YGC_BROWSER_EXECUTABLE', 'YGC_BROWSER_ARTIFACTS'))
                     or key in ('REVERB_API_TOKEN', 'K_SERVICE', 'CLOUD_RUN_JOB')):
                 del os.environ[key]
         os.environ.update(YGC_DATA_DIR=directory, YGC_DB_PATH=str(root / 'chronicle.db'),
@@ -36,6 +36,8 @@ def main():
                 from browser_modal_dismissal import main as dismissal
                 components()
                 dismissal()
+                from browser_user_journeys import main as journeys
+                journeys(repository)
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)
