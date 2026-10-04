@@ -19,9 +19,10 @@ def png(size=(800,400)):
 
 
 class Storage:
-    def __init__(self):self.objects={};self.deleted=[]
+    def __init__(self):self.objects={};self.deleted=[];self.next_id=0
     def put(self,scope,data,*,content_type):
-        ref=ObjectReference(scope,'media/'+format(len(self.objects)+1,'032x'),1,len(data),content_type)
+        self.next_id+=1
+        ref=ObjectReference(scope,'media/'+format(self.next_id,'032x'),1,len(data),content_type)
         self.objects[ref]=data
         return ref
     def get(self,ref):return self.objects[ref]

@@ -32,12 +32,20 @@ def main():
     class Operations:
         row=dict(mode='offline',message='<img src=x onerror=alert(1)>',version=1)
         fail=None
+        policies={t:dict(target=t,enabled=0,interval_hours=24,generations=10,next_run=0,last_at=None,last_status=None,last_error=None) for t in ('accounts','chronicle','operations','authentication')}
         @contextmanager
         def access(self, kind, actor):
             if self.fail:raise self.fail
             if actor!='admin-uuid':raise PermissionError()
             class CatalogConnection:
                 def execute(self,query,params):
+                    if query.startswith('SELECT * FROM backup_schedules'):
+                        return SimpleNamespace(fetchone=lambda:dict(ops.policies[params[0]]))
+                    if query.startswith('UPDATE backup_schedules'):
+                        generations,enabled,interval,next_run,target=params
+                        ops.policies[target].update(generations=generations,enabled=enabled,interval_hours=interval,next_run=next_run)
+                        return SimpleNamespace()
+                    if query.startswith('INSERT INTO events'):return SimpleNamespace()
                     target=params[1]
                     records=[{'reason':json.dumps(dict(kind='db_backup_v1',backup_id='fixture',target=target,created_at='2026-10-05T00:00:00Z',schema_version=2,tables=42 if target=='chronicle' else 8,rows=3))}] if target in ('chronicle','accounts') else []
                     return SimpleNamespace(fetchall=lambda:records)
@@ -120,6 +128,11 @@ def main():
                 page.locator('#backupTarget').select_option('operations');expect(page.locator('#backupRows tr')).to_have_count(0)
                 expect(page.locator('#backupStatus')).to_have_text('No saved snapshots for this database.')
                 page.locator('#backupTarget').select_option('accounts')
+                expect(page.locator('#backupKeep')).to_have_value('10')
+                page.locator('#backupKeep').fill('12');page.locator('#backupInterval').fill('48');page.locator('#backupScheduled').check();page.locator('#backupPolicySave').click()
+                expect(page.locator('#backupPolicyStatus')).to_have_text('Backup settings saved.')
+                page.locator('#backupTarget').select_option('chronicle');expect(page.locator('#backupKeep')).to_have_value('10')
+                page.locator('#backupTarget').select_option('accounts');expect(page.locator('#backupKeep')).to_have_value('12');expect(page.locator('#backupScheduled')).to_be_checked()
                 expect(page.locator('#backupSave')).to_be_enabled()
                 page.locator('#backupSave').click()
                 expect(page.locator('#backupSaveStatus')).to_have_text('Saving this database…')

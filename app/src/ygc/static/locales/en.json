@@ -1230,7 +1230,7 @@
   "guitars.field_current_owner_name": "Current Owner",
   "guitars.field_current_owner_type": "Owner type",
   "backups.heading": "Database backups",
-  "backups.scope": "Saved database snapshots. Save one selected database using a private Job. Scheduling, retention and restore are not yet connected.",
+  "backups.scope": "Save and retain snapshots of the selected database. Restore is not yet connected.",
   "backups.target": "Database",
   "backups.at": "Saved at (UTC)",
   "backups.version": "Schema version",
@@ -1244,5 +1244,11 @@
   "backups.running": "Saving this database…",
   "backups.succeeded": "Saved and read-back verified.",
   "backups.unknown": "The save result is not yet confirmed. Refresh to check; no automatic restart will occur. A new attempt is allowed after 10 minutes.",
-  "backups.busy": "A save is already pending for this database."
+  "backups.busy": "A save is already pending for this database.",
+  "backups.scheduled": "Periodic save",
+  "backups.interval": "Interval (hours)",
+  "backups.keep": "Keep snapshots",
+  "backups.policy_save": "Save settings",
+  "backups.policy_saved": "Backup settings saved.",
+  "backups.policy_scope": "Schedules are independent for each database. Retention applies after the next successful save."
 }

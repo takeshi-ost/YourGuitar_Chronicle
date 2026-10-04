@@ -1230,7 +1230,7 @@
   "guitars.field_current_owner_name": "現在の所有者",
   "guitars.field_current_owner_type": "所有者の種類",
   "backups.heading": "DBバックアップ",
-  "backups.scope": "保存済みのDBスナップショットです。選択したDBだけを非公開Jobで保存します。定期保存・世代保持・復元は未接続です。",
+  "backups.scope": "選択したDBの保存と世代保持を行います。復元はまだ未接続です。",
   "backups.target": "対象DB",
   "backups.at": "保存日時（UTC）",
   "backups.version": "スキーマ版",
@@ -1244,5 +1244,11 @@
   "backups.running": "このDBを保存しています…",
   "backups.succeeded": "保存と読み戻し検証が完了しました。",
   "backups.unknown": "保存結果はまだ確認できていません。更新して確認してください。自動では再実行しません。10分後に新しい保存を開始できます。",
-  "backups.busy": "このDBの保存がすでに進行中です。"
+  "backups.busy": "このDBの保存がすでに進行中です。",
+  "backups.scheduled": "定期保存",
+  "backups.interval": "保存間隔（時間）",
+  "backups.keep": "保持する保存件数",
+  "backups.policy_save": "設定を保存",
+  "backups.policy_saved": "バックアップ設定を保存しました。",
+  "backups.policy_scope": "定期保存はDBごとに独立しています。保持件数の変更は次回の保存成功後に適用します。"
 }
