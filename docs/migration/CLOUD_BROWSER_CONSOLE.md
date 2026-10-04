@@ -35,3 +35,7 @@ Cloud Build `6f72c649-1e98-4700-8abc-5115a8b9eacb` が成功。イメージ `acc
 実URLのConsole・許可アセット・readyが200、無認証の管理APIが401。公式SDKが初期化された匿名ブラウザで管理欄が非表示になり、認証画面が利用可能であることとデスクトップ／モバイル表示を確認した。OperationsのOfflineを維持。続いて利用者が実環境のBrowserConsole操作を確認した（2026-10-04）。これは利用者による確認結果であり、エージェントによる代理ログインではない。個々のモード・競合等の詳細受入試験をすべて完了したとは扱わない。
 
 GitHub Actionsの共通CIも成功した（run `37208270805`、実装コミット `16e102e`）。mainへの統合状況はPR #22 / #23 / #24とGit履歴で確認する。
+
+## ギター閲覧の追加（2026-10-05）
+
+左のGuitar DB Managementと右のProduct Detailに、Admin用の一覧・検索・ページ送り・基本情報閲覧を追加した。Operationsと取得障害を分離し、左右独立スクロールを維持する。編集・画像・Chronicleは未接続。[仕様と確認範囲](CLOUD_GUITAR_BROWSER.md)を参照。

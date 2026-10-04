@@ -48,6 +48,21 @@ def main():
             return dict(self.row)
     ops=Operations();verifier=Verifier();app=FastAPI()
     app.include_router(account_router(verifier,DOCUMENTS));app.include_router(operations_router(verifier,ops,SimpleNamespace(status=lambda:dict(backend='gcs',content='available',accounts='unavailable',check='read_only'))))
+    from ygc.cloud_guitar_routes import guitar_router
+    from ygc.cloud_guitars import FIELDS,GuitarMissing
+    guitar_reads=[]
+    rows=[dict.fromkeys(FIELDS) | dict(id=i,manufacturer='<img src=x onerror=alert(1)>',model='Model '+str(i),year='1960',serial_number='S'+str(i)) for i in range(1,29)]
+    class Guitars:
+        def list(self,actor,*,q,after,limit):
+            with ops.access('admin_read',actor):
+                guitar_reads.append(actor)
+                matching=[r for r in rows if r['id']>after and q.lower() in r['model'].lower()]
+                return dict(items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+        def detail(self,actor,individual_id):
+            with ops.access('admin_read',actor):
+                if not 1<=individual_id<=len(rows):raise GuitarMissing()
+                return rows[individual_id-1]
+    app.include_router(guitar_router(verifier,Guitars()))
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -78,6 +93,19 @@ def main():
                 expect(page.locator('#contentStorageStatus')).to_have_text('Read access confirmed')
                 expect(page.locator('#accountsStorageStatus')).to_have_text('Status unavailable. Refresh to try again.')
                 expect(page.locator('#consoleIdentity')).to_have_text('<b>Operator</b>');assert page.locator('#consoleIdentity b').count()==0
+                expect(page.locator('#guitarRows tr')).to_have_count(25)
+                assert page.locator('#guitarRows img').count()==0
+                page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)
+                page.locator('#guitarPrevious').click();expect(page.locator('#guitarRows tr')).to_have_count(25)
+                page.locator('#guitarRows button').first.click()
+                expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
+                assert page.locator('#guitarDetailFields img').count()==0
+                assert page.evaluate('document.documentElement.scrollHeight<=innerHeight')
+                page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()
+                expect(page.locator('#guitarRows tr')).to_have_count(1)
+                page.locator('#guitarSearch').fill('unknown');page.locator('#guitarSearchSubmit').click()
+                expect(page.locator('#guitarStatus')).to_have_text('No guitars found.')
+                page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.locator('#statusTab').focus();page.keyboard.press('ArrowRight')
                 expect(page.locator('#maintenanceTab')).to_be_focused();expect(page.locator('#maintenancePanel')).to_be_visible()
                 expect(page.locator('#operationsMessage')).to_have_value(ops.row['message']);assert page.locator('#operations img').count()==0

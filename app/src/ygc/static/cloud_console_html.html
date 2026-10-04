@@ -7,12 +7,16 @@
 <body><header><h1>Your Guitar Chronicle <small data-i18n="ui.browser_console_bc10c95d">Browser Console</small></h1><nav class="page-nav"><a href="/account" data-i18n="console.account">Account</a><button id="consoleSignOut" hidden data-i18n="account.sign_out">SignOut</button></nav></header>
 <main class="console-workspace">
 <section class="console-main-layer" tabindex="0" data-i18n-aria-label="ui.main_eb814be3" aria-label="Main">
-<nav><a href="#consoleAccount" data-i18n="console.account">Account</a></nav>
+<nav><a href="#guitarBrowser" data-i18n="guitars.heading">Guitar DB Management</a> <a href="#consoleAccount" data-i18n="console.account">Account</a></nav>
 <section class="panel" id="consoleAccount"><h2 data-i18n="console.access">Administrator access</h2><p id="consoleIdentity"></p><p id="consoleStatus" role="status" data-i18n="cloud.loading">Loading authentication...</p><a href="/account" data-i18n="console.account_help">Sign in or verify your email on the Account page.</a></section>
-<section class="panel"><h2 data-i18n="console.available">Available operations</h2><p data-i18n="console.scope">Service status and maintenance modes are available here. Data management, backups and background jobs are not yet connected.</p></section>
+<section class="panel" id="guitarBrowser" hidden><div class="toolbar"><h2 data-i18n="guitars.heading">Guitar DB Management</h2><button id="guitarRefresh" data-i18n="action.refresh">Refresh</button></div>
+<p data-i18n="guitars.read_only">Read-only guitar data. Editing, images and Chronicle are not yet connected.</p>
+<form id="guitarSearchForm"><label for="guitarSearch" data-i18n="guitars.search">Maker, model or serial number</label><input id="guitarSearch" maxlength="120"><button id="guitarSearchSubmit" data-i18n="guitars.search_button">Search</button></form>
+<div class="guitar-table-scroll"><table><thead><tr><th data-i18n="guitars.field_manufacturer">Maker</th><th data-i18n="guitars.field_model">Model</th><th data-i18n="guitars.field_year">Year</th><th data-i18n="guitars.field_serial_number">Serial</th><th data-i18n="action.detail">Detail</th></tr></thead><tbody id="guitarRows"></tbody></table></div>
+<p id="guitarStatus" role="status"></p><button id="guitarPrevious" disabled data-i18n="guitars.previous">Previous</button> <button id="guitarNext" disabled data-i18n="guitars.next">Next</button></section>
 </section>
 <aside class="console-detail-layer" tabindex="0" data-i18n-aria-label="action.detail" aria-label="Detail">
-<nav><a href="#operations" data-i18n="ui.operations_358cc201">Operations</a></nav>
+<nav><a href="#cloudProductDetail" data-i18n="guitars.detail">Product Detail</a> <a href="#operations" data-i18n="ui.operations_358cc201">Operations</a></nav>
 <section class="panel operations-detail-panel" id="operations"><div class="toolbar"><h2 data-i18n="ui.operations_358cc201">Operations</h2><button id="consoleRefresh" disabled data-i18n="action.refresh">Refresh</button></div>
 <p id="operationsStatus" role="status">—</p>
 <div id="consoleControls" hidden>
@@ -26,4 +30,4 @@
 <label for="operationsMessage" data-i18n="ui.message_to_users_97162fcd">Message to users</label><textarea id="operationsMessage" maxlength="2000"></textarea>
 <p data-i18n="console.mode_notice">The administrator entry remains accessible in every mode. A mode change does not stop jobs already running.</p>
 <button id="operationsSave" disabled data-i18n="ui.save_settings_7f3a3b14">Save settings</button>
-</form></section></div></section></aside></main></body></html>
+</form></section></div></section><section class="panel" id="cloudProductDetail" hidden><h2 data-i18n="guitars.detail">Product Detail</h2><p id="guitarDetailEmpty" data-i18n="guitars.select">Select a guitar to view its details.</p><dl id="guitarDetailFields"></dl></section></aside></main></body></html>
