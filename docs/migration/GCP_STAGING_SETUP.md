@@ -102,3 +102,7 @@ PR #19のCLI修正はmainへ統合済み。ユーザーがinitializeを実行し
 ## 2026-10-04：認証確認画面のCloud Run配置
 
 Cloud Runへ認証確認画面だけを配置した。専用コンテナ・限定したビルド対象・実行／ビルド資格の分離・Secret Manager連携を整備。現在の構成、実URL、検証範囲、残る実ユーザー認証試験とWebUI移行は[Cloud Run認証確認画面](CLOUD_RUN_ACCOUNT_STAGING.md)を参照。上記の未配置・未初期化の記述は、その時点の履歴である。
+
+## 2026-10-04：基本認証試験とAccounts同期
+
+利用者が一般メールアドレスでCreate Account・再読み込み後のログイン維持・SignOut・Sign Inを確認し、基本認証試験が完了した。Accounts正本からChronicle参加者への同期を専用Cloud Run Jobへ配置。初回実行は正常終了し、登録1件／投影1件／未反映0、ID・UUID・反映版の一致を読取り専用で独立確認した。定期起動と実行結果、停止・再開、残るWebUI移行は[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を参照。
