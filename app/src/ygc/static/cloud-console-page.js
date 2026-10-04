@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const modes={normal:'ui.normal_a7248eeb',read_only:'ui.read_only_8ac76735',offline:'ui.offline_a1794783',admin_only:'console.admin_only'};
 const defaultMessage=mode=>mode==='normal'?'':t('console.default_'+mode);
 let auth,settings=null,authorized=false,busy=false;
-const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error});
+const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error,maintenanceMode:()=>!!settings&&settings.mode!=='normal'});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 $('consoleStatus').removeAttribute('data-i18n');
 function controls(){

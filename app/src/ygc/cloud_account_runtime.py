@@ -6,6 +6,7 @@ from ygc.cloud_account_api import create_app
 from ygc.db.postgres import PostgresSettings
 from ygc.cloud_storage import CloudStorage, StorageSettings
 from ygc.cloud_backup_control import BackupJobClient
+from ygc.cloud_maintenance_control import MaintenanceJobClient
 
 
 def application():
@@ -23,15 +24,19 @@ def application():
             raise ValueError('Cloud SQL and Identity Platform projects must match.')
     storage = CloudStorage(StorageSettings.from_environment(project))
     backup_client = None
+    maintenance_client = None
     try:
         if os.environ.get('YGC_BACKUP_REGION'):
             backup_client = BackupJobClient(project, os.environ['YGC_BACKUP_REGION'])
-        return create_app(settings, storage=storage, backup_client=backup_client, project_id=project,
+        if os.environ.get('YGC_MAINTENANCE_REGION'):
+            maintenance_client=MaintenanceJobClient(project,os.environ['YGC_MAINTENANCE_REGION'])
+        return create_app(settings, storage=storage, backup_client=backup_client,maintenance_client=maintenance_client, project_id=project,
                       tenant=os.environ.get('YGC_IDENTITY_TENANT', ''),
                       web_config={'apiKey': os.environ.get('YGC_FIREBASE_API_KEY', ''),
                                   'authDomain': os.environ.get('YGC_FIREBASE_AUTH_DOMAIN', '')})
     except Exception:
         if backup_client is not None:backup_client.close()
+        if maintenance_client is not None:maintenance_client.close()
         storage.close()
         raise
 

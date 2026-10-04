@@ -41,6 +41,13 @@ def prune(settings,storage,target):
     deleted=0
     with connect(settings,'operations') as con:
         con.execute('SELECT pg_advisory_xact_lock(%s)',(79432100+TARGETS.index(target),))
+        # A queued restore pins its selection while a worker starts and saves its safety copy.
+        pending=con.execute("""SELECT reason FROM events WHERE
+          CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'state' IN ('starting','running','unknown')
+          AND CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'target'=%s""",
+          ('{"kind":"db_maintenance_request_v1",%','{"kind":"db_maintenance_request_v1",%',target)).fetchall()
+        pinned={json.loads(row['reason']).get('backup_id') for row in pending
+                if (datetime.now(timezone.utc)-datetime.fromisoformat(json.loads(row['reason'])['created_at'])).total_seconds()<1800}
         keep=con.execute('SELECT generations FROM backup_schedules WHERE target=%s FOR SHARE',(target,)).fetchone()['generations']
         if type(keep) is not int or not 1<=keep<=100:raise ValueError('Invalid retention.')
         rows=con.execute("""SELECT id,reason FROM events WHERE
@@ -49,6 +56,7 @@ def prune(settings,storage,target):
           ORDER BY id DESC""",('{"kind":"'+KIND+'",%',target,'{"kind":"'+KIND+'",%')).fetchall()
         for row in rows[keep:]:
             record=json.loads(row['reason']);ref=ObjectReference(**record['object'])
+            if record['backup_id'] in pinned:continue
             if ref.scope!=('content' if target=='chronicle' else 'accounts') or ref.content_type!='application/gzip':raise ValueError('Wrong archive scope.')
             try:
                 verify_snapshot(storage.get(ref),target,record['sha256'])

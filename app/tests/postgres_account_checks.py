@@ -297,3 +297,21 @@ def transitions(app, store, a, b, c):
         ownership.admin_moderate_claim(first, actors[a['id']], action)
         with connect(app, 'chronicle') as con:
             assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s', (second,)).fetchone()['current_owner_user_id'] == c['id']
+
+    # Restoration re-evaluates the full A->B->C history with current source authority.
+    from ygc.cloud_db_snapshot import snapshot
+    from ygc.cloud_db_restore import load,replace_content
+    data,meta=snapshot(app,'chronicle')
+    header,rows,sequences=load(data,'chronicle',meta['sha256'])
+    store.update_profile(c['app_user_id'], {'display_name':'Latest Owner C'})
+    with connect(app,'accounts') as source:
+        current=[dict(row) for row in source.execute('SELECT * FROM account_records ORDER BY id')]
+    with connect(app,'chronicle') as con:
+        replace_content(con,header,rows,sequences,current)
+        assert con.execute('SELECT current_owner_user_id,current_owner_name FROM individuals WHERE id=%s',(second,)).fetchone()=={'current_owner_user_id':c['id'],'current_owner_name':'Latest Owner C'}
+        owned={r['user_id']:r['ownership_status'] for r in con.execute('SELECT user_id,ownership_status FROM user_guitars WHERE individual_id=%s',(second,))}
+        assert owned[c['id']]=='current_owner' and owned[b['id']]=='former_owner'
+    raises(ValueError,lambda:ownership.set_claim_response(later,actors[c['id']],'negative'))
+    raises(PermissionError,lambda:ownership.admin_moderate_claim(later,actors[b['id']],'negative'))
+    ownership.admin_moderate_claim(later,actors[a['id']],'negative')
+    print('PostgreSQL restore ownership: current profile, transfer continuity, Owned/Formerly Owned, self-decision prohibition and separate Admin authority passed.')

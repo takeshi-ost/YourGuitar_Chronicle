@@ -1230,7 +1230,7 @@
   "guitars.field_current_owner_name": "Current Owner",
   "guitars.field_current_owner_type": "Owner type",
   "backups.heading": "Database backups",
-  "backups.scope": "Save and retain snapshots of the selected database. Restore is not yet connected.",
+  "backups.scope": "Save, schedule and restore one selected database. Restore and reset require maintenance mode.",
   "backups.target": "Database",
   "backups.at": "Saved at (UTC)",
   "backups.version": "Schema version",
@@ -1250,5 +1250,16 @@
   "backups.keep": "Keep snapshots",
   "backups.policy_save": "Save settings",
   "backups.policy_saved": "Backup settings saved.",
-  "backups.policy_scope": "Schedules are independent for each database. Retention applies after the next successful save."
+  "backups.policy_scope": "Schedules are independent for each database. Retention applies after the next successful save.",
+  "backups.restore": "Restore",
+  "backups.reset": "Reset test data",
+  "backups.action": "Action",
+  "backups.confirm": "Confirm",
+  "backups.confirm_name": "Type the database name shown above to confirm.",
+  "backups.confirm_scope": "A protective backup is saved first. Only the selected database is affected. Accounts retains registrations, identities and current authority. Operations retains service mode and history.",
+  "backups.maintenance_starting": "Maintenance requested.",
+  "backups.maintenance_running": "Applying database maintenance…",
+  "backups.maintenance_unknown": "Result not confirmed. Check the saved status before trying again.",
+  "backups.maintenance_succeeded": "Database maintenance completed.",
+  "backups.maintenance_failed": "Maintenance failed or requires reconciliation. Inspect the protective backup before retrying."
 }

@@ -1,4 +1,4 @@
-"""Admin-only catalog reading; no raw backup, storage reference or restore endpoint."""
+"""Admin-only backup catalog and confirmed private maintenance Jobs."""
 import json
 from fastapi import APIRouter,HTTPException,Request
 from fastapi.responses import JSONResponse
@@ -7,6 +7,7 @@ from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_backup_job import KIND
 from ygc.cloud_backup_control import BackupBusy
 from ygc.cloud_backup_policy import policy,configure
+from ygc.cloud_maintenance_control import MaintenanceModeRequired
 from ygc.db.postgres import TARGETS
 
 
@@ -22,7 +23,7 @@ def catalog(operations,actor,target):
                 'limit':50,'scope':'database_snapshot','restore_available':False}
 
 
-def backup_router(verifier,operations,control=None):
+def backup_router(verifier,operations,control=None,maintenance=None):
     router=APIRouter();headers={'Cache-Control':'private, no-store'}
     async def actor(request):
         try:identity=await run_in_threadpool(verifier.verify,bearer_token=bearer_token(request))
@@ -46,6 +47,7 @@ def backup_router(verifier,operations,control=None):
         try:
             return JSONResponse(await run_in_threadpool(function,*args),headers=headers)
         except BackupBusy:raise HTTPException(409,'A save is already pending for this database.',headers=headers) from None
+        except MaintenanceModeRequired:raise HTTPException(409,'Maintenance mode is required.',headers=headers) from None
         except ValueError:raise HTTPException(400,'Invalid backup request.',headers=headers) from None
         except PermissionError:raise HTTPException(403,'A verified active administrator is required.',headers=headers) from None
         except Exception:raise HTTPException(503,'Backup operation unavailable.',headers=headers) from None
@@ -58,7 +60,7 @@ def backup_router(verifier,operations,control=None):
         except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
         result=await execute(catalog,operations,admin,target)
         # Availability is deployment configuration, never inferred from client privileges.
-        body=json.loads(result.body);body['save_available']=control is not None
+        body=json.loads(result.body);body['save_available']=control is not None;body['maintenance_available']=maintenance is not None;body['restore_available']=maintenance is not None
         return JSONResponse(body,headers=headers)
 
     @router.post('/api/admin/backups/save')
@@ -96,4 +98,22 @@ def backup_router(verifier,operations,control=None):
         try:target=target_query(request)
         except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
         return await execute(control.status,admin,target)
+
+    @router.post('/api/admin/databases/maintain')
+    async def maintain(request:Request):
+        admin=await actor(request)
+        if maintenance is None:raise HTTPException(503,'Maintenance is not configured.',headers=headers)
+        try:
+            if request.query_params or len(await request.body())>1024:raise ValueError()
+            data=await request.json()
+        except (ValueError,TypeError):raise HTTPException(400,'Invalid maintenance request.',headers=headers) from None
+        return await execute(maintenance.start,admin,data)
+
+    @router.get('/api/admin/databases/status')
+    async def maintenance_status(request:Request):
+        admin=await actor(request)
+        if maintenance is None:raise HTTPException(503,'Maintenance is not configured.',headers=headers)
+        try:target=target_query(request)
+        except ValueError:raise HTTPException(400,'Select one database.',headers=headers) from None
+        return await execute(maintenance.status,admin,target)
     return router

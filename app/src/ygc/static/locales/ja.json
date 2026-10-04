@@ -1230,7 +1230,7 @@
   "guitars.field_current_owner_name": "現在の所有者",
   "guitars.field_current_owner_type": "所有者の種類",
   "backups.heading": "DBバックアップ",
-  "backups.scope": "選択したDBの保存と世代保持を行います。復元はまだ未接続です。",
+  "backups.scope": "DBごとに保存・定期保存・復元できます。復元と初期化にはメンテナンスモードが必要です。",
   "backups.target": "対象DB",
   "backups.at": "保存日時（UTC）",
   "backups.version": "スキーマ版",
@@ -1250,5 +1250,16 @@
   "backups.keep": "保持する保存件数",
   "backups.policy_save": "設定を保存",
   "backups.policy_saved": "バックアップ設定を保存しました。",
-  "backups.policy_scope": "定期保存はDBごとに独立しています。保持件数の変更は次回の保存成功後に適用します。"
+  "backups.policy_scope": "定期保存はDBごとに独立しています。保持件数の変更は次回の保存成功後に適用します。",
+  "backups.restore": "復元",
+  "backups.reset": "テストデータの初期化",
+  "backups.action": "操作",
+  "backups.confirm": "実行する",
+  "backups.confirm_name": "確認のため、上に表示されているDB名を入力してください。",
+  "backups.confirm_scope": "実行前に保護用バックアップを保存します。対象は選択したDBのみです。Accountsの登録・認証・現在の権限、Operationsのサービス状態・履歴は維持します。",
+  "backups.maintenance_starting": "DB操作を受け付けました。",
+  "backups.maintenance_running": "DBの復元・初期化を実行しています…",
+  "backups.maintenance_unknown": "結果を確認できていません。再実行の前に保存された状態を確認してください。",
+  "backups.maintenance_succeeded": "DBの操作が完了しました。",
+  "backups.maintenance_failed": "DB操作が失敗したか、整合の確認が必要です。再実行の前に保護用バックアップを確認してください。"
 }
