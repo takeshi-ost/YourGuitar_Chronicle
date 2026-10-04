@@ -12,3 +12,5 @@ Requires-Dist: python-multipart<1,>=0.0.9
 Requires-Dist: Pillow<13,>=11
 Provides-Extra: dev
 Requires-Dist: pytest<9,>=8; extra == "dev"
+Provides-Extra: browser
+Requires-Dist: playwright<2,>=1.50; extra == "browser"

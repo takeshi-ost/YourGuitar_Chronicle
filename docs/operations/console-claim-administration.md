@@ -1,10 +1,12 @@
-# Browser Consoleの管理操作（ローカル限定）
+# Browser ConsoleのClaim・個体・ユーザー管理規則
+
+具体的な画面操作・ボタン・結果は[管理操作ガイド](README.md)を参照。本書は管理操作のデータ効果と制約を扱う。
 
 Browser Consoleはlocalhostに接続したローカル管理者向け。ページが発行するプロセス内トークンと接続元・Hostのloopback判定を管理APIで確認する。**ユーザーのadminロールや本番認証ではない**ため、外部に公開して使用しない。
 
 ## Claim管理と所有者確認
 
-管理者は全ClaimのVerificationをPositive / Negative / Unverifiedに強制変更でき、必要ならClaimをハード削除できる。現在のOwnerは管理者判定後でも他ユーザーのClaimを再判定できるが、自分のClaimは判定できない。変更した個体のSnapshotを再構築し、`claim_admin_actions` に管理操作を記録する。ListingをNegativeとしても個体参照に必要な基礎識別情報は残す。最後の有効なListing Claimの削除は個体と関連記録の削除につながるため、画面の明示確認とAPIの追加フラグが必要。監査記録はバックアップではない。通常操作の所有権と判定権限の連動は[Claim中心のデータ構造](CLAIM_CENTERED_ARCHITECTURE.md)を参照。
+管理者は通常ユーザーと別の経路でClaimのVerificationをPositive / Negative / Unverifiedに強制変更でき、必要ならハード削除できる。ただし係争ロック・裁定済みClaimの制限は通常の管理操作にも適用され、係争の再審議経路を使う。現在のOwnerは管理者判定後でも他ユーザーのClaimを再判定できるが、自分のClaimは判定できない。変更した個体のSnapshotを再構築し、`claim_admin_actions` に管理操作を記録する。ListingをNegativeとしても個体参照に必要な基礎識別情報は残す。最後の有効なListing Claimの削除は個体と関連記録の削除につながるため、画面の明示確認とAPIの追加フラグが必要。監査記録はバックアップではない。通常操作の所有権と判定権限の連動は[Claim中心のデータ構造](../architecture/CLAIM_CENTERED_ARCHITECTURE.md)を参照。
 
 **Unverified Acquire** は、有効な承認待ちAcquireのうち、承認によってCurrent Ownerが変わり得るものだけを数える。ペアClaimを含めて、ロールバックされるsavepoint内でSnapshotを試算する。場所だけ変わる、後続Claimで覆われる、すでに同一Ownerのものは除外する。
 
@@ -31,4 +33,4 @@ Display Name、Account Type、Residence、Bio、4項目の公開範囲、Signatu
 
 ## CrawlとDB運用
 
-管理画面は各段階の件数と最新20回の実行ログを表示する。保存済み詳細の再判定、確認待ち候補一覧、DBのバックアップ・復元・初期化、Claimの旧DB移行と不足項目Backfillを提供する。確認待ち候補を画面で承認する操作は未実装。収集の数値の定義は [incremental-crawl.md](incremental-crawl.md)。
+管理画面は各段階の件数と最新20回の実行ログを表示する。保存済み詳細の再判定、確認待ち候補一覧、DBのバックアップ・復元・初期化、Claimの旧DB移行と不足項目Backfillを提供する。確認待ち候補を画面で承認する操作は未実装。収集の数値の定義は [incremental-crawl.md](../features/incremental-crawl.md)。

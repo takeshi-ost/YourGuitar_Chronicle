@@ -27,9 +27,9 @@ Incremental Crawlは一覧を最大2000件処理し、既存Listingの公開状�
 
 ## 進捗・ログと数値の意味
 
-一覧スクリーニング、詳細取得、シリアル候補抽出、個体照合、Claim付き登録の段階を実行中に表示し、`crawl_runs` に段階別の件数と終了／失敗を残す。画面のCrawl Run Logでは分野・製造年にかかわらず全体の最新20回を表示し、古いログはDBに残る。Manual Crawl、詳細キャッシュ再処理、Listing backfillの履歴も同じ欄へ集約する。
+一覧スクリーニング、詳細取得、シリアル候補抽出、個体照合、Claim付き登録の段階を実行中に表示し、`crawl_runs` に段階別の件数と終了／失敗を残す。Crawl Nowで手動実行し、OperationsのReverbチェックとWeb Crawlの間隔設定で自動実行を制御する。画面のCrawl Run Logでは分野・製造年にかかわらず全体の最新20回を表示し、古いログはDBに残る。Manual Crawl、詳細キャッシュ再処理、Listing backfillの履歴も同じ欄へ集約する。
 
-| Browser Consoleの数値 | 現行定義 |
+| 集計値・互換機能 | 現行定義 |
 | --- | --- |
 | Registered Guitars | DBのIndividual総数（手動登録と外部登録を含む） |
 | Serial Listings | シリアルを持つ個体の有効な外部Listing証跡のユニーク件数。Listing / Acquireの由来を数え、同一source + Listing IDは重複除外。Unverifiedも含む |
@@ -37,19 +37,27 @@ Incremental Crawlは一覧を最大2000件処理し、既存Listingの公開状�
 | Unverified Acquire | 承認すると現在の所有者が変わり得る、有効な承認待ちAcquire Claim。承認前後のOwnerをSnapshot評価して判定 |
 | New Discovery | 有効かつBANされていない作成者のClaimの作成日時、またはその掲載Evidenceの取得日時が新しい個体を最大200件表示（未移行掲載は旧記録を参照）。Crawlの新規登録件数とは別 |
 
-データの意味・判定の管理操作は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) と [console-claim-administration.md](console-claim-administration.md)。実Reverbトークンを使った現行パイプラインの総合検証、取りこぼし・誤照合の標本評価は引き続き必要。
+Registered Guitars／Serial Listings／RepeatedのWeb Crawl上の指標行は削除済み。以下の定義は統計・互換APIやDB Maintenanceの補助機能で使う値であり、常設の指標行を意味しない。
+
+データの意味・判定の管理操作は [CLAIM_CENTERED_ARCHITECTURE.md](../architecture/CLAIM_CENTERED_ARCHITECTURE.md) と [console-claim-administration.md](../operations/console-claim-administration.md)。実Reverbトークンを使った現行パイプラインの総合検証、取りこぼし・誤照合の標本評価は引き続き必要。
 
 
 ## 対象カテゴリとクロール前バックアップ
 
-クロール対象はElectric Guitars／Acoustic Guitarsのみ。All Guitarsは入力UI・新規実行API・CLIから除く。過去のallの履歴は削除しない。保存済みAuto Crawlがallの場合は自動実行を保留し、Electric + Acoustic Guitarsの設定を保存する。既存のelectric／acoustic設定は両方を対象とする設定へ切り替え、ON／OFF・製造年・実行間隔・次回実行時刻を保持する。Batchも登録時に明示カテゴリを確認し、不明カテゴリ・ベース・アンプ・パーツを登録しない。過去の混入レコードは自動削除しない。
+クロール対象はElectric Guitars／Acoustic Guitarsのみ。All Guitarsは入力UI・新規実行API・CLIから除く。過去のallの履歴は削除しない。保存済みAuto Crawlがallの場合は自動実行を保留し、Electric + Acoustic Guitarsの設定を保存する。既存のelectric／acoustic設定は両方を対象とする設定へ切り替え、ON／OFF・製造年・実行間隔・次回実行時刻を保持する。Manual Crawl（旧Batch）も登録時に明示カテゴリを確認し、不明カテゴリ・ベース・アンプ・パーツを登録しない。過去の混入レコードは自動削除しない。
 
-Browser Consoleの手動・自動クロール、保存済み詳細の再処理、CLIのcrawl／crawl-stepは開始前にChronicle DBとmediaのZIPを保存する。バックアップ失敗時は実行を止める。保持世代数はGuitar DBのCrawl backupsで1〜100件（初期10件）を指定し、最新の保存成功後に最古から削除する。保持数変更は次回バックアップで適用。保存先はYGC_DATA_DIR/crawl_backups、保持設定はoperations.sqliteでDB復元から独立する。
+Browser Consoleの手動・自動クロール、保存済み詳細の再処理、CLIのcrawl／crawl-stepは開始前にChronicle DBとmediaのZIPを保存する。バックアップ失敗時は実行を止める。保持世代数はBackupsモーダルのGuitar / Chronicleで1〜100件（初期10件）を指定し、最新の保存成功後に最古から削除する。保持数変更は次回バックアップで適用。保存先はYGC_DATA_DIR/crawl_backups、保持設定はoperations.sqliteでDB復元から独立する。
 
 保存済みバックアップのRestoreは管理トークン必須。メンテナンス（閲覧のみ／全面停止）を有効にし、実行中ジョブの終了を待つ。既存のZIP検証・DB／media復元・失敗時ロールバックを使用し、復元前にも現在状態のバックアップを保存する。Operations設定と保存済みバックアップ群は復元で置き換えない。既存復元の512 MB上限を超えるZIPは自動保存を失敗させ、クロールを開始しない。
 
 ### Electric／Acousticの一括収集
 
-Crawl前保存はBackupsのChronicle対象に記録され、手動・定期・復元前保存と保持枠を共有する。OperationsとAuthentication実験はCrawl前には保存せず、個別の定期保存または手動保存を使う。詳細は[UI_STRUCTURE.md](UI_STRUCTURE.md)のBackupsの一元管理を参照。
+Crawl前保存はBackupsのChronicle対象に記録され、手動・定期・復元前保存と保持枠を共有する。OperationsとAuthentication実験はCrawl前には保存せず、個別の定期保存または手動保存を使う。詳細は[UI_STRUCTURE.md](../development/UI_STRUCTURE.md)のBackupsの一元管理を参照。
 
 Browser ConsoleのIncremental CrawlとAuto Crawlは、Electric + Acoustic Guitarsを一度に扱う。内部ではelectric guitar／acoustic guitarを順に検索し、それぞれ最大1,000件（合計最大2,000件）を処理する。両カテゴリの候補をまとめて照合し、Listing IDの重複を排除する。掲載状態の確認は一括実行につき最大5件、開始前バックアップと実行ログは各1回。カテゴリごとの検索位置を永続化し、途中停止後も続きから再開する。Restart Scanの画面ボタンは整理時に削除。互換APIのrestartは両方の検索位置を戻す。既存のカテゴリ別の検索位置は引き継ぐ。保存済み詳細の再判定も両カテゴリが対象。API／CLIのelectric・acoustic指定は互換のため維持し、CLI crawl-stepの既定値はelectric_acousticとする。
+
+## 新品の除外とリスト件数
+
+Reverbの公式ConditionがBrand Newの掲載は収集から除外する。Condition UUIDは `7c3f45de-2ae0-4c81-8400-fdb6b1d74890`。一覧・詳細・保存済み詳細の再処理で検査し、タイトル中のnewには依存しない。Mint・状態不明・中古リイシューは新品扱いしない。既存個体・Claimはこの条件で削除しない。参照：[Reverb Condition定義](https://www.reverb-api.com/docs/create-listings)。
+
+主要リストの `N items` は検索後の表示行数。未読件数や未取得ページ込みの総件数とは区別する。

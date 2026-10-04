@@ -61,7 +61,7 @@ Reopen for reconsiderationは理由付きで管理者が実行する。現在の
 
 `test_disputes.py`でラウンドごとの一回提出・古いラウンドの拒否・既存Evidenceの移行・証拠未提出時の管理者裁定・ラウンド別履歴、理由必須、時系列による対象限定、双方の決定と所有権・判定権限、再審議、Evidenceの閲覧制限、同時申立て、古い管理画面の拒否、再起動後のロック、係争中Transfer・審議結果の停止を確認する。実ブラウザーでは一時DBで申立て、画像提出、要旨公開、管理者判断を確認する。
 
-ユーザーへの係争案内はUnanswered Requestsと共通のサブウィンドウとしてメイン最上部に表示する。係争中案件と、Decline済み／無回答期限を過ぎた異議申立て候補がなければ隠す。User Profile欄の専用ボタンは置かない。Product DetailのUnder disputeは所有申請案内と同じowner-claim-cardを使い、同じ幅・配置・共通枠で係争詳細を開く。
+ユーザーへの未決着の係争案内は、Top Pageと本人User Profileの重要情報領域に表示する。係争中案件と、Decline済み／無回答期限を過ぎた異議申立て候補がなければ隠す。User Profile欄の専用ボタンは置かない。Product DetailのUnder disputeは所有申請案内と同じowner-claim-cardを使い、同じ幅・配置・共通枠で係争詳細を開く。
 
 ### Dispute Detailsの表示
 

@@ -28,6 +28,8 @@ Console用トークンの埋込みだけは従来どおりサーバー生成HTML
 
 ## 検証
 
+共通の入口は `python scripts/run_tests.py`（リポジトリ直下）。PythonとJavaScriptを一時保存先で実行する。`--browser` を追加すると専用の一時サーバー・DB・画像を生成してブラウザ検証も実行する。依存関係と個別実行は `app/README.md` の「テスト」を参照。通常のpytestも `tests/conftest.py` で読み込み前から保存先を隔離する。
+
 既存のJavaScriptテストは `app/tests/page_source.cjs` でページ固有アセットを読み込み、表示・操作の回帰を確認する。Pythonテストはアセットの配信と許可リストも確認する。
 
 `app/tests/browser_ui_components.py` は明示実行するPlaywrightテスト。実行先はuser ID 1と画像付きindividual ID 1のある検証専用サーバーを使う。既存レコードは変更しない。`YGC_BROWSER_URL`、`YGC_BROWSER_EXECUTABLE` で接続先とChromium実行ファイルを指定できる。フォーカス、Tab移動、重ね合わせ、Escape、スクロール復帰、モバイルのアルバム、native dialogを検証する。
@@ -38,11 +40,11 @@ Console用トークンの埋込みだけは従来どおりサーバー生成HTML
 
 ## 共通配色とレイアウト
 
-操作部品はテーマのサブウィンドウの明暗に合わせたダーク／ライトの共通配色を使う。ボタンの役割は`data-ui-action`（primary / close / neutral / danger）で指定する。テーマ追加時は共通パレットも選択する。詳細は [USER_THEMES.md](USER_THEMES.md)。
+操作部品はテーマのサブウィンドウの明暗に合わせたダーク／ライトの共通配色を使う。ボタンの役割は`data-ui-action`（primary / close / neutral / danger）で指定する。テーマ追加時は共通パレットも選択する。詳細は [USER_THEMES.md](../features/USER_THEMES.md)。
 
 - Notificationsは共通モーダル。確認済みの行はモーダル背景色、未確認は別の面色と左線で区別する。
 - User ProfileのOwnership RequestsとヘッダーのCheck Requestsボタンは削除済み。申請の詳細は重要情報領域・通常通知・管理画面から開く。
-- Unanswered RequestsはTop Page / Profileの先頭。コンパクトな青緑背景・白太字・明るいミント色の枠を全テーマで共用する。
+- 重要情報領域はTop Pageと本人のProfileの先頭。他人のProfileには表示しない。コンパクトな青緑背景・白太字・明るいミント色の枠を全テーマで共用する。
 - 追加を促す所有申請・Claim追加・新規ギター追加の操作には二重線の共通枠を付ける。
 - Product Detail内の所有申請・Claim追加ボタンとClaimカードは同幅・同位置とし、左右の余白を揃える。
 - Top PageのStatisticsはModel Distributionから始める。デスクトップのページ内リンク移動では、そのカード上端を固定Product Detail上端に合わせる。
@@ -52,9 +54,9 @@ Console用トークンの埋込みだけは従来どおりサーバー生成HTML
 ## 2026-10: viewport-based panel heights
 
 - Top Page and User Profile guitar lists use their unfiltered item counts to determine content height, capped at Product Detail height (`100dvh - header height - 28px`) on widths above 900px. Filtering does not change the outer height. Resizing and toolbar changes trigger measurement; table rows currently use a single-line layout.
-- New discovery → Product List spacing is 16px.
+- New discovery → All Discovered Guitars spacing is 16px.
 - User Chronicle grows naturally with its contents and uses the same desktop height cap, with internal scrolling. It currently has no filter. Compact layouts retain their independent sizing.
-- Browser Console Product Detail and User Detail have viewport-based heights and internal scrolling, while remaining in the page grid. Backup and User DB actions sit in the left column above their lists. On desktop, each Detail starts level with the action panel and gains its height plus bottom margin, preserving its prior bottom position. The resulting desktop height can exceed the viewport; the enclosing page also scrolls. Compact layouts stack the columns without this extra height.
+- Browser Consoleは左Main／右Detailを独立スクロールする。Product DetailとUser Detailは右層の表示領域から高さを測定し、未選択時もその高さを保つ。旧版の操作欄分の高さ加算・ページ全体スクロールは使用しない。
 
 ## Server Operations / Console scrolling
 
@@ -64,13 +66,13 @@ Browser ConsoleのOperationsは右Detail層にまとめ、上部にOperationsの
 
 運用APIは既存のlocalhost Console管理トークンで保護する。`YGC_DATA_DIR/operations.sqlite`に設定と直近100件表示用の変更履歴を保存し、Chronicle DBのリセット・復元とは独立させる。メンテナンス設定更新はReason入力不要・version一致必須。操作履歴にはモード変更を自動記録する。通常／閲覧のみ／全面停止を選択でき、閲覧のみでは新規の変更HTTPリクエスト（管理操作・MCPも含む）を拒否する。全面停止では通常閲覧も拒否する。Console HTML・アセット・運用設定API・healthは復旧のため到達可能に保つ。拒否は503とRetry-Afterを返し、全面停止の通常ページには案内を表示する。受付済み処理・既存ジョブは完了まで継続する。CLI等のHTTP外操作は停止しない。
 
-`/health/live`はWebプロセスの応答、`/health/ready`は読取専用のDB接続・必要テーブルの参照と全面停止でないことを確認する。外部監視・通知・バックアップ自動化・本番認証・GCP永続化は別途実装する。運用DBも本番移行時に共有永続ストアへ交換する。
+`/health/live`はWebプロセスの応答、`/health/ready`は読取専用のDB接続・必要テーブルの参照と全面停止でないことを確認する。ローカルの定期バックアップは実装済み。外部監視・通知・本番認証・GCP永続化は別途実装する。運用DBも本番移行時に共有永続ストアへ交換する。
 
 Product DetailとUser Detailは選択状態にかかわらず表示領域相当の高さを保持し、内容は内部でスクロールする。User Detailの表示項目・編集項目は1行1項目とする。OwnershipにはRequest、Disputes、Authentication（GPT連携）をこの順で小項目として配置し、ヘッダーからはOwnershipへ移動する。
 
 Ownership Requestの初期フィルタはIncomplete。写真待ち・審議待ち・審議中・処理エラーと、画像審議承認済みでもOwner承認待ち（Unverified）の申請を表示する。採否・Verificationが確定した申請、取消・終了・期限切れは含めない。
 
-OwnershipのRequest／Disputesは共通のpanel・toolbar・table-wrapを使った7列の一覧とし、末尾のView request／View disputeボタンから詳細モーダルを開く。Requestの画像・管理操作・報告・履歴・審議指示はメインから除き、共通Overlay管理によるnative dialogへ移す。モーダルを閉じたら画像URLを解放し、未完了の詳細読み込み結果は反映しない。
+OwnershipのRequest／Disputesは共通のpanel・toolbar・table-wrapを使った7列の一覧とし、末尾のDetailボタンから詳細モーダルを開く。Requestの画像・管理操作・報告・履歴・審議指示はメインから除き、共通Overlay管理によるnative dialogへ移す。モーダルを閉じたら画像URLを解放し、未完了の詳細読み込み結果は反映しない。
 
 ## 仮登録とログアウト
 
@@ -96,7 +98,7 @@ OperationsのBackground jobsにはCrawl見出し、ReverbのAuto Crawlチェッ�
 
 Acquire / Listing reviewにはChatGPTのチェックボックスとLast answerを表示する。初期ONで従来の審議動作を維持し、OFFは正式Acquire／Listingのpending MCPによる新規lease取得を停止する。OFF中も画像参照・回答提出は受け付けるが、審査中の申請・Claim・所有状態は更新しない。回答・失敗報告・画像観察はoperations.sqliteのpaused_review_answersに別保存し、処理中leaseの時間切れ更新もOFF中は停止する。ONに戻しても保留回答は自動適用せず、通常の審議再開で扱う。スイッチ自体はChatGPTの外部スケジュールを作成・削除しない。設定はoperations.sqliteへ保存。最終回答時間は受理済みGPT回答の専用イベント（既存データはAI result.completed_at）から取得し、管理者判断・取消の時間を含めない。
 
-Operationsの現在モードは24pxの太字で表示し、確認日時は別の小さい行に表示する。Maintenanceはモード変更時に対応する定型メッセージを入力欄に設定する（編集可能）。保存済みメッセージがある場合、フォーム初期表示ではそれを使用する。Crawl backupsの一覧閲覧・保持数保存は通常モードでも可能。復元のみメンテナンス必須。
+Operationsの現在モードは24pxの太字で表示し、確認日時は別の小さい行に表示する。Maintenanceはモード変更時に対応する定型メッセージを入力欄に設定する（編集可能）。保存済みメッセージがある場合、フォーム初期表示ではそれを使用する。Backupsの一覧閲覧・保持数保存は通常モードでも可能。復元のみメンテナンス必須。
 
 ## Browser Consoleの操作整理（2026-10-03）
 
@@ -139,19 +141,13 @@ Top Page／User Profileのメイン先頭に青緑色の重要情報領域を置
 
 ヘッダーのCheck Requestsとユーザー名横のYou表示は削除し、ログアウトボタンはSignOut表記。Acquire RequestのRefleshボタンは表示しない（Listingフォームは維持）。重要情報はTop Pageと自分のUser Profileに限定し、他ユーザーのUser Profileではメンテナンス情報を含めて表示しない。Guestの初期テーマはSunburst & White（sunburst_3ply）とする。
 
-## 壁紙の木目とレリック
+## 壁紙
 
-Butterscotch & Black／Cherry Red & Blackは既存壁紙レイヤーだけをCSSで90度回転し、木目を縦方向にする。Black & Pearlは保存済みテーマID `black_pearl`を維持し、表示名をユーザー指定の`Rellic Black & Pearl`に変更する。新しい壁紙は`static/rellic-black-wood.webp`。参考画像の黒塗装が大きく剥がれた質感を内蔵image_genで生成し、WebPに変換して配置した。
-
-生成プロンプト:
-
-> Use case: photorealistic-natural. Asset type: website wallpaper texture. Generate one flat rectangular texture of heavily relic-worn BLACK guitar lacquer over natural brown ash wood, inspired by the attached black Strat-style guitar reference (NOT the golden wood texture image). Full-bleed texture only: no guitar silhouette, no neck, pickups, hardware, pickguard, borders, text, or watermark. Straight-on macro surface, evenly lit, matte black worn nitrocellulose finish with very large irregular chipped/abraded bare brown wood patches especially along both side edges and several smaller patches across the center; heavy scratches, tiny nicks, authentic jagged paint boundaries. Predominantly black, about 30-40 percent exposed warm brown wood. Exposed ash grain runs VERTICALLY. Natural age wear, not flames or decorative crackle. Landscape wallpaper around 1536x1024. Center somewhat darker for website panels but visibly heavily relic-worn throughout. Save generated output and return its local file path for integration into this repository.
-
-Butterscotchの壁紙は1672×941pxの元画像倍率、Cherryは1254×705.75px、Rellic Blackは1152×768px（後者2つは元画像の75%）で表示する。画面の縦横比による非等方な引き伸ばしを避け、広い画面では背景を繰り返して細部の密度を保つ。Sunburst & White自体の絵柄は変更しない。
+木目・レリック・表示倍率は[テーマ仕様](../features/USER_THEMES.md)を参照する。
 
 ## UI language resources (2026-10-03)
 
-- English remains the default; Japanese is available as an automatically generated draft. Top Page, User Profile, User Settings and Browser Console have one header language selector, independent of authentication and account type. The selection uses browser-local `ygc_ui_language`; the browser's preferred language does not change the default English UI. On narrow screens the selector precedes the horizontally scrolling position links.
+- English remains the default; Japanese is available from an automatically generated draft with human-reviewed wording updates. Top Page, User Profile, User Settings and Browser Console have one header language selector, independent of authentication and account type. The selection uses browser-local `ygc_ui_language`; the browser's preferred language does not change the default English UI. On narrow screens the selector precedes the horizontally scrolling position links.
 - `static/locales/manifest.json` defines the default language and available BCP 47 codes, native labels and `ltr` / `rtl` directions. Add a `<code>.json` dictionary and a manifest entry to enable another language. Missing translations fall back to English. The selector waits for initial page loading to finish. A switch reloads the page so page-owned charts, menus and dialogs use the selected dictionary too; cancelled requests during that navigation do not clear the tab login. Save open forms before switching.
 - `/assets/i18n.js` bundles registered dictionaries with the shared `YGCI18n` runtime. There is no separate fetch race before page renderers run. Locale JSON files are included in the installed Python package.
 - Static UI text uses `data-i18n`; placeholder, accessible label, title and image alternative text use the corresponding `data-i18n-*` attributes. Nested labels keep their input elements. Dynamic renderers use `t(key, parameters, fallback)` for text and `html(...)` for escaped HTML text. Translation strings are plain text, never HTML or executable handlers. Keys remain stable when English wording changes; existing `ui.*` keys have a descriptive stem plus a disambiguating suffix.
@@ -162,7 +158,7 @@ Butterscotchの壁紙は1672×941pxの元画像倍率、Cherryは1254×705.75px�
 
 ### 日本語辞書の編集
 
-- `app/src/ygc/static/locales/ja.json` は英語辞書を元にした自動翻訳の初稿です。人による確認・修正を前提とし、自動的に再生成して上書きする処理はありません。
+- `app/src/ygc/static/locales/ja.json` は英語辞書を元にした自動翻訳に、ユーザー指定の文言調整を反映した辞書です。人による確認・修正を前提とし、自動的に再生成して上書きする処理はありません。
 - 左側のキーは変更せず、右側の日本語だけを書き換えてください。例：`"header.notifications": "通知"`。英語は `en.json` で同じキーを確認できます。
 - `{count}`、`{time}`、`{formattedCount}` などの差し込み名は維持してください。複数形の項目は `one` / `other` の構造を残し、日本語の文言を修正します。改行は `\n`、引用符はJSONの規則で記述します。HTMLタグは入れません。
 - 保存後にページを再読み込みすると修正を反映します。ヘッダーの「日本語」で切り替え、Englishへ戻すこともできます。プロフィールなどの保存内容は翻訳しません。

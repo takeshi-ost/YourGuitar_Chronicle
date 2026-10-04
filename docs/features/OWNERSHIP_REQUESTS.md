@@ -1,126 +1,8 @@
-# Authentication Test — GPT連携
+# Listing / Acquire申請の機能仕様
 
-正式Acquireの手順は下記「正式Acquire申請」、新規登録は「Listing申請（新規個体の登録）」を参照。以下の先頭部分は、Claimを変更しない実験用キューの説明です。
+対象：現行ローカル実装。通常利用者の操作は[ユーザーガイド](../user-guide/README.md)。実験用GPTキューは[Authentication Test](AUTHENTICATION_TEST.md)に分離する。所有状態と判定権限は[不変条件](../architecture/CLAIM_CENTERED_ARCHITECTURE.md)に従う。過去の実機検証は[検証記録](../history/OWNERSHIP_REVIEW_VALIDATION.md)。
 
-Browser Console → **Authentication Test → 実験用キュー** holds multiple test submissions. Each addition
-gets an immutable revision, even when an application ID is reused. An identical
-pending/processing upload is deduplicated. Completed submissions are never overwritten.
-This remains an experiment: actual Claim/Evidence/ownership records are not updated.
-
-### Setup and storage
-
-Submissions and the connection key are stored separately at
-`YGC_DATA_DIR/direct-review/queue.sqlite3` (default `app/data/direct-review`).
-Existing queue records and keys are preserved when upgrading to the GPT-only UI.
-The first connection setup creates a key only if one does not already exist.
-The key survives page reloads and server restarts and has no automatic expiry. **接続キーを失効** revokes it explicitly,
-releases in-flight leases and preserves all submissions/results. **保存済み接続設定を
-表示／接続を有効化** retrieves the same key, or creates one after revocation.
-The store directory has mode 0700 and its SQLite file mode 0600; the key is stored
-inside that file, not encrypted. Keep this local experimental store private.
-
-1. Restart WebUI, reload the Console, and select three images plus expected text.
-2. Click **① テスト申請を追加** for each test. Previous submissions stay in the queue.
-3. Configure the generated stdio MCP command in the desktop client, substituting the
-   experiment key for `PASTE_TOKEN`. Preserve existing client configuration. Do not
-   paste the key into a chat. Local Codex configuration is normally
-   `~/.codex/config.toml`; see the [official MCP setup](https://learn.chatgpt.com/docs/extend/mcp).
-4. Reconnect/restart the desktop client to load the **new tool schemas**. Image fetch,
-   failure and result submission now require `lease_token` returned by the pending
-   tool. Old tool calls without this value fail safely. Refresh the scheduled task's
-   saved instructions with the generated prompt, including the snapshot continuation
-   through `remaining_revisions`. Existing one-item instructions process only one item per run
-   if the caller honors the updated schema.
-5. Keep the Mac awake and desktop app and YGC running for local scheduled execution.
-   No schedule is created or modified by YGC. Check the scheduler's tool permissions:
-   acquiring a job now writes queue state and is correctly marked as a write tool.
-6. The Console displays pending/processing/completed/error/cancelled records and
-   UTC receipt/start/completion timestamps. It refreshes every 15 seconds while the
-   page is visible, when the checkbox is enabled. **③** also refreshes manually.
-7. Select a row to view observations, the report and structured result. Download JSON
-   or text before deleting records. Retry errors or cancel unwanted submissions.
-   Only completed/error/cancelled records may be deleted (with UI confirmation).
-
-**② ローカル接続診断** initializes MCP, lists tools and pings only. It does NOT
-claim a job or fetch its images. Actual image visibility must be checked in the client.
-The existing stdio bridge and local endpoint are unchanged:
-`python -m ygc.direct_mcp_bridge --url http://127.0.0.1:8000/api/experiments/direct/mcp`
-(use the actual WebUI port). The bridge reads `YGC_EXPERIMENT_TOKEN`, disables HTTP
-redirects and proxy environment variables, and never calls an inference API.
-
-### Queue and retry semantics
-
-- `ygc_pending_test` atomically claims ONE oldest pending row (`BEGIN IMMEDIATE`),
-  sets processing, increments attempts, and returns application ID, revision and a
-  random per-attempt lease token. Empty queues return `jobs: []`, including when all
-  records are currently processing. This is a mutating, non-idempotent tool.
-- `ygc_test_image` requires that lease and returns actual EXIF-stripped JPEG image
-  blocks. Expected text is not exposed. Source and prepared-image SHA256 hashes are
-  saved along with sent dimensions.
-- `ygc_submit_test_review` strictly validates the claimed ID/revision/lease and saves
-  structured observations, deterministic text checks, the provisional decision,
-  reason codes, human-readable report, prompt/rule versions and UTC completion time.
-  `reviewer_model` is optional self-reported metadata, not attestation; unknown is null.
-  The receipt contains no expected text. Identical completed submissions are safe to
-  retry with the same lease; conflicting or stale submissions are rejected.
-- `ygc_fail_test` records an operational error without generating a False decision.
-  It stops automatic processing of that row until an operator requests retry.
-- A lease lasts two hours from claim and survives server restart. Expired leases
-  become pending on the next queue access, until three timed-out attempts have been
-  made; then they become error. Manual retry preserves attempt history and permits
-  another attempt. No heartbeat or lease extension is implemented. Late submissions
-  after expiry/reassignment/cancellation/revocation are rejected.
-- The first pending call omits `remaining_revisions` and snapshots current pending
-  revisions. It claims one row and returns the rest as `remaining_revisions`. After
-  submitting successfully, pass that exact returned list to the next pending call;
-  keep updating it from responses until empty. An empty list never starts a new
-  snapshot. Processing/completed/cancelled/deleted rows are skipped. New submissions
-  cannot enter this continuation list. Each row is leased only when it is its turn,
-  so waiting for earlier rows does not consume its two-hour lease.
-- There is no three-item limit. Instructions request all initially pending items,
-  sequentially, stopping on errors or runtime/usage limits. Unclaimed rows remain
-  pending for a later run. Concurrent runs claim distinct rows. Snapshot continuation
-  is carried by the caller (not an authenticated server-side batch); clients must not
-  start another snapshot in the same run or add revisions to the returned list.
-  The prompt version is `direct-queue-v3-gpt-only`.
-
-Maximum retained storage is 100 submissions and 256 MB of encoded image payloads.
-Each input image is at most 12 MB; preparation uses the existing 3000px limit and
-rejects encoded images over 8 MB. There is no automatic retention deletion. Remove
-unneeded terminal records in the Console when full. SQLite may retain free pages
-for reuse after deletion; this is not a secure-erasure feature.
-
-This separate SQLite store is not the main Chronicle DB. Its backup/restore must be
-managed separately; do not assume the normal application DB backup includes it.
-A key holder can submit observations; these are not cryptographically attested AI
-outputs. Within one model chat, image context is shared despite instructions to
-transcribe separately. Human review/calibration and formal Evidence integration are
-still separate future work.
-
-The local HTTP endpoint remains a minimal stateless MCP 2025-03-26 tools transport
-(JSON replies, no SSE, sampling or MCP session persistence). Request bodies are
-bounded to 100 KB; GET/DELETE return 405. Loopback client/Host checks, Origin checks
-and bearer authentication remain mandatory. This does not provide a public/cloud
-endpoint, OAuth integration, or changes to the actual Claim/ownership database.
-
-### 判定と構成
-
-認証テストはGPTのMCP連携のみです。OpenAI/Gemini推論API、ローカルOCR・
-特徴点・CLIPSeg、Google Sheets実験のコード・画面・専用エンドポイントは削除しました。
-古いブラウザー保存APIキーはConsole読込時に当該2項目だけ削除します。
-サーバー環境変数のAPIキーは使用しません。既存の画像やDB、モデル保存ファイルは削除しません。
-
-`authentication_evidence.py` が画像前処理・厳密な結果スキーマ・読取指示・文字照合、
-`authentication_decision.py` が暫定採否、`direct_experiment.py` がMCPとレポート、
-`direct_queue.py` が永続保存を担当します。
-
-近接画像のSerial、両画像のChallengeが期待値と一致し、個体比較に明確な矛盾がなければTrueとします。
-一致根拠の不足、uncertain、比較材料不足だけでは不採用にしません。曖昧な反射・付着物は
-一致・矛盾の根拠から除外します。写真間のつながりや撮影再利用は採否条件に含めません。
-文字照合は空白・ハイフン・大小文字のみ正規化し、I/1やO/0は区別します。
-運用エラーはFalseとせずerrorとして記録します。一致確率は作成しません。
-
-## 正式Acquire申請（2026-10-01）
+## 正式Acquire申請
 
 画像審議を必要とするのは、ユーザーが現在の所有を主張する新規Acquireのみ。
 Former Ownerの過去来歴、Automation Acquire、Transferは対象外。Listingの審議は別ルールで未実装。
@@ -197,7 +79,7 @@ WebUIとCodexを再起動して新しいツール定義を読み込み、Browser
 これは正式Acquireの業務フローを既存ローカル環境へ接続した実装であり、GCP公開運用の認証実装ではない。
 本人識別は既存PrototypeIdentityのまま。MCPもloopback＋共有キーの運用で、AI実行主体の暗号学的証明はない。
 公開前にIdentity Platform等で本人と審議担当を検証し、画像・申請・更新API全体を認可する必要がある。
-クラウドDB／オブジェクト保存と運用監視は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) に沿って別途進める。ローカルの係争解決は [OWNERSHIP_DISPUTES.md](OWNERSHIP_DISPUTES.md) に記載する。
+クラウドDB／オブジェクト保存と運用監視は [GCP_BOUNDARIES.md](../migration/GCP_BOUNDARIES.md) に沿って別途進める。ローカルの係争解決は [OWNERSHIP_DISPUTES.md](OWNERSHIP_DISPUTES.md) に記載する。
 
 ### 個体比較の採否緩和（2026-10-01）
 
@@ -299,36 +181,10 @@ JPEGの内部MPF情報によりPillowがMPOと認識する画像も、主画像�
 補助画像の選別や合成は行わず、EXIFの回転適用・メタデータ除去・12MB／20MPの制限を維持する。
 GIF・WebP等のアニメーションは従来どおり拒否する。未対応形式のエラーには、実際に検出した形式名も表示する。
 
-## 実機確認と最終検証（2026-10-01）
-
-ユーザーによるローカル環境での確認結果：
-
-- Acquire：画像審議通過後にClaimを作成し、現OwnerのPositive判定後に所有権が移行した。不適切な画像による申請の却下も確認した。
-- Listing：Add Guitarから写真を提出し、新規ギターの登録とListingのPositiveを確認した。
-- 同じMaker・Serialで再登録すると、既存ギターへの申請に案内されることを確認した。
-- 拡張子が.jpgでも内部がMPOの実ファイルを主画像のJPEGへ変換でき、修正後のListing申請が完了した。
-
-最終回帰検証は実データとは別の一時DBで実施。Pythonは313件と別実行のローカルMCP接続1件、JavaScriptは34件が通過した。
-所有権・判定権限の遷移、Transferの独立性、Listingの同時重複申請、管理者上書き、画像アクセス権、取消後の古い審議結果を含む。
-共通モーダル移行前のHTMLを期待していたプロフィールテスト1件を更新した。
-StarletteのTestClient依存に関する非推奨警告が1種類残るが、検証失敗はない。
-
-この確認はローカル運用を対象とする。公開サーバー向け本人認証・外部接続は別途設計する。係争フローはローカル実装済みで、公開環境への移行は別途検証する。
-コミット時は実データ、接続キー、ローカル定期タスク設定を含めない。
-
-### main統合後の検証
-
-mainの旧Observation整理とページ別アセット・共通オーバーレイを保持して統合した。
-Acquireの比較画像はListing項目・marketplace Evidenceを優先し、旧Observationは既存データの互換読取だけに使用する。
-新規Listing／Acquireは旧Observationへ二重書込しない。未登録クロール記録の保全・移行テストも継続する。
-統合後はPython330件（ローカルMCP接続を含む）・JavaScript34件が通過。
-一時DBの実ブラウザーでもListing登録・重複案内、Acquireの承認待ち、管理者採否変更と所有権再評価を確認した。
-
 ### Ownership Requestsの導線と確認状態
 
-申請フォーム・状態ラベル・管理操作は英語で表示する。診断文章や管理者の記入内容は保存された原文を表示する。
-本人のUser Profile欄のUser Settings横にOwnership Requestsを置く。Top Pageには常設の履歴ボタンを置かない。
-ヘッダーのNotifications左側には、提出済みの審議待ち・審議中・Owner承認待ち、または未確認の結果がある場合だけCheck Requestsを表示する。
+申請フォーム・状態ラベル・管理操作は日英の言語切替に従う。診断文章や管理者の記入内容は保存された原文を表示する。
+本人ProfileのOwnership RequestsとヘッダーのCheck Requestsは削除済み。未決着の申請はTop Page／本人Profileの重要情報領域からDetailを開き、通常通知・Browser Consoleからも確認する。重要情報領域は他人のProfileには表示しない。以下の結果確認済み管理は通常通知と独立して保持する。
 写真未提出のdraftは対象外。error・accepted・rejected・closedの新しい結果は、申請者が詳細を開くと確認済みにする。
 履歴一覧の表示や管理者・現Ownerの閲覧では確認済みにしない。申請記録のseen_event_idで確認した履歴の位置を保存し、
 古い画面からの確認操作がそれより新しい結果を既読にしないようにする。確認状態は通常通知の既読状態とは独立する。
@@ -342,7 +198,7 @@ Acquireの比較画像はListing項目・marketplace Evidenceを優先し、旧O
 - Keep Request：入力内容だけを保存して閉じる。選択した写真は保存しないため、再開時に選び直す。Acquireの写真提出後はこのボタンを表示しない。
 - Cancel：入力の変更を保存せず閉じる。保存済みの申請自体は取り消さない。Escapeによる閉じる操作も保存しない。
 - OK：Acquireの写真提出後（審議待ち・結果・エラーを含む）はフッターをこのボタンだけにする。Cancelと同じく、申請状態を変更せず閉じる。
-- Reflesh：保存済みの状態を再取得する。未保存フォームでは入力とChallengeを維持して写真選択を解除し、申請は作成しない。
+- Reflesh：Listingフォームにのみ表示する（Acquire Requestからは削除済み）。保存済みの状態を再取得する。未保存フォームでは入力とChallengeを維持して写真選択を解除し、申請は作成しない。
 - Cansel Request：保存済みの下書きまたは未決着の申請を、従来の取消処理で停止する。
 
 Reflesh／Cansel Requestは指定されたUI表記。未保存フォームは申請者・種別・入力・Challenge・期限を署名で固定し、改変・別ユーザーによる保存を拒否する。
@@ -358,7 +214,7 @@ Product DetailのAcquire Evidenceへの導線を外し、申請履歴は状態�
 
 ### 未回答Claimの表示
 
-TopPageとUserProfileのメイン先頭に、操作ユーザー宛ての`Unanswered Requests`を表示する。
+Top Pageと本人User Profileの重要情報領域に、未回答TransferやOwner判定待ちAcquireを表示する。
 対象は未回答Transferの譲受人と、Unverified Acquireを判定できるCurrent Owner。
 通知の既読とは独立し、Claim作成前の画像審議中申請は対象にしない。
 Accept / Declineは確認後、既存のTransfer応答またはPositive / Negative Verificationへ接続する。
