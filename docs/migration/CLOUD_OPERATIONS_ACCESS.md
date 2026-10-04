@@ -38,4 +38,12 @@ Identity PlatformのBearerトークンを検証し、Googleのメール確認済
 
 初回Admin用Job `ygc-staging-admin-bootstrap` も同じイメージで配置。既存 `ygc-staging-app` の限定権限を利用し、個別IAMポリシーに公開Invokerなし、単一タスク・retry 0・300秒。初期設定はdry-run。既存Accounts同期Job・Schedulerの設定は変更していない。
 
-初回dry-run実行 `ygc-staging-admin-bootstrap-lk2g8` は失敗。追加の読み取り確認で、選択された運営用メールのIdentity Platformユーザーが未登録であることを確認した。利用者によるCreate Accountとメール確認を待つ。Admin権限はまだ付与していない。
+初回dry-run実行 `ygc-staging-admin-bootstrap-lk2g8` は失敗。追加の読み取り確認で、選択された運営用メールのIdentity Platformユーザーが未登録であることを確認した。この時点ではCreate Accountとメール確認待ちで、Admin権限は未付与だった。
+
+## 運営用Adminの付与完了
+
+2026-10-04、利用者から運営用メールの認証完了を受け、dry-run `ygc-staging-admin-bootstrap-mdpvd` が登録・メール確認済みの対応確認に成功。実付与 `ygc-staging-admin-bootstrap-kqptv` の結果は `status=ok, dry_run=false, granted=true`。専用Jobは付与後にdry-run設定へ戻した。サービスモードはOfflineを維持する。
+
+Admin資格はAccounts正本から読み取る。Chronicleにはroleを複製せず、プロフィール等の既存投影と版数を同期する。BrowserConsoleのクラウド画面への接続と、実AdminのBearerによるブラウザ操作試験は引き続き残る。
+
+同期Job `ygc-staging-account-projection-5mjw4` が成功。Google主体から固定IDを解決した読み取り専用のDB検証で、有効なAdmin資格、初回付与監査1件、Chronicleの固定IDと最新投影版数の一致を確認した。実ユーザーの認証トークンを取得・代理使用する試験は行っていない。
