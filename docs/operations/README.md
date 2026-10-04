@@ -199,4 +199,4 @@ Other Pending Acquire Claimsは正式申請一覧とは別に、承認でCurrent
 
 ## GCPステージングのConsole
 
-クラウド版は現在、認証済みAdminによるOperationsの状態確認とメンテナンスモード変更に対応する。ここに記載したローカルのデータ管理操作はまだ移行していない。[クラウドConsoleの操作と接続範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。
+クラウド版は現在、認証済みAdminによるOperationsの状態確認とメンテナンスモード変更、個体の読取り、DB別の保存・保持・定期保存、復元・テストデータ初期化に対応する。復元・初期化は配置と隔離検証済みで、実管理者ブラウザでの受入は未完了。Crawl・コンテンツ編集・画像付きコンテンツ復元は未移植。ローカルと同じ範囲が全て操作できる状態ではない。[DB管理の確認手順](../migration/DB_OPERATIONS_ACCEPTANCE.md)も参照。[クラウドConsoleの操作と接続範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。

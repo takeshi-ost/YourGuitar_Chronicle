@@ -145,3 +145,12 @@ Accountsは登録を巻き戻す完全置換ではない。Google側アカウン
 この段階の実クラウド復元・初期化は、管理者ブラウザの受入確認まで未完了。CrawlのPostgreSQL移植、実Reverb資格情報の接続、Crawl前Chronicle保存、クラウドコンテンツ編集・画像付き復旧の確認も残る。
 
 隔離検証はPython668件、JavaScript71件、共通Chromium、PostgreSQL18が成功。既存CRUD/sequence USAGE権限のまま4DBの復元・初期化と永続要求の再送/一般ユーザー拒否/モード変更後の拒否を確認した。実ブラウザ操作はComputer Useのアクセシビリティ・画面収録許可待ちで進められないため、クラウド側の接続検証と配置後に受入待ちとして中断する予定。復元・リセットの実要求を資格情報の代用やSQL直書きで作成しない。
+
+### 復元・初期化の実配置記録（2026-10-05）
+
+- PR #31のコミット `c51457e662f766118e063b447319f4fb1be5d3fc` に対する必須CI run `37219241004` が成功し、main `97418ab` へマージした。
+- Cloud Build `f15e0ba2-227f-4f16-8687-dd78346788b1` が成功。イメージ `sha256:a8fd864bb58bc81fef6601d97c8f9f303e31b008408bcc5f652c91c0ae2672a0` をWeb ready revision `ygc-staging-accounts-00013-5fb`、手動保存Job、定期保存Job、メンテナンスJobへ配置した。保存Jobにも復元待ちアーカイブの世代削除保護が反映されている。
+- 非公開 `ygc-staging-db-maintenance` は既存バックアップSA・DB Secret version 1・単一タスク・retry 0・900秒上限。既定引数は `--check-only`。アプリSAへ既存の `ygcBackupJobRunner` をこのJob単体で付与した。既存ロールの権限一致を確認し、権限の追加・上書き、Jobの公開Invoker、SA鍵作成は行っていない。
+- execution `ygc-staging-db-maintenance-bfprr` が読み取り専用の4DB接続確認に成功した。実DBの復元・初期化は実行していない。
+- 実URLでhealth/ready/Console/資産の200、匿名の保存台帳・ポリシー・操作状態・復元/初期化要求の401を確認。サービスはOfflineを保持した。
+- Computer Useからのブラウザ操作はアクセシビリティ・画面収録許可待ちで利用できず、管理者としての実復旧試験を行えない。利用者の[ブラウザ受入手順](DB_OPERATIONS_ACCEPTANCE.md)を再開条件とし、ここで中断する。次のReverb実接続に必要なSecretも未作成（既存SecretはDBパスワードのみ）。
