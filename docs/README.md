@@ -12,7 +12,7 @@
 | 機能の振る舞いを確認する | [機能仕様一覧](features/README.md) | 入力条件、表示対象、状態遷移、制限・例外 |
 | データの意味・保存構造を知る | [Claim設計](architecture/CLAIM_CENTERED_ARCHITECTURE.md)、[DB構造](architecture/DATABASE_STRUCTURE.md) | 不変条件と評価規則／物理DB・テーブル・正本・復元境界 |
 | 管理者として運用する | [運用ガイド](operations/README.md)、[Claim管理](operations/console-claim-administration.md) | 管理画面の操作と実施条件 |
-| 実装・検証する | [UI構造](development/UI_STRUCTURE.md)、[開発手順](development/DEVELOPMENT_WORKFLOW.md) | ファイル責務、共通部品、テスト・依存・CI |
+| 実装・検証する | [UI構造](development/UI_STRUCTURE.md)、[開発手順](development/DEVELOPMENT_WORKFLOW.md)、[GCP移行前の整備状況](development/GCP_PREPARATION_STATUS.md) | ファイル責務、共通部品、テスト・依存・CI |
 | GCP・旧DBから移行する | [GCP境界](migration/GCP_BOUNDARIES.md)、[Observation移行](migration/TEMP_OBSERVATION_MIGRATION_PLAN.md) | 現行との差、未実装、移行条件 |
 | 過去の判断・検証をたどる | [引継ぎ](history/HANDOFF_2026-10-03.md)、[SNS記録](history/SNS_IMPLEMENTATION_LOG.md)、[審議検証](history/OWNERSHIP_REVIEW_VALIDATION.md)、[壁紙生成](history/WALLPAPER_GENERATION.md) | 当時の日付・件数・判断。現行仕様ではない |
 

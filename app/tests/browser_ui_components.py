@@ -4,6 +4,7 @@ Run explicitly with Playwright installed. YGC_BROWSER_URL and
 YGC_BROWSER_EXECUTABLE can override the server and Chromium executable.
 """
 import os
+from browser_diagnostics import diagnostic_page
 
 from playwright.sync_api import sync_playwright, expect
 
@@ -12,9 +13,7 @@ def main():
     base = os.environ.get('YGC_BROWSER_URL', 'http://127.0.0.1:18765')
     executable = os.environ.get('YGC_BROWSER_EXECUTABLE')
     errors = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(**({'executable_path': executable} if executable else {}))
-        page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+    with sync_playwright() as p, diagnostic_page(p, 'browser_ui_components') as page:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(base + '/users/1?prototype_user_id=1&individual_id=1')
         expect(page.locator('#detail')).to_contain_text('Current Owner')
@@ -77,7 +76,6 @@ def main():
         page.mouse.click(2, 2)
         expect(page.locator('#observationDiagnosticDialog')).not_to_be_visible()
         assert not errors, errors
-        browser.close()
     print('Shared overlays: focus, Tab, nesting, Escape, scroll restoration, mobile album, native dialog passed')
 
 
