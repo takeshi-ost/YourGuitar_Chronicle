@@ -9,6 +9,15 @@ from ygc.db.postgres_accounts import AccountNotRegistered
 from ygc.registration_fields import validate_registration
 
 
+def bearer_token(request):
+    header = request.headers.get('Authorization', '')
+    scheme, separator, value = header.partition(' ')
+    if not separator or scheme.lower() != 'bearer' or not value.strip():
+        raise HTTPException(401, 'An Identity Platform ID token is required.',
+                            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'})
+    return value
+
+
 def account_response(identity, account):
     # A deliberate whitelist: never return canonical DB rows or credentials.
     return {'user': {key: account[key] for key in
@@ -28,14 +37,6 @@ def account_router(verifier, documents):
     versions = {kind: doc['version'] for kind, doc in documents.items()}
     router = APIRouter(prefix='/api/auth')
 
-    def token(request):
-        header = request.headers.get('Authorization', '')
-        scheme, separator, value = header.partition(' ')
-        if not separator or scheme.lower() != 'bearer' or not value.strip():
-            raise HTTPException(401, 'An Identity Platform ID token is required.',
-                                headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'})
-        return value
-
     def response(body):
         return JSONResponse(body, headers={'Cache-Control': 'private, no-store'})
 
@@ -45,7 +46,7 @@ def account_router(verifier, documents):
 
     @router.post('/register')
     async def register(request: Request):
-        bearer = token(request)
+        bearer = bearer_token(request)
         try:
             fields = validate_registration(await request.json(), versions)
         except ValueError as exc:
@@ -64,7 +65,7 @@ def account_router(verifier, documents):
 
     @router.get('/me')
     async def me(request: Request):
-        bearer = token(request)
+        bearer = bearer_token(request)
         try:
             identity = await run_in_threadpool(verifier.verify, bearer_token=bearer)
         except PermissionError:
