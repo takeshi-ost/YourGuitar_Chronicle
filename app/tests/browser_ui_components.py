@@ -58,6 +58,9 @@ def main():
         assert not page.locator('#productDetailShell').evaluate("el => el.classList.contains('compact-open')")
         page.set_viewport_size({'width': 1440, 'height': 1000})
         page.goto(base + '/')
+        # Initial user loading may redraw an already selected Product Detail.
+        # Start the focus lifecycle check after those requests have completed.
+        page.wait_for_load_state('networkidle')
         page.locator('#individualBody tr.clickable').first.click()
         button = page.get_by_role('button', name='Observation decision', exact=True)
         button.click()
