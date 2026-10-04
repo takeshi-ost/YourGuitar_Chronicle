@@ -15,7 +15,7 @@
 - 固定依存は `python scripts/install_dependencies.py --postgres --identity` で導入する。CIの全依存導入には `--browser --postgres --identity` を使用する。
 - 初期化には `IdentityPlatformIdentity(accounts, project_id=..., tenant='')` を使用し、終了時に `close()` を呼ぶ。従来の `IdentityPlatformReplacement` 名も明示引数を要求する接続口として残す。
 - 実行資格はApplication Default Credentialsを利用する。サービスアカウント鍵やWeb用apiKeyをサーバー検証の秘密鍵として使用しない。
-- 失効・無効化確認にはユーザー照会権限 `firebaseauth.users.get` が必要。現在の実行用サービスアカウントにはまだ付与していない。接続段階で最小権限を付与して確認する。
+- 失効・無効化確認にはユーザー照会権限 `firebaseauth.users.get` が必要。2026-10-04、実行用サービスアカウントにこの1権限だけの独自ロールを付与し、IAMで確認済み。実行用資格での実token確認はまだ行っていない。[Cloud SQL接続・権限確認](CLOUD_SQL_INITIALIZATION.md)を参照。
 - Googleへの接続・資格・権限の失敗は認証拒否となる。失敗時にダミー認証へ切り替えない。公開エラーにSDK例外内のトークン等を転載しない。
 
 ## 残る実装
