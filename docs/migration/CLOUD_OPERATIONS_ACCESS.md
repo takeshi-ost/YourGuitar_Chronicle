@@ -37,3 +37,5 @@ Identity PlatformのBearerトークンを検証し、Googleのメール確認済
 ビルド `c825522d-f44d-4025-afab-731f21148641` が成功。イメージ `account-api@sha256:40ec9052fce6b92ea90b3a5de5ec5c3a8a2ab860e216740b3d26b0134bbf41d8` を認証サービスのリビジョン `ygc-staging-accounts-00004-6sz` へ配置した。実URLでhealth・3DB ready・公開状態が200、管理APIへの無認証・不正Bearer・偽装Console資格が401。OperationsはOfflineを維持した。
 
 初回Admin用Job `ygc-staging-admin-bootstrap` も同じイメージで配置。既存 `ygc-staging-app` の限定権限を利用し、個別IAMポリシーに公開Invokerなし、単一タスク・retry 0・300秒。初期設定はdry-run。既存Accounts同期Job・Schedulerの設定は変更していない。
+
+初回dry-run実行 `ygc-staging-admin-bootstrap-lk2g8` は失敗。追加の読み取り確認で、選択された運営用メールのIdentity Platformユーザーが未登録であることを確認した。利用者によるCreate Accountとメール確認を待つ。Admin権限はまだ付与していない。
