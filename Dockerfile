@@ -5,7 +5,7 @@ COPY app/pyproject.toml app/constraints.txt app/build-requirements.txt ./app/
 COPY app/src ./app/src
 RUN python -m pip install --no-cache-dir pip==26.2.1 && \
     python -m pip install --no-cache-dir --constraint app/constraints.txt \
-    --build-constraint app/build-requirements.txt './app[postgres,identity]' && \
+    --build-constraint app/build-requirements.txt './app[postgres,identity,storage]' && \
     useradd --uid 10001 --create-home ygc
 USER 10001
 CMD ["python", "-m", "ygc.cloud_account_runtime"]

@@ -56,7 +56,7 @@ jobs:
           node-version: '24'
 
       - name: Install pinned dependencies
-        run: python scripts/install_dependencies.py --browser --postgres --identity
+        run: python scripts/install_dependencies.py --browser --postgres --identity --storage
 
       - name: Check dependency definitions and pins
         run: python scripts/check_dependencies.py

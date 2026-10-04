@@ -22,6 +22,7 @@ dev = ["pytest>=8,<9"]
 browser = ["playwright>=1.50,<2"]
 postgres = ["psycopg[binary]>=3.3,<4"]
 identity = ["firebase-admin>=7,<8"]
+storage = ["google-cloud-storage>=3.16,<4"]
 
 [project.scripts]
 ygc = "ygc.cli:app"

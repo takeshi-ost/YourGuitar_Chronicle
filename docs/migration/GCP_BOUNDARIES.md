@@ -1,6 +1,6 @@
 # GCP 移行のための境界（現在はローカル試作）
 
-この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現行の一般WebUIはローカル試作。独立した[Cloud Run認証画面](CLOUD_RUN_ACCOUNT_STAGING.md)の基本認証試験は完了し、[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を配置済み。一般WebUIのPostgreSQL接続とCrawl等のクラウド定期実行は残る。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
+この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現行の一般WebUIはローカル試作。独立した[Cloud Run認証画面](CLOUD_RUN_ACCOUNT_STAGING.md)の基本認証試験は完了し、[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を配置済み。[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)の管理者Operationsと[Cloud Storageの接続基盤](CLOUD_STORAGE.md)を追加した。一般WebUIのPostgreSQL接続、画像のアップロード／配信、Crawl等のクラウド定期実行は残る。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
 
 | 責務 | 現在 | 将来の差し替え点 |
 | --- | --- | --- |
@@ -161,4 +161,4 @@ local_dummyの`POST /api/local-auth/register`は表示名、Account Type、Terms
 
 公開前に暫定Terms／Privacyを正式文面・版に差し替える。Identity Platform移行時はメール／パスワードを認証SDKへ渡し、検証済みUIDにアカウントと同意を関連づける。メール確認済みトークンをサーバーで検証してClaim／所有権申請を許可する作業は未実装。local_dummyではメール確認を実施した扱いにしない。
 
-管理者権限、モードごとの許可範囲、メンテナンス中のReset・復元、ローカル現状維持方針は[管理者権限とメンテナンス制御](ADMIN_AND_MAINTENANCE.md)にまとめる。方針は未実装。
+管理者権限、モードごとの許可範囲、メンテナンス中のReset・復元、ローカル現状維持方針は[管理者権限とメンテナンス制御](ADMIN_AND_MAINTENANCE.md)にまとめる。クラウドのAdmin資格・4モード・状態確認とモード操作は実装済み。コンテンツ管理、復元／リセット、ジョブ排他への接続は残る。

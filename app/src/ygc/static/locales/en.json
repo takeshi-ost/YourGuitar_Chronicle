@@ -1192,5 +1192,8 @@
   "console.ready": "Administrator access confirmed.",
   "console.default_read_only": "The service is under maintenance. Browsing is available, but changes are temporarily paused.",
   "console.default_offline": "The service is temporarily unavailable for maintenance. Please try again later.",
-  "console.default_admin_only": "The service is being tested by administrators. Please try again later."
+  "console.default_admin_only": "The service is being tested by administrators. Please try again later.",
+  "console.content_storage": "Content storage",
+  "console.accounts_storage": "Account storage",
+  "console.storage_readable": "Read access confirmed"
 }

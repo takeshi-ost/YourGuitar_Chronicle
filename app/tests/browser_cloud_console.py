@@ -3,6 +3,7 @@ import os
 import socket
 import threading
 from types import SimpleNamespace
+from contextlib import contextmanager
 from fastapi import FastAPI
 from playwright.sync_api import sync_playwright, expect
 import uvicorn
@@ -30,6 +31,11 @@ def main():
     class Operations:
         row=dict(mode='offline',message='<img src=x onerror=alert(1)>',version=1)
         fail=None
+        @contextmanager
+        def access(self, kind, actor):
+            if self.fail:raise self.fail
+            if actor!='admin-uuid':raise PermissionError()
+            yield
         def details(self, actor):
             calls.append(('read',actor))
             if self.fail:raise self.fail
@@ -41,7 +47,7 @@ def main():
             self.row=dict(mode=data['mode'],message=data['message'],version=data['version']+1)
             return dict(self.row)
     ops=Operations();verifier=Verifier();app=FastAPI()
-    app.include_router(account_router(verifier,DOCUMENTS));app.include_router(operations_router(verifier,ops))
+    app.include_router(account_router(verifier,DOCUMENTS));app.include_router(operations_router(verifier,ops,SimpleNamespace(status=lambda:dict(backend='gcs',content='available',accounts='unavailable',check='read_only'))))
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -69,6 +75,8 @@ def main():
                 expect(page.locator('#consoleControls')).to_be_hidden();assert not calls
                 open_console('admin@example.invalid')
                 expect(page.locator('#operationsStatus')).to_have_text('Offline')
+                expect(page.locator('#contentStorageStatus')).to_have_text('Read access confirmed')
+                expect(page.locator('#accountsStorageStatus')).to_have_text('Status unavailable. Refresh to try again.')
                 expect(page.locator('#consoleIdentity')).to_have_text('<b>Operator</b>');assert page.locator('#consoleIdentity b').count()==0
                 page.locator('#statusTab').focus();page.keyboard.press('ArrowRight')
                 expect(page.locator('#maintenanceTab')).to_be_focused();expect(page.locator('#maintenancePanel')).to_be_visible()

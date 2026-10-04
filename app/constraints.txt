@@ -57,7 +57,9 @@ google-cloud-core==2.8.0
 google-cloud-firestore==2.34.0 ; platform_python_implementation != 'PyPy'
     # via firebase-admin
 google-cloud-storage==3.16.0
-    # via firebase-admin
+    # via
+    #   firebase-admin
+    #   your-guitar-chronicle (app/pyproject.toml)
 google-crc32c==1.9.0
     # via
     #   google-cloud-storage

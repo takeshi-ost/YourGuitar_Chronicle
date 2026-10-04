@@ -6,7 +6,7 @@ from ygc.cloud_account_routes import bearer_token
 from ygc.db.postgres_operations import ModeConflict
 
 
-def operations_router(verifier, operations):
+def operations_router(verifier, operations, storage=None):
     router = APIRouter()
 
     def response(body):
@@ -46,6 +46,16 @@ def operations_router(verifier, operations):
     @router.get('/api/service/status')
     async def public_status():
         return await execute(operations.public_status)
+
+    def storage_status(actor):
+        with operations.access('admin_read', actor):
+            if storage is None:
+                raise RuntimeError('Storage is not configured.')
+            return storage.status()
+
+    @router.get('/api/admin/operations/storage')
+    async def storage_details(request: Request):
+        return await execute(storage_status, await admin_identity(request))
 
     @router.get('/api/admin/operations')
     async def details(request: Request):

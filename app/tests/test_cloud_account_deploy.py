@@ -35,6 +35,8 @@ def test_domain_updates_preserve_restrictions_before_public_access(monkeypatch, 
             env = json.loads(path.read_text())
             assert 'YGC_POSTGRES_PASSWORD' not in env
             assert env['YGC_DATABASE_BACKEND'] == 'postgres'
+            assert env['YGC_MEDIA_BACKEND'] == 'gcs'
+            assert env['YGC_CONTENT_BUCKET'] != env['YGC_ACCOUNTS_BUCKET']
             assert path.stat().st_mode & 0o777 == 0o600
             assert '--no-allow-unauthenticated' in command
             output = url

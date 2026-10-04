@@ -1192,5 +1192,8 @@
   "console.ready": "管理者資格を確認しました。",
   "console.default_read_only": "サービスはメンテナンス中です。閲覧は可能ですが、変更は一時的に停止しています。",
   "console.default_offline": "サービスはメンテナンスのため一時的に停止しています。しばらくしてから再度お試しください。",
-  "console.default_admin_only": "サービスは管理者による確認中です。しばらくしてから再度お試しください。"
+  "console.default_admin_only": "サービスは管理者による確認中です。しばらくしてから再度お試しください。",
+  "console.content_storage": "コンテンツ画像の保存先",
+  "console.accounts_storage": "アカウント画像の保存先",
+  "console.storage_readable": "読み取り確認済み"
 }

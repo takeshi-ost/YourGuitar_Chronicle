@@ -53,7 +53,8 @@ def test_unauthorized_never_reads_or_writes_admin_state(api, failure):
     if failure == 'role': verifier.accounts.resolve_identity.return_value['role'] = 'member'
     if failure == 'disabled': verifier.accounts.resolve_identity.side_effect = PermissionError('disabled account')
     for response in (client.get('/api/admin/operations', headers=headers),
-                     client.put('/api/admin/operations/mode', json=DATA, headers=headers)):
+                     client.put('/api/admin/operations/mode', json=DATA, headers=headers),
+                     client.get('/api/admin/operations/storage', headers=headers)):
         assert response.status_code in (401, 403)
         assert 'private-token' not in response.text
     operations.details.assert_not_called()
@@ -75,3 +76,24 @@ def test_recheck_failures_and_conflicts_do_not_leak(api, error, status):
     response = client.put('/api/admin/operations/mode', json=DATA, headers=AUTH)
     assert response.status_code == status
     assert 'private-password' not in response.text
+
+
+def test_storage_status_rechecks_admin_and_never_probes():
+    from contextlib import nullcontext
+    verifier = Mock()
+    verifier.verify.return_value = VerifiedIdentity('issuer','subject','',True)
+    verifier.accounts.resolve_identity.return_value = {'app_user_id':'canonical','role':'admin'}
+    operations, storage = Mock(), Mock()
+    operations.access.return_value = nullcontext()
+    storage.status.return_value = {'backend':'gcs','content':'available','accounts':'unavailable','check':'read_only'}
+    app=FastAPI();app.include_router(operations_router(verifier,operations,storage))
+    with TestClient(app) as client:
+        response=client.get('/api/admin/operations/storage',headers=AUTH)
+        assert response.json()==storage.status.return_value
+        assert response.headers['cache-control']=='private, no-store'
+        operations.access.assert_called_once_with('admin_read','canonical')
+        storage.probe.assert_not_called()
+        operations.access.side_effect=PermissionError('revoked')
+        assert client.get('/api/admin/operations/storage',headers=AUTH).status_code==403
+        storage.status.assert_called_once()
+        assert client.post('/api/admin/operations/storage',headers=AUTH).status_code==405

@@ -14,6 +14,8 @@ def environment(monkeypatch):
               'YGC_POSTGRES_USER': 'ygc_app', 'YGC_POSTGRES_PASSWORD': 'private-password',
               'YGC_FIREBASE_API_KEY': 'public-key',
               'YGC_FIREBASE_AUTH_DOMAIN': 'test-project.firebaseapp.com'}
+    monkeypatch.setattr(runtime, 'CloudStorage', Mock(return_value=Mock()))
+    values.update(YGC_MEDIA_BACKEND='gcs',YGC_CONTENT_BUCKET='test-project-content',YGC_ACCOUNTS_BUCKET='test-project-accounts')
     for key, value in values.items():
         monkeypatch.setenv(key, value)
 
