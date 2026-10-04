@@ -140,3 +140,33 @@ def test_api_startup_failure_closes_verifier(monkeypatch):
         with TestClient(app):
             pass
     verifier.close.assert_called_once()
+
+
+def test_cloud_page_is_explicit_and_config_matches_verifier(monkeypatch):
+    from ygc import cloud_account_api
+    accounts = Mock()
+    verifier = Mock(accounts=accounts)
+    monkeypatch.setattr(cloud_account_api, 'PostgresAccounts', Mock(return_value=accounts))
+    monkeypatch.setattr(cloud_account_api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
+    app = cloud_account_api.create_app(object(), project_id='test-project', tenant='test-tenant',
+                                      web_config={'apiKey': 'test-public-key', 'authDomain': 'test-project.firebaseapp.com'})
+    with TestClient(app) as client:
+        config = client.get('/api/auth/config').json()
+        assert config['firebase']['projectId'] == 'test-project' and config['tenant'] == 'test-tenant'
+        assert client.get('/account').status_code == 200
+        assert client.get('/assets/cloud-auth-loader.js').status_code == 200
+        assert client.get('/assets/i18n.js').status_code == 200
+        assert client.get('/assets/local-auth.js').status_code == 404
+        assert client.get('/api/local-auth/login').status_code == 404
+
+
+@pytest.mark.parametrize('config', [ {}, {'apiKey': 'x', 'authDomain': 'other.firebaseapp.com'},
+    {'apiKey': '', 'authDomain': 'test-project.firebaseapp.com'},
+    {'apiKey': 'x', 'authDomain': 'test-project.firebaseapp.com', 'password': 'secret'}])
+def test_cloud_page_config_errors_fail_before_sdk_initialization(monkeypatch, config):
+    from ygc import cloud_account_api
+    initialize = Mock()
+    monkeypatch.setattr(cloud_account_api, 'IdentityPlatformIdentity', initialize)
+    with pytest.raises(ValueError):
+        cloud_account_api.create_app(object(), project_id='test-project', web_config=config)
+    initialize.assert_not_called()

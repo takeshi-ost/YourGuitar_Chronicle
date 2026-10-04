@@ -38,6 +38,8 @@ def main():
                 dismissal()
                 from browser_user_journeys import main as journeys
                 journeys(repository)
+                from browser_cloud_account import main as cloud_account
+                cloud_account()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

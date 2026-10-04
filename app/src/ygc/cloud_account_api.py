@@ -7,9 +7,11 @@ from ygc.cloud_account_routes import account_router
 from ygc.cloud_registration import DOCUMENTS
 from ygc.db.postgres_accounts import PostgresAccounts
 from ygc.identity_platform import IdentityPlatformIdentity
+from ygc.cloud_account_page import install, public_config
 
 
-def create_app(settings, *, project_id, tenant=''):
+def create_app(settings, *, project_id, tenant='', web_config=None):
+    config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
 
@@ -24,4 +26,6 @@ def create_app(settings, *, project_id, tenant=''):
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     app.include_router(account_router(verifier, DOCUMENTS))
+    if config is not None:
+        install(app, config)
     return app

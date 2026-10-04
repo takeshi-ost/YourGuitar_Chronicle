@@ -1,0 +1,40 @@
+"""Explicit opt-in browser page for the cloud account API."""
+import json
+from pathlib import Path
+from fastapi import HTTPException
+from fastapi.responses import FileResponse, JSONResponse, Response
+
+STATIC = Path(__file__).with_name('static')
+
+
+def public_config(web_config, *, project_id, tenant):
+    if (not isinstance(web_config, dict) or set(web_config) != {'apiKey', 'authDomain'}
+            or not isinstance(web_config['apiKey'], str) or not web_config['apiKey'].strip()
+            or web_config['authDomain'] != project_id + '.firebaseapp.com'):
+        raise ValueError('Explicit matching Identity Platform Web configuration is required.')
+    return {'firebase': {**web_config, 'projectId': project_id}, 'tenant': tenant}
+
+
+def install(app, config):
+    @app.get('/api/auth/config')
+    def configuration():
+        return JSONResponse(config, headers={'Cache-Control': 'no-store'})
+
+    @app.get('/account')
+    def account_page():
+        return FileResponse(STATIC / 'cloud_account_html.html', headers={'Cache-Control': 'no-store'})
+
+    @app.get('/assets/i18n.js')
+    def i18n():
+        from ygc.localization import ui_resources
+        resources = json.dumps(ui_resources(), ensure_ascii=True)
+        return Response('globalThis.YGCI18nResources=' + resources + ';\n' +
+                        (STATIC / 'i18n.js').read_text(), media_type='text/javascript',
+                        headers={'Cache-Control': 'no-store'})
+
+    @app.get('/assets/{filename}')
+    def asset(filename: str):
+        if filename not in ('identity-platform-auth.js', 'cloud-auth-loader.js',
+                            'cloud-account-page.js', 'cloud-account.css', 'ui-components.css', 'overlays.js'):
+            raise HTTPException(404, 'Asset not found.')
+        return FileResponse(STATIC / filename, headers={'Cache-Control': 'no-store'})

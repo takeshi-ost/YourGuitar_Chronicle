@@ -9,6 +9,7 @@ src/ygc/authentication_evidence.py
 src/ygc/claim_dates.py
 src/ygc/cli.py
 src/ygc/cloud_account_api.py
+src/ygc/cloud_account_page.py
 src/ygc/cloud_account_routes.py
 src/ygc/cloud_registration.py
 src/ygc/config.py
@@ -68,8 +69,13 @@ src/ygc/matching/__init__.py
 src/ygc/matching/individual_matcher.py
 src/ygc/static/butterscotch-wood.webp
 src/ygc/static/cherry-wood.webp
+src/ygc/static/cloud-account-page.js
+src/ygc/static/cloud-account.css
+src/ygc/static/cloud-auth-loader.js
+src/ygc/static/cloud_account_html.html
 src/ygc/static/disputes.js
 src/ygc/static/i18n.js
+src/ygc/static/identity-platform-auth.js
 src/ygc/static/important-information.js
 src/ygc/static/index_html.html
 src/ygc/static/list-navigation.js
