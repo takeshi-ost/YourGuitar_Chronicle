@@ -101,6 +101,28 @@ def run(port):
                         con.execute("UPDATE account_records SET role='member' WHERE app_user_id=%s",(aid,))
                 rejected(psycopg.errors.QueryCanceled,change_role)
             print('PostgreSQL avatars: mode matrix, canonical self, atomic audit rollback, retained backup objects and role/mode write fencing passed.')
+            from ygc.cloud_guitars import CloudGuitars,FIELDS,GuitarMissing
+            guitars=CloudGuitars(app,operations)
+            with connect(app,'chronicle') as con:
+                for number in range(1,29):
+                    con.execute('INSERT INTO individuals(manufacturer,model,normalized_manufacturer,created_at,updated_at) VALUES(%s,%s,%s,%s,%s)',
+                        ('Maker','Literal %_'+str(number),'maker','now','now'))
+            first=guitars.list(aid,limit=25)
+            assert len(first['items'])==25 and first['next_after'] is not None
+            second=guitars.list(aid,after=first['next_after'],limit=25)
+            assert len(second['items'])==3 and second['next_after'] is None
+            assert not {r['id'] for r in first['items']} & {r['id'] for r in second['items']}
+            assert set(guitars.detail(aid,first['items'][0]['id']))==set(FIELDS)
+            assert len(guitars.list(aid,q='%_',limit=50)['items'])==28
+            assert guitars.list(aid,q="' OR 1=1 --")['items']==[]
+            assert guitars.list(aid,q='unknown')['items']==[]
+            rejected(GuitarMissing,lambda:guitars.detail(aid,9999))
+            rejected(PermissionError,lambda:guitars.list(bid))
+            # Administrator read is available in every service mode.
+            for mode in MODES:
+                version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                assert len(guitars.list(aid)['items'])==25
+            print('PostgreSQL guitar reads: bounded keyset pages, literal wildcard search, fixed fields, missing IDs, Admin mode matrix and member refusal passed.')
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

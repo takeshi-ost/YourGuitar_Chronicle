@@ -7,6 +7,8 @@ from ygc.db.postgres import connect
 
 from ygc.cloud_account_routes import account_router
 from ygc.cloud_avatar_routes import avatar_router
+from ygc.cloud_guitar_routes import guitar_router
+from ygc.cloud_guitars import CloudGuitars
 from ygc.cloud_operations_routes import operations_router
 from ygc.db.postgres_operations import PostgresOperations
 from ygc.cloud_registration import DOCUMENTS
@@ -39,6 +41,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     operations = PostgresOperations(settings)
     app.include_router(operations_router(verifier, operations, storage))
     app.include_router(avatar_router(verifier, operations, storage))
+    app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

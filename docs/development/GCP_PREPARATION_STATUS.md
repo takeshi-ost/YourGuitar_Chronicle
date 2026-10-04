@@ -153,3 +153,7 @@ Admin認証済みのConsoleから状態確認と4モードの変更を操作す�
 ## 2026-10-04：Cloud Storage接続
 
 コンテンツ／アカウントの非公開バケットへ明示接続し、世代指定の不変な参照・作成／取得／削除、Adminによる読み取り状態表示、IAM専用の書込確認Jobを追加した。画像のDB参照・アップロード／配信・バックアップ／復元は後続。[仕様と検証範囲](../migration/CLOUD_STORAGE.md)を参照。
+
+## 2026-10-05：クラウドConsoleのギター閲覧
+
+Chronicleの個体一覧・検索・ページ送りと右側Product Detailの読み取りを追加。確認済みメール・正本Admin資格で全サービスモードから利用する。画像・Claim・編集・Crawl・バックアップ／復元は後続。[仕様と検証範囲](../migration/CLOUD_GUITAR_BROWSER.md)を参照。
