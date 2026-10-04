@@ -58,6 +58,49 @@ def run(port):
                 assert con.execute('SELECT COUNT(*) AS n FROM events').fetchone()['n'] == 4
                 audit = json.loads(con.execute('SELECT reason FROM events ORDER BY id LIMIT 1').fetchone()['reason'])
                 assert audit['actor_app_user_id'] == aid
+            # Avatar writes use the locked Accounts connection and commit while
+            # the Operations mode lock is still held. No user image reaches GCP.
+            from test_cloud_avatar import Storage, png
+            from ygc.cloud_avatar import CloudAvatar, decode_reference
+            store = Storage()
+            avatars = CloudAvatar(operations,store)
+            for mode in MODES:
+                version = operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                for user, administrative in ((bid,False),(aid,False),(aid,True)):
+                    allowed = administrative or mode=='normal' or (mode=='admin_only' and user==aid)
+                    action = lambda: avatars.set(user,png(),'image/png',admin=administrative)
+                    if allowed:
+                        action()
+                        with connect(app,'accounts') as con:
+                            value=con.execute('SELECT avatar_storage_path FROM account_records WHERE app_user_id=%s',(user,)).fetchone()['avatar_storage_path']
+                            assert store.get(decode_reference(value))==avatars.get(user,admin=administrative)
+                            assert con.execute('SELECT COUNT(*) AS n FROM account_metadata WHERE key LIKE %s',('avatar:%',)).fetchone()['n']>0
+                    else: rejected(PermissionError,action)
+            # Failed Accounts audit rolls back the reference and compensates the new object.
+            with connect(owner,'accounts') as con:
+                before=con.execute('SELECT avatar_storage_path FROM account_records WHERE app_user_id=%s',(aid,)).fetchone()['avatar_storage_path']
+                con.execute(sql.SQL('REVOKE INSERT ON account_metadata FROM {}').format(sql.Identifier(role)))
+            size=len(store.objects)
+            rejected(psycopg.errors.InsufficientPrivilege,lambda:avatars.set(aid,png(),'image/png',admin=True))
+            assert len(store.objects)==size
+            with connect(owner,'accounts') as con:
+                assert con.execute('SELECT avatar_storage_path FROM account_records WHERE app_user_id=%s',(aid,)).fetchone()['avatar_storage_path']==before
+                con.execute(sql.SQL('GRANT INSERT ON account_metadata TO {}').format(sql.Identifier(role)))
+            assert avatars.set(aid,admin=True)=={'has_avatar':False}
+            assert len(store.objects)==size  # Objects remain available to earlier backups.
+            # Concurrent mode changes and role changes cannot pass this write lock.
+            with operations.account_access('admin_write',aid):
+                def change_mode():
+                    with connect(app,'operations') as con:
+                        con.execute('SET statement_timeout=100')
+                        con.execute("UPDATE settings SET mode='normal' WHERE id=1")
+                rejected(psycopg.errors.QueryCanceled,change_mode)
+                def change_role():
+                    with connect(app,'accounts') as con:
+                        con.execute('SET statement_timeout=100')
+                        con.execute("UPDATE account_records SET role='member' WHERE app_user_id=%s",(aid,))
+                rejected(psycopg.errors.QueryCanceled,change_role)
+            print('PostgreSQL avatars: mode matrix, canonical self, atomic audit rollback, retained backup objects and role/mode write fencing passed.')
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

@@ -1,4 +1,5 @@
 """Browser account API journeys with external Google operations replaced only here."""
+from contextlib import contextmanager
 import os
 import socket
 import threading
@@ -61,7 +62,20 @@ def main():
                 raise PermissionError('Invalid fixture token')
             return VerifiedIdentity('fixture-issuer', bearer_token.replace('fixture-verified-', 'fixture-', 1), '', bearer_token.startswith('fixture-verified-'))
 
+    from ygc.cloud_avatar_routes import avatar_router
+    from test_cloud_avatar import Storage, png
+    class AvatarOperations:
+        @contextmanager
+        def account_access(self,kind,actor):
+            record=next(row for row in records.values() if row['app_user_id']==actor)
+            record.setdefault('avatar_storage_path',None)
+            class Connection:
+                def execute(self,query,params):
+                    if query.startswith('UPDATE account_records'):record['avatar_storage_path']=params[0]
+            yield Connection(),{},record
+    storage=Storage()
     app = FastAPI()
+    app.include_router(avatar_router(TestVerifier(),AvatarOperations(),storage))
     app.include_router(account_router(TestVerifier(), DOCUMENTS))
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
@@ -141,9 +155,25 @@ def main():
                 expect(page.locator('#sendVerification')).not_to_be_visible()
                 ready()
                 expect(page.locator('#verificationStatus')).to_have_text('Email address verified.')
+                expect(page.locator('#accountAvatar')).to_be_visible()
+                page.locator('#avatarFile').set_input_files({'name':'avatar.png','mimeType':'image/png','buffer':png()})
+                page.locator('#avatarUpload').click()
+                expect(page.locator('#avatarPreview')).to_be_visible()
+                expect(page.locator('#avatarRemove')).to_be_enabled()
+                assert page.locator('#avatarPreview').get_attribute('src').startswith('blob:')
+                assert len(storage.objects)==1
+                ready()
+                expect(page.locator('#avatarPreview')).to_be_visible()
+                page.locator('#avatarRemove').click()
+                expect(page.locator('#avatarPreview')).not_to_be_visible()
+                expect(page.locator('#avatarRemove')).to_be_disabled()
+                assert len(storage.objects)==1  # Removal preserves backup references.
+                ready()
+                expect(page.locator('#avatarPreview')).not_to_be_visible()
                 page.locator('#signOut').click()
                 expect(page.locator('#signOut')).not_to_be_visible()
                 expect(page.locator('#accountSummary')).not_to_be_visible()
+                expect(page.locator('#accountAvatar')).not_to_be_visible()
                 page.locator('#email').fill('new@example.invalid')
                 page.locator('#password').fill('bad')
                 page.locator('#submit').click()

@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from ygc.db.postgres import connect
 
 from ygc.cloud_account_routes import account_router
+from ygc.cloud_avatar_routes import avatar_router
 from ygc.cloud_operations_routes import operations_router
 from ygc.db.postgres_operations import PostgresOperations
 from ygc.cloud_registration import DOCUMENTS
@@ -35,7 +36,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     app.include_router(account_router(verifier, DOCUMENTS))
-    app.include_router(operations_router(verifier, PostgresOperations(settings), storage))
+    operations = PostgresOperations(settings)
+    app.include_router(operations_router(verifier, operations, storage))
+    app.include_router(avatar_router(verifier, operations, storage))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

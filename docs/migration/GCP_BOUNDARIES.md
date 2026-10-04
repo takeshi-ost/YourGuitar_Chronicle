@@ -1,6 +1,6 @@
 # GCP 移行のための境界（現在はローカル試作）
 
-この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現行の一般WebUIはローカル試作。独立した[Cloud Run認証画面](CLOUD_RUN_ACCOUNT_STAGING.md)の基本認証試験は完了し、[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を配置済み。[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)の管理者Operationsと[Cloud Storageの接続基盤](CLOUD_STORAGE.md)を追加した。一般WebUIのPostgreSQL接続、画像のアップロード／配信、Crawl等のクラウド定期実行は残る。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
+この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現行の一般WebUIはローカル試作。独立した[Cloud Run認証画面](CLOUD_RUN_ACCOUNT_STAGING.md)の基本認証試験は完了し、[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を配置済み。[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)の管理者Operationsと[Cloud Storageの接続基盤](CLOUD_STORAGE.md)を追加した。[本人アカウント画像](CLOUD_ACCOUNT_AVATAR.md)は保存／取得／参照解除を接続済み。一般WebUIのPostgreSQL接続、コンテンツ画像のアップロード／配信、Crawl等のクラウド定期実行は残る。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
 
 | 責務 | 現在 | 将来の差し替え点 |
 | --- | --- | --- |
