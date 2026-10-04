@@ -1195,5 +1195,16 @@
   "console.default_admin_only": "サービスは管理者による確認中です。しばらくしてから再度お試しください。",
   "console.content_storage": "コンテンツ画像の保存先",
   "console.accounts_storage": "アカウント画像の保存先",
-  "console.storage_readable": "読み取り確認済み"
+  "console.storage_readable": "読み取り確認済み",
+  "avatar.heading": "アカウント画像",
+  "avatar.choose": "画像を選択",
+  "avatar.limits": "JPEG・PNG・WebP、8 MiB・800万画素以内。",
+  "avatar.save": "画像を保存",
+  "avatar.remove": "画像を外す",
+  "avatar.empty": "アカウント画像はありません。",
+  "avatar.saved": "アカウント画像を保存しました。",
+  "avatar.removed": "アカウント画像を外しました。",
+  "avatar.invalid": "上限以内の有効なJPEG・PNG・WebPを選択してください。",
+  "avatar.restricted": "現在、この画像操作は制限されています。",
+  "avatar.failed": "画像操作に失敗しました。更新して現在の画像を確認してください。"
 }

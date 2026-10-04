@@ -1,8 +1,10 @@
 import {loadCloudAuth} from './cloud-auth-loader.js';
+import {createAvatar} from './cloud-account-avatar.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
 let auth,policies,mode='signin',busy=false,state=null;
+const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -27,6 +29,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
+  avatar.render();
 }
 async function documents(){
   policies=null;
@@ -34,6 +37,7 @@ async function documents(){
   $('terms').checked=$('privacy').checked=false;
 }
 function update(result){
+  if(state?.user?.app_user_id!==result?.user?.app_user_id)avatar.clear();
   state=result;
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
@@ -69,7 +73,7 @@ $('cloudAccountForm').onsubmit=async event=>{
       terms_accepted:$('terms').checked,privacy_accepted:$('privacy').checked,
       terms_version:policies.terms.version,privacy_version:policies.privacy.version,
     },state?.registration_required?undefined:credentials);
-    $('email').value='';update(result);
+    $('email').value='';update(result);await loadAvatar();
   }catch(error){
     if(error.code==='policy_changed'){
       try{await documents()}catch{error={code:'auth/network-request-failed'}}
@@ -98,12 +102,24 @@ $('refreshVerification').onclick=async()=>{
   if(busy||!state?.user)return;
   busy=true;render();
   try{
-    const result=await auth.refreshVerification();update(result);
+    const result=await auth.refreshVerification();update(result);await loadAvatar();
     if(result?.user)$('status').textContent=t(result.identity?.email_verified===true?'cloud.email_verified':'cloud.verification_pending');
   }catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
 };
-try{auth=await loadCloudAuth();await documents();update(await auth.restore())}
+async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true){
+    try{await avatar.refresh()}catch(error){avatar.failed(error)}
+  }
+}
+async function avatarAction(work){
+  if(busy)return;busy=true;render();
+  try{await work()}catch(error){avatar.failed(error)}finally{busy=false;render()}
+}
+$('avatarForm').onsubmit=event=>{event.preventDefault();avatarAction(()=>avatar.save($('avatarFile').files[0]))};
+$('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
+$('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
+try{auth=await loadCloudAuth();await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(()=>avatar.refresh())}
 catch(error){$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');
 globalThis.YGCCloudAccountReady=true;

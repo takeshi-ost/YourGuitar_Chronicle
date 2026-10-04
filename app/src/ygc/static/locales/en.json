@@ -1195,5 +1195,16 @@
   "console.default_admin_only": "The service is being tested by administrators. Please try again later.",
   "console.content_storage": "Content storage",
   "console.accounts_storage": "Account storage",
-  "console.storage_readable": "Read access confirmed"
+  "console.storage_readable": "Read access confirmed",
+  "avatar.heading": "Account image",
+  "avatar.choose": "Choose an image",
+  "avatar.limits": "JPEG, PNG or WebP, up to 8 MiB and 8 million pixels.",
+  "avatar.save": "Save image",
+  "avatar.remove": "Remove image",
+  "avatar.empty": "No account image.",
+  "avatar.saved": "Account image saved.",
+  "avatar.removed": "Account image removed.",
+  "avatar.invalid": "Choose a valid JPEG, PNG or WebP within the limits.",
+  "avatar.restricted": "This image operation is currently restricted.",
+  "avatar.failed": "Image operation failed. Refresh to check the current image."
 }

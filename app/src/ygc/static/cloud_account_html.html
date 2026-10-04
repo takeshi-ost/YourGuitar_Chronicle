@@ -22,6 +22,12 @@
 <button id="sendVerification" type="button" data-i18n="cloud.verify_email">Send verification email</button>
 <button id="refreshVerification" type="button" data-i18n="cloud.refresh_verification">Check verification status</button>
 </section>
+<section id="accountAvatar" hidden>
+<h2 data-i18n="avatar.heading">Account image</h2><img id="avatarPreview" hidden alt="Account image" data-i18n-alt="avatar.heading" width="128" height="128">
+<form id="avatarForm"><label for="avatarFile" data-i18n="avatar.choose">Choose an image</label><input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp">
+<p data-i18n="avatar.limits">JPEG, PNG or WebP, up to 8 MiB and 8 million pixels.</p>
+<button id="avatarUpload" type="submit" data-i18n="avatar.save">Save image</button><button id="avatarRemove" type="button" disabled data-i18n="avatar.remove">Remove image</button><button id="avatarRefresh" type="button" data-i18n="action.refresh">Refresh</button></form><p id="avatarStatus" role="status"></p>
+</section>
 <form id="cloudAccountForm">
   <fieldset id="credentialsFields">
     <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>

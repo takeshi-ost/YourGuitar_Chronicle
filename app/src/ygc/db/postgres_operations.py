@@ -33,7 +33,7 @@ class PostgresOperations:
             return {'mode': row['mode'], 'message': row['message'] if row['mode'] != 'normal' else ''}
 
     @contextmanager
-    def access(self, kind, app_user_id=None):
+    def _access(self, kind, app_user_id=None, *, account_write=False):
         """Keep role and mode locks until the caller's work commits.
 
         Future content routes must retain this context around their transaction;
@@ -41,10 +41,12 @@ class PostgresOperations:
         """
         if kind not in ('public_read', 'user_read', 'user_write', 'admin_read', 'admin_write'):
             raise ValueError('Unknown access category.')
+        if account_write and kind not in ('user_write', 'admin_write'):
+            raise ValueError('Account writes require a write category.')
         with connect(self.settings, 'accounts') as source:
             actor = None
             if app_user_id is not None:
-                actor = source.execute('SELECT * FROM account_records WHERE app_user_id=%s FOR SHARE',
+                actor = source.execute('SELECT * FROM account_records WHERE app_user_id=%s ' + ('FOR UPDATE' if account_write else 'FOR SHARE'),
                                        (app_user_id,)).fetchone()
                 PostgresAccounts._active(actor)
             admin = bool(actor and actor['role'] == 'admin')
@@ -61,7 +63,21 @@ class PostgresOperations:
                                (row['mode'] == 'admin_only' and admin))
                     if not allowed:
                         raise ServiceRestricted('Service access is temporarily restricted.')
-                yield con, row, actor
+                yield con, row, actor, source
+                if account_write:
+                    # Publish Accounts changes before releasing the service-mode lock.
+                    source.commit()
+
+    @contextmanager
+    def access(self, kind, app_user_id=None):
+        with self._access(kind, app_user_id) as (con, row, actor, source):
+            yield con, row, actor
+
+    @contextmanager
+    def account_access(self, kind, app_user_id):
+        """Use the already locked canonical connection for atomic account updates."""
+        with self._access(kind, app_user_id, account_write=kind.endswith('_write')) as (con, row, actor, source):
+            yield source, row, actor
 
     def details(self, app_user_id):
         with self.access('admin_read', app_user_id) as (con, row, actor):
