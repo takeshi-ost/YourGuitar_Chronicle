@@ -1,6 +1,7 @@
 """Real mode matrix, canonical role fencing, audit rollback and initial Admin."""
 import json
 import uuid
+import time
 import psycopg
 from psycopg import sql
 from ygc.db.postgres import PostgresSettings, bootstrap, migrate, connect
@@ -146,11 +147,32 @@ def run(port):
             assert save(app,store,'accounts','fixture',request_id=token)['saved']
             assert controls.status(aid,'accounts')['state']=='succeeded'
             print('PostgreSQL manual backup: persistent intent, repeated UUID, per-target conflict, member denial and committed archive success passed.')
+            from ygc.cloud_backup_policy import configure,policy,prune
+            before=policy(operations,aid,'chronicle')
+            updated=configure(operations,aid,'accounts',1,True,48)
+            assert updated['enabled'] is True and updated['generations']==1 and updated['interval_hours']==48
+            assert policy(operations,aid,'chronicle')==before
+            rejected(PermissionError,lambda:configure(operations,bid,'accounts',1,True,1))
+            save(app,store,'accounts','fixture-2')
+            assert prune(app,store,'accounts')==1
+            assert len(store.objects)==1
+            configure(operations,aid,'accounts',10,False,24)
+            assert save(app,store,'accounts','scheduled-fixture',scheduled=True)['skipped']
+            with connect(app,'operations') as con:
+                con.execute("UPDATE backup_schedules SET enabled=1,next_run=0 WHERE target='accounts'")
+            assert save(app,store,'accounts','scheduled-due',scheduled=True)['saved']
+            assert policy(operations,aid,'accounts')['next_run']>time.time()
+            assert save(app,store,'accounts','scheduled-repeat',scheduled=True)['skipped']
+            configure(operations,aid,'accounts',10,False,24)
+            print('PostgreSQL backup policy: independent persistent settings, strict Admin gate, exact archive pruning and disabled scheduled save passed.')
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))
             rejected(psycopg.errors.InsufficientPrivilege,lambda: operations.set_mode(aid,mode='normal',message='',version=version))
             assert operations.details(aid)['version'] == version
+            prior_policy=policy(operations,aid,'accounts')
+            rejected(psycopg.errors.InsufficientPrivilege,lambda: configure(operations,aid,'accounts',1,True,1))
+            assert policy(operations,aid,'accounts')==prior_policy
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('GRANT INSERT ON events TO {}').format(sql.Identifier(role)))
             # Role changes cannot race an admitted administrative operation.

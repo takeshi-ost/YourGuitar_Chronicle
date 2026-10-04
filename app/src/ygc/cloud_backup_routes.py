@@ -6,6 +6,7 @@ from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_backup_job import KIND
 from ygc.cloud_backup_control import BackupBusy
+from ygc.cloud_backup_policy import policy,configure
 from ygc.db.postgres import TARGETS
 
 
@@ -14,7 +15,8 @@ def catalog(operations,actor,target):
     with operations.access('admin_read',actor) as (con,mode,account):
         records=con.execute("""SELECT reason FROM events WHERE
             CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'target'=%s
-            ORDER BY id DESC LIMIT 50""",('{"kind":"'+KIND+'",%',target)).fetchall()
+            AND CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'deleted_at' IS NULL
+            ORDER BY id DESC LIMIT 50""",('{"kind":"'+KIND+'",%',target,'{"kind":"'+KIND+'",%')).fetchall()
         fields=('backup_id','target','created_at','schema_version','tables','rows')
         return {'target':target,'items':[{k:json.loads(row['reason'])[k] for k in fields} for row in records],
                 'limit':50,'scope':'database_snapshot','restore_available':False}
@@ -69,6 +71,23 @@ def backup_router(verifier,operations,control=None):
             if not isinstance(data,dict) or set(data)!={'target','request_id'}:raise ValueError()
         except (ValueError,TypeError):raise HTTPException(400,'Select one database and request UUID.',headers=headers) from None
         return await execute(control.start,admin,data['target'],data['request_id'])
+
+    @router.get('/api/admin/backups/policy')
+    async def read_policy(request:Request):
+        admin=await actor(request)
+        try:target=target_query(request)
+        except ValueError:raise HTTPException(400,'Select one backup target.',headers=headers) from None
+        return await execute(policy,operations,admin,target)
+
+    @router.put('/api/admin/backups/policy')
+    async def write_policy(request:Request):
+        admin=await actor(request)
+        try:
+            if request.query_params or len(await request.body())>1024:raise ValueError()
+            data=await request.json()
+            if not isinstance(data,dict) or set(data)!={'target','generations','enabled','interval_hours'}:raise ValueError()
+        except (ValueError,TypeError):raise HTTPException(400,'Invalid backup policy.',headers=headers) from None
+        return await execute(configure,operations,admin,data['target'],data['generations'],data['enabled'],data['interval_hours'])
 
     @router.get('/api/admin/backups/save-status')
     async def status(request:Request):
