@@ -39,7 +39,8 @@ def test_domain_updates_preserve_restrictions_before_public_access(monkeypatch, 
             assert '--no-allow-unauthenticated' in command
             output = url
         elif command[1:4] == ['services', 'api-keys', 'update']:
-            restrictions['browserKeyRestrictions']['allowedReferrers'].append(url + '/*')
+            refs_arg = next(part for part in command if part.startswith('--allowed-referrers='))
+            restrictions['browserKeyRestrictions']['allowedReferrers'] = refs_arg.split('=', 1)[1].split(',')
             if corrupt_api_targets:
                 # Replacement, not mutation: the original restriction snapshot must remain intact.
                 restrictions['apiTargets'] = [{'service': 'unexpected.googleapis.com'}]
@@ -72,4 +73,6 @@ def test_domain_updates_preserve_restrictions_before_public_access(monkeypatch, 
     assert bool(public) is (not corrupt_api_targets)
     assert config['authorizedDomains'] == ['existing.example', 'test-service.run.app']
     assert restrictions['browserKeyRestrictions']['allowedReferrers'][0] == 'https://existing.example/*'
+    assert 'https://test-project.firebaseapp.com/*' in restrictions['browserKeyRestrictions']['allowedReferrers']
+    assert url + '/*' in restrictions['browserKeyRestrictions']['allowedReferrers']
     assert all(not path.exists() for path in env_paths)

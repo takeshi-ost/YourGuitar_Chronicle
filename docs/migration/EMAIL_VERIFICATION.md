@@ -30,3 +30,7 @@ Python532件、JavaScript71件、共通ブラウザ・クラウド認証ブラ�
 Cloud Runリビジョン `ygc-staging-accounts-00003-ncs` へ配置し、公式SDKの読み込みと未ログイン時の表示、health／readyの200、不正トークンの401を確認した。ビルド `107513f9-dec3-4a68-ad95-a29bd8c1e74d`、固定image digest `sha256:3ec4986d065a72727ec64c2ab8976d8f51af7e5ee3d7cdcea959c044f9125113`。実受信・リンクの消費・確認済みJWTは利用者による次の実環境試験。基本認証試験は既に完了しているが、メール確認・失効・無効化の試験とは区別する。
 
 公式参照：[メール確認の送信とメール言語設定](https://firebase.google.com/docs/auth/web/manage-users)、[Userとトークン更新](https://firebase.google.com/docs/reference/js/auth.user.md)。
+
+## 確認リンクの403修正
+
+利用者の実リンク試験でFirebase標準ハンドラーのリファラーが拒否された。Cloud Runのoriginだけが許可され、`https://your-guitar-chronicle-staging.firebaseapp.com/*` が漏れていたため、既存制限を保持して追加した。配置スクリプトもWeb画面とauthDomainの両方を追加・照合するよう修正し、回帰テストで保持と追加を検証する。確認リンクの再試験は利用者が行う。

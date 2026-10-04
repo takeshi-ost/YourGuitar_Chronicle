@@ -9,7 +9,7 @@
 - Cloud Run：`ygc-staging-accounts`。1 vCPU / 512 MiB、リクエスト課金、最小0・最大1、同時処理8、タイムアウト30秒。
 - 実行用サービスアカウント：`ygc-staging-app`。鍵ファイルなし。Cloud SQLのUnix socketを使い、DBパスワードはSecret Manager `ygc-staging-db-password` のversion 1を環境変数として受け取る。
 - Web画面は公開。Accountsの参照・登録は、サーバーで検証したIdentity PlatformのBearerトークンが必要。Cloud Runの公開権限はYGCのAdmin権限ではない。
-- Identity Platformの許可ドメインとWebキーのHTTPリファラー許可に上記ホストだけを追加。既存の許可とAPI対象制限を保持した。もう一つのCloud Run生成URLは認証試験用の許可に追加していない。
+- Identity Platformの許可ドメインとWebキーのHTTPリファラー許可に上記ホストを追加。確認リンクの403修正後、WebキーのHTTPリファラーには当該プロジェクトのFirebase authDomainも追加済み。既存の許可とAPI対象制限を保持した。もう一つのCloud Run生成URLは認証試験用の許可に追加していない。
 - データは初期化済みのCloud SQLを利用。起動時はスキーマ照合だけで、DDL・マイグレーション・SQLiteへの代替接続・Crawl・定期処理を実行しない。
 
 Operations DBのサービスモードはofflineのまま。この独立した認証確認画面は、そのモードによる公開サービスの閲覧制御とは別の移行試験用画面。一般サービスを公開済みと扱わない。
