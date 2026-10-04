@@ -5,6 +5,11 @@ $('status').removeAttribute('data-i18n');
 let auth,policies,mode='signin',busy=false,state=null;
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
+  $('emailVerification').hidden=!registered;
+  const verified=state?.identity?.email_verified===true;
+  $('verificationStatus').textContent=t(verified?'cloud.email_verified':'cloud.email_unverified');
+  $('sendVerification').hidden=verified;
+  $('sendVerification').disabled=$('refreshVerification').disabled=busy||!registered;
   $('accountSummary').hidden=!registered;
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
   $('authActions').hidden=registered||resume;
@@ -76,6 +81,25 @@ $('signOut').onclick=async()=>{
   if(busy)return;busy=true;render();
   try{await auth.logout();mode='signin';$('cloudAccountForm').reset();update(null)}
   catch(error){$('status').textContent=errorMessage(error)}
+  finally{busy=false;render()}
+};
+$('sendVerification').onclick=async()=>{
+  if(busy||!state?.user)return;
+  busy=true;render();
+  try{
+    const result=await auth.requestEmailVerification({language:document.documentElement.lang||'en'});
+    update(result.account);
+    $('status').textContent=t(result.sent?'cloud.verification_sent':'cloud.email_verified');
+  }catch(error){$('status').textContent=errorMessage(error)}
+  finally{busy=false;render()}
+};
+$('refreshVerification').onclick=async()=>{
+  if(busy||!state?.user)return;
+  busy=true;render();
+  try{
+    const result=await auth.refreshVerification();update(result);
+    if(result?.user)$('status').textContent=t(result.identity?.email_verified===true?'cloud.email_verified':'cloud.verification_pending');
+  }catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
 };
 try{auth=await loadCloudAuth();await documents();update(await auth.restore())}

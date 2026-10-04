@@ -1168,5 +1168,11 @@
   "cloud.policy_changed": "文書の版が更新されました。最新の文書を確認し、もう一度同意してください。",
   "cloud.failed": "アカウントの処理を完了できませんでした。もう一度お試しいただくか、SignOutしてください。",
   "cloud.policy_version": "版: {version}",
-  "cloud.working": "処理中..."
+  "cloud.working": "処理中...",
+  "cloud.verify_email": "確認メールを送信",
+  "cloud.refresh_verification": "確認状態を更新",
+  "cloud.email_verified": "メールアドレスは確認済みです。",
+  "cloud.email_unverified": "メールアドレスはまだ確認されていません。",
+  "cloud.verification_sent": "確認メールを送信しました。メール内のリンクを開いてから、この画面で確認状態を更新してください。",
+  "cloud.verification_pending": "メールアドレスはまだ未確認です。メール内のリンクを開いてから、もう一度確認状態を更新してください。"
 }

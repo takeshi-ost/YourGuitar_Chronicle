@@ -40,3 +40,7 @@ ChromiumではGoogleの外部SDK操作を試験専用モジュールへ置き換
 現行WebUIの残るSQLite業務処理の移植、TopPageへの認証部品組込み、メール確認の案内／制御、投影Workerのクラウド配置、Cloud SQL接続、実行サービスアカウントのユーザー照会権限、実Google認証・デプロイ後の統合確認。確認画面の実装はこれらの完了を意味しない。
 
 関連：[アプリ登録API](CLOUD_ACCOUNT_REGISTRATION.md)、[サーバーtoken検証](IDENTITY_PLATFORM_VERIFICATION.md)。公式参照：[SDKのCDN導入](https://firebase.google.com/docs/web/alt-setup)、[認証状態の永続化](https://firebase.google.com/docs/auth/web/auth-state-persistence)、[メール・パスワード認証](https://firebase.google.com/docs/auth/web/password-auth)。
+
+## メール確認
+
+認証画面へ確認メール送信・確認状態更新を追加した。公式SDKの送信は利用者のクリック時だけ行い、状態更新は新しいJWTをサーバーで検証する。[操作・検証範囲](EMAIL_VERIFICATION.md)を参照。クラウド所有権申請APIの接続・確認済み必須化は後続の移行として残る。

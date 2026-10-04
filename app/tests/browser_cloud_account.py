@@ -16,7 +16,7 @@ from ygc.db.postgres_accounts import AccountNotRegistered
 from ygc.identity_platform import VerifiedIdentity
 
 SDK = r'''
-const makeUser=email=>({email,getIdToken:async()=> 'fixture-'+email});
+const makeUser=email=>({email,emailVerified:false,getIdToken:async()=> 'fixture-'+(sessionStorage.getItem('verified-'+email)==='true'?'verified-':'')+email});
 const saved=sessionStorage.getItem('fixture-sdk-email');
 const auth={currentUser:saved?makeUser(saved):null,authStateReady:async()=>{}};
 export const browserSessionPersistence='session';
@@ -30,6 +30,8 @@ export async function createUserWithEmailAndPassword(_auth,email,password){
   window.fixtureCreates=(window.fixtureCreates||0)+1;
   await signInWithEmailAndPassword(_auth,email,password);
 }
+export async function reload(user){window.fixtureReloads=(window.fixtureReloads||0)+1;}
+export async function sendEmailVerification(user,settings){window.fixtureVerificationSends=(window.fixtureVerificationSends||0)+1;window.fixtureVerificationURL=settings.url;window.fixtureVerificationLanguage=auth.languageCode;}
 export async function signOut(){auth.currentUser=null;sessionStorage.removeItem('fixture-sdk-email');}
 '''
 
@@ -57,7 +59,7 @@ def main():
         def verify(self, *, bearer_token):
             if not bearer_token.startswith('fixture-'):
                 raise PermissionError('Invalid fixture token')
-            return VerifiedIdentity('fixture-issuer', bearer_token, '', False)
+            return VerifiedIdentity('fixture-issuer', bearer_token.replace('fixture-verified-', 'fixture-', 1), '', bearer_token.startswith('fixture-verified-'))
 
     app = FastAPI()
     app.include_router(account_router(TestVerifier(), DOCUMENTS))
@@ -125,6 +127,20 @@ def main():
                 assert all('email' not in body and 'password' not in body for body in captured)
                 ready()
                 expect(page.locator('#accountSummary')).to_contain_text('Browser Cloud User')
+                expect(page.locator('#verificationStatus')).to_contain_text('not verified')
+                assert page.evaluate('window.fixtureVerificationSends||0') == 0
+                page.locator('#sendVerification').click()
+                expect(page.locator('#status')).to_contain_text('Verification email sent')
+                assert page.evaluate('window.fixtureVerificationSends') == 1
+                assert page.evaluate('window.fixtureVerificationURL') == url
+                page.locator('#refreshVerification').click()
+                expect(page.locator('#status')).to_contain_text('still unverified')
+                page.evaluate("sessionStorage.setItem('verified-new@example.invalid','true')")
+                page.locator('#refreshVerification').click()
+                expect(page.locator('#verificationStatus')).to_have_text('Email address verified.')
+                expect(page.locator('#sendVerification')).not_to_be_visible()
+                ready()
+                expect(page.locator('#verificationStatus')).to_have_text('Email address verified.')
                 page.locator('#signOut').click()
                 expect(page.locator('#signOut')).not_to_be_visible()
                 expect(page.locator('#accountSummary')).not_to_be_visible()
@@ -162,10 +178,14 @@ def main():
                 page.locator('#submit').click()
                 expect(page.locator('#accountSummary')).to_contain_text('日本語ユーザー')
                 assert len(records) == 2
+                expect(page.locator('#verificationStatus')).to_contain_text('まだ確認')
+                page.locator('#sendVerification').click()
+                expect(page.locator('#status')).to_contain_text('確認メールを送信しました')
+                assert page.evaluate('window.fixtureVerificationLanguage') == 'ja'
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 context.close()
                 browser.close()
-            print('Cloud account browser: registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, Japanese and mobile passed.')
+            print('Cloud account browser: registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')
         finally:
             server.should_exit = True
             thread.join(timeout=10)
