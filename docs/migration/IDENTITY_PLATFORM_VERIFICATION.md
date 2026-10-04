@@ -1,6 +1,6 @@
 # Identity Platformのサーバー検証
 
-2026-10-04、`ygc.identity_platform.IdentityPlatformIdentity` を追加。WebUIへの接続前に認証境界単体を実装・隔離検証する段階。ローカルのダミー認証は継続する。Cloud Runへの配置や実アカウントでの接続確認はまだ行っていない。
+2026-10-04、`ygc.identity_platform.IdentityPlatformIdentity` をmainへ統合済み。独立した[認証確認画面をCloud Runへ配置](CLOUD_RUN_ACCOUNT_STAGING.md)した。実アカウントの登録・ログイン・失効確認は残る。ローカルのダミー認証は継続する。
 
 ## 検証とID対応
 

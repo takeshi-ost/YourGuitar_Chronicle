@@ -1,6 +1,6 @@
 # ブラウザのGoogle認証とステージング確認画面
 
-更新日：2026-10-04。PR #17の登録APIへ接続するブラウザ部品を実装した。実GCP接続とCloud Run配置はまだ行っていない。現行TopPage／Browser Consoleのローカル仮認証は維持する。
+更新日：2026-10-04。ブラウザ部品と登録APIはPR #18までmainへ統合済み。独立した[認証確認画面をCloud Runへ配置](CLOUD_RUN_ACCOUNT_STAGING.md)し、実ブラウザでSDKの初期化を確認した。実ユーザーでの登録・ログイン試験は次の段階。現行TopPage／Browser Consoleのローカル仮認証は維持する。
 
 ## 接続部品
 

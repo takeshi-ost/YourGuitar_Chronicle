@@ -136,7 +136,7 @@ def test_api_startup_failure_closes_verifier(monkeypatch):
     monkeypatch.setattr(cloud_account_api, 'PostgresAccounts', Mock(return_value=accounts))
     monkeypatch.setattr(cloud_account_api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
     app = cloud_account_api.create_app(object(), project_id='test-project')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError, match='database initialization check failed'):
         with TestClient(app):
             pass
     verifier.close.assert_called_once()

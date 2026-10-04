@@ -2,6 +2,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse, RedirectResponse
+from ygc.db.postgres import connect
 
 from ygc.cloud_account_routes import account_router
 from ygc.cloud_registration import DOCUMENTS
@@ -18,7 +20,10 @@ def create_app(settings, *, project_id, tenant='', web_config=None):
     @asynccontextmanager
     async def lifespan(app):
         try:
-            await run_in_threadpool(accounts.check_schema)
+            try:
+                await run_in_threadpool(accounts.check_schema)
+            except Exception:
+                raise RuntimeError('Cloud account database initialization check failed.') from None
             yield
         finally:
             verifier.close()
@@ -26,6 +31,24 @@ def create_app(settings, *, project_id, tenant='', web_config=None):
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     app.include_router(account_router(verifier, DOCUMENTS))
+    @app.get('/health')
+    def health():
+        return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})
+
+    @app.get('/ready')
+    def ready():
+        try:
+            for target in ('accounts', 'chronicle'):
+                with connect(settings, target) as con:
+                    con.execute('SELECT 1').fetchone()
+        except Exception:
+            return JSONResponse({'status': 'unavailable'}, status_code=503,
+                                headers={'Cache-Control': 'no-store'})
+        return health()
+
     if config is not None:
         install(app, config)
+        @app.get('/')
+        def index():
+            return RedirectResponse('/account')
     return app
