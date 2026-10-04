@@ -6,7 +6,7 @@
 
 1. 同じタブの[アカウント画面](https://ygc-staging-accounts-rgmjxrs5kq-an.a.run.app/account)で、メール確認済みの運営用YGCアカウントにSign Inする。
 2. 表示されたBrowser Consoleリンクから `/console` を開く。URLを直接開くことも可能。未認証・未確認・非Adminの場合は案内のみで操作できない。
-3. 右Detail層最上部のOperationsで現在のモードを確認する。Service statusタブでWeb応答・Accounts / Chronicle / Operations DB接続・確認時刻を表示する。
+3. 右Detail層最上部のOperationsで現在のモードを確認する。Service statusタブでWeb応答・Accounts / Chronicle / Operations DB接続・対象別Storage読み取り・確認時刻を表示する。
 4. MaintenanceタブでNormal / Read only / Offline / Admin Onlyを選び、必要に応じて案内メッセージを編集して保存する。Reasonは要求しない。モード変更時は日英の定型文を設定し、Normalは空とする。
 5. 他の管理操作で設定が更新されていた場合は保存を拒否し、Refresh後に再編集する。Refreshは未保存入力を現在のサーバー設定で置き換える。自動更新は行わない。
 
@@ -24,7 +24,7 @@ Consoleの静的な外枠は公開されるが、管理データや操作者の�
 
 ブラウザ試験でGuest・一般ユーザー・未確認Adminの拒否、Adminによるモード保存と再読込み、同時更新の409、DB障害からの再取得、資格解除後の403、SignOut、タブのキーボード操作、表示内容のHTML非解釈、左右独立スクロール、日英・モバイル表示を確認した。Google操作とDBは当該ブラウザ試験内だけの代替であり、実ユーザーによる操作試験とは区別する。
 
-残るのはコンテンツ・画像・Crawl・審議・バックアップ・復元／リセット等のAPIと画面の移行、ジョブ排他、全モード・権限解除・ジョブ競合を含む実環境の詳細受入試験。Service statusはDB接続確認であり、Storage・Reverb・GPTの疎通や全テーブルの健全性を保証しない。これらの未接続操作をクラウド画面へボタンだけ追加しない。
+残るのはコンテンツ・画像・Crawl・審議・バックアップ・復元／リセット等のAPIと画面の移行、ジョブ排他、全モード・権限解除・ジョブ競合を含む実環境の詳細受入試験。Service statusはDB接続とCloud Storageの対象別読み取り確認を行う。Reverb・GPTや全テーブルの健全性は確認しない。Storageの書き込み検証と移行範囲は[Storage接続](CLOUD_STORAGE.md)を参照。これらの未接続操作をクラウド画面へボタンだけ追加しない。
 
 検証結果：Python555件、JavaScript71件、共通ブラウザ操作と新Consoleの操作検証、実PostgreSQLの4DB・権限／所有判定・Operations検証が通過した。辞書の空キーを検出して修正し、Python全体と関連ブラウザを再確認した。
 

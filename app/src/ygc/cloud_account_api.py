@@ -14,7 +14,7 @@ from ygc.identity_platform import IdentityPlatformIdentity
 from ygc.cloud_account_page import install, public_config
 
 
-def create_app(settings, *, project_id, tenant='', web_config=None):
+def create_app(settings, *, project_id, tenant='', web_config=None, storage=None):
     config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
@@ -29,11 +29,13 @@ def create_app(settings, *, project_id, tenant='', web_config=None):
             yield
         finally:
             verifier.close()
+            if storage is not None:
+                storage.close()
 
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     app.include_router(account_router(verifier, DOCUMENTS))
-    app.include_router(operations_router(verifier, PostgresOperations(settings)))
+    app.include_router(operations_router(verifier, PostgresOperations(settings), storage))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

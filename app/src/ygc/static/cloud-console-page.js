@@ -39,6 +39,13 @@ async function refresh(){
     const ready=await fetch('/ready',{cache:'no-store',credentials:'omit',redirect:'error'});
     $('databaseStatus').textContent=t(ready.ok?'console.connected':'console.unavailable');
   }catch{$('databaseStatus').textContent=t('console.unavailable')}
+  try{
+    const storage=await request('/api/admin/operations/storage');
+    for(const scope of ['content','accounts'])$(scope+'StorageStatus').textContent=t(storage[scope]==='available'?'console.storage_readable':'console.unavailable');
+  }catch(e){
+    if([401,403].includes(e.status))throw e;
+    for(const scope of ['content','accounts'])$(scope+'StorageStatus').textContent=t('console.unavailable');
+  }
   $('checkedAt').textContent=new Date().toLocaleString(globalThis.YGCI18n.locale);
 }
 async function action(work){

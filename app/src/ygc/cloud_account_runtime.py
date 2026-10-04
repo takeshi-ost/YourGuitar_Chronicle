@@ -4,6 +4,7 @@ import re
 import uvicorn
 from ygc.cloud_account_api import create_app
 from ygc.db.postgres import PostgresSettings
+from ygc.cloud_storage import CloudStorage, StorageSettings
 
 
 def application():
@@ -19,10 +20,15 @@ def application():
     if settings.host.startswith('/cloudsql/'):
         if not settings.host.startswith('/cloudsql/' + project + ':'):
             raise ValueError('Cloud SQL and Identity Platform projects must match.')
-    return create_app(settings, project_id=project,
+    storage = CloudStorage(StorageSettings.from_environment(project))
+    try:
+        return create_app(settings, storage=storage, project_id=project,
                       tenant=os.environ.get('YGC_IDENTITY_TENANT', ''),
                       web_config={'apiKey': os.environ.get('YGC_FIREBASE_API_KEY', ''),
                                   'authDomain': os.environ.get('YGC_FIREBASE_AUTH_DOMAIN', '')})
+    except Exception:
+        storage.close()
+        raise
 
 
 def main():

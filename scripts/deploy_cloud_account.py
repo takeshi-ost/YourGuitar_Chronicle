@@ -50,7 +50,8 @@ def main():
     key = json.loads(cli('services', 'api-keys', 'get-key-string', args.api_key_resource,
                         '--format=json'))['keyString']
     instance = args.project + ':' + args.region + ':' + args.instance
-    env = {'YGC_PLATFORM_TARGET': 'gcp', 'YGC_DATABASE_BACKEND': 'postgres',
+    env = {'YGC_PLATFORM_TARGET': 'gcp', 'YGC_MEDIA_BACKEND': 'gcs',
+           'YGC_CONTENT_BUCKET': args.project + '-content', 'YGC_ACCOUNTS_BUCKET': args.project + '-accounts', 'YGC_DATABASE_BACKEND': 'postgres',
            'YGC_IDENTITY_BACKEND': 'identity_platform', 'YGC_IDENTITY_PROJECT_ID': args.project,
            'YGC_POSTGRES_HOST': '/cloudsql/' + instance, 'YGC_POSTGRES_USER': 'ygc_app',
            'YGC_POSTGRES_PREFIX': 'ygc_', 'YGC_FIREBASE_API_KEY': key,

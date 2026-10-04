@@ -61,3 +61,7 @@ Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を�
 ## クラウドConsoleの追加
 
 認証画面から有効・メール確認済みAdminにBrowser Consoleリンクを表示し、`/console` でOperationsの状態確認とモード変更を操作できるようにした。過去の「BrowserConsole未配置」は当該配置時点の記録。現時点の接続範囲は[クラウドConsole](CLOUD_BROWSER_CONSOLE.md)を参照。コンテンツ管理・Crawl・バックアップ等はまだ未配置。
+
+## Cloud Storageの接続
+
+リビジョン `ygc-staging-accounts-00006-ppj` へ更新し、コンテンツ／アカウントのStorage設定と、Admin資格が必要な読み取り状態APIを追加した。Cloud Run起動は明示Storage設定を必須とする。readyはDB接続を確認し、Storage障害で管理者の復旧入口を封鎖しない。画像のアップロード／配信APIは未接続。[接続・専用Job・実配置記録](CLOUD_STORAGE.md)を参照。

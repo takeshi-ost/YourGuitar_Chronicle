@@ -19,7 +19,7 @@ Windowsでは `app\.venv\Scripts\python.exe scripts/run_tests.py`。仮想環境
 
 ## 依存関係の固定
 
-`constraints.txt` が直接・間接依存の固定バージョンを持つ。`pyproject.toml` は必要なライブラリと対応範囲を定義する。セットアップと起動スクリプトは `scripts/install_dependencies.py` を使い、pip自体、実行時依存、ビルド時依存を固定する。通常は開発用、`--runtime` は実行用のみ、`--browser` はブラウザ検証用、`--postgres` はPostgreSQL接続・移行用を追加する。既存環境の追加パッケージは削除しないため、本番・CIは新しい仮想環境を使用する。
+`constraints.txt` が直接・間接依存の固定バージョンを持つ。`pyproject.toml` は必要なライブラリと対応範囲を定義する。セットアップと起動スクリプトは `scripts/install_dependencies.py` を使い、pip自体、実行時依存、ビルド時依存を固定する。通常は開発用、`--runtime` は実行用のみ、`--browser` はブラウザ検証用、`--postgres` はPostgreSQL接続・移行用、`--storage` はCloud Storage接続用を追加する。既存環境の追加パッケージは削除しないため、本番・CIは新しい仮想環境を使用する。
 
 依存更新は起動時には行わない。変更が必要なときに、リポジトリ直下で次を実行し、固定ファイルの差分と共通テストを確認する。再生成にはuvが必要だが、通常のインストールにuvは不要。
 
@@ -53,4 +53,4 @@ PR #14の統合後main `aa27c21` でもCI成功。Python435件、JavaScript55件
 
 ## PostgreSQL移行基盤の検証
 
-接続・4スキーマ・権限・再実行の検証手順は[PostgreSQL初期化](../migration/POSTGRES_BOOTSTRAP.md)。ローカルは `--postgres-bin /path/to/postgresql18/bin` で一時クラスタを使う。依存の全固定検査には `scripts/install_dependencies.py --browser --postgres --identity` で全extrasを導入する。WebUIのPostgreSQL移植とは別段階。
+接続・4スキーマ・権限・再実行の検証手順は[PostgreSQL初期化](../migration/POSTGRES_BOOTSTRAP.md)。ローカルは `--postgres-bin /path/to/postgresql18/bin` で一時クラスタを使う。依存の全固定検査には `scripts/install_dependencies.py --browser --postgres --identity --storage` で全extrasを導入する。WebUIのPostgreSQL移植とは別段階。

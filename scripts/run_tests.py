@@ -15,7 +15,7 @@ def isolated_environment(directory):
     # Do not inherit local credentials, cloud switches or storage overrides.
     for key in list(env):
         if key.startswith('YGC_') or key in ('REVERB_API_TOKEN', 'K_SERVICE', 'CLOUD_RUN_JOB',
-                           'FIREBASE_AUTH_EMULATOR_HOST', 'GOOGLE_APPLICATION_CREDENTIALS',
+                           'FIREBASE_AUTH_EMULATOR_HOST', 'STORAGE_EMULATOR_HOST', 'GOOGLE_APPLICATION_CREDENTIALS',
                            'GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT'):
             del env[key]
     env.update(YGC_DATA_DIR=str(directory), YGC_DB_PATH=str(directory / 'chronicle.db'),
