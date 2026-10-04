@@ -1,6 +1,6 @@
 # PostgreSQLのAccounts同期と所有判定
 
-更新日：2026-10-04。PR #15でDB層をmainへ統合済み。所有権Webルート・実GCP・クラウド配置は未接続。後続の認証検証・[登録API](CLOUD_ACCOUNT_REGISTRATION.md)は別部品として追加する。
+更新日：2026-10-04。DB層、認証検証、[登録API](CLOUD_ACCOUNT_REGISTRATION.md)はmainへ統合済み。独立した認証確認画面をCloud Runへ配置し、利用者の基本認証試験が完了。[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を実配置し、初回同期・Schedulerからの再実行が成功した。所有権Webルートは未接続。
 
 ## 正本と同期
 
@@ -59,4 +59,4 @@ Chronicleだけを初期化・復元した後、現在のAccountsから `reconci
 - Acquire承認前後のOwnerとOwned分類、自己判定禁止、旧Ownerの権限喪失、Transfer受領者の自己否定禁止。
 - A→B→CのTransfer成立後、先行TransferをAdminが否定・Unverified化・削除してもCを維持すること、Adminの別経路と監査actor、BANに伴うSnapshot再評価。
 
-WebUI全Repository・画像審議・Crawl・Follow / DM・運用設定・独立バックアップ／復元／リセットは未移植。Identity Platform、Cloud Storage、クラウドWorkerも未接続。今回のコードだけでCloud Runを起動できる状態ではなく、ローカル起動制限は維持する。
+WebUI全Repository・画像審議・Crawl・Follow / DM・運用設定・独立バックアップ／復元／リセットは未移植。Identity Platformは独立した認証確認画面で接続済み。Cloud Storageのアプリ接続と現行WebUI移行は残る。同期Workerの実配置状況は[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を参照。現行ローカルWebUIをそのままCloud Runへ配置することはできず、起動制限を維持する。

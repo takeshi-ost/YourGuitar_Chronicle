@@ -46,6 +46,6 @@ Cloud Runのstartup probeは `/health`。DB障害時に無意味な再起動を�
 
 実URLで画面・公開設定・DB接続・無認証と不正トークンの401・未配置APIの404を確認した。公式Web SDKの読み込みと実ブラウザのデスクトップ／モバイル表示も確認した。
 
-実メールアドレスとパスワードによる登録・Sign In・再読込・SignOut・失効確認は、利用者による次の試験として残る。まだ実ユーザーをエージェントが作成したり、メールを送信したりしていない。規約・プライバシー本文はステージング草案。公開前の正式版整備と、Accounts投影ワーカー、残りのWebUI/API・Storage・Jobsの移行は別途必要。
+2026-10-04、利用者が一般メールアドレスによるCreate Account・再読込み後のログイン維持・SignOut・Sign Inを確認した。これは利用者による実環境試験結果であり、エージェントによる代理登録ではない。失効・無効化の確認は残る。まだ実ユーザーをエージェントが作成したり、メールを送信したりしていない。規約・プライバシー本文はステージング草案。Accounts投影ワーカーは[専用Jobとして配置済み](ACCOUNT_PROJECTION_JOB.md)。公開前の正式版整備と、残りのWebUI/API・Storage・Crawl等のJobs移行は別途必要。
 
 公式参照：[Cloud Runコンテナ要件](https://docs.cloud.google.com/run/docs/container-contract)、[Secret Managerの設定](https://docs.cloud.google.com/run/docs/configuring/services/secrets)、[専用ビルドアカウント](https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts)。

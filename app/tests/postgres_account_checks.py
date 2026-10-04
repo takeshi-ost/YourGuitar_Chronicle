@@ -53,7 +53,21 @@ def run(port):
                 assert con.execute("SELECT COUNT(*) AS n FROM account_records WHERE display_name='rollback'").fetchone()['n'] == 0
                 assert con.execute('SELECT COUNT(*) AS n FROM account_consents').fetchone()['n'] == 1
                 assert con.execute('SELECT COUNT(*) AS n FROM account_projection_outbox').fetchone()['n'] == 4
-            assert store.drain_projection() == 4
+            # The same bounded entry point used by Cloud Run Jobs handles the real outbox.
+            from ygc.account_projection_job import run as run_job
+            assert run_job(app, limit=2) == {'status': 'ok', 'processed': 2, 'pending': 2}
+            assert run_job(app, limit=100) == {'status': 'ok', 'processed': 2, 'pending': 0}
+            assert run_job(app) == {'status': 'ok', 'processed': 0, 'pending': 0}
+            # Scheduler delivery can overlap; concurrent workers must neither duplicate
+            # users nor acknowledge an event without projecting its latest revision.
+            for account in (a, b, a, b):
+                store.update_profile(account['app_user_id'], {'bio': 'concurrent projection'})
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                runs = list(pool.map(lambda _: run_job(app), range(2)))
+            assert sum(result['processed'] for result in runs) == 4
+            assert run_job(app)['pending'] == 0
+            with connect(app, 'chronicle') as con:
+                assert con.execute('SELECT COUNT(*) AS n FROM users').fetchone()['n'] == 4
             def content_action():
                 with store.content_transaction(a['app_user_id'], [a['id'], b['id']]) as (con, actor):
                     assert actor['id'] == a['id'] and actor['role'] == 'member'
@@ -94,7 +108,7 @@ def run(port):
                 con.execute('UPDATE users SET app_user_id=%s WHERE id=%s', (str(uuid.uuid4()), a['id']))
                 con.execute('ALTER TABLE users ENABLE TRIGGER immutable_participant_identity')
             store.update_profile(a['app_user_id'], {'bio': 'pending'})
-            raises(ValueError, store.project_next)
+            raises(ValueError, lambda: run_job(app))
             with connect(owner, 'chronicle') as con:
                 con.execute('ALTER TABLE users DISABLE TRIGGER immutable_participant_identity')
                 con.execute('UPDATE users SET app_user_id=%s WHERE id=%s', (a['app_user_id'], a['id']))

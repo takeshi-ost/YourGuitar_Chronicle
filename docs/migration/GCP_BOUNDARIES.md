@@ -1,6 +1,6 @@
 # GCP 移行のための境界（現在はローカル試作）
 
-この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現在のアプリはローカル試作であり、クラウド認証・WebUIのPostgreSQL接続・クラウド定期実行は未実装。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
+この文書は将来の Cloud Run + Cloud SQL (PostgreSQL) + Identity Platform + Cloud Scheduler / Cloud Run Jobs への移行契約を示す。現行の一般WebUIはローカル試作。独立した[Cloud Run認証画面](CLOUD_RUN_ACCOUNT_STAGING.md)の基本認証試験は完了し、[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を配置済み。一般WebUIのPostgreSQL接続とCrawl等のクラウド定期実行は残る。実装ブランチに追加した接続・初期スキーマ基盤の範囲は[PostgreSQL初期化](POSTGRES_BOOTSTRAP.md)を参照。ローカルAuto Crawlと定期バックアップは実装済み。`ygc.platform_boundaries` は接続前後の型とローカル実装を定義し、未接続のクラウド側は明示的にエラーにする。
 
 | 責務 | 現在 | 将来の差し替え点 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 
 ## 認証境界
 
-標準の `local_dummy` はloopback専用のテストユーザー選択からサーバー発行セッションを作り、操作IDを照合する。ただしメール・パスワードによる実際の本人確認ではなく、Identity Platformの署名JWT検証も未実装。互換 `prototype` では `viewer_id` 等が未検証の申告IDとなる。公開前には全APIをIdentity Platformの検証済み主体に接続し、管理者権限・画像等の直接参照を含めて認可を検証する。アカウントの固定UUID・認証対応付けは後述のアカウントDBを正とし、コンテンツ内usersは参照用の投影として扱う。
+標準の `local_dummy` はloopback専用のテストユーザー選択からサーバー発行セッションを作り、操作IDを照合する。ただしメール・パスワードによる実際の本人確認ではなく、このローカル認証でIdentity Platformの署名JWTを検証することはない。クラウド用の検証部品は[別経路](IDENTITY_PLATFORM_VERIFICATION.md)で実装済み。互換 `prototype` では `viewer_id` 等が未検証の申告IDとなる。公開前には全APIをIdentity Platformの検証済み主体に接続し、管理者権限・画像等の直接参照を含めて認可を検証する。アカウントの固定UUID・認証対応付けは後述のアカウントDBを正とし、コンテンツ内usersは参照用の投影として扱う。
 
 将来の受け渡し順序は、クライアントが Identity Platform で取得した ID token → HTTPS リクエストの Bearer token → サーバーが署名・発行者・対象・有効期限等を検証 → `(identity_provider, identity_subject)` で `users.id` を解決 → `verified=True` のコンテキストを業務処理へ渡す、となる。`users` に nullable な対応付け列と一意インデックスを用意した。既存利用者との対応付け・移行時の重複解消は後で明示的に行う。プロトタイプ ID や表示名から自動的に同一人物とみなさない。
 
@@ -72,7 +72,7 @@ GCP移行時はDBを新規初期化して試験を始める。現在のローカ
 
 ## 調査：アカウントとコンテンツの分離・独立復元（2026-10-03）
 
-以下はGoogle公式資料を確認した設計案。ローカルでのDB分離・ダミー認証・独立復元は末尾の手順で利用できる。Identity Platform接続とPostgreSQLへの移行は未実装。
+以下はGoogle公式資料を確認した設計案。ローカルでのDB分離・ダミー認証・独立復元は末尾の手順で利用できる。この節は初期設計時の案であり、実装・接続の現在状態は[構築状況](GCP_STAGING_SETUP.md)と各移行文書を参照する。
 
 ### 確認したGCPの仕様
 
@@ -138,7 +138,7 @@ GuestのSign Inはメールアドレス・パスワードのモーダルを開�
 
 `SignInResult` の応答はIdentity Platform RESTに合わせて `localId`、`idToken`、`expiresIn`（文字列）、`displayName`、`registered` を持つ。サービス側の `user_id`／`app_user_id` を追加する。ローカルidTokenはサーバー発行のランダムセッションであり、Google署名JWTではない。refreshTokenはnull、capabilities.refreshはfalseとし、未実装の更新機能を装わない。[Identity Platform RESTの認証応答](https://docs.cloud.google.com/identity-platform/docs/use-rest-api)
 
-本番化ではブラウザのproviderアダプターをIdentity Platform SDK／RESTへ差し替え、取得した実ID tokenをサーバーで検証する。サーバーの `IdentityPlatformReplacement` とアカウント対応付けも実装し、検証済みissuer／tenant／uidからサービスIDを解決する。正規化した認証結果を画面に渡す契約を維持する。GCPへの接続・JWT検証・refresh・実メール認証は引き続き未実装。
+本番化ではブラウザのproviderアダプターをIdentity Platform SDK／RESTへ差し替え、取得した実ID tokenをサーバーで検証する。サーバーの `IdentityPlatformReplacement` とアカウント対応付けも実装し、検証済みissuer／tenant／uidからサービスIDを解決する。正規化した認証結果を画面に渡す契約を維持する。この契約を基に独立したクラウド認証画面を実装・配置済み。現行TopPage等のprovider置換は残る。
 
 ### 保存・復元の単位
 
