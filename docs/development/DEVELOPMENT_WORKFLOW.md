@@ -33,7 +33,7 @@ uv pip compile app/pyproject.toml app/build-requirements.txt --all-extras --univ
 
 `.github/workflows/pr-checks.yml` はmain向けPRの作成・更新、mainへのpush、手動実行で動く。Ubuntu 24.04、Python 3.12、Node.js 24で、固定依存とPlaywrightのChromiumをインストールし、`python scripts/run_tests.py --browser` を実行する。実データ・GCP・Reverbへの接続情報は不要。新しい更新が届いたら同じPRの古い実行はキャンセルする。
 
-GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。ブラウザ失敗時は `browser-failure-diagnostics` artifactにスクリーンショット・Playwright trace・ページエラーを保存し、7日間保持する。実データ・実認証情報を使わない専用テスト環境の記録。自動チェックを必須のマージ条件にする場合はmainの保護ルールでこの名前をRequired status checksへ追加する。ワークフローだけではマージを禁止しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。
+GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。ブラウザ失敗時は `browser-failure-diagnostics` artifactにスクリーンショット・Playwright trace・ページエラーを保存し、7日間保持する。実データ・実認証情報を使わない専用テスト環境の記録。2026-10-04にmainの保護ルールへこのチェックを登録済み。PR経由と最新mainに対するチェック成功を管理者にも要求する。他者レビュー承認は必須ではなく、強制push・ブランチ削除は許可しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。
 
 テストの後片付け：pytestの `tmp_path` とキャッシュも専用の一時保存先にまとめ、成功・失敗・通常のCtrl+C中断でPythonプロセスが終了した際に削除する。削除対象を安全に限定するため、独自の `--basetemp` 指定は受け付けない。OSによる強制終了（SIGKILL）や電源断では終了処理が走らず、一時領域が残る場合がある。以前の実行で残った領域は今回の自動削除対象に含めない。
 
@@ -41,7 +41,7 @@ GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗�
 
 残作業の優先度・完了条件・移行作業との区別は[GCP移行前の整備状況](GCP_PREPARATION_STATUS.md)で管理する。
 
-PR #13の統合後main `aea72cf` でもCI成功。Python433件、JavaScript55件、Chromium検証が通過した。件数は固定の合格条件にしない。mainの保護ルールは未適用で、依存定義の整合検査、主要操作のブラウザテスト、失敗artifact、Windows確認が残る。
+PR #13の統合後main `aea72cf` でもCI成功。Python433件、JavaScript55件、Chromium検証が通過した。件数は固定の合格条件にしない。mainの保護ルールは適用済み。依存整合検査・主要操作のブラウザテスト・失敗artifactはPR #14で実装・CI検証済み（未マージ）。Windows実機確認は残る。
 
 ## 追加した移行前チェック
 
