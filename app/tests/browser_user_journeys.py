@@ -8,6 +8,10 @@ from ygc import acquire_review
 
 def ready(page, url):
     page.goto(url)
+    settled(page)
+
+
+def settled(page):
     page.wait_for_function('window.YGCPageReady')
     page.evaluate('async () => await window.YGCPageReady')
 
@@ -47,6 +51,7 @@ def sign_out(page):
     with page.expect_navigation(wait_until="domcontentloaded"):
         page.locator('#accountHub button[onclick="logoutUser(this)"]').click()
     expect(page.locator('#accountHub button[onclick="openAccountSignIn()"]')).to_be_visible()
+    settled(page)
 
 
 def sign_in(page, user_id):
@@ -57,6 +62,7 @@ def sign_in(page, user_id):
     with page.expect_navigation(wait_until='domcontentloaded'):
         page.locator('#accountSignInSubmit').click()
     expect(page.locator('#accountHub button[onclick="logoutUser(this)"]')).to_be_visible()
+    settled(page)
 
 
 def main(repository):
@@ -85,6 +91,7 @@ def main(repository):
         with page.expect_navigation(wait_until='domcontentloaded'):
             page.locator('#accountRegistrationSubmit').click()
         expect(page.locator('#accountHub button[onclick="logoutUser(this)"]')).to_be_visible()
+        settled(page)
         with repository.connect() as con:
             user = con.execute("SELECT id FROM users WHERE display_name='Journey Applicant'").fetchone()[0]
             assert con.execute('SELECT COUNT(*) FROM accounts.account_consents WHERE app_user_id=(SELECT app_user_id FROM users WHERE id=?)', (user,)).fetchone()[0] == 2

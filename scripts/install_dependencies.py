@@ -13,12 +13,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', action='store_true', help='Install runtime dependencies only')
     parser.add_argument('--browser', action='store_true', help='Include Playwright browser test dependencies')
+    parser.add_argument('--postgres', action='store_true', help='Include PostgreSQL connection and migration tools')
     args = parser.parse_args()
     if args.runtime and args.browser:
         parser.error('--runtime and --browser cannot be combined')
     if version('pip') != PIP_VERSION:
         subprocess.run([sys.executable, '-m', 'pip', 'install', f'pip=={PIP_VERSION}'], check=True)
-    extras = '' if args.runtime else '[dev,browser]' if args.browser else '[dev]'
+    groups = [] if args.runtime else ['dev']
+    if args.browser:
+        groups.append('browser')
+    if args.postgres:
+        groups.append('postgres')
+    extras = '[' + ','.join(groups) + ']' if groups else ''
     subprocess.run([sys.executable, '-m', 'pip', 'install',
                     '--constraint', str(APP / 'constraints.txt'),
                     '--build-constraint', str(APP / 'constraints.txt'),

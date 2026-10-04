@@ -84,6 +84,8 @@ DB Maintenanceを開き、目的に合う操作を選ぶ。Crawl Nowと異なり
 
 Reset DBはAccounts、Operations、実験キューの全消去ではない。Accountsからユーザー・交流の投影を再作成するため、アカウントは残る。画面の「Deletes guitar and user data」は実際の削除範囲を正確に示していない。所有履歴・お気に入り・コンテンツ通知などChronicle内情報は失われる。
 
+現在のReset DBはNormalモードで実行する。Read-only / Offlineでは管理者のReset DBも停止する（バックアップ復元とは条件が異なる）。再クロールのために初期化するときは、ReverbのAuto CrawlとChatGPT審議反映をOFFにし、実行中Crawlの終了を待ち、Guitar / Chronicleの手動バックアップを保存・必要ならDownloadする。その後NormalでReset DBを実行し、Incremental Crawlの年範囲を設定してCrawl Nowを押す。初期化前に始まった審議の遅延回答には注意し、古い申請がある場合はその反映を再開する前に確認する。
+
 Statisticsボタンは集計モーダルを開く。Refreshで集計を再取得する。統計表示自体はDBを書き換えない。
 
 ### 重複候補のMerge / Delete

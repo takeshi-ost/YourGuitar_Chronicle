@@ -1,3 +1,4 @@
 [console_scripts]
 ygc = ygc.cli:app
+ygc-postgres = ygc.db.postgres:main
 ygc-web = ygc.web:main

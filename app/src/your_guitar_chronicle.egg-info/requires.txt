@@ -11,3 +11,6 @@ playwright<2,>=1.50
 
 [dev]
 pytest<9,>=8
+
+[postgres]
+psycopg[binary]<4,>=3.3

@@ -1,0 +1,40 @@
+{
+  "accounts": [
+    {
+      "version": 2,
+      "file": "accounts_002.sql",
+      "sha256": "7ca5e4b2173b33be4184eaba3da914cfc762c967823102b30106840c8086af18",
+      "tables": {
+        "account_projection_outbox": [
+          "id",
+          "account_id",
+          "app_user_id",
+          "revision",
+          "created_at",
+          "delivered_at"
+        ]
+      },
+      "append_columns": {
+        "account_records": [
+          "projection_version"
+        ]
+      }
+    }
+  ],
+  "chronicle": [
+    {
+      "version": 2,
+      "file": "chronicle_002.sql",
+      "sha256": "224e82853c972e7a8c85d4c61c1f83a088f60855d0a3d7f3315e226e61066018",
+      "tables": {
+        "account_projection_receipts": [
+          "account_id",
+          "app_user_id",
+          "revision",
+          "applied_at"
+        ]
+      },
+      "append_columns": {}
+    }
+  ]
+}
