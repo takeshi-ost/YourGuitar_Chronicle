@@ -93,6 +93,29 @@ def test_catalog_queries_strict(api,query):
     con.execute.assert_not_called()
 
 
+def test_save_and_progress_admin_only_and_strict_payloads(api):
+    import uuid
+    client,verifier,ops,con=api
+    control=Mock();control.start.return_value={'state':'running'};control.status.return_value={'state':'idle'}
+    app=FastAPI();app.include_router(backup_router(verifier,ops,control))
+    token=str(uuid.uuid4())
+    with TestClient(app) as client:
+        payload={'target':'accounts','request_id':token}
+        assert client.post('/api/admin/backups/save',json=payload).status_code==401
+        verifier.accounts.resolve_identity.return_value['role']='member'
+        assert client.post('/api/admin/backups/save',json=payload,headers=AUTH).status_code==403
+        control.start.assert_not_called()
+        verifier.accounts.resolve_identity.return_value['role']='admin'
+        for bad in [{},dict(payload,user_id='fake'),{'target':'accounts'},[],{'target':'accounts','request_id':token,'job':'foreign'}]:
+            assert client.post('/api/admin/backups/save',json=bad,headers=AUTH).status_code==400
+        assert client.post('/api/admin/backups/save?target=accounts',json=payload,headers=AUTH).status_code==400
+        assert client.get('/api/admin/backups/save-status?target=accounts&target=chronicle',headers=AUTH).status_code==400
+        assert client.post('/api/admin/backups/save',json=payload,headers=AUTH).json()=={'state':'running'}
+        control.start.assert_called_once_with('canonical','accounts',token)
+        assert client.get('/api/admin/backups/save-status?target=accounts',headers=AUTH).json()=={'state':'idle'}
+        control.status.assert_called_once_with('canonical','accounts')
+
+
 def test_job_requires_confirmed_single_task_and_never_exposes_error(monkeypatch,capsys):
     monkeypatch.setenv('YGC_GCP_PROJECT_ID','test-project');monkeypatch.setenv('K_SERVICE','web')
     constructor=Mock();monkeypatch.setattr(job,'CloudStorage',constructor)

@@ -14,7 +14,7 @@ from ygc.db.postgres import PostgresSettings,TARGETS,connect
 KIND='db_backup_v1'
 
 
-def save(settings,storage,target,execution,progress=lambda stage:None):
+def save(settings,storage,target,execution,progress=lambda stage:None,request_id=None):
     if target not in TARGETS:raise ValueError('Unknown target.')
     # Lock one target, not all four DBs. Immutable image objects are retained separately.
     candidate=None;committing=False
@@ -32,6 +32,7 @@ def save(settings,storage,target,execution,progress=lambda stage:None):
             progress('read_back')
             if hashlib.sha256(storage.get(candidate)).hexdigest()!=meta['sha256']:raise ValueError('Read-back mismatch.')
             record={'kind':KIND,'backup_id':str(uuid.uuid4()),**meta,'object':asdict(candidate),'execution':execution}
+            if request_id is not None:record['request_id']=request_id
             progress('catalog_commit')
             catalog.execute('INSERT INTO events(occurred_at,mode,reason) SELECT %s,mode,%s FROM settings WHERE id=1',
                 (datetime.now(timezone.utc).isoformat(),json.dumps(record,separators=(',',':'))))
@@ -74,8 +75,10 @@ def main(argv=None):
         storage=CloudStorage(StorageSettings.from_environment(project));settings=PostgresSettings.from_environment()
         if not settings.host.startswith('/cloudsql/'+project+':'):raise ValueError('Cloud SQL project mismatch.')
         execution=os.environ.get('CLOUD_RUN_EXECUTION','')
+        token=os.environ.get('YGC_BACKUP_REQUEST_ID')
+        if token is not None and str(uuid.UUID(token))!=token:raise ValueError('Invalid request UUID.')
         if args.verify_only:progress('read_back_verification')
-        result=verify_latest(settings,storage,args.target) if args.verify_only else save(settings,storage,args.target,execution,progress)
+        result=verify_latest(settings,storage,args.target) if args.verify_only else save(settings,storage,args.target,execution,progress,token)
         print(json.dumps(result));return 0
     except Exception:
         print(json.dumps({'status':'failed','stage':stage}),file=sys.stderr);return 1

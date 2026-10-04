@@ -161,3 +161,7 @@ Chronicleの個体一覧・検索・ページ送りと右側Product Detailの読
 ## 2026-10-05：DB別バックアップ保存基盤
 
 対象DBの論理スナップショット保存・読み戻し検証とConsoleの履歴を追加した。保存はIAM専用Jobで対象ごとに実行する。定期保存・世代保持・復元・Crawlへの接続は後続。[仕様と検証](../migration/CLOUD_DATABASE_BACKUPS.md)を参照。
+
+## Console手動バックアップの接続状況（2026-10-05）
+
+DB別保存基盤と保存履歴（PR #28）はmainへマージ、利用者の表示確認済み。「今すぐ保存」と永続要求・状態追跡を実装し、共通CI成功後にステージングへ配置済み。固定Jobへの実行・引数上書き・実行状態参照とOperation参照のIAM追加は利用者の明示承認後に実施した。アプリSAからのAccounts保存起動・完了参照、匿名保存API拒否、Offline維持を確認済み。実Consoleからの開始・再読み込みの利用者確認を待つ。詳細は [バックアップ接続](../migration/CLOUD_DATABASE_BACKUPS.md#console手動保存の接続)。定期保存・保持世代・復元・Crawlは未接続。
