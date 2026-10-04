@@ -1,6 +1,6 @@
 # SNS要素の設計・実装記録
 
-この文書はSNS追加の目論見、仕様、実装内容、検証、未実装範囲を蓄積する。後日のローカルCodexによる評価資料として保持し、以後のSNS変更も追記する。現行ブランチは `feature/observation-redesign`。
+この文書はSNS追加の目論見、仕様、実装内容、検証、未実装範囲を蓄積する。後日のローカルCodexによる評価資料として保持し、以後のSNS変更も追記する。記載中の段階名・ブランチ名・検証結果は当時の記録であり、現行機能は[機能一覧](../overview/CAPABILITIES.md)を参照する。
 
 ## 基本方針（2026-09-30）
 
@@ -153,4 +153,4 @@ Claim関連の変更は慎重に進めたいという要望から、コメント
 
 ## Transferの追加（2026-09-30）
 
-DMとは独立して、Current Owner本人が相手ユーザーを指定し、通知を受けた相手がAcceptするユーザー間Transferを実装する。合意は承認者ID・日時・その時点のCurrent Owner IDを持つEvidenceであり、Verificationとは独立。ユーザー検索は相手指定に限定する。設計・API・旧データとの区別・検証は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md) に記録する。既存DM・Follow関係を所有権の許可条件に使わない。
+DMとは独立して、Current Owner本人が相手ユーザーを指定し、通知を受けた相手がAcceptするユーザー間Transferを実装する。合意は承認者ID・日時・その時点のCurrent Owner IDを持つEvidenceであり、Verificationとは独立。ユーザー検索は相手指定に限定する。設計・API・旧データとの区別・検証は [TRANSFER_CLAIM.md](../features/TRANSFER_CLAIM.md) に記録する。既存DM・Follow関係を所有権の許可条件に使わない。

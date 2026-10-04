@@ -1,0 +1,48 @@
+# 開発・検証・PR運用
+
+テスト・依存固定・PRチェック・一時領域の後片付けを扱う。変更履歴はPR #13を参照。セットアップ・起動は[app/README.md](../../app/README.md)。
+
+## テスト
+
+Python 3.12以降とNode.jsを用意し、リポジトリ直下で実行する。
+
+```bash
+app/.venv/bin/python scripts/run_tests.py
+```
+
+Windowsでは `app\.venv\Scripts\python.exe scripts/run_tests.py`。仮想環境を有効化済みなら `python scripts/run_tests.py` でもよい。Node.jsがPATHにない場合は `--node /path/to/node` を指定する。PythonとJavaScriptを両方実行し、いずれかの失敗は終了コード1で返す。テストは実データ・認証情報を継承せず、一時ディレクトリを終了時に削除する。Reverbトークンは不要。
+
+ブラウザ検証も実行する場合は、`app` 内で `python ../scripts/install_dependencies.py --browser`、`python -m playwright install chromium` を実行してから、共通コマンドに `--browser` を付ける。既存Chromeを使う場合は `--browser-executable /path/to/chrome` も指定できる。専用の一時DB・画像・ローカルサーバーを自動生成し、終了時に停止・削除する。既存の起動中サーバーには接続しない。ローカル通信が禁止された実行環境では、通信を許可して実行する必要がある。
+
+個別のPythonテストは `app` 内の `python -m pytest tests/test_ui_assets.py -q` などでも実行できる。`tests/conftest.py` がアプリの読み込み前に保存先を一時領域へ切り替え、各テストにも独立したDB・画像・ログ領域を用意する。呼び出し元の `YGC_DATA_DIR`／DBパスは使用しない。
+
+
+## 依存関係の固定
+
+`constraints.txt` が直接・間接依存の固定バージョンを持つ。`pyproject.toml` は必要なライブラリと対応範囲を定義する。セットアップと起動スクリプトは `scripts/install_dependencies.py` を使い、pip自体、実行時依存、ビルド時依存を固定する。通常は開発用、`--runtime` は実行用のみ、`--browser` はブラウザ検証用も追加する。既存環境の追加パッケージは削除しないため、本番・CIは新しい仮想環境を使用する。
+
+依存更新は起動時には行わない。変更が必要なときに、リポジトリ直下で次を実行し、固定ファイルの差分と共通テストを確認する。再生成にはuvが必要だが、通常のインストールにuvは不要。
+
+```bash
+uv pip compile app/pyproject.toml app/build-requirements.txt --all-extras --universal --python-version 3.12 --output-file app/constraints.txt
+```
+
+既存バージョンは再生成時にも優先する。意図的に更新する場合だけ `--upgrade-package パッケージ名` を追加する。ビルド依存を変える場合は `pyproject.toml` と `build-requirements.txt` も揃える。OS固有の依存はマーカーで管理する。Pythonは現在検証済みの3.12を基準とし、Windows/Linuxの実機検証とCIは別途実施する。Node.jsはPython依存に含まず、JavaScriptテスト用に別途用意する。
+
+## PR自動チェック
+
+`.github/workflows/pr-checks.yml` はmain向けPRの作成・更新、mainへのpush、手動実行で動く。Ubuntu 24.04、Python 3.12、Node.js 24で、固定依存とPlaywrightのChromiumをインストールし、`python scripts/run_tests.py --browser` を実行する。実データ・GCP・Reverbへの接続情報は不要。新しい更新が届いたら同じPRの古い実行はキャンセルする。
+
+GitHub上のチェック名は `Tests (Python, JavaScript, Chromium)`。失敗した場合はPRのChecksから該当ステップのログを確認する。自動チェックを必須のマージ条件にする場合はmainの保護ルールでこの名前をRequired status checksへ追加する。ワークフローだけではマージを禁止しない。チェックはLinuxでの実機検証も兼ねるが、Windowsでの実機検証はまだ含まない。
+
+テストの後片付け：pytestの `tmp_path` とキャッシュも専用の一時保存先にまとめ、成功・失敗・通常のCtrl+C中断でPythonプロセスが終了した際に削除する。削除対象を安全に限定するため、独自の `--basetemp` 指定は受け付けない。OSによる強制終了（SIGKILL）や電源断では終了処理が走らず、一時領域が残る場合がある。以前の実行で残った領域は今回の自動削除対象に含めない。
+
+## 残る整備
+
+- mainの保護ルール：PRとチェック成功を必須にする設定は未適用。
+- pyprojectと固定ファイルの更新漏れを自動検出するチェック。
+- 日本語切替・ログイン・申請から承認までの操作を正式なブラウザテストへ追加。
+- 失敗画面・操作記録の保存。
+- Windowsでの実機検証。
+
+GitHub CIの実行ID 37168107661ではPython 431件、JavaScript 55件、Chromium検証が成功した。後片付けの追加テストによって件数は増えているため、件数は固定の合格条件にしない。

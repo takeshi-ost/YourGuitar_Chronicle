@@ -21,6 +21,16 @@ import pytest
 from ygc.db.repository import utcnow
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    # pytest's default tmp_path retention otherwise survives our cleanup.
+    # Reject externally supplied deletion targets; pytest clears basetemp itself.
+    if config.option.basetemp is not None:
+        raise pytest.UsageError('YGC tests manage disposable storage; do not supply --basetemp.')
+    config.option.basetemp = str(_test_root / 'pytest')
+    config.inicfg['cache_dir'] = str(_test_root / 'cache')
+
+
 @pytest.fixture
 def legacy_marketplace_row():
     """Explicitly model a pre-Evidence writer without using today's write path."""

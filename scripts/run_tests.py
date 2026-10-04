@@ -49,7 +49,7 @@ def main():
         if failures:
             print('\nFailed: ' + ', '.join(failures), file=sys.stderr)
             return 1
-        print('\nAll requested checks passed. Temporary storage removed.')
+    print('\nAll requested checks passed. Temporary storage removed.')
     return 0
 
 

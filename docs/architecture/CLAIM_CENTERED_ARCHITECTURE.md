@@ -7,7 +7,7 @@
 - **Observation:** 一個体につき一つの論理的なClaim調停機構。Claimの発生日・同日のClaim ID、承認・BAN、必須Evidenceから候補値と採否理由を計算し、Individualに現在値を反映する。過去の判定結果そのものは保存しない。
 - **Evidence:** Claimに紐付く根拠。外部掲載のListing ID、URL、取得日時、Owner / LocationなどはListingまたは再掲載AcquireのEvidence。ユーザーAcquireには取得日Evidenceを必須とする。旧`observations`テーブルは移行中のクロール記録・互換参照として残るが、現在値の判定元ではない。
 
-共通評価器への切替は`main`に統合済み。個体に登録する外部掲載と手動Listing・Ownership・Former OwnerはClaimと必要なEvidence・画像を保存し、旧行を新設しない。Claim編集も旧行へ同期しない。新しい未登録クロール記録は `crawl_unregistered_records` に入力全体を保持する。旧テーブルはAPI、移行・復元処理の互換参照として残る。残存箇所と撤去条件は [Observation移行の残作業](TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照。
+共通評価器への切替は`main`に統合済み。個体に登録する外部掲載と手動Listing・Ownership・Former OwnerはClaimと必要なEvidence・画像を保存し、旧行を新設しない。Claim編集も旧行へ同期しない。新しい未登録クロール記録は `crawl_unregistered_records` に入力全体を保持する。旧テーブルはAPI、移行・復元処理の互換参照として残る。残存箇所と撤去条件は [Observation移行の残作業](../migration/TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照。
 
 手動登録も外部収集も、入力正規化 → 外部Listing IDの重複確認 → Individual照合または作成 → ClaimとEvidenceの保存 → 個体単位Observationの判定 → Individual Snapshotへの反映の流れに従う。同じ外部Listingの判定と、別IDで見つけた**同一の物理個体**の判定は別の問題である。
 
@@ -16,7 +16,7 @@ Browser Consoleの「Observation判定」は読み取り専用のClaim×項目�
 ## 承認と所有状態
 
 - Listing Claimは掲載時点の主張として保持する。再出品が既存個体と確実に結び付く場合は新たなListing Claimを増やさずAcquire Claimで来歴を追加する。それぞれの外部掲載根拠はClaim Evidenceに保存する。
-- 現時点でAcquireはOwnerとLocationを設定し、Release / Lostと旧TransferはOwnerとLocationをUnknownにする。新規ユーザー間TransferはFrom＝Current Ownerの申請とToのAccept Evidenceにより、ObservationがToへOwnerとLocationを移す。合意とVerificationは独立し、成立済みTransferは承認時のEvidenceを根拠にそれぞれ独立して時系列順（同日はClaim ID順）に適用し、過去のTransferの再評価結果へ依存させない。移転後Toは、自身を譲受人とするPositiveなTransferを通常Verificationで変更できない。詳細は [TRANSFER_CLAIM.md](TRANSFER_CLAIM.md)。LostはAutomation専用のOwnership Claimで、確認済みの外部掲載が現在値の唯一の根拠だったときだけ作る。意味は掲載由来の現在値が追跡不能になったことであり、所有放棄ではない。ユーザー操作ではLostを作成・Verification・編集・無効化できない。ユーザーが作るIncident / Lostとは区別する。旧Automation Releaseは履歴として残し、同じSnapshot効果で評価する。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
+- 現時点でAcquireはOwnerとLocationを設定し、Release / Lostと旧TransferはOwnerとLocationをUnknownにする。新規ユーザー間TransferはFrom＝Current Ownerの申請とToのAccept Evidenceにより、ObservationがToへOwnerとLocationを移す。合意とVerificationは独立し、成立済みTransferは承認時のEvidenceを根拠にそれぞれ独立して時系列順（同日はClaim ID順）に適用し、過去のTransferの再評価結果へ依存させない。移転後Toは、自身を譲受人とするPositiveなTransferを通常Verificationで変更できない。詳細は [TRANSFER_CLAIM.md](../features/TRANSFER_CLAIM.md)。LostはAutomation専用のOwnership Claimで、確認済みの外部掲載が現在値の唯一の根拠だったときだけ作る。意味は掲載由来の現在値が追跡不能になったことであり、所有放棄ではない。ユーザー操作ではLostを作成・Verification・編集・無効化できない。ユーザーが作るIncident / Lostとは区別する。旧Automation Releaseは履歴として残し、同じSnapshot効果で評価する。ユーザーOwnerがいる個体への新たなAcquireはUnverifiedから開始する。承認によるOwner変更候補は管理画面のUnverified Acquireに表示される。
 - Owner Verificationが必要な第三者のSpecification / Repair / Incident / Event / MediaなどはUnverifiedで開始する。適用対象のClaimはPositive時だけSnapshotやギャラリーに反映する。Negative / Unverifiedも表示方法を変えてChronicleに残す。現在のOwnerは管理者判定後も再判定できる。
 - 通常のOwner VerificationはCurrent Ownerが他ユーザーのClaimに対して行う。自分のClaimは判定できず、Listing、Identity Correction、AutomationのLostなどは通常ユーザーの判定対象外。管理者は別の強制判定操作で全種類のClaimを判定できる。
 - Former OwnerのAcquire / Releaseは同じペアIDを持ち、まとめて判定する。ユーザーAcquireは明示的な取得日と日付Evidenceを要する。Current Ownerがいないときは日付Evidenceを持つ新しいAcquireを自動でPositiveにし、Ownerがいる場合の第三者AcquireはOwner承認待ちにする。同日の競合は小さいClaim IDを先に評価する。
@@ -68,13 +68,13 @@ Acquire作成・Evidence紐付け・既存Observation再評価・結果保存を
 画像審議通過がOwner承認を代替することはない。過去日付のAcquireがFormerly Ownedになる既存規則を維持する。
 Transfer等で申請者がすでにCurrent Ownerになった場合は追加せず終了する。
 申請の重複送信・古いlease・取消後の提出からClaimを作らない。
-詳細は [AUTHENTICATION_TEST.md](AUTHENTICATION_TEST.md) の「正式Acquire申請」を参照。
+詳細は [正式Acquire申請](../features/OWNERSHIP_REQUESTS.md)を参照。
 
 ## 重複と移行
 
-同一個体の候補判定ではメーカー、シリアル、モデルの矛盾を検討し、曖昧なら候補をreviewに保持する。管理画面のRepeatedは**同じ正規化メーカー・シリアルを持つ異なるIndividual群**で、同一性が確定した件数ではない。人が残す個体を選んでMergeまたはDeleteする。MergeしたClaimの一部は再承認待ちにする。詳細は [console-claim-administration.md](console-claim-administration.md)。
+同一個体の候補判定ではメーカー、シリアル、モデルの矛盾を検討し、曖昧なら候補をreviewに保持する。管理画面のRepeatedは**同じ正規化メーカー・シリアルを持つ異なるIndividual群**で、同一性が確定した件数ではない。人が残す個体を選んでMergeまたはDeleteする。MergeしたClaimの一部は再承認待ちにする。詳細は [console-claim-administration.md](../operations/console-claim-administration.md)。
 
-旧Observation中心DB向けの移行入口は `ygc claim-status` / `ygc migrate-claims`。Evidenceへの複写は `ygc migrate-claim-evidence`、現在値の全件照合は読み取り専用の `ygc audit-observation-migration`。収集前にはreadiness（Claim未登録の旧Listing Observation、Claimなし個体、不完全なIdentity Claim、未完了shellが0）を確認する。再掲載に紐付くAutomation Acquireは有効な記録であり、Listing未移行件数に含めず、Listingへ移行しない。移行はバックアップを取ってから実施する。これはローカル旧DB向けであり、PostgreSQLへの移行手順とは別。後者は [GCP_BOUNDARIES.md](GCP_BOUNDARIES.md) を参照。
+旧Observation中心DB向けの移行入口は `ygc claim-status` / `ygc migrate-claims`。Evidenceへの複写は `ygc migrate-claim-evidence`、現在値の全件照合は読み取り専用の `ygc audit-observation-migration`。収集前にはreadiness（Claim未登録の旧Listing Observation、Claimなし個体、不完全なIdentity Claim、未完了shellが0）を確認する。再掲載に紐付くAutomation Acquireは有効な記録であり、Listing未移行件数に含めず、Listingへ移行しない。移行はバックアップを取ってから実施する。これはローカル旧DB向けであり、PostgreSQLへの移行手順とは別。後者は [GCP_BOUNDARIES.md](../migration/GCP_BOUNDARIES.md) を参照。
 
 ### Ownership Requestの管理者変更
 
@@ -106,4 +106,4 @@ Inheritは廃止し、新規作成APIと入力UIから除外する。移転に�
 
 ### 係争決定の例外
 
-現在所有を置き換えるAcquireのDecline・長期無回答に対する係争を実装する。係争中は対象個体の所有関係の変更を停止し、管理者の係争決定だけが同一トランザクション内で対象Claimを判定する。決定済みClaimは通常Ownerおよび通常の管理者強制判定から変更できず、理由付き再審議を経由する。Claim作成者は維持する。後のOwnerが過去の係争を通常Verificationで変更することもできない。詳細は[Ownership Disputes](OWNERSHIP_DISPUTES.md)。
+現在所有を置き換えるAcquireのDecline・長期無回答に対する係争を実装する。係争中は対象個体の所有関係の変更を停止し、管理者の係争決定だけが同一トランザクション内で対象Claimを判定する。決定済みClaimは通常Ownerおよび通常の管理者強制判定から変更できず、理由付き再審議を経由する。Claim作成者は維持する。後のOwnerが過去の係争を通常Verificationで変更することもできない。詳細は[Ownership Disputes](../features/OWNERSHIP_DISPUTES.md)。

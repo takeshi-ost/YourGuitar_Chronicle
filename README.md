@@ -4,8 +4,8 @@
 
 - [ローカルでのセットアップと起動](app/README.md)
 - [現行ドキュメントの目次](docs/README.md)
-- [企画概要](docs/PROJECT_VISION.md)
-- [機能と未完成範囲](docs/CAPABILITIES.md)
-- [GCPへの移行境界](docs/GCP_BOUNDARIES.md)
+- [企画概要](docs/overview/PROJECT_VISION.md)
+- [機能と未完成範囲](docs/overview/CAPABILITIES.md)
+- [GCPへの移行境界](docs/migration/GCP_BOUNDARIES.md)
 
-現行の開発基準は `main` です。プロフィール・収集・管理画面の拡張とClaim Evidenceを使うObservation評価器は、2026年9月30日に統合済みです。旧DBの互換処理の整理状況は [Observation移行の残作業](docs/TEMP_OBSERVATION_MIGRATION_PLAN.md) を参照してください。
+現行の開発基準は `main`。未マージの変更は作業ブランチとPRで確認する。開発・テスト・依存固定・PRチェックは[開発手順](docs/development/DEVELOPMENT_WORKFLOW.md)、旧DBの互換処理は[Observation移行の残作業](docs/migration/TEMP_OBSERVATION_MIGRATION_PLAN.md)を参照。

@@ -1,6 +1,6 @@
 # Observation移行の完了範囲と残作業
 
-**2026-09-30更新。共通Observation評価器への切替は完了し、`main`へ統合済み。旧テーブルの互換処理は整理中。** この文書は残作業と撤去条件を管理する一時計画であり、現行仕様は [CLAIM_CENTERED_ARCHITECTURE.md](CLAIM_CENTERED_ARCHITECTURE.md) を参照する。初期の段階A〜Dの計画・経緯はGit履歴に残る。下記の撤去条件を満たして整理が完了した時点で、必要な運用説明を現行文書へ移し、この計画書を削除する。
+**2026-09-30更新。共通Observation評価器への切替は完了し、`main`へ統合済み。旧テーブルの互換処理は整理中。** この文書は残作業と撤去条件を管理する一時計画であり、現行仕様は [CLAIM_CENTERED_ARCHITECTURE.md](../architecture/CLAIM_CENTERED_ARCHITECTURE.md) を参照する。初期の段階A〜Dの計画・経緯はGit履歴に残る。下記の撤去条件を満たして整理が完了した時点で、必要な運用説明を現行文書へ移し、この計画書を削除する。
 
 ## 完了していること
 
