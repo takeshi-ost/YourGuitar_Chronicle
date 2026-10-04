@@ -14,3 +14,5 @@ Provides-Extra: dev
 Requires-Dist: pytest<9,>=8; extra == "dev"
 Provides-Extra: browser
 Requires-Dist: playwright<2,>=1.50; extra == "browser"
+Provides-Extra: postgres
+Requires-Dist: psycopg[binary]<4,>=3.3; extra == "postgres"

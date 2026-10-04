@@ -23,3 +23,7 @@ ChatGPTチェックで正式Acquire / Listing審議の反映を制御する。OF
 Crawl前の保存はChronicleだけを対象にする。その他のDBの定期頻度は個別設定。閲覧・ダウンロードはNormalでも可能。復元はRead-only / Offlineとバックグラウンドジョブ停止が必要で、復元前保存を行う。Accounts保存ではセッションを含めず、復元でもセッションを破棄する。
 
 物理的な保存先と復元時のユーザーID保護は[DB構造](../architecture/DATABASE_STRUCTURE.md)、操作は[運用ガイド](../operations/README.md)。
+
+## 管理者とメンテナンスの仕様整理
+
+現行ではOperations等の例外を除き、Read-only / Offlineで管理者の更新も停止し、Reset DBも拒否される。この挙動は管理者の修復操作を妨げる仕様不整合として扱う。変更は未実装。最終仕様とローカル現状維持方針、GCP移行後の受入条件は[管理者権限とメンテナンス制御](../migration/ADMIN_AND_MAINTENANCE.md)を参照。

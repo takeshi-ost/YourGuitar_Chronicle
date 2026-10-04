@@ -1350,7 +1350,7 @@ class Repository:
             """
             UPDATE user_guitars
             SET ownership_status = CASE
-                    WHEN ? IS NOT NULL
+                    WHEN CAST(? AS TEXT) IS NOT NULL
                      AND CAST(user_id AS TEXT) = CAST(? AS TEXT)
                     THEN 'current_owner'
                     ELSE 'former_owner'
@@ -2739,30 +2739,33 @@ class Repository:
     def create_transfer(self, from_id: int, individual_id: int, to_id: int) -> int:
         with self.connect() as con:
             con.execute("BEGIN IMMEDIATE")
-            self._transfer_user(con, from_id)
-            self._transfer_user(con, to_id)
-            if from_id == to_id:
-                raise ValueError("Cannot transfer to yourself")
-            owner = evaluate_observation(con, individual_id).values['current_owner_user_id']
-            if owner is None or int(owner) != from_id:
-                raise ValueError("Only the Current Owner can propose a Transfer")
-            if con.execute("""SELECT 1 FROM claim_transfers t JOIN claims c ON c.id=t.claim_id
-                    WHERE c.individual_id=? AND t.from_user_id=? AND t.to_user_id=?
-                      AND t.state='pending' AND c.status='active'""", (individual_id,from_id,to_id)).fetchone():
-                raise ValueError("A Transfer to this user is already pending")
-            now = utcnow()
-            cur = con.execute("""INSERT INTO claims (individual_id,author_user_id,claim_type,field_name,
-                value_text,ownership_kind,ownership_source,status,verification_status,created_at,updated_at)
-                VALUES (?,?,'ownership','owner_user_id',?,'transfer','user_transfer','active','unverified',?,?)""",
-                (individual_id,from_id,str(to_id),now,now))
-            cid = cur.lastrowid
-            con.execute("INSERT INTO claim_transfers (claim_id,from_user_id,to_user_id,created_at) VALUES (?,?,?,?)",
-                        (cid,from_id,to_id,now))
-            con.execute("""INSERT INTO notifications (recipient_user_id,actor_user_id,notification_type,
-                individual_id,claim_id,title,body,created_at) VALUES (?,?,'transfer_request',?,?,'Transfer request',
-                'The Current Owner proposes transferring this guitar to you. Open the Transfer to Accept or Decline.',?)""",
-                (to_id,from_id,individual_id,cid,now))
-            return int(cid)
+            return self.create_transfer_in_connection(con, from_id, individual_id, to_id)
+
+    def create_transfer_in_connection(self, con, from_id: int, individual_id: int, to_id: int) -> int:
+        self._transfer_user(con, from_id)
+        self._transfer_user(con, to_id)
+        if from_id == to_id:
+            raise ValueError("Cannot transfer to yourself")
+        owner = evaluate_observation(con, individual_id).values['current_owner_user_id']
+        if owner is None or int(owner) != from_id:
+            raise ValueError("Only the Current Owner can propose a Transfer")
+        if con.execute("""SELECT 1 FROM claim_transfers t JOIN claims c ON c.id=t.claim_id
+                WHERE c.individual_id=? AND t.from_user_id=? AND t.to_user_id=?
+                  AND t.state='pending' AND c.status='active'""", (individual_id,from_id,to_id)).fetchone():
+            raise ValueError("A Transfer to this user is already pending")
+        now = utcnow()
+        cur = con.execute("""INSERT INTO claims (individual_id,author_user_id,claim_type,field_name,
+            value_text,ownership_kind,ownership_source,status,verification_status,created_at,updated_at)
+            VALUES (?,?,'ownership','owner_user_id',?,'transfer','user_transfer','active','unverified',?,?) RETURNING id""",
+            (individual_id,from_id,str(to_id),now,now))
+        cid = cur.fetchone()['id']
+        con.execute("INSERT INTO claim_transfers (claim_id,from_user_id,to_user_id,created_at) VALUES (?,?,?,?)",
+                    (cid,from_id,to_id,now))
+        con.execute("""INSERT INTO notifications (recipient_user_id,actor_user_id,notification_type,
+            individual_id,claim_id,title,body,created_at) VALUES (?,?,'transfer_request',?,?,'Transfer request',
+            'The Current Owner proposes transferring this guitar to you. Open the Transfer to Accept or Decline.',?)""",
+            (to_id,from_id,individual_id,cid,now))
+        return int(cid)
 
     def transfer_details(self, claim_id: int | None = None, *, individual_id: int | None = None):
         with self.connect() as con:
@@ -2781,51 +2784,56 @@ class Repository:
             raise ValueError("Invalid Transfer action")
         with self.connect() as con:
             con.execute("BEGIN IMMEDIATE")
-            self._transfer_user(con, actor_id)
-            row = con.execute("""SELECT t.*,c.individual_id,c.status FROM claim_transfers t
-                JOIN claims c ON c.id=t.claim_id WHERE t.claim_id=?""", (claim_id,)).fetchone()
-            if row is None:
-                raise ValueError("Transfer not found")
-            required = row['from_user_id'] if action=='cancel' else row['to_user_id']
-            if actor_id != required:
-                raise ValueError("Only the designated participant can perform this action")
-            state = {'accept':'accepted','decline':'declined','cancel':'cancelled'}[action]
-            if row['state'] == state:
-                return {'claim_id':claim_id,'state':state,'individual_id':row['individual_id']}
-            if row['state'] != 'pending' or row['status'] != 'active':
-                raise ValueError("Transfer is no longer pending")
-            now = utcnow()
-            if action == 'accept':
-                self._transfer_user(con, row['from_user_id'])
-                self._transfer_user(con, row['to_user_id'])
-                current = evaluate_observation(con, row['individual_id']).values['current_owner_user_id']
-                if current is None or int(current) != row['from_user_id']:
-                    raise ValueError("Current Owner changed; a new Transfer is required")
-                con.execute("INSERT INTO claim_transfer_acceptance VALUES (?,?,?,?)",
-                            (claim_id,actor_id,now,int(current)))
-                con.execute("UPDATE user_guitars SET released_at=? WHERE user_id=? AND individual_id=?",
-                            (now[:10],row['from_user_id'],row['individual_id']))
-                con.execute("UPDATE claims SET occurred_at=?,verification_status='positive',updated_at=? WHERE id=?",
-                            (now,now,claim_id))
-                next_order = con.execute('SELECT COALESCE(MAX(display_order),-1)+1 FROM user_guitars WHERE user_id=?',
-                                         (actor_id,)).fetchone()[0]
-                con.execute("""INSERT INTO user_guitars (user_id,individual_id,ownership_status,display_order,
-                    acquired_at,created_at,updated_at) VALUES (?,?,'current_owner',?,?,?,?)
-                    ON CONFLICT(user_id,individual_id) DO UPDATE SET acquired_at=excluded.acquired_at,released_at=NULL,updated_at=excluded.updated_at""",
-                    (actor_id,row['individual_id'],next_order,now[:10],now,now))
-            con.execute("UPDATE claim_transfers SET state=?,resolved_at=? WHERE claim_id=?", (state,now,claim_id))
-            if action == 'accept':
-                snapshot = self._rebuild_individual_snapshot_in_connection(con,row['individual_id'])
-                if str(snapshot['current_owner_user_id']) != str(actor_id):
-                    raise ValueError("Transfer conflicts with Claim chronology; create a new Transfer")
-            con.execute("UPDATE notifications SET is_read=1,read_at=? WHERE claim_id=? AND notification_type='transfer_request'",
-                        (now,claim_id))
-            other = row['to_user_id'] if action=='cancel' else row['from_user_id']
-            con.execute("""INSERT INTO notifications (recipient_user_id,actor_user_id,notification_type,
-                individual_id,claim_id,title,body,created_at) VALUES (?,?,'transfer_result',?,?,?,?,?)""",
-                (other,actor_id,row['individual_id'],claim_id,'Transfer '+state,
-                 'The Transfer proposal was '+state+'.',now))
+            return self.resolve_transfer_in_connection(con, claim_id, actor_id, action)
+
+    def resolve_transfer_in_connection(self, con, claim_id: int, actor_id: int, action: str) -> dict:
+        if action not in ('accept','decline','cancel'):
+            raise ValueError("Invalid Transfer action")
+        self._transfer_user(con, actor_id)
+        row = con.execute("""SELECT t.*,c.individual_id,c.status FROM claim_transfers t
+            JOIN claims c ON c.id=t.claim_id WHERE t.claim_id=?""", (claim_id,)).fetchone()
+        if row is None:
+            raise ValueError("Transfer not found")
+        required = row['from_user_id'] if action=='cancel' else row['to_user_id']
+        if actor_id != required:
+            raise ValueError("Only the designated participant can perform this action")
+        state = {'accept':'accepted','decline':'declined','cancel':'cancelled'}[action]
+        if row['state'] == state:
             return {'claim_id':claim_id,'state':state,'individual_id':row['individual_id']}
+        if row['state'] != 'pending' or row['status'] != 'active':
+            raise ValueError("Transfer is no longer pending")
+        now = utcnow()
+        if action == 'accept':
+            self._transfer_user(con, row['from_user_id'])
+            self._transfer_user(con, row['to_user_id'])
+            current = evaluate_observation(con, row['individual_id']).values['current_owner_user_id']
+            if current is None or int(current) != row['from_user_id']:
+                raise ValueError("Current Owner changed; a new Transfer is required")
+            con.execute("INSERT INTO claim_transfer_acceptance VALUES (?,?,?,?)",
+                        (claim_id,actor_id,now,int(current)))
+            con.execute("UPDATE user_guitars SET released_at=? WHERE user_id=? AND individual_id=?",
+                        (now[:10],row['from_user_id'],row['individual_id']))
+            con.execute("UPDATE claims SET occurred_at=?,verification_status='positive',updated_at=? WHERE id=?",
+                        (now,now,claim_id))
+            next_order = con.execute('SELECT COALESCE(MAX(display_order),-1)+1 FROM user_guitars WHERE user_id=?',
+                                     (actor_id,)).fetchone()[0]
+            con.execute("""INSERT INTO user_guitars (user_id,individual_id,ownership_status,display_order,
+                acquired_at,created_at,updated_at) VALUES (?,?,'current_owner',?,?,?,?)
+                ON CONFLICT(user_id,individual_id) DO UPDATE SET acquired_at=excluded.acquired_at,released_at=NULL,updated_at=excluded.updated_at""",
+                (actor_id,row['individual_id'],next_order,now[:10],now,now))
+        con.execute("UPDATE claim_transfers SET state=?,resolved_at=? WHERE claim_id=?", (state,now,claim_id))
+        if action == 'accept':
+            snapshot = self._rebuild_individual_snapshot_in_connection(con,row['individual_id'])
+            if str(snapshot['current_owner_user_id']) != str(actor_id):
+                raise ValueError("Transfer conflicts with Claim chronology; create a new Transfer")
+        con.execute("UPDATE notifications SET is_read=1,read_at=? WHERE claim_id=? AND notification_type='transfer_request'",
+                    (now,claim_id))
+        other = row['to_user_id'] if action=='cancel' else row['from_user_id']
+        con.execute("""INSERT INTO notifications (recipient_user_id,actor_user_id,notification_type,
+            individual_id,claim_id,title,body,created_at) VALUES (?,?,'transfer_result',?,?,?,?,?)""",
+            (other,actor_id,row['individual_id'],claim_id,'Transfer '+state,
+             'The Transfer proposal was '+state+'.',now))
+        return {'claim_id':claim_id,'state':state,'individual_id':row['individual_id']}
 
     def get_user_favorites(self, user_id: int) -> list[sqlite3.Row]:
         with self.connect() as con:
@@ -4213,7 +4221,7 @@ class Repository:
                 ?, ?, ?, 'ownership',
                 'owner_user_id', ?, ?, ?, ?,
                 'active', ?, ?, ?
-            )
+            ) RETURNING id
             """,
             (
                 individual_id,
@@ -4232,7 +4240,7 @@ class Repository:
                 now,
             ),
         )
-        claim_id = int(cur.lastrowid)
+        claim_id = int(cur.fetchone()['id'])
         if previous_owner_text and previous_owner_text.strip():
             con.execute("UPDATE claims SET previous_owner_text=? WHERE id=?",
                         (previous_owner_text.strip(), claim_id))
@@ -6266,7 +6274,7 @@ class Repository:
                 confirm_individual_delete=confirm_individual_delete)
 
     def admin_moderate_claim_in_connection(self, con, claim_id: int, action: str, *,
-                                          confirm_individual_delete: bool = False) -> dict | None:
+                                          confirm_individual_delete: bool = False, actor: str = 'local-console-admin') -> dict | None:
         if action not in ('positive', 'negative', 'unverified', 'delete'):
             raise ValueError('Invalid admin action')
         claim = con.execute("SELECT * FROM claims WHERE id=?", (claim_id,)).fetchone()
@@ -6285,8 +6293,8 @@ class Repository:
         for target in targets:
             con.execute("INSERT INTO claim_admin_actions "
                         "(claim_id, individual_id, action, previous_verification, actor, created_at) "
-                        "VALUES (?, ?, ?, ?, 'local-console-admin', ?)",
-                        (target["id"], individual_id, action, target["verification_status"], utcnow()))
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (target["id"], individual_id, action, target["verification_status"], actor, utcnow()))
         if delete_individual:
             con.execute("DELETE FROM observations WHERE individual_id=?", (individual_id,))
             con.execute("DELETE FROM individuals WHERE id=?", (individual_id,))
@@ -6365,124 +6373,137 @@ class Repository:
                 "stance must be positive, negative, or unverified"
             )
 
-        now = utcnow()
         with self.connect() as con:
             con.execute("BEGIN IMMEDIATE")
-            claim = con.execute(
+            return self.set_claim_response_in_connection(con, claim_id, responder_user_id, stance, reason)
+
+    def set_claim_response_in_connection(self, con, claim_id: int, responder_user_id: int, stance: str, reason: str | None = None) -> bool:
+        normalized = stance.strip().lower()
+        if normalized not in (
+            "positive",
+            "negative",
+            "unverified",
+        ):
+            raise ValueError(
+                "stance must be positive, negative, or unverified"
+            )
+
+        now = utcnow()
+        claim = con.execute(
+            """
+            SELECT
+                id,
+                individual_id,
+                author_user_id,
+                admin_verification,
+                claim_type,
+                ownership_kind,
+                ownership_source,
+                ownership_pair_id,
+                verification_status,
+                value_text,
+                occurred_at,
+                created_at
+            FROM claims
+            WHERE id = ?
+              AND status = 'active'
+            """,
+            (claim_id,),
+        ).fetchone()
+        if not claim:
+            return False
+        if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
+                           (responder_user_id,)).fetchone():
+            raise ValueError("Account is banned")
+        is_former_owner_claim = (
+            claim["claim_type"] == "ownership"
+            and str(claim["ownership_source"] or "") == "former_owner"
+        )
+        is_manual_acquire = (
+            claim["claim_type"] == "ownership"
+            and claim["ownership_kind"] == "acquire"
+            and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
+        )
+
+        owner = con.execute(
+            """SELECT 1 FROM individuals
+               WHERE id=? AND current_owner_user_id=?""",
+            (claim['individual_id'], responder_user_id),
+        ).fetchone()
+        denial = self._owner_verification_denial(claim, responder_user_id, bool(owner))
+        if denial:
+            raise ValueError(denial)
+
+        from ygc import disputes
+        if claim['claim_type'] in ('ownership','listing','identity_correction'):
+            disputes.guard(con, claim['individual_id'], claim_id)
+        if normalized == 'negative':
+            disputes.record_decline(con, claim_id, responder_user_id, reason)
+
+        if is_former_owner_claim and self._former_owner_pair(con, claim):
+            con.execute(
                 """
-                SELECT
-                    id,
-                    individual_id,
-                    author_user_id,
-                    admin_verification,
-                    claim_type,
-                    ownership_kind,
-                    ownership_source,
-                    ownership_pair_id,
-                    verification_status,
-                    value_text,
-                    occurred_at,
-                    created_at
-                FROM claims
-                WHERE id = ?
+                UPDATE claims
+                SET verification_status = ?, admin_verification = 0,
+                    updated_at = ?
+                WHERE ownership_pair_id = ?
+                  AND ownership_source = 'former_owner'
                   AND status = 'active'
                 """,
-                (claim_id,),
-            ).fetchone()
-            if not claim:
-                return False
-            if not con.execute("SELECT 1 FROM users WHERE id=? AND ban_status<>'ban'",
-                               (responder_user_id,)).fetchone():
-                raise ValueError("Account is banned")
-            is_former_owner_claim = (
-                claim["claim_type"] == "ownership"
-                and str(claim["ownership_source"] or "") == "former_owner"
+                (
+                    normalized,
+                    now,
+                    claim["ownership_pair_id"],
+                ),
             )
-            is_manual_acquire = (
-                claim["claim_type"] == "ownership"
-                and claim["ownership_kind"] == "acquire"
-                and claim["ownership_source"] not in ("automation", "merged_listing", "former_owner")
+            if normalized == 'positive':
+                pair = con.execute(
+                    """SELECT ownership_kind,occurred_at FROM claims
+                       WHERE ownership_pair_id=? AND ownership_source='former_owner'
+                         AND status='active' AND verification_status='positive'""",
+                    (claim["ownership_pair_id"],),
+                ).fetchall()
+                dates = {row['ownership_kind']: row['occurred_at'] for row in pair}
+                if 'acquire' in dates and 'release' in dates:
+                    next_order = int(con.execute(
+                        'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
+                        (claim['author_user_id'],),
+                    ).fetchone()[0])
+                    con.execute(
+                        """INSERT INTO user_guitars
+                           (user_id,individual_id,ownership_status,display_order,
+                            acquired_at,released_at,created_at,updated_at)
+                           VALUES (?,?,'former_owner',?,?,?,?,?)
+                           ON CONFLICT(user_id,individual_id) DO UPDATE SET
+                             acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
+                             released_at=COALESCE(user_guitars.released_at,excluded.released_at),
+                             updated_at=excluded.updated_at""",
+                        (claim['author_user_id'], claim['individual_id'], next_order,
+                         dates['acquire'], dates['release'], now, now),
+                    )
+        else:
+            con.execute(
+                """
+                UPDATE claims
+                SET verification_status = ?, admin_verification = 0,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    normalized,
+                    now,
+                    claim_id,
+                ),
             )
 
-            owner = con.execute(
-                """SELECT 1 FROM individuals
-                   WHERE id=? AND current_owner_user_id=?""",
-                (claim['individual_id'], responder_user_id),
-            ).fetchone()
-            denial = self._owner_verification_denial(claim, responder_user_id, bool(owner))
-            if denial:
-                raise ValueError(denial)
+        if normalized == 'positive' and is_manual_acquire:
+            self._record_accepted_acquire(con, claim)
 
-            from ygc import disputes
-            if claim['claim_type'] in ('ownership','listing','identity_correction'):
-                disputes.guard(con, claim['individual_id'], claim_id)
-            if normalized == 'negative':
-                disputes.record_decline(con, claim_id, responder_user_id, reason)
-
-            if is_former_owner_claim and self._former_owner_pair(con, claim):
-                con.execute(
-                    """
-                    UPDATE claims
-                    SET verification_status = ?, admin_verification = 0,
-                        updated_at = ?
-                    WHERE ownership_pair_id = ?
-                      AND ownership_source = 'former_owner'
-                      AND status = 'active'
-                    """,
-                    (
-                        normalized,
-                        now,
-                        claim["ownership_pair_id"],
-                    ),
-                )
-                if normalized == 'positive':
-                    pair = con.execute(
-                        """SELECT ownership_kind,occurred_at FROM claims
-                           WHERE ownership_pair_id=? AND ownership_source='former_owner'
-                             AND status='active' AND verification_status='positive'""",
-                        (claim["ownership_pair_id"],),
-                    ).fetchall()
-                    dates = {row['ownership_kind']: row['occurred_at'] for row in pair}
-                    if 'acquire' in dates and 'release' in dates:
-                        next_order = int(con.execute(
-                            'SELECT COALESCE(MAX(display_order), -1) + 1 FROM user_guitars WHERE user_id=?',
-                            (claim['author_user_id'],),
-                        ).fetchone()[0])
-                        con.execute(
-                            """INSERT INTO user_guitars
-                               (user_id,individual_id,ownership_status,display_order,
-                                acquired_at,released_at,created_at,updated_at)
-                               VALUES (?,?,'former_owner',?,?,?,?,?)
-                               ON CONFLICT(user_id,individual_id) DO UPDATE SET
-                                 acquired_at=COALESCE(user_guitars.acquired_at,excluded.acquired_at),
-                                 released_at=COALESCE(user_guitars.released_at,excluded.released_at),
-                                 updated_at=excluded.updated_at""",
-                            (claim['author_user_id'], claim['individual_id'], next_order,
-                             dates['acquire'], dates['release'], now, now),
-                        )
-            else:
-                con.execute(
-                    """
-                    UPDATE claims
-                    SET verification_status = ?, admin_verification = 0,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        normalized,
-                        now,
-                        claim_id,
-                    ),
-                )
-
-            if normalized == 'positive' and is_manual_acquire:
-                self._record_accepted_acquire(con, claim)
-
-            self._rebuild_individual_snapshot_in_connection(
-                con,
-                int(claim["individual_id"]),
-            )
-            return True
+        self._rebuild_individual_snapshot_in_connection(
+            con,
+            int(claim["individual_id"]),
+        )
+        return True
 
     def set_claim_vote(
         self,

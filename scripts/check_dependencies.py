@@ -55,7 +55,7 @@ def check(app):
         try:
             dist = metadata.distribution(pin.name)
         except metadata.PackageNotFoundError:
-            errors.append(f'{pin.name}: not installed; install with --browser before checking')
+            errors.append(f'{pin.name}: not installed; install with --browser --postgres before checking')
             continue
         if not pin.specifier.contains(dist.version, prereleases=True):
             errors.append(f'{pin.name}: installed {dist.version} differs from {pin.specifier}')

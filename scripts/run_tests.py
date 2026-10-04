@@ -29,6 +29,9 @@ def main():
     parser.add_argument('--browser', action='store_true', help='Also run Chromium UI checks; requires .[browser] and installed Chromium')
     parser.add_argument('--browser-executable', help='Optional Chrome/Chromium executable')
     parser.add_argument('--browser-artifacts', type=Path, help='Keep screenshots and traces of failed disposable browser checks here')
+    pg = parser.add_mutually_exclusive_group()
+    pg.add_argument('--postgres-bin', type=Path, help='Run PostgreSQL checks with a temporary local cluster')
+    pg.add_argument('--postgres-port', type=int, help='Run PostgreSQL checks against the loopback CI test service')
     args = parser.parse_args()
     node = shutil.which(args.node)
     if not node:
@@ -44,6 +47,9 @@ def main():
                 env['YGC_BROWSER_EXECUTABLE'] = args.browser_executable
             checks.append(('Browser', [sys.executable, str(ROOT / 'app/tests/run_browser_checks.py')]))
         failures = []
+        if args.postgres_bin or args.postgres_port:
+            option = ['--postgres-bin', str(args.postgres_bin.resolve())] if args.postgres_bin else ['--port', str(args.postgres_port)]
+            checks.append(('PostgreSQL', [sys.executable, str(ROOT / 'app/tests/run_postgres_checks.py'), *option]))
         for label, command in checks:
             print(f'\nRunning {label} checks with temporary storage', flush=True)
             code = subprocess.run(command, cwd=ROOT, env=env).returncode

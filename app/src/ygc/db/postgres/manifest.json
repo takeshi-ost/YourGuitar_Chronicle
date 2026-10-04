@@ -1,0 +1,595 @@
+{
+  "chronicle": {
+    "sha256": "ea22351882e46fe076c390e8c03e4a0e61eba7fc40f4632dcea88d16a1466eb6",
+    "tables": {
+      "acquire_application_events": [
+        "id",
+        "revision",
+        "at",
+        "kind",
+        "note"
+      ],
+      "acquire_applications": [
+        "request_kind",
+        "listing_payload",
+        "seen_event_id",
+        "revision",
+        "applicant_id",
+        "individual_id",
+        "original_individual_id",
+        "serial",
+        "challenge",
+        "expires_at",
+        "created_at",
+        "submitted_at",
+        "started_at",
+        "completed_at",
+        "acquisition_date",
+        "body",
+        "status",
+        "images",
+        "image_meta",
+        "reference_source",
+        "product_details",
+        "product_observations",
+        "attempts",
+        "lease_token",
+        "lease_until",
+        "error",
+        "received",
+        "result",
+        "report",
+        "prompt_version",
+        "claim_id"
+      ],
+      "claim_admin_actions": [
+        "id",
+        "claim_id",
+        "individual_id",
+        "action",
+        "previous_verification",
+        "actor",
+        "created_at"
+      ],
+      "claim_evidence": [
+        "id",
+        "claim_id",
+        "media_asset_id",
+        "created_at"
+      ],
+      "claim_identity_items": [
+        "id",
+        "claim_id",
+        "field_name",
+        "old_value",
+        "new_value",
+        "created_at"
+      ],
+      "claim_listing_items": [
+        "id",
+        "claim_id",
+        "field_name",
+        "value_text",
+        "created_at"
+      ],
+      "claim_responses": [
+        "id",
+        "claim_id",
+        "responder_user_id",
+        "stance",
+        "created_at",
+        "updated_at"
+      ],
+      "claim_source_evidence": [
+        "id",
+        "claim_id",
+        "evidence_type",
+        "source_site",
+        "source_listing_id",
+        "source_url",
+        "captured_at",
+        "effective_date",
+        "date_basis",
+        "payload_json",
+        "legacy_observation_id",
+        "created_at"
+      ],
+      "claim_spec_items": [
+        "id",
+        "claim_id",
+        "field_name",
+        "value_text",
+        "created_at"
+      ],
+      "claim_specification_source": [
+        "claim_id",
+        "source_site",
+        "source_listing_id",
+        "source_url",
+        "captured_at",
+        "extracted_json"
+      ],
+      "claim_transfer_acceptance": [
+        "claim_id",
+        "accepted_by_user_id",
+        "accepted_at",
+        "current_owner_user_id"
+      ],
+      "claim_transfers": [
+        "claim_id",
+        "from_user_id",
+        "to_user_id",
+        "state",
+        "created_at",
+        "resolved_at"
+      ],
+      "claim_votes": [
+        "id",
+        "claim_id",
+        "user_id",
+        "vote",
+        "created_at",
+        "updated_at"
+      ],
+      "claims": [
+        "id",
+        "individual_id",
+        "observation_id",
+        "author_user_id",
+        "claim_type",
+        "field_name",
+        "value_text",
+        "specification_kind",
+        "ownership_kind",
+        "ownership_source",
+        "ownership_pair_id",
+        "previous_owner_text",
+        "body",
+        "target_claim_id",
+        "occurred_at",
+        "status",
+        "verification_status",
+        "admin_verification",
+        "created_at",
+        "updated_at"
+      ],
+      "crawl_candidates": [
+        "source_site",
+        "source_listing_id",
+        "claim_json",
+        "provenance_json",
+        "status",
+        "reason",
+        "updated_at"
+      ],
+      "crawl_detail_cache": [
+        "source_site",
+        "source_listing_id",
+        "payload_json",
+        "fetched_at"
+      ],
+      "crawl_listing_cache": [
+        "source_site",
+        "source_listing_id",
+        "status",
+        "checked_at",
+        "recheck_after"
+      ],
+      "crawl_listing_checks": [
+        "source_site",
+        "source_listing_id",
+        "api_url",
+        "checked_at",
+        "missing_since",
+        "status"
+      ],
+      "crawl_programs": [
+        "source_site",
+        "category",
+        "year_min",
+        "year_max",
+        "page_url",
+        "pending_json",
+        "next_url",
+        "processed",
+        "observations_created",
+        "finished",
+        "updated_at"
+      ],
+      "crawl_runs": [
+        "id",
+        "source_site",
+        "started_at",
+        "finished_at",
+        "pages_discovered",
+        "pages_fetched",
+        "observations_created",
+        "status",
+        "error_message",
+        "category",
+        "year_min",
+        "year_max",
+        "phase",
+        "counts_json",
+        "updated_at"
+      ],
+      "crawl_unregistered_records": [
+        "id",
+        "source_site",
+        "source_listing_id",
+        "source_url",
+        "observed_at",
+        "reason",
+        "payload_json",
+        "created_at"
+      ],
+      "direct_messages": [
+        "id",
+        "sender_user_id",
+        "recipient_user_id",
+        "body",
+        "created_at",
+        "read_at"
+      ],
+      "individual_resolution_actions": [
+        "id",
+        "source_id",
+        "keep_id",
+        "action",
+        "created_at"
+      ],
+      "individuals": [
+        "id",
+        "manufacturer",
+        "model",
+        "finish",
+        "year",
+        "serial_number",
+        "location_country",
+        "location_region",
+        "current_owner_name",
+        "current_owner_type",
+        "current_owner_user_id",
+        "current_owner_source_url",
+        "normalized_manufacturer",
+        "normalized_model",
+        "normalized_serial",
+        "representative_media_asset_id",
+        "created_at",
+        "updated_at"
+      ],
+      "legacy_crawl_archive": [
+        "legacy_observation_id",
+        "payload_json",
+        "payload_sha256",
+        "archived_at"
+      ],
+      "media_assets": [
+        "id",
+        "individual_id",
+        "uploader_user_id",
+        "media_type",
+        "storage_path",
+        "original_filename",
+        "mime_type",
+        "captured_at",
+        "caption",
+        "created_at",
+        "updated_at"
+      ],
+      "notifications": [
+        "id",
+        "recipient_user_id",
+        "actor_user_id",
+        "notification_type",
+        "individual_id",
+        "claim_id",
+        "title",
+        "body",
+        "is_read",
+        "created_at",
+        "read_at"
+      ],
+      "observations": [
+        "id",
+        "individual_id",
+        "manufacturer",
+        "model",
+        "finish",
+        "year",
+        "serial_number",
+        "owner_name",
+        "owner_type",
+        "owner_profile_url",
+        "location_country",
+        "location_region",
+        "location_source",
+        "seller",
+        "event_type",
+        "actor_user_id",
+        "occurred_at",
+        "source_site",
+        "source_url",
+        "image_url",
+        "source_listing_id",
+        "observed_at",
+        "listing_date",
+        "title",
+        "raw_text",
+        "serial_confidence",
+        "extraction_version",
+        "created_at"
+      ],
+      "ownership_declines": [
+        "claim_id",
+        "owner_id",
+        "reason",
+        "created_at",
+        "acknowledged_at"
+      ],
+      "ownership_dispute_claims": [
+        "dispute_id",
+        "claim_id",
+        "applicant_id"
+      ],
+      "ownership_dispute_events": [
+        "id",
+        "dispute_id",
+        "actor_id",
+        "kind",
+        "note",
+        "created_at"
+      ],
+      "ownership_dispute_evidence": [
+        "id",
+        "dispute_id",
+        "claim_id",
+        "author_id",
+        "explanation",
+        "summary",
+        "published_summary",
+        "published_at",
+        "filename",
+        "content_type",
+        "content",
+        "created_at"
+      ],
+      "ownership_dispute_round_evidence": [
+        "evidence_id",
+        "round_id"
+      ],
+      "ownership_dispute_round_parties": [
+        "round_id",
+        "claim_id",
+        "user_id",
+        "submitted_at"
+      ],
+      "ownership_dispute_rounds": [
+        "id",
+        "dispute_id",
+        "number",
+        "phase",
+        "request_reason",
+        "created_at"
+      ],
+      "ownership_disputes": [
+        "id",
+        "individual_id",
+        "owner_id",
+        "locked_owner_id",
+        "status",
+        "version",
+        "created_at",
+        "updated_at",
+        "decision",
+        "reason",
+        "winner_id"
+      ],
+      "user_admin_actions": [
+        "id",
+        "user_id",
+        "previous_ban_status",
+        "ban_status",
+        "created_at"
+      ],
+      "user_favorites": [
+        "user_id",
+        "individual_id",
+        "created_at"
+      ],
+      "user_follows": [
+        "follower_user_id",
+        "followed_user_id",
+        "created_at"
+      ],
+      "user_guitars": [
+        "id",
+        "user_id",
+        "individual_id",
+        "ownership_status",
+        "display_order",
+        "acquired_at",
+        "released_at",
+        "created_at",
+        "updated_at"
+      ],
+      "users": [
+        "id",
+        "display_name",
+        "account_type",
+        "ban_status",
+        "identity_provider",
+        "identity_subject",
+        "location_country",
+        "location_region",
+        "bio",
+        "date_of_birth",
+        "avatar_storage_path",
+        "avatar_original_filename",
+        "avatar_mime_type",
+        "birth_visibility",
+        "residence_visibility",
+        "bio_visibility",
+        "avatar_visibility",
+        "signature_individual_id",
+        "theme",
+        "theme_override",
+        "created_at",
+        "updated_at",
+        "app_user_id"
+      ]
+    }
+  },
+  "accounts": {
+    "sha256": "828aa0837e355428c559f804f50973ff653f9170b46042e78d2816fd6a4dbe9c",
+    "tables": {
+      "account_consents": [
+        "app_user_id",
+        "policy_kind",
+        "version",
+        "accepted_at"
+      ],
+      "account_direct_messages": [
+        "id",
+        "sender_user_id",
+        "recipient_user_id",
+        "body",
+        "created_at",
+        "read_at"
+      ],
+      "account_metadata": [
+        "key",
+        "value"
+      ],
+      "account_records": [
+        "id",
+        "display_name",
+        "account_type",
+        "ban_status",
+        "identity_provider",
+        "identity_subject",
+        "location_country",
+        "location_region",
+        "bio",
+        "date_of_birth",
+        "avatar_storage_path",
+        "avatar_original_filename",
+        "avatar_mime_type",
+        "birth_visibility",
+        "residence_visibility",
+        "bio_visibility",
+        "avatar_visibility",
+        "theme",
+        "theme_override",
+        "created_at",
+        "updated_at",
+        "app_user_id",
+        "role",
+        "disabled"
+      ],
+      "account_user_follows": [
+        "follower_user_id",
+        "followed_user_id",
+        "created_at"
+      ],
+      "identity_links": [
+        "issuer",
+        "tenant",
+        "subject",
+        "app_user_id"
+      ],
+      "local_sessions": [
+        "token_hash",
+        "app_user_id",
+        "expires_at"
+      ]
+    }
+  },
+  "operations": {
+    "sha256": "06ee069ba6d5510c62c5783a7bf373b3294baa1ec11c4a3054bf37fb68bfe137",
+    "tables": {
+      "auto_crawl": [
+        "id",
+        "enabled",
+        "category",
+        "year_min",
+        "year_max",
+        "interval_seconds",
+        "next_run"
+      ],
+      "backup_schedules": [
+        "target",
+        "enabled",
+        "interval_hours",
+        "generations",
+        "next_run",
+        "last_at",
+        "last_status",
+        "last_error"
+      ],
+      "backup_settings": [
+        "id",
+        "generations"
+      ],
+      "events": [
+        "id",
+        "occurred_at",
+        "mode",
+        "reason"
+      ],
+      "paused_review_answers": [
+        "revision",
+        "kind",
+        "received_at",
+        "payload"
+      ],
+      "review_settings": [
+        "id",
+        "enabled"
+      ],
+      "settings": [
+        "id",
+        "mode",
+        "message",
+        "version"
+      ]
+    }
+  },
+  "authentication": {
+    "sha256": "3fbd9917c29a94a8059b71e62ff2a69b7e6832bbbdd5fc08a7f442e180afc847",
+    "tables": {
+      "events": [
+        "id",
+        "revision",
+        "at",
+        "kind",
+        "note"
+      ],
+      "jobs": [
+        "seq",
+        "application_id",
+        "revision",
+        "serial",
+        "challenge",
+        "images",
+        "image_meta",
+        "status",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "attempts",
+        "lease_token",
+        "lease_until",
+        "error",
+        "received",
+        "result",
+        "report",
+        "prompt_version"
+      ],
+      "settings": [
+        "name",
+        "value"
+      ]
+    }
+  }
+}

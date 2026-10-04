@@ -8,8 +8,14 @@ echo "Repository: $(pwd)"
 echo "Branch: $(git branch --show-current)"
 
 echo
-echo "[1/4] Pulling latest changes..."
-git pull --ff-only
+echo "[1/4] Checking automatic update..."
+if ! git rev-parse --verify '@{upstream}' >/dev/null 2>&1; then
+  echo "No upstream branch. Starting with local code."
+elif [ -n "$(git status --porcelain)" ]; then
+  echo "Uncommitted changes found. Starting with local code."
+else
+  git pull --ff-only
+fi
 
 echo
 echo "[2/4] Preparing Python environment..."

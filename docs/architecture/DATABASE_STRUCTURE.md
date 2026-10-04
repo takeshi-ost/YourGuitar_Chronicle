@@ -89,3 +89,7 @@ Operations復元はモード・スイッチ・周期設定などを戻す。Auth
 - `direct_queue.py`：実験キューのDDL。
 
 いずれも `app/src/ygc` 配下。DDL変更時は本書の表と正本・復元境界を更新する。実DBを開いて文書を生成する必要はない。
+
+## PostgreSQL移行基盤（実装ブランチ）
+
+ローカルのSQLite構造と区別し、初期DDLは[PostgreSQL初期化](../migration/POSTGRES_BOOTSTRAP.md)、002のAccounts更新版・Outbox／Chronicle反映版、認証主体と投影の分離、再試行・復元境界は[Accounts同期と所有判定](../migration/POSTGRES_ACCOUNT_SYNC.md)にまとめる。WebUIはまだSQLiteを使用し、クラウド用の操作ガイドが使用可能になったという意味ではない。

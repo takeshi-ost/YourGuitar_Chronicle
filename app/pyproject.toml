@@ -20,16 +20,18 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
 browser = ["playwright>=1.50,<2"]
+postgres = ["psycopg[binary]>=3.3,<4"]
 
 [project.scripts]
 ygc = "ygc.cli:app"
 ygc-web = "ygc.web:main"
+ygc-postgres = "ygc.db.postgres:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ygc = ["db/schema.sql", "static/*.html", "static/*.css", "static/*.js", "static/pages/*.css", "static/pages/*.js", "static/*.webp", "static/logos/*.png", "static/locales/*.json"]
+ygc = ["db/schema.sql", "db/postgres/*.sql", "db/postgres/*.json", "static/*.html", "static/*.css", "static/*.js", "static/pages/*.css", "static/pages/*.js", "static/*.webp", "static/logos/*.png", "static/locales/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -8,10 +8,22 @@ echo Repository: %CD%
 echo Branch: %CURRENT_BRANCH%
 
 echo.
-echo [1/4] Pulling latest changes...
+echo [1/4] Checking automatic update...
+git rev-parse --verify "@{upstream}" >nul 2>&1
+if errorlevel 1 (
+    echo No upstream branch. Starting with local code.
+    goto :prepare
+)
+set HAS_LOCAL_CHANGES=
+for /f "delims=" %%i in ('git status --porcelain') do set HAS_LOCAL_CHANGES=1
+if defined HAS_LOCAL_CHANGES (
+    echo Uncommitted changes found. Starting with local code.
+    goto :prepare
+)
 git pull --ff-only
 if errorlevel 1 goto :error
 
+:prepare
 echo.
 echo [2/4] Preparing Python environment...
 cd app
