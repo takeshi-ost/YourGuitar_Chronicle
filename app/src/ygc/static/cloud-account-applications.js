@@ -63,7 +63,11 @@ export function createApplications({auth,state,busy,work}){
     for(const key of keys){const visible=selected?kind==='acquire'&&['occurred_at','body'].includes(key):key==='occurred_at'||key==='body'||(kind==='acquire'?key==='individual_id':key!=='individual_id');inputs[key].label.hidden=inputs[key].input.hidden=!visible;inputs[key].input.disabled=!visible;inputs[key].input.required=visible&&['manufacturer','serial_number','individual_id','occurred_at'].includes(key)}
     if(selected){
       inputs.occurred_at.input.value=selected.acquisition_date||today();inputs.body.input.value=selected.body||'';
-      detail.textContent=t('applications.challenge',{challenge:selected.challenge,expires:new Date(selected.expires_at*1000).toLocaleString()})+' · '+t('applications.status_'+selected.status);
+      detail.textContent=t('applications.serial_number')+': '+selected.serial+'\n'+
+        (selected.individual_id?t('applications.individual_id')+': '+selected.individual_id+'\n':'')+
+        t('applications.challenge',{challenge:selected.challenge,expires:new Date(selected.expires_at*1000).toLocaleString()})+'\n'+t('applications.status_'+selected.status)+
+        (selected.acquisition_date?'\n'+t('applications.occurred_at')+': '+selected.acquisition_date:'')+
+        (selected.body?'\n'+t('applications.body')+': '+selected.body:'');
     }else{form.reset();inputs.occurred_at.input.value=today();detail.textContent=t('applications.instructions')}
     inputs.occurred_at.input.max=today();render();globalThis.YGCOverlays.open(dialog);
   }
