@@ -1231,7 +1231,7 @@
   "users.field_created_at": "Registered at",
   "users.field_updated_at": "Updated at",
   "chronicle.heading": "Chronicle",
-  "chronicle.read_only": "Read-only Claim history. Decision and editing controls are not yet connected.",
+  "chronicle.read_only": "Claim history with administrator verification. Claim editing and images are not yet connected.",
   "chronicle.empty": "No Claim history.",
   "chronicle.total": "Total history records: {count}",
   "chronicle.positive": "Positive",
@@ -1249,7 +1249,7 @@
   "chronicle.type_comment": "Comment",
   "chronicle.type_statement": "Statement",
   "guitars.heading": "Guitar DB Management",
-  "guitars.read_only": "Read-only guitar data and Chronicle. Editing and image display are not yet connected.",
+  "guitars.read_only": "Guitar details and Claim history with administrator verification. Editing and images are not yet connected.",
   "guitars.search": "Maker, model or serial number",
   "guitars.search_button": "Search",
   "guitars.empty": "No guitars found.",
@@ -1330,5 +1330,12 @@
   "crawl.succeeded": "Crawl completed.",
   "crawl.failed": "Crawl failed. Check the run phase and protective backup before retrying.",
   "crawl.unknown": "Crawl result not confirmed. Refresh before retrying.",
-  "crawl.busy": "Crawl or database maintenance is already pending."
+  "crawl.busy": "Crawl or database maintenance is already pending.",
+  "chronicle.admin_decision": "Admin decision",
+  "chronicle.decision_warning": "Claim #{id}: currently {state}. This overrides the decision as an administrator and recalculates the guitar’s current owner and details. A linked Former Owner pair is changed together.",
+  "chronicle.apply_decision": "Apply decision",
+  "chronicle.cancel_decision": "Cancel",
+  "chronicle.decision_saved": "Decision saved. Guitar details and history have been refreshed.",
+  "chronicle.decision_conflict": "The Claim changed or Crawl/maintenance is running. Refresh before reviewing again.",
+  "chronicle.decision_unavailable": "The result could not be confirmed. Refresh the history before attempting another change."
 }

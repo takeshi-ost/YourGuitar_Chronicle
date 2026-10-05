@@ -203,3 +203,8 @@ Crawlの表示・手動実行/事前保存・ギター限定/重複防止・定�
 
 
 User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取りを追加。Claim履歴・判定/有効状態・Listing/Specificationの内容とページ移動を接続する。所有権の変更、判定・編集・投票、画像付き復旧は別の後続範囲。
+
+
+2026-10-05のChronicle閲覧受入：利用者が履歴表示、展開/折畳み/Refresh、個体切替、SignOut後の表示制限を確認し、問題なし。25件超の履歴を持つ個体がないため、実クラウドでのページ移動は未確認として残す。隔離ブラウザ・PostgreSQLのページ移動試験は成功済み。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#chronicle閲覧の利用者受入2026-10-05)を参照。
+
+次の接続はChronicleのAdmin強制判定。Positive / Negative / Unverifiedのみとし、既存の業務トランザクション・監査・所有状態再評価を共有する。全モードのAdmin操作、表示状態の競合検出、Crawl/復元/初期化との排他を検証する。実クラウドの確認項目は[Browser Console](../migration/CLOUD_BROWSER_CONSOLE.md#chronicleの管理者判定2026-10-05)を参照。通常Owner判定・申請審議・Claim本文編集・画像付き復旧は引き続き後続範囲。

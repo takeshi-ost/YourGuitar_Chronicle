@@ -5,3 +5,7 @@
 #cloudUserDetail{min-height:calc(100dvh - 150px)}#userDetailFields{grid-template-columns:minmax(0,1fr)}#userDetailFields dt{font-weight:bold}
 
 .chronicle-record{margin:10px 0;border:1px solid #a2adb7;border-radius:8px;padding:10px}.chronicle-record summary{cursor:pointer;font-weight:bold}.chronicle-record dl{grid-template-columns:minmax(0,1fr)}.chronicle-record.positive{border-left:4px solid #34684b}.chronicle-record.unverified{border:0;padding:4px}.chronicle-record.negative{border:0;padding:4px}.chronicle-record.inactive{opacity:.6}.chronicle-record p{overflow-wrap:anywhere}
+#claimDecisionDialog{max-width:32rem;max-height:80vh;overflow:auto;border-radius:12px;padding:24px}
+#claimDecisionDialog::backdrop{background:rgba(0,0,0,.45)}
+#claimDecisionDialog select{display:block;margin:16px 0}
+#claimDecisionDialog button{margin-right:8px}

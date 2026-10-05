@@ -60,3 +60,7 @@ Chronicleだけを初期化・復元した後、現在のAccountsから `reconci
 - A→B→CのTransfer成立後、先行TransferをAdminが否定・Unverified化・削除してもCを維持すること、Adminの別経路と監査actor、BANに伴うSnapshot再評価。
 
 WebUI全Repository・画像審議・Crawl・Follow / DM・運用設定・独立バックアップ／復元／リセットは未移植。Identity Platformは独立した認証確認画面で接続済み。Cloud Storageのアプリ接続と現行WebUI移行は残る。同期Workerの実配置状況は[Accounts同期Job](ACCOUNT_PROJECTION_JOB.md)を参照。現行ローカルWebUIをそのままCloud Runへ配置することはできず、起動制限を維持する。
+
+### 後続接続の更新（2026-10-05）
+
+上の未移植一覧はDB基盤実装時の記録。現時点ではCrawl、Operations、DB別バックアップ／復元／初期化、Admin用の個体・ユーザー・Chronicle閲覧を接続済み。今回Admin強制判定のPositive / Negative / UnverifiedをConsoleへ接続する。通常Owner判定とTransferのブラウザ操作、申請審議、Follow / DM等は未接続。現在の範囲と利用者受入は[クラウドBrowser Console](CLOUD_BROWSER_CONSOLE.md)を参照。

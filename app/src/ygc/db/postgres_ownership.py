@@ -1,7 +1,8 @@
 """PostgreSQL Owner Verification and Transfer business entry points.
 
 Uses the same algorithms as SQLite inside fenced PG transactions. These methods
-accept a server-resolved ActorContext; they are not connected to Web routes yet.
+accept a server-resolved ActorContext. Admin verification is connected to the
+cloud console; normal Owner/Transfer routes remain separate migration work.
 Acquire image review, reset/backup and the remaining Repository methods are not
 silently delegated to SQLite.
 """
@@ -102,11 +103,16 @@ class PostgresOwnership:
                 raise ValueError('Transfer participants changed; retry the operation.')
             return repo.resolve_transfer_in_connection(repo.connection, claim_id, account['id'], action)
 
-    def admin_moderate_claim(self, claim_id, actor, action, *, confirm_individual_delete=False):
+    def admin_moderate_claim(self, claim_id, actor, action, *, confirm_individual_delete=False, expected_revision=None, expected_individual_id=None):
         self._verified(actor)
         individual = self._individual(claim_id)
         with self._transaction(actor, individual, require_admin=True) as (repo, account):
             self._same_individual(repo, claim_id, individual)
+            if expected_revision is not None:
+                from ygc.claim_revision import revision,ClaimConflict
+                current=repo.connection.execute('SELECT * FROM claims WHERE id=? FOR UPDATE',(claim_id,)).fetchone()
+                if not current or current['individual_id']!=expected_individual_id or revision(current)!=expected_revision:
+                    raise ClaimConflict('Claim changed; reload before retrying.')
             if account['role'] != 'admin':
                 raise PermissionError('An active administrator account is required.')
             return repo.admin_moderate_claim_in_connection(repo.connection, claim_id, action,
