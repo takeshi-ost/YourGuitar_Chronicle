@@ -661,3 +661,18 @@ def test_combined_acoustic_failure_keeps_electric_cursor_and_combined_log(tmp_pa
     assert collector.requests.count('acoustic guitar') == 1
     from ygc.crawl_detail_cache import reprocess_details
     assert reprocess_details(repo, 'electric_acoustic', 1970, 1979)['skipped_existing'] == 5
+
+
+@pytest.mark.parametrize('limit',[1,2,3,7])
+def test_combined_small_limit_is_total_and_cursor_resumes(tmp_path,limit):
+    repo=Repository(tmp_path/'small.db');repo.init_db()
+    collector=Collector([{'listings':[dict(_summary(n),year='2020') for n in range(1,20)]}])
+    first=advance_program(repo,collector,'electric_acoustic',1970,1979,_summary_limit=limit)
+    second=advance_program(repo,collector,'electric_acoustic',1970,1979,_summary_limit=limit)
+    assert first['summaries_processed']==limit and second['summaries_processed']==limit
+    assert first['new_individuals']==0 and second['new_individuals']==0
+    assert second['processed']==2*limit
+    if limit==1:
+        from ygc.incremental_crawl import program_status
+        assert program_status(repo,'electric',1970,1979)['processed']==1
+        assert program_status(repo,'acoustic',1970,1979)['processed']==1

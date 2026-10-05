@@ -106,7 +106,7 @@ def main():
     crawl_calls=[]
     class Crawl:
         reads=0
-        config=dict(year_min=1950,year_max=1980,interval_hours=1,enabled=False,available=True,category='electric_acoustic',next_run=0,last_at=None,runs=[],request={'state':'idle'})
+        config=dict(summary_limit=2000,year_min=1950,year_max=1980,interval_hours=1,enabled=False,available=True,category='electric_acoustic',next_run=0,last_at=None,runs=[],request={'state':'idle'})
         def details(self,actor):
             with ops.access('admin_read',actor):
                 if crawl_calls:
@@ -149,16 +149,16 @@ def main():
                 open_console('admin@example.invalid')
                 expect(page.locator('#operationsStatus')).to_have_text('Offline')
                 expect(page.locator('#cloudCrawl')).to_be_visible()
-                page.locator('#crawlYearMin').fill('1960');page.locator('#crawlInterval').fill('2');page.locator('#crawlConfigSave').click()
+                expect(page.locator('#crawlLimit')).to_have_value('2000');page.locator('#crawlLimit').fill('3');page.locator('#crawlYearMin').fill('1960');page.locator('#crawlInterval').fill('2');page.locator('#crawlConfigSave').click()
                 expect(page.locator('#crawlYearMin')).to_have_value('1960')
                 page.locator('#crawlTab').click();page.locator('#crawlAuto').check()
                 expect(page.locator('#crawlAuto')).to_be_checked()
                 page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
-                expect(page.locator('#crawlYearMin')).to_have_value('1960');expect(page.locator('#crawlInterval')).to_have_value('2')
+                expect(page.locator('#crawlYearMin')).to_have_value('1960');expect(page.locator('#crawlInterval')).to_have_value('2');expect(page.locator('#crawlLimit')).to_have_value('3')
                 page.locator('#crawlNow').click();expect(page.locator('#crawlStatus')).to_have_text('Crawl is running…')
                 page.locator('#crawlTab').click();expect(page.locator('#crawlAuto')).to_be_enabled();page.locator('#crawlAuto').uncheck()
                 expect(page.locator('#crawlStatus')).to_have_text('Crawl completed.');expect(page.locator('#crawlAuto')).not_to_be_checked()
-                assert len(crawl_calls)==1 and crawl_calls[0]['year_min']==1960
+                assert len(crawl_calls)==1 and crawl_calls[0]['summary_limit']==3 and crawl_calls[0]['year_min']==1960
                 expect(page.locator('#crawlRows tr')).to_have_count(1)
                 page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
                 expect(page.locator('#crawlRows tr')).to_have_count(1);assert len(crawl_calls)==1

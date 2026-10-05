@@ -3,14 +3,14 @@ export function createCrawlBrowser({request,authorized,onUnauthorized}){
  let busy=false,epoch=0,timer=null,available=false,pending=false;
  function render(){
   $('cloudCrawl').hidden=!authorized();
-  for(const id of ['crawlNow','crawlConfigSave','crawlAuto','crawlYearMin','crawlYearMax','crawlInterval'])$(id).disabled=busy||pending||!available||!authorized();
+  for(const id of ['crawlNow','crawlConfigSave','crawlAuto','crawlYearMin','crawlYearMax','crawlInterval','crawlLimit'])$(id).disabled=busy||pending||!available||!authorized();
   $('crawlAuto').disabled=busy||!available||!authorized();
   $('crawlRefresh').disabled=busy||!authorized();
  }
  function clear(){epoch++;clearTimeout(timer);timer=null;available=false;pending=false;$('crawlRows').replaceChildren();$('crawlStatus').textContent='';$('crawlLastAt').textContent='—';render()}
  function display(row){
   available=row.available===true;$('crawlAuto').checked=row.enabled;
-  $('crawlYearMin').value=row.year_min;$('crawlYearMax').value=row.year_max;$('crawlInterval').value=row.interval_hours;
+  $('crawlYearMin').value=row.year_min;$('crawlYearMax').value=row.year_max;$('crawlInterval').value=row.interval_hours;$('crawlLimit').value=row.summary_limit;
   $('crawlLastAt').textContent=row.last_at||'—';
   pending=['starting','running','unknown'].includes(row.request.state)&&!row.request.retry_allowed;
   $('crawlStatus').textContent=t(!available?'crawl.unavailable':row.request.state==='idle'?'crawl.ready':'crawl.'+row.request.state);
@@ -30,9 +30,9 @@ export function createCrawlBrowser({request,authorized,onUnauthorized}){
   catch(error){if(current!==epoch)return;if([401,403].includes(error.status)){clear();onUnauthorized(error)}else{$('crawlStatus').textContent=t(error.status===409?'crawl.busy':'crawl.unknown');timer=setTimeout(()=>refresh(),5000)}}
   finally{busy=false;render()}
  }
- function config(){return {year_min:Number($('crawlYearMin').value),year_max:Number($('crawlYearMax').value),interval_hours:Number($('crawlInterval').value),enabled:$('crawlAuto').checked}}
+ function config(){return {year_min:Number($('crawlYearMin').value),year_max:Number($('crawlYearMax').value),interval_hours:Number($('crawlInterval').value),enabled:$('crawlAuto').checked,summary_limit:Number($('crawlLimit').value)}}
  $('crawlConfig').onsubmit=event=>{event.preventDefault();action('/api/admin/crawl',config(),'PUT')};
  $('crawlAuto').onchange=()=>{if(!$('crawlConfig').checkValidity()){ $('crawlAuto').checked=!$('crawlAuto').checked;return;}action('/api/admin/crawl',config(),'PUT')};
- $('crawlNow').onclick=()=>{if(!$('crawlConfig').reportValidity())return;const row=config();action('/api/admin/crawl/start',{year_min:row.year_min,year_max:row.year_max,request_id:crypto.randomUUID()},'POST')};
+ $('crawlNow').onclick=()=>{if(!$('crawlConfig').reportValidity())return;const row=config();action('/api/admin/crawl/start',{year_min:row.year_min,year_max:row.year_max,summary_limit:row.summary_limit,request_id:crypto.randomUUID()},'POST')};
  $('crawlRefresh').onclick=()=>refresh();return {render,clear,refresh};
 }

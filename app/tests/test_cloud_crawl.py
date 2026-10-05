@@ -83,3 +83,17 @@ def test_rollout_creates_job_for_gcloud_cannot_find_response(monkeypatch):
     assert any(command[1:4]==['run','jobs','create'] for command in calls)
     assert any(command[1:4]==['scheduler','jobs','create'] for command in calls)
     assert not any(command[1:4]==['run','jobs','execute'] for command in calls)
+
+
+@pytest.mark.parametrize('value',[0,2001,-1,True,1.5,'3',None])
+def test_crawl_limit_requires_integer_in_range(value):
+    from ygc.cloud_crawl_job import validate_limit
+    with pytest.raises(ValueError):validate_limit(value)
+
+
+def test_old_settings_have_two_thousand_default():
+    from ygc.cloud_crawl_job import configured_limit
+    con=Mock();con.execute.return_value.fetchone.return_value=None
+    assert configured_limit(con)==2000
+    con.execute.return_value.fetchone.return_value={'reason':'{"action":"crawl_settings","enabled":false}'}
+    assert configured_limit(con)==2000
