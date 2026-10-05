@@ -32,7 +32,9 @@ export function createMediaBrowser({request,authorized,selected,busy,work,onUnau
   next.onclick=()=>{if(busy()||cursor===null)return;history.push(cursor);work(refresh)};
   form.onsubmit=event=>{
     event.preventDefault();if(busy()||!authorized()||selected()===null)return;
-    const upload=file.files[0],id=selected(),savedEpoch=epoch;if(!upload||upload.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(upload.type)){status.textContent=t('avatar.invalid');return}
+    const upload=file.files[0],id=selected(),savedEpoch=epoch;if(!upload){status.textContent=t('content_media.invalid_image');return}
+    if(upload.size>8*1024*1024){status.textContent=t('content_media.image_size_limit');return}
+    if(!['image/jpeg','image/png','image/webp'].includes(upload.type)){status.textContent=t('content_media.image_format');return}
     work(async current=>{try{await request('/api/admin/guitars/'+id+'/media',{method:'POST',headers:{'Content-Type':upload.type},body:upload});if(savedEpoch!==epoch||id!==selected()||!authorized())return;file.value='';await updated(current);if(id!==selected()||!authorized())return;status.textContent=t('content_media.saved')}catch(error){if(savedEpoch!==epoch||id!==selected()||!authorized())return;if([401,403].includes(error.status)){clear();onUnauthorized(error)}else status.textContent=t(['image_pixel_limit','image_size_limit','image_format','invalid_image'].includes(error.code)?'content_media.'+error.code:'content_media.save_failed')}});
   };
   return {render,clear,refresh};
