@@ -27,7 +27,7 @@ def test_query_defaults_and_literals():
 def api():
     verifier=Mock();verifier.verify.return_value=VerifiedIdentity('issuer','subject','',True)
     verifier.accounts.resolve_identity.return_value={'app_user_id':'canonical','role':'admin'}
-    service=Mock();service.list.return_value={'items':[],'next_after':None};service.detail.return_value={'id':1,'manufacturer':'Maker'}
+    service=Mock();service.list.return_value={'total':0,'items':[],'next_after':None};service.detail.return_value={'id':1,'manufacturer':'Maker'}
     app=FastAPI();app.include_router(guitar_router(verifier,service))
     with TestClient(app) as client:yield client,verifier,service
 
@@ -79,7 +79,8 @@ def test_bigint_response_preserves_decimal_precision(api):
     value=2**63-1
     service.detail.return_value={'id':value,'manufacturer':'Maker'}
     assert client.get('/api/admin/guitars/'+str(value),headers=AUTH).json()['id']==str(value)
-    service.list.return_value={'items':[{'id':value}], 'next_after':value}
+    service.list.return_value={'total':value,'items':[{'id':value}], 'next_after':value}
     result=client.get('/api/admin/guitars',headers=AUTH).json()
     assert result['items'][0]['id']==result['next_after']==str(value)
+    assert result['total']==str(value)
     assert service.list.return_value['items'][0]['id']==value

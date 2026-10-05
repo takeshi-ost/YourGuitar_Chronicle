@@ -109,8 +109,11 @@ def run(port):
                     con.execute('INSERT INTO individuals(manufacturer,model,normalized_manufacturer,created_at,updated_at) VALUES(%s,%s,%s,%s,%s)',
                         ('Maker','Literal %_'+str(number),'maker','now','now'))
             first=guitars.list(aid,limit=25)
+            assert first['total']==28
             assert len(first['items'])==25 and first['next_after'] is not None
             second=guitars.list(aid,after=first['next_after'],limit=25)
+            assert second['total']==28
+            assert guitars.list(aid,q='Model 28')['total']==28
             assert len(second['items'])==3 and second['next_after'] is None
             assert not {r['id'] for r in first['items']} & {r['id'] for r in second['items']}
             assert set(guitars.detail(aid,first['items'][0]['id']))==set(FIELDS)

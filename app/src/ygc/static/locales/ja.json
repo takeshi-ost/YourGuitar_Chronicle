@@ -1213,7 +1213,7 @@
   "guitars.search_button": "検索",
   "guitars.empty": "該当するギターはありません。",
   "guitars.page_size": "1ページ25件",
-  "guitars.page_count": "このページに{count}件",
+  "guitars.total_count": "個体総数：{count}件",
   "guitars.unavailable": "ギター情報を取得できません。再読み込みしてください。",
   "guitars.missing": "このギターは見つかりません。",
   "guitars.detail": "製品詳細",

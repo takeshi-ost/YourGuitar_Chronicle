@@ -32,7 +32,7 @@ def guitar_router(verifier,service):
             # BIGINT identifiers cross JavaScript as decimal strings, without rounding.
             if detail_id is not None:result={**result,'id':str(result['id'])}
             else:
-                result={'items':[{**row,'id':str(row['id'])} for row in result['items']],
+                result={'total':str(result['total']),'items':[{**row,'id':str(row['id'])} for row in result['items']],
                     'next_after':str(result['next_after']) if result['next_after'] is not None else None}
             return JSONResponse(result,headers=headers)
         except GuitarMissing:raise HTTPException(404,'Guitar not found.',headers=headers) from None

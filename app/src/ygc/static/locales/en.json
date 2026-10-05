@@ -1213,7 +1213,7 @@
   "guitars.search_button": "Search",
   "guitars.empty": "No guitars found.",
   "guitars.page_size": "25 per page",
-  "guitars.page_count": "{count} guitars on this page",
+  "guitars.total_count": "Total guitars: {count}",
   "guitars.unavailable": "Guitar data unavailable. Refresh to retry.",
   "guitars.missing": "This guitar is no longer available.",
   "guitars.detail": "Product Detail",

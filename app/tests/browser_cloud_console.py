@@ -71,7 +71,7 @@ def main():
             with ops.access('admin_read',actor):
                 guitar_reads.append(actor)
                 matching=[r for r in rows if r['id']>after and q.lower() in r['model'].lower()]
-                return dict(items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+                return dict(total=len(rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
         def detail(self,actor,individual_id):
             with ops.access('admin_read',actor):
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
@@ -201,12 +201,12 @@ def main():
                 expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
                 assert len(maintenance_calls)==2 and maintenance_calls[-1]['backup_id'] is None
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
-                expect(page.locator('#guitarStatus')).to_have_text('25 guitars on this page')
+                expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
                 expect(page.locator('#guitarPrevious')).to_be_disabled()
                 expect(page.locator('#guitarNext')).to_be_enabled()
                 assert page.locator('#guitarRows img').count()==0
                 page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)
-                expect(page.locator('#guitarStatus')).to_have_text('3 guitars on this page')
+                expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
                 expect(page.locator('#guitarPrevious')).to_be_enabled()
                 expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarPrevious').click();expect(page.locator('#guitarRows tr')).to_have_count(25)
@@ -216,10 +216,10 @@ def main():
                 assert page.evaluate('document.documentElement.scrollHeight<=innerHeight')
                 page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarRows tr')).to_have_count(1)
-                expect(page.locator('#guitarStatus')).to_have_text('1 guitars on this page')
+                expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
                 expect(page.locator('#guitarPrevious')).to_be_disabled();expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarSearch').fill('unknown');page.locator('#guitarSearchSubmit').click()
-                expect(page.locator('#guitarStatus')).to_have_text('No guitars found.')
+                expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
                 page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.locator('#statusTab').focus();page.keyboard.press('ArrowRight')
                 expect(page.locator('#maintenanceTab')).to_be_focused();expect(page.locator('#maintenancePanel')).to_be_visible()
