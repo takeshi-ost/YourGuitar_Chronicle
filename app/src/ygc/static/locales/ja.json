@@ -1355,5 +1355,7 @@
   "self_profile.heading": "あなたのプロフィール",
   "self_profile.restricted": "サービスモードまたはアカウント状態により、プロフィールの操作が制限されています。",
   "self_profile.failed": "プロフィールを取得できませんでした。編集前に再取得してください。",
-  "self_profile.notice": "表示名・国・地域・自己紹介を変更します。関連ギターへの反映には少し時間がかかる場合があります。"
+  "self_profile.notice": "表示名・国・地域・自己紹介を変更します。関連ギターへの反映には少し時間がかかる場合があります。",
+  "users.previous": "前へ",
+  "users.next": "次へ"
 }

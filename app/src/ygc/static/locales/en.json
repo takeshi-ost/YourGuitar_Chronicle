@@ -1355,5 +1355,7 @@
   "self_profile.heading": "Your profile",
   "self_profile.restricted": "Profile access is restricted by the service mode or your account status.",
   "self_profile.failed": "Profile could not be loaded. Refresh before editing.",
-  "self_profile.notice": "Update your display name, country, region and bio. Changes to related guitars may take a little longer to appear."
+  "self_profile.notice": "Update your display name, country, region and bio. Changes to related guitars may take a little longer to appear.",
+  "users.previous": "Previous",
+  "users.next": "Next"
 }

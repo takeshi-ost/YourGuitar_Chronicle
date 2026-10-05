@@ -220,3 +220,7 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 2026-10-05のプロフィール編集受入：PR #42は必須CI成功・main統合・配置済み。利用者が案内した編集操作を確認できたと報告し、管理者プロフィール編集の操作受入は完了。関連個体への同期と所有分類の実データ比較、所有一覧とChronicleの25件超ページ移動は、既存のデータ待ちを維持する。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#プロフィール編集の利用者受入2026-10-05)を参照。
 
 続いてAccountページの本人プロフィール編集を接続。本人の正本UUIDに限定し、通常操作のモード制限、比較版の競合拒否、原子的な監査・同期イベント、Crawl/復元/初期化との排他を共有する。メンテナンス中の管理者編集はBrowser Consoleを使用する。[仕様・確認手順](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人プロフィール編集2026-10-05)を参照。TopPage/User Profileの一般向け画面統合は引き続き後続範囲。
+
+2026-10-05の本人プロフィール編集受入：PR #43は必須CI成功・main統合・配置済み。利用者が案内した6項目を確認できたと報告し、操作受入は完了。関連個体への同期と所有分類の実データ比較、所有一覧/Chronicleの25件超ページ移動は既存の対象データ待ちを維持する。[確認記録](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人プロフィール編集の利用者受入2026-10-05)を参照。
+
+次の接続はAccountページの本人Owned / Formerly Owned閲覧。Browser Consoleと分類クエリを共有し、正本の本人ID/UUID・有効状態・通常のサービスモードで読取りを制限する。一般向けProduct Detailへのリンクや所有権変更は後続。[仕様・確認手順](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人のowned--formerly-owned閲覧2026-10-05)を参照。

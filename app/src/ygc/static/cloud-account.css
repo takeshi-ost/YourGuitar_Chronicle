@@ -11,3 +11,5 @@ dialog{width:min(560px,calc(100vw - 64px));max-height:calc(100dvh - 64px);overfl
 #avatarPreview{object-fit:contain;border-radius:8px;max-width:100%}#accountAvatar h2{font-size:18px}#avatarStatus{overflow-wrap:anywhere}
 
 #selfProfileValues{overflow-wrap:anywhere}#selfProfileValues dt{font-weight:bold}#selfProfileValues dd{margin:0 0 8px;white-space:pre-wrap}#selfProfileStatus{overflow-wrap:anywhere}dialog textarea{box-sizing:border-box;width:100%;min-height:120px;font:inherit}
+
+#selfGuitars h2{font-size:18px}#selfGuitars ul{padding-left:20px}#selfGuitars li{overflow-wrap:anywhere;margin:8px 0}.self-guitar-status{overflow-wrap:anywhere}
