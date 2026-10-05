@@ -35,4 +35,4 @@
 
 ## 後続
 
-ブラウザ操作の受入は完了した。データ内容を比較する実復旧試験は後続課題として残し、Reverb認証情報をSecret Managerへ接続してCrawlのPostgreSQL移植・Crawl前Chronicle保存を進める。現在はCrawlを実行する画面/Jobをクラウドに接続していない。画像付きChronicle（media_assets）の復元も未移植のため、変更前に拒否する。詳細は[保存・復元仕様](CLOUD_DATABASE_BACKUPS.md#現在の到達点と復元初期化2026-10-05)。
+ブラウザ操作の受入は完了した。データ内容を比較する実復旧試験は後続課題として残る。Reverb Secretを接続し、CrawlのPostgreSQL実装・専用Job・Consoleを配置、DB接続とReverb認証の読取り確認は成功した。[Crawlの確認一覧](CLOUD_REVERB_CRAWL.md#検証範囲と再開時の確認)に従って実収集し、データが入った後にChronicleの保存→追加収集→復元と初期化→復元を確認する。画像付きChronicle（media_assets）の復元も未移植のため、変更前に拒否する。詳細は[保存・復元仕様](CLOUD_DATABASE_BACKUPS.md#現在の到達点と復元初期化2026-10-05)。

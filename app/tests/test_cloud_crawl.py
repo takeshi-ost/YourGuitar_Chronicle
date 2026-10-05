@@ -60,3 +60,26 @@ def test_rollout_refuses_missing_user_secret_before_iam_mutations(monkeypatch):
     with pytest.raises(RuntimeError):module.main()
     assert len(calls)==1 and calls[0][1:4]==['secrets','versions','describe']
     assert 'get-secret-value' not in calls[0] and 'access' not in calls[0]
+
+
+def test_rollout_creates_job_for_gcloud_cannot_find_response(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from types import SimpleNamespace
+    path=Path(__file__).resolve().parents[2]/'scripts/deploy_cloud_crawl.py'
+    spec=importlib.util.spec_from_file_location('deploy_cloud_crawl_create',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    calls=[]
+    def run(command,**kwargs):
+        calls.append(command)
+        parts=command[1:]
+        if parts[:3]==['secrets','versions','describe']:return SimpleNamespace(returncode=0,stdout='ENABLED',stderr='')
+        if parts[:3]==['iam','roles','describe']:return SimpleNamespace(returncode=0,stdout='{"includedPermissions":["run.jobs.run","run.jobs.runWithOverrides","run.executions.get"]}',stderr='')
+        if parts[:3]==['run','jobs','describe']:return SimpleNamespace(returncode=1,stdout='',stderr='ERROR: Cannot find job [ygc-staging-reverb-crawl].')
+        if parts[:3]==['scheduler','jobs','describe']:return SimpleNamespace(returncode=1,stdout='',stderr='NOT_FOUND')
+        return SimpleNamespace(returncode=0,stdout='configured',stderr='')
+    monkeypatch.setattr(module.subprocess,'run',run)
+    monkeypatch.setattr('sys.argv',['deploy_cloud_crawl.py','--project','your-guitar-chronicle-staging','--region','asia-northeast1','--image','asia-northeast1-docker.pkg.dev/your-guitar-chronicle-staging/ygc-staging/account-api@sha256:'+'0'*64])
+    module.main()
+    assert any(command[1:4]==['run','jobs','create'] for command in calls)
+    assert any(command[1:4]==['scheduler','jobs','create'] for command in calls)
+    assert not any(command[1:4]==['run','jobs','execute'] for command in calls)

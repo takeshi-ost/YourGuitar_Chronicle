@@ -199,4 +199,4 @@ Other Pending Acquire Claimsは正式申請一覧とは別に、承認でCurrent
 
 ## GCPステージングのConsole
 
-クラウド版は現在、認証済みAdminによるOperationsの状態確認とメンテナンスモード変更、個体の読取り、DB別の保存・保持・定期保存、復元・テストデータ初期化に対応する。復元・初期化は実管理者ブラウザで操作受入済み。ただし対象業務データが空だったため、データ内容の復旧比較は残る。CrawlはPostgreSQL向け実装と隔離検証を完了し、Reverb Secret登録後の配置・実収集確認を待つ（[クラウドCrawl](../migration/CLOUD_REVERB_CRAWL.md)）。コンテンツ編集・画像付きコンテンツ復元は未移植。ローカルと同じ範囲が全て操作できる状態ではない。[DB管理の確認手順](../migration/DB_OPERATIONS_ACCEPTANCE.md)も参照。[クラウドConsoleの操作と接続範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。
+クラウド版は現在、認証済みAdminによるOperationsの状態確認とメンテナンスモード変更、個体の読取り、DB別の保存・保持・定期保存、復元・テストデータ初期化に対応する。復元・初期化は実管理者ブラウザで操作受入済み。ただし対象業務データが空だったため、データ内容の復旧比較は残る。CrawlはPostgreSQL向け実装・配置・Reverb認証確認を完了し、管理者による実収集確認を待つ（[クラウドCrawl](../migration/CLOUD_REVERB_CRAWL.md)）。コンテンツ編集・画像付きコンテンツ復元は未移植。ローカルと同じ範囲が全て操作できる状態ではない。[DB管理の確認手順](../migration/DB_OPERATIONS_ACCEPTANCE.md)も参照。[クラウドConsoleの操作と接続範囲](../migration/CLOUD_BROWSER_CONSOLE.md)を参照。
