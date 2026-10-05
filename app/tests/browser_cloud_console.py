@@ -102,6 +102,25 @@ def main():
         def status(self,actor,target):
             return dict(state='succeeded' if maintenance_calls else 'idle',target=target)
     app.include_router(backup_router(verifier,ops,BackupControl(),Maintenance()))
+    from ygc.cloud_crawl_routes import crawl_router
+    crawl_calls=[]
+    class Crawl:
+        reads=0
+        config=dict(year_min=1950,year_max=1980,interval_hours=1,enabled=False,available=True,category='electric_acoustic',next_run=0,last_at=None,runs=[],request={'state':'idle'})
+        def details(self,actor):
+            with ops.access('admin_read',actor):
+                if crawl_calls:
+                    self.reads+=1;self.config['request']={'state':'running' if self.reads==1 else 'succeeded'}
+                return self.config
+        def configure(self,actor,data):
+            with ops.access('admin_write',actor):self.config.update(data);return self.config
+        def start(self,actor,data):
+            with ops.access('admin_write',actor):
+                crawl_calls.append(data);self.config['last_at']='2026-10-05T00:00:00Z'
+                self.config['runs']=[dict(started_at=self.config['last_at'],status='ok',phase='done',pages_discovered=12,pages_fetched=4,observations_created=2)]
+                return {'state':'running'}
+    app.include_router(crawl_router(verifier,Crawl()))
+
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}
@@ -129,6 +148,21 @@ def main():
                 expect(page.locator('#consoleControls')).to_be_hidden();assert not calls
                 open_console('admin@example.invalid')
                 expect(page.locator('#operationsStatus')).to_have_text('Offline')
+                expect(page.locator('#cloudCrawl')).to_be_visible()
+                page.locator('#crawlYearMin').fill('1960');page.locator('#crawlInterval').fill('2');page.locator('#crawlConfigSave').click()
+                expect(page.locator('#crawlYearMin')).to_have_value('1960')
+                page.locator('#crawlTab').click();page.locator('#crawlAuto').check()
+                expect(page.locator('#crawlAuto')).to_be_checked()
+                page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
+                expect(page.locator('#crawlYearMin')).to_have_value('1960');expect(page.locator('#crawlInterval')).to_have_value('2')
+                page.locator('#crawlNow').click();expect(page.locator('#crawlStatus')).to_have_text('Crawl is running…')
+                page.locator('#crawlTab').click();expect(page.locator('#crawlAuto')).to_be_enabled();page.locator('#crawlAuto').uncheck()
+                expect(page.locator('#crawlStatus')).to_have_text('Crawl completed.');expect(page.locator('#crawlAuto')).not_to_be_checked()
+                assert len(crawl_calls)==1 and crawl_calls[0]['year_min']==1960
+                expect(page.locator('#crawlRows tr')).to_have_count(1)
+                page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
+                expect(page.locator('#crawlRows tr')).to_have_count(1);assert len(crawl_calls)==1
+
                 expect(page.locator('#contentStorageStatus')).to_have_text('Read access confirmed')
                 expect(page.locator('#accountsStorageStatus')).to_have_text('Status unavailable. Refresh to try again.')
                 expect(page.locator('#consoleIdentity')).to_have_text('<b>Operator</b>');assert page.locator('#consoleIdentity b').count()==0

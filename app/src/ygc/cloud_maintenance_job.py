@@ -37,7 +37,9 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
         if target not in TARGETS or action not in ('restore','reset'):raise ValueError('Invalid maintenance request.')
         if (datetime.now(timezone.utc)-datetime.fromisoformat(record['created_at'])).total_seconds()>1800:raise PermissionError('Expired request.')
         # Session locks survive the intent update and pre-operation backup commits.
-        catalog.execute('SELECT pg_advisory_lock(79432190)')
+        if not catalog.execute('SELECT pg_try_advisory_lock(79432190) AS locked').fetchone()['locked']:
+            if not record.get('execution'):update(catalog,event['id'],record,'failed')
+            raise RuntimeError('Database maintenance or Crawl is running.')
         try:
             event=_find(catalog,token);record=json.loads(event['reason'])
             if record['state'] not in ('starting','running','unknown'):return {'status':'ok','already_completed':True}
@@ -65,9 +67,10 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                 if actor['role']!='admin':raise PermissionError('Administrator revoked.')
                 mode=catalog.execute('SELECT mode FROM settings WHERE id=1 FOR SHARE').fetchone()['mode']
                 if mode=='normal':raise PermissionError('Maintenance mode required.')
+                record['execution']=execution
                 update(catalog,event['id'],record,'running')
                 # Never proceed when the protective save failed. Do not prune the selected archive here.
-                progress('safety_backup');save(settings,storage,target,execution)
+                progress('safety_backup');save(settings,storage,target,execution,source='pre_restore')
                 catalog.execute('SELECT mode FROM settings WHERE id=1 FOR SHARE')
                 if catalog.execute('SELECT mode FROM settings WHERE id=1').fetchone()['mode']=='normal':raise PermissionError('Maintenance mode changed.')
                 catalog.execute('SELECT pg_advisory_xact_lock(%s)',(79432100+TARGETS.index(target),))

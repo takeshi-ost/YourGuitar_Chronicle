@@ -15,8 +15,8 @@ from ygc.db.postgres import PostgresSettings,TARGETS,connect
 KIND='db_backup_v1'
 
 
-def save(settings,storage,target,execution,progress=lambda stage:None,request_id=None,scheduled=False):
-    if target not in TARGETS:raise ValueError('Unknown target.')
+def save(settings,storage,target,execution,progress=lambda stage:None,request_id=None,scheduled=False,source=None):
+    if target not in TARGETS or source not in (None,'manual','scheduled','crawl','pre_restore'):raise ValueError('Unknown target or source.')
     # Lock one target, not all four DBs. Immutable image objects are retained separately.
     candidate=None;committing=False
     progress('catalog_lock')
@@ -37,7 +37,7 @@ def save(settings,storage,target,execution,progress=lambda stage:None,request_id
             if hashlib.sha256(storage.get(candidate)).hexdigest()!=meta['sha256']:raise ValueError('Read-back mismatch.')
             record={'kind':KIND,'backup_id':str(uuid.uuid4()),**meta,'object':asdict(candidate),'execution':execution}
             if request_id is not None:record['request_id']=request_id
-            record['source']='scheduled' if scheduled else 'manual'
+            record['source']=source or ('scheduled' if scheduled else 'manual')
             progress('catalog_commit')
             catalog.execute('INSERT INTO events(occurred_at,mode,reason) SELECT %s,mode,%s FROM settings WHERE id=1',
                 (datetime.now(timezone.utc).isoformat(),json.dumps(record,separators=(',',':'))))

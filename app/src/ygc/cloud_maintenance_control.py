@@ -45,8 +45,8 @@ class MaintenanceControl:
                 record=json.loads(previous['reason'])
                 if any(record[key]!=data[key] for key in ('target','action','backup_id')) or record['actor']!=str(actor):raise ValueError('UUID reused for another request.')
                 return public(record)
-            pending=con.execute("""SELECT 1 FROM events WHERE CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'state' IN ('starting','running','unknown')
-              AND CASE WHEN reason LIKE %s THEN reason::jsonb ELSE NULL END ->>'created_at'>%s LIMIT 1""",('{"kind":"'+REQUEST_KIND+'",%','{"kind":"'+REQUEST_KIND+'",%',(datetime.now(timezone.utc)-timedelta(minutes=30)).isoformat())).fetchone()
+            pending=con.execute("""SELECT 1 FROM events WHERE CASE WHEN (reason LIKE %s OR reason LIKE '{"kind":"reverb_crawl_request_v1",%%') THEN reason::jsonb ELSE NULL END ->>'state' IN ('starting','running','unknown')
+              AND CASE WHEN (reason LIKE %s OR reason LIKE '{"kind":"reverb_crawl_request_v1",%%') THEN reason::jsonb ELSE NULL END ->>'created_at'>%s LIMIT 1""",('{"kind":"'+REQUEST_KIND+'",%','{"kind":"'+REQUEST_KIND+'",%',(datetime.now(timezone.utc)-timedelta(minutes=30)).isoformat())).fetchone()
             if pending:raise BackupBusy()
             record={'kind':REQUEST_KIND,'request_id':token,'actor':str(actor),'target':target,'action':action,'backup_id':data['backup_id'],'state':'starting','created_at':datetime.now(timezone.utc).isoformat()}
             row=con.execute('INSERT INTO events(occurred_at,mode,reason) VALUES(%s,%s,%s) RETURNING id',(record['created_at'],mode['mode'],json.dumps(record,separators=(',',':')))).fetchone()
@@ -56,7 +56,7 @@ class MaintenanceControl:
             # Preserve a completion recorded by a quickly finished worker.
             current=con.execute('SELECT reason FROM events WHERE id=%s FOR UPDATE',(row['id'],)).fetchone()
             worker=json.loads(current['reason'])
-            if worker['state'] in ('succeeded','failed'):record['state']=worker['state']
+            if worker.get('execution') or worker['state'] in ('succeeded','failed'):record=worker
             con.execute('UPDATE events SET reason=%s WHERE id=%s',(json.dumps(record,separators=(',',':')),row['id']))
             return public(record)
 
