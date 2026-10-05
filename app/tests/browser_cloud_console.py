@@ -101,6 +101,7 @@ def main():
                 return dict(total=str(len(ids)),items=[dict(id=str(i),captured_at='2026-10-05') for i in following[:25]],next_after=str(following[24]) if len(following)>25 else None)
         def upload(self,actor,individual,data,mime):
             with ops.access('admin_write',actor):
+                normalize_image(data,mime,max_side=2048)
                 assert mime=='image/png' and data==png()
                 image_records.setdefault(individual,[]).append(1)
                 return dict(media_id='1',claim_id='29',verification_status='unverified')
@@ -278,6 +279,13 @@ def main():
                 page.locator('#contentMediaFile').set_input_files(dict(name='photo.png',mimeType='image/png',buffer=png()))
                 page.locator('#contentMediaSave').click()
                 expect(page.locator('#contentMediaStatus')).to_contain_text('Image saved as a Media Claim')
+                expect(page.locator('#contentMediaRows button')).to_have_count(1)
+                page.locator('#contentMediaFile').set_input_files(dict(name='huge.png',mimeType='image/png',buffer=b'x'*(8*1024*1024+1)))
+                page.locator('#contentMediaSave').click()
+                expect(page.locator('#contentMediaStatus')).to_have_text('This image exceeds 8 MiB. Reduce its file size before uploading.')
+                page.locator('#contentMediaFile').set_input_files(dict(name='large.png',mimeType='image/png',buffer=png((3000,3000))))
+                page.locator('#contentMediaSave').click()
+                expect(page.locator('#contentMediaStatus')).to_have_text('This image exceeds 8 million pixels. Reduce its dimensions before uploading.')
                 expect(page.locator('#contentMediaRows button')).to_have_count(1)
                 page.locator('#contentMediaRows button').click()
                 expect(page.locator('#contentMediaDialog')).to_be_visible()

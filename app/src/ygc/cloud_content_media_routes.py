@@ -5,7 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_guitars import positive_id,GuitarMissing
 from ygc.cloud_content_media import MediaConflict
-from ygc.cloud_avatar import MAX_UPLOAD
+from ygc.cloud_avatar import MAX_UPLOAD,ImageUploadInvalid
 
 
 def content_media_router(verifier,service):
@@ -32,11 +32,11 @@ def content_media_router(verifier,service):
             else:
                 if request.query_params or request.headers.get('content-encoding'):raise ValueError()
                 mime=request.headers.get('content-type','').split(';')[0].strip().lower()
-                if mime not in ('image/jpeg','image/png','image/webp'):raise ValueError()
+                if mime not in ('image/jpeg','image/png','image/webp'):raise ImageUploadInvalid('image_format')
                 chunks=[];size=0
                 async for chunk in request.stream():
                     size+=len(chunk)
-                    if size>MAX_UPLOAD:raise HTTPException(413,'Image size exceeded.',headers=headers)
+                    if size>MAX_UPLOAD:raise HTTPException(413,{'code':'image_size_limit'},headers=headers)
                     chunks.append(chunk)
                 result=await run_in_threadpool(service.upload,who,individual,b''.join(chunks),mime)
             return JSONResponse(result,headers=headers)
@@ -44,6 +44,7 @@ def content_media_router(verifier,service):
         except GuitarMissing:raise HTTPException(404,'Image or guitar not found.',headers=headers) from None
         except MediaConflict:raise HTTPException(409,'Crawl or database maintenance is running.',headers=headers) from None
         except PermissionError:raise HTTPException(403,'Verified administrator access required.',headers=headers) from None
+        except ImageUploadInvalid as error:raise HTTPException(400,{'code':error.code},headers=headers) from None
         except (ValueError,TypeError):raise HTTPException(400,'Invalid image, identifier or pending account projection.',headers=headers) from None
         except Exception:raise HTTPException(503,'Image result unavailable. Refresh before retrying.',headers=headers) from None
     @router.api_route('/api/admin/guitars/{individual}/media',methods=['GET','POST'])

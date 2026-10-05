@@ -36,16 +36,23 @@ def decode_reference(value):
     return ref
 
 
+class ImageUploadInvalid(ValueError):
+    def __init__(self,code):
+        self.code=code
+        super().__init__('Invalid image upload.')
+
+
 def normalize_image(data, content_type, *, max_side=512):
     if max_side not in (512,2048):raise ValueError('Invalid image dimensions.')
     formats = {'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WEBP'}
-    if content_type not in formats or not isinstance(data, bytes) or not 0 < len(data) <= MAX_UPLOAD:
-        raise ValueError('Upload JPEG, PNG or WebP within the size limit.')
+    if content_type not in formats:raise ImageUploadInvalid('image_format')
+    if not isinstance(data,bytes) or not data:raise ImageUploadInvalid('invalid_image')
+    if len(data)>MAX_UPLOAD:raise ImageUploadInvalid('image_size_limit')
     with NORMALIZING:
         try:
             with Image.open(BytesIO(data)) as image:
-                if image.format != formats[content_type] or image.width*image.height > MAX_PIXELS or getattr(image, 'n_frames', 1) != 1:
-                    raise ValueError('Unsupported image or pixel limit exceeded.')
+                if image.format!=formats[content_type] or getattr(image,'n_frames',1)!=1:raise ImageUploadInvalid('image_format')
+                if image.width*image.height>MAX_PIXELS:raise ImageUploadInvalid('image_pixel_limit')
                 image.verify()
             with Image.open(BytesIO(data)) as image:
                 image.load()
@@ -62,8 +69,9 @@ def normalize_image(data, content_type, *, max_side=512):
                         canvas.close();rgba.close()
                 finally:
                     if oriented is not image:oriented.close()
-        except (UnidentifiedImageError, OSError, SyntaxError, OverflowError, Image.DecompressionBombError):
-            raise ValueError('Invalid image.') from None
+        except Image.DecompressionBombError:raise ImageUploadInvalid('image_pixel_limit') from None
+        except (UnidentifiedImageError,OSError,SyntaxError,OverflowError):
+            raise ImageUploadInvalid('invalid_image') from None
 
 
 class CloudAvatar:
