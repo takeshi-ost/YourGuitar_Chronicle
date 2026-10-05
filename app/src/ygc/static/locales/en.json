@@ -1212,6 +1212,7 @@
   "guitars.search": "Maker, model or serial number",
   "guitars.search_button": "Search",
   "guitars.empty": "No guitars found.",
+  "guitars.page_size": "25 per page",
   "guitars.page_count": "{count} guitars on this page",
   "guitars.unavailable": "Guitar data unavailable. Refresh to retry.",
   "guitars.missing": "This guitar is no longer available.",

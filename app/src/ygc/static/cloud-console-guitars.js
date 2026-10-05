@@ -1,6 +1,6 @@
 // Console data access remains separate from Operations availability.
 export function createGuitarBrowser({request,authorized,onUnauthorized}){
-  const $=id=>document.getElementById(id),t=k=>YGCI18n.t(k);
+  const $=id=>document.getElementById(id),t=(key,params={})=>YGCI18n.t(key,params);
   let busy=false,epoch=0,next=null,history=[0],query='';
   const fields=['id','manufacturer','model','finish','year','serial_number','location_country','location_region','current_owner_name','current_owner_type'];
   function render(){

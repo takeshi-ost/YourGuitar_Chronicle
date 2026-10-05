@@ -61,3 +61,6 @@ PR #31の必須CI成功・main統合・実配置、非公開Jobの4DB読取り�
 ### Reverb Crawlの接続準備（2026-10-05）
 
 左Web Crawlの年範囲・間隔・Crawl Now・実行ログ、右Operations/Background jobsのReverb Autoチェックと最終開始時刻を実装。PostgreSQLと専用Jobへ接続する。現在はSecret登録と実配置が未完了で、実ステージングの画面にはまだ追加していない。[仕様と再開時確認](CLOUD_REVERB_CRAWL.md)を参照。
+
+
+2026-10-05の件数表示修正：Guitar DB Managementのページ件数へ翻訳パラメーターを渡す。1ページ25件で、先頭ページのPreviousと次ページがない場合のNextは無効。表示にページサイズを明記し、28件の往復移動と1件検索で件数・ボタン状態をブラウザ検証する。
