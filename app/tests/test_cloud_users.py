@@ -84,3 +84,38 @@ def test_bigint_response_preserves_decimal_precision(api):
     assert result['items'][0]['id']==result['next_after']==str(value)
     assert result['total']==str(value)
     assert service.list.return_value['items'][0]['id']==value
+
+
+def test_owned_page_canonical_admin_and_precision(api):
+    client,verifier,service=api;value=2**63-1
+    service.guitars.return_value=dict(items=[dict(id=value,manufacturer='Maker')],total=value,next_after=value)
+    response=client.get('/api/admin/users/1/guitars?kind=formerly_owned&after=2&limit=10',headers=AUTH)
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    assert response.json()['total']==response.json()['items'][0]['id']==response.json()['next_after']==str(value)
+    service.guitars.assert_called_once_with('canonical',1,kind='formerly_owned',after=2,limit=10)
+
+
+@pytest.mark.parametrize('query',['kind=pending','kind=owned&kind=owned','q=abc','viewer_id=2','limit=51','after=0'])
+def test_owned_page_invalid_query_never_reads(api,query):
+    client,verifier,service=api
+    assert client.get('/api/admin/users/1/guitars?'+query,headers=AUTH).status_code==400
+    service.guitars.assert_not_called()
+
+
+@pytest.mark.parametrize('case,status',[('missing',401),('email',403),('member',403),('disabled',403)])
+def test_owned_page_identity_rejected_before_read(api,case,status):
+    client,verifier,service=api;headers=AUTH
+    if case=='missing':headers={}
+    if case=='email':verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    if case=='member':verifier.accounts.resolve_identity.return_value['role']='member'
+    if case=='disabled':verifier.accounts.resolve_identity.side_effect=PermissionError()
+    assert client.get('/api/admin/users/1/guitars',headers=headers).status_code==status
+    service.guitars.assert_not_called()
+
+
+def test_owned_page_failures_private(api):
+    client,verifier,service=api
+    for failure,status in [(UserMissing(),404),(PermissionError('private'),403),(RuntimeError('private'),503)]:
+        service.guitars.side_effect=failure
+        response=client.get('/api/admin/users/1/guitars',headers=AUTH)
+        assert response.status_code==status and 'private' not in response.text

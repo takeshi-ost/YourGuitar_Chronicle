@@ -116,5 +116,5 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
   $('chronicleRefresh').onclick=()=>{if(selectedId!==null){claimHistory=[0];action(chronicle)}};
   $('chronicleNext').onclick=()=>{if(busy||claimNext===null)return;claimHistory.push(claimNext);action(chronicle)};
   $('chroniclePrevious').onclick=()=>{if(busy||claimHistory.length<2)return;claimHistory.pop();action(chronicle)};
-  return {render,clear,refresh};
+  return {render,clear,refresh,detail};
 }

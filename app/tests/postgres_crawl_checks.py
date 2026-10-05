@@ -122,7 +122,7 @@ def run(app,accounts,operations,storage,aid):
         assert perform(app,storage,first,'fixture-crawl',token)['saved_before_crawl']
         assert advance.call_args.kwargs['_summary_limit']==3
     with connect(app,'operations') as con:
-        archives=[json.loads(row['reason']) for row in con.execute('SELECT reason FROM events WHERE reason LIKE %s',('{"kind":"'+BACKUP_KIND+'",%',))]
+        archives=[json.loads(row['reason']) for row in con.execute('SELECT reason FROM events WHERE reason LIKE %s ORDER BY id',('{"kind":"'+BACKUP_KIND+'",%',))]
         assert archives[-1]['target']=='chronicle' and archives[-1]['source']=='crawl'
     assert perform(app,storage,first,'repeat-crawl',token)['already_completed']
     blocked=str(uuid.uuid4());control.start(aid,dict(data,request_id=blocked));before=Collector()

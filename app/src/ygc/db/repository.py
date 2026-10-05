@@ -18,6 +18,7 @@ from ygc.observation_evaluator import FIELDS as OBSERVATION_FIELDS, evaluate_obs
 from ygc.observation_matrix import build_observation_matrix
 from ygc.specification_extractor import extract_specifications, clean_specification_value
 from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
+from ygc.owned_guitar_visibility import VISIBLE_SQL
 
 
 def utcnow() -> str:
@@ -2480,7 +2481,7 @@ class Repository:
 
             guitars = list(
                 con.execute(
-                    """
+                    f"""
                     SELECT
                         ug.*,
                         i.manufacturer,
@@ -2495,38 +2496,7 @@ class Repository:
                     INNER JOIN individuals i
                       ON i.id = ug.individual_id
                     WHERE ug.user_id = ?
-                      AND (ug.ownership_status <> 'former_owner'
-                           OR EXISTS (
-                               SELECT 1 FROM claims c
-                               WHERE c.individual_id=ug.individual_id
-                                 AND c.author_user_id=ug.user_id
-                                 AND c.claim_type='ownership'
-                                 AND c.ownership_kind='acquire'
-                                 AND c.status='active'
-                                 AND c.verification_status='positive'
-                           )
-                           OR EXISTS (
-                               SELECT 1 FROM claims c
-                               JOIN claim_listing_items li ON li.claim_id=c.id
-                               WHERE c.individual_id=ug.individual_id
-                                 AND c.claim_type='listing'
-                                 AND c.status='active'
-                                 AND c.verification_status='positive'
-                                 AND li.field_name='owner_user_id'
-                                 AND li.value_text=CAST(ug.user_id AS TEXT)
-                           )
-                           OR EXISTS (SELECT 1 FROM claim_transfers t JOIN claims tc ON tc.id=t.claim_id
-                               JOIN claim_transfer_acceptance e ON e.claim_id=tc.id
-                               WHERE tc.individual_id=ug.individual_id AND t.to_user_id=ug.user_id
-                                 AND t.state='accepted')
-                           OR NOT EXISTS (
-                               SELECT 1 FROM claims c
-                               WHERE c.individual_id=ug.individual_id
-                                 AND c.author_user_id=ug.user_id
-                                 AND c.claim_type='ownership'
-                                 AND c.ownership_kind='acquire'
-                                 AND c.ownership_source='former_owner'
-                           ))
+                      AND {VISIBLE_SQL}
                     ORDER BY
                         CASE
                             WHEN ug.ownership_status

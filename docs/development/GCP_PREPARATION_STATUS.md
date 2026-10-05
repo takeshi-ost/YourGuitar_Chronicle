@@ -208,3 +208,7 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 2026-10-05のChronicle閲覧受入：利用者が履歴表示、展開/折畳み/Refresh、個体切替、SignOut後の表示制限を確認し、問題なし。25件超の履歴を持つ個体がないため、実クラウドでのページ移動は未確認として残す。隔離ブラウザ・PostgreSQLのページ移動試験は成功済み。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#chronicle閲覧の利用者受入2026-10-05)を参照。
 
 次の接続はChronicleのAdmin強制判定。Positive / Negative / Unverifiedのみとし、既存の業務トランザクション・監査・所有状態再評価を共有する。全モードのAdmin操作、表示状態の競合検出、Crawl/復元/初期化との排他を検証する。実クラウドの確認項目は[Browser Console](../migration/CLOUD_BROWSER_CONSOLE.md#chronicleの管理者判定2026-10-05)を参照。通常Owner判定・申請審議・Claim本文編集・画像付き復旧は引き続き後続範囲。
+
+2026-10-05追記：Admin強制判定（PR #40）は必須CI成功・main統合・ステージング配置済み。利用者がモーダル、取消し・外クリック、判定保存・再読み込み、Read only / Offline中の管理者操作、2タブの競合拒否、SignOut後の制限をすべて確認し、操作対象を元の状態へ戻したと報告した。この範囲の受入は完了。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#管理者判定の利用者受入2026-10-05)を参照。履歴25件超の実クラウドページ移動は引き続き対象データ待ち。通常Owner判定・申請審議・Claim本文編集・画像付き復旧等は後続範囲。
+
+次の移行範囲はUser DetailのOwned / Formerly Owned閲覧。既存の所有者再評価結果と共有した過去所有の表示条件を使用し、個体リンクをProduct Detailへ接続する。現在所有・過去所有の実データがない区分は操作受入と内容比較を分けて記録する。[仕様・確認手順](../migration/CLOUD_BROWSER_CONSOLE.md#user-detailのowned--formerly-owned2026-10-05)を参照。

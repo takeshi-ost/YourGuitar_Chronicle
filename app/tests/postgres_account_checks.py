@@ -203,6 +203,15 @@ def cloud_registration_checks(settings, store):
 def transitions(app, store, a, b, c):
     ownership = PostgresOwnership(app)
     actors = {x['id']: ActorContext(x['id'], 'identity-platform', x['identity_subject'], True, x['app_user_id']) for x in (a,b,c)}
+    from ygc.cloud_users import CloudUsers
+    from contextlib import contextmanager
+    class ReadGate:
+        @contextmanager
+        def access(self,kind,actor):
+            assert kind=='admin_read' and actor==a['app_user_id']
+            yield
+    browser=CloudUsers(app,ReadGate())
+    def owned_ids(user,kind):return {r['id'] for r in browser.guitars(a['app_user_id'],user['id'],kind=kind)['items']}
     with connect(app, 'chronicle') as con:
         individual = con.execute("""INSERT INTO individuals(manufacturer,normalized_manufacturer,serial_number,
             normalized_serial,created_at,updated_at,current_owner_user_id)
@@ -221,6 +230,7 @@ def transitions(app, store, a, b, c):
         con.execute("INSERT INTO claim_source_evidence(claim_id,evidence_type,effective_date,created_at) VALUES(%s,'acquisition_date','2026-02-01','now')", (acquire,))
         assert evaluate_observation(ObservationConnection(con), individual).values['current_owner_user_id'] == str(a['id'])
         assert con.execute('SELECT COUNT(*) AS n FROM user_guitars WHERE user_id=%s', (b['id'],)).fetchone()['n'] == 0
+    assert individual in owned_ids(a,'owned') and individual not in owned_ids(b,'owned') and individual not in owned_ids(b,'formerly_owned')
     raises(ValueError, lambda: ownership.set_claim_response(acquire, actors[b['id']], 'positive'))
     unverified = ActorContext(a['id'], 'prototype', None, False, a['app_user_id'])
     raises(PermissionError, lambda: ownership.set_claim_response(acquire, unverified, 'positive'))
@@ -228,6 +238,7 @@ def transitions(app, store, a, b, c):
     raises(PermissionError, lambda: ownership.set_claim_response(acquire, mismatched, 'positive'))
     assert acquire in ownership.owner_verifiable_claim_ids(individual, actors[a['id']])
     assert ownership.set_claim_response(acquire, actors[a['id']], 'positive')
+    assert individual in owned_ids(b,'owned') and individual not in owned_ids(a,'owned') and individual in owned_ids(a,'formerly_owned')
     for stance in ('positive', 'negative', 'unverified'):
         raises(ValueError, lambda: ownership.set_claim_response(acquire, actors[b['id']], stance))
     raises(ValueError, lambda: ownership.set_claim_response(acquire, actors[a['id']], 'negative'))
@@ -293,10 +304,13 @@ def transitions(app, store, a, b, c):
     ownership.resolve_transfer(first, actors[b['id']], 'accept')
     later = ownership.create_transfer(second, actors[b['id']], c['id'])
     ownership.resolve_transfer(later, actors[c['id']], 'accept')
+    assert second in owned_ids(c,'owned') and second not in owned_ids(b,'owned')
+    assert second in owned_ids(a,'formerly_owned') and second in owned_ids(b,'formerly_owned')
     for action in ('negative', 'unverified', 'delete'):
         ownership.admin_moderate_claim(first, actors[a['id']], action)
         with connect(app, 'chronicle') as con:
             assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s', (second,)).fetchone()['current_owner_user_id'] == c['id']
+        assert second in owned_ids(c,'owned') and second not in owned_ids(b,'owned')
 
     # Restoration re-evaluates the full A->B->C history with current source authority.
     from ygc.cloud_db_snapshot import snapshot

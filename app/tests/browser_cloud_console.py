@@ -97,12 +97,11 @@ def main():
             with ops.access('admin_read',actor):
                 matching=[r for r in user_rows if r['id']>after and q.lower() in r['display_name'].lower()]
                 return dict(total=len(user_rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
-        def moderate(self,actor,individual_id,claim_id,*,action,revision):
-            from ygc.claim_revision import ClaimConflict
-            with ops.access('admin_write',actor):
-                if revision!=str(claim_versions.get(claim_id,0)).zfill(64):raise ClaimConflict()
-                decisions.append((individual_id,claim_id,action));claim_states[claim_id]=action;claim_versions[claim_id]=claim_versions.get(claim_id,0)+1
-                return dict(claim_id=str(claim_id),individual_id=str(individual_id),verification_status=action)
+        def guitars(self,actor,user_id,*,kind,after,limit):
+            with ops.access('admin_read',actor):
+                records=rows if user_id==1 and kind=='owned' else rows[:1] if user_id==1 else []
+                selected=[r for r in records if r['id']>after]
+                return dict(items=selected[:limit],total=len(records),next_after=selected[limit-1]['id'] if len(selected)>limit else None)
         def detail(self,actor,individual_id):
             with ops.access('admin_read',actor):
                 if not 1<=individual_id<=len(user_rows):raise UserMissing()
@@ -250,10 +249,22 @@ def main():
                 page.locator('#userRows button').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0
+                owned=page.locator('#userGuitars_owned');former=page.locator('#userGuitars_formerly_owned')
+                expect(owned.locator('.user-owned-guitars button')).to_have_count(25)
+                expect(owned).to_contain_text('Total guitars: 28');expect(former.locator('.user-owned-guitars button')).to_have_count(1)
+                owned.locator('button').filter(has_text='Next').click();expect(owned.locator('.user-owned-guitars button')).to_have_count(3)
+                owned.locator('button').filter(has_text='Previous').click();expect(owned.locator('.user-owned-guitars button')).to_have_count(25)
+                owned.locator('.user-owned-guitars button').first.click();expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
+                expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
+                assert owned.locator('img').count()==0
+
                 page.locator('#userSearch').fill('User 28');page.locator('#userSearchSubmit').click()
                 expect(page.locator('#userRows tr')).to_have_count(1)
                 expect(page.locator('#userStatus')).to_have_text('Total accounts: 28')
                 expect(page.locator('#userPrevious')).to_be_disabled();expect(page.locator('#userNext')).to_be_disabled()
+                page.locator('#userRows button').first.click();expect(page.locator('#userDetailFields')).to_contain_text('Profile 28')
+                expect(page.locator('#userGuitars_owned')).to_contain_text('No guitars in this category.')
+                expect(page.locator('#userGuitars_formerly_owned')).to_contain_text('No guitars in this category.')
                 page.locator('#guitarRows button').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
                 expect(page.locator('#chronicleRows details')).to_have_count(25)

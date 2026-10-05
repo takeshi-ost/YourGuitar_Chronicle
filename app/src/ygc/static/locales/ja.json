@@ -1208,7 +1208,7 @@
   "avatar.restricted": "現在、この画像操作は制限されています。",
   "avatar.failed": "画像操作に失敗しました。更新して現在の画像を確認してください。",
   "users.heading": "ユーザーDB管理",
-  "users.read_only": "アカウント情報の閲覧。編集機能は今後接続します。",
+  "users.read_only": "アカウントと所有情報の閲覧。編集は未接続です。",
   "users.search": "名前またはアカウントID",
   "users.search_button": "検索",
   "users.detail": "ユーザー詳細",
@@ -1337,5 +1337,11 @@
   "chronicle.cancel_decision": "キャンセル",
   "chronicle.decision_saved": "判定を保存し、個体情報と履歴を更新しました。",
   "chronicle.decision_conflict": "Claimが変更されたか、Crawl／DBメンテナンスが実行中です。再取得してから再確認してください。",
-  "chronicle.decision_unavailable": "結果を確認できませんでした。再操作する前に履歴を再取得してください。"
+  "chronicle.decision_unavailable": "結果を確認できませんでした。再操作する前に履歴を再取得してください。",
+  "users.owned": "現在所有",
+  "users.formerly_owned": "過去に所有",
+  "users.ownership_refresh": "所有一覧を再取得",
+  "users.ownership_empty": "この区分のギターはありません。",
+  "users.ownership_total": "ギター総数：{count}",
+  "users.ownership_unavailable": "所有情報を取得できませんでした。再取得してください。"
 }

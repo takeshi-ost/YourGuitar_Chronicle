@@ -1208,7 +1208,7 @@
   "avatar.restricted": "This image operation is currently restricted.",
   "avatar.failed": "Image operation failed. Refresh to check the current image.",
   "users.heading": "User DB Management",
-  "users.read_only": "Read-only account records. Editing is not yet connected.",
+  "users.read_only": "Read-only account and ownership records. Editing is not yet connected.",
   "users.search": "Name or account ID",
   "users.search_button": "Search",
   "users.detail": "User Detail",
@@ -1337,5 +1337,11 @@
   "chronicle.cancel_decision": "Cancel",
   "chronicle.decision_saved": "Decision saved. Guitar details and history have been refreshed.",
   "chronicle.decision_conflict": "The Claim changed or Crawl/maintenance is running. Refresh before reviewing again.",
-  "chronicle.decision_unavailable": "The result could not be confirmed. Refresh the history before attempting another change."
+  "chronicle.decision_unavailable": "The result could not be confirmed. Refresh the history before attempting another change.",
+  "users.owned": "Owned",
+  "users.formerly_owned": "Formerly Owned",
+  "users.ownership_refresh": "Refresh ownership",
+  "users.ownership_empty": "No guitars in this category.",
+  "users.ownership_total": "Total guitars: {count}",
+  "users.ownership_unavailable": "Ownership data unavailable. Refresh to retry."
 }

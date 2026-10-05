@@ -11,7 +11,7 @@ const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthori
 const crawl=createCrawlBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 $('consoleStatus').removeAttribute('data-i18n');
-const users=createUserBrowser({request,authorized:()=>authorized,onUnauthorized:error});
+const users=createUserBrowser({request,authorized:()=>authorized,onUnauthorized:error,onGuitar:id=>guitars.detail(id)});
 function controls(){
   users.render();guitars.render();backups.render();crawl.render();
   $('consoleControls').hidden=!authorized;
