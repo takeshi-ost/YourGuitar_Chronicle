@@ -291,8 +291,8 @@ def main():
                 expect(page.locator('#chronicleRows details')).to_have_count(25)
                 expect(page.locator('#chronicleStatus')).to_have_text('Total history records: 28')
                 assert page.locator('#chronicleRows img, #chronicleRows b').count()==0
-                assert page.locator('#chronicleRows .positive[open]').count()>0
-                assert page.locator('#chronicleRows .negative[open], #chronicleRows .unverified[open]').count()==0
+                expect(page.locator('#chronicleRows .positive').first).to_have_attribute('open','')
+                expect(page.locator('#chronicleRows .negative[open], #chronicleRows .unverified[open]')).to_have_count(0)
                 page.locator('#chronicleNext').click();expect(page.locator('#chronicleRows details')).to_have_count(3)
                 page.locator('#chroniclePrevious').click();expect(page.locator('#chronicleRows details')).to_have_count(25)
                 card=page.locator('#chronicleRows details').filter(has=page.locator('.claim-admin-decision')).first
