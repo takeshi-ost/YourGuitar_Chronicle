@@ -201,8 +201,14 @@ def main():
                 expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
                 assert len(maintenance_calls)==2 and maintenance_calls[-1]['backup_id'] is None
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
+                expect(page.locator('#guitarStatus')).to_have_text('25 guitars on this page')
+                expect(page.locator('#guitarPrevious')).to_be_disabled()
+                expect(page.locator('#guitarNext')).to_be_enabled()
                 assert page.locator('#guitarRows img').count()==0
                 page.locator('#guitarNext').click();expect(page.locator('#guitarRows tr')).to_have_count(3)
+                expect(page.locator('#guitarStatus')).to_have_text('3 guitars on this page')
+                expect(page.locator('#guitarPrevious')).to_be_enabled()
+                expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarPrevious').click();expect(page.locator('#guitarRows tr')).to_have_count(25)
                 page.locator('#guitarRows button').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
@@ -210,6 +216,8 @@ def main():
                 assert page.evaluate('document.documentElement.scrollHeight<=innerHeight')
                 page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarRows tr')).to_have_count(1)
+                expect(page.locator('#guitarStatus')).to_have_text('1 guitars on this page')
+                expect(page.locator('#guitarPrevious')).to_be_disabled();expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarSearch').fill('unknown');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarStatus')).to_have_text('No guitars found.')
                 page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')

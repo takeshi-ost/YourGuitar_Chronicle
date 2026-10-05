@@ -1212,6 +1212,7 @@
   "guitars.search": "メーカー・モデル・シリアル番号",
   "guitars.search_button": "検索",
   "guitars.empty": "該当するギターはありません。",
+  "guitars.page_size": "1ページ25件",
   "guitars.page_count": "このページに{count}件",
   "guitars.unavailable": "ギター情報を取得できません。再読み込みしてください。",
   "guitars.missing": "このギターは見つかりません。",
