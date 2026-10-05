@@ -4,7 +4,7 @@ export function createMediaBrowser({request,authorized,selected,busy,work,onUnau
   title.textContent=t('content_media.heading');file.type='file';file.accept='image/jpeg,image/png,image/webp';file.required=true;file.id='contentMediaFile';file.setAttribute('aria-label',t('avatar.choose'));
   save.type='submit';save.id='contentMediaSave';save.textContent=t('content_media.save');
   for(const [button,key] of [[refreshButton,'action.refresh'],[previous,'users.previous'],[next,'users.next']]){button.type='button';button.textContent=t(key)}
-  status.id='contentMediaStatus';status.setAttribute('role','status');rows.id='contentMediaRows';form.append(file,save);panel.append(title,form,refreshButton,status,rows,previous,next);document.getElementById('cloudProductDetail').insertBefore(panel,document.getElementById('chroniclePanel'));
+  status.id='contentMediaStatus';status.setAttribute('role','status');rows.id='contentMediaRows';const limits=document.createElement('p');limits.textContent=t('content_media.limits');form.append(file,save,limits);panel.append(title,form,refreshButton,status,rows,previous,next);document.getElementById('cloudProductDetail').insertBefore(panel,document.getElementById('chroniclePanel'));
   const dialog=document.createElement('dialog'),image=document.createElement('img'),close=document.createElement('button');dialog.id='contentMediaDialog';image.id='mediaPreview';image.alt=t('content_media.heading');close.textContent=t('action.close');close.type='button';dialog.append(image,close);document.body.append(dialog);
   let epoch=0,history=[0],cursor=null,url=null;
   const revoke=()=>{if(url)URL.revokeObjectURL(url);url=null;image.removeAttribute('src')};
@@ -33,7 +33,7 @@ export function createMediaBrowser({request,authorized,selected,busy,work,onUnau
   form.onsubmit=event=>{
     event.preventDefault();if(busy()||!authorized()||selected()===null)return;
     const upload=file.files[0],id=selected(),savedEpoch=epoch;if(!upload||upload.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(upload.type)){status.textContent=t('avatar.invalid');return}
-    work(async current=>{try{await request('/api/admin/guitars/'+id+'/media',{method:'POST',headers:{'Content-Type':upload.type},body:upload});if(savedEpoch!==epoch||id!==selected()||!authorized())return;file.value='';await updated(current);if(id!==selected()||!authorized())return;status.textContent=t('content_media.saved')}catch(error){if(savedEpoch!==epoch||id!==selected()||!authorized())return;if([401,403].includes(error.status)){clear();onUnauthorized(error)}else status.textContent=t('content_media.save_failed')}});
+    work(async current=>{try{await request('/api/admin/guitars/'+id+'/media',{method:'POST',headers:{'Content-Type':upload.type},body:upload});if(savedEpoch!==epoch||id!==selected()||!authorized())return;file.value='';await updated(current);if(id!==selected()||!authorized())return;status.textContent=t('content_media.saved')}catch(error){if(savedEpoch!==epoch||id!==selected()||!authorized())return;if([401,403].includes(error.status)){clear();onUnauthorized(error)}else status.textContent=t(['image_pixel_limit','image_size_limit','image_format','invalid_image'].includes(error.code)?'content_media.'+error.code:'content_media.save_failed')}});
   };
   return {render,clear,refresh};
 }

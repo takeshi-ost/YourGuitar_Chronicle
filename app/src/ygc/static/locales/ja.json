@@ -1363,5 +1363,10 @@
   "content_media.total": "画像総数：{count}",
   "content_media.saved": "画像をMedia Claimとして保存しました。判定状態はクロニクルで確認してください。",
   "content_media.failed": "画像を取得できませんでした。再取得してください。",
-  "content_media.save_failed": "保存結果を確認できませんでした。再試行前に画像とクロニクルを再取得してください。"
+  "content_media.save_failed": "保存結果を確認できませんでした。再試行前に画像とクロニクルを再取得してください。",
+  "content_media.limits": "JPEG・PNG・WebP、8 MiB・800万画素以内。",
+  "content_media.image_pixel_limit": "画像が800万画素を超えています。縦横のサイズを縮小してから追加してください。",
+  "content_media.image_size_limit": "画像が8 MiBを超えています。ファイル容量を小さくしてから追加してください。",
+  "content_media.image_format": "静止画像のJPEG・PNG・WebPを選択してください。",
+  "content_media.invalid_image": "画像を読み込めませんでした。有効なJPEG・PNG・WebPを選択してください。"
 }

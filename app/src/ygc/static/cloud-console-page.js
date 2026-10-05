@@ -30,7 +30,7 @@ function error(error){
 }
 async function request(path,options,binary=false){
   const response=await auth.authorizedFetch(path,options,true);
-  if(!response.ok)throw Object.assign(Error('Operation unavailable'),{status:response.status});
+  if(!response.ok){let code;try{const body=await response.json();code=body.detail?.code}catch{}throw Object.assign(Error('Operation unavailable'),{status:response.status,code})}
   if(binary){if(!response.headers.get('Content-Type')?.startsWith('image/jpeg'))throw Error('Unexpected image');const blob=await response.blob();if(blob.size>25*1024*1024)throw Error('Image too large');return blob}
   return response.json();
 }

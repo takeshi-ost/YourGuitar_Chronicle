@@ -1363,5 +1363,10 @@
   "content_media.total": "Total images: {count}",
   "content_media.saved": "Image saved as a Media Claim. Review its verification in Chronicle.",
   "content_media.failed": "Images unavailable. Refresh to try again.",
-  "content_media.save_failed": "Save result could not be confirmed. Refresh images and Chronicle before retrying."
+  "content_media.save_failed": "Save result could not be confirmed. Refresh images and Chronicle before retrying.",
+  "content_media.limits": "JPEG, PNG or WebP · up to 8 MiB and 8 million pixels.",
+  "content_media.image_pixel_limit": "This image exceeds 8 million pixels. Reduce its dimensions before uploading.",
+  "content_media.image_size_limit": "This image exceeds 8 MiB. Reduce its file size before uploading.",
+  "content_media.image_format": "Choose a still JPEG, PNG or WebP image.",
+  "content_media.invalid_image": "This image could not be read. Choose a valid JPEG, PNG or WebP."
 }

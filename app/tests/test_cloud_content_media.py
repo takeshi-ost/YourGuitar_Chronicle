@@ -92,3 +92,14 @@ def test_upload_limits_and_operation_errors(api):
     service.get.side_effect=GuitarMissing()
     assert client.get('/api/admin/guitars/99/media/2',headers=AUTH).status_code==404
     service.get.assert_called_once_with('canonical',99,2)
+
+
+@pytest.mark.parametrize('image,mime,code',[(png((3000,3000)),'image/png','image_pixel_limit'),(b'broken','image/png','invalid_image'),(png(),'image/jpeg','image_format')])
+def test_image_validation_reason_is_safe_and_reaches_api(api,image,mime,code):
+    from ygc.cloud_avatar import ImageUploadInvalid
+    client,verifier,service=api
+    with pytest.raises(ImageUploadInvalid) as caught:normalize_image(image,mime,max_side=2048)
+    assert caught.value.code==code
+    service.upload.side_effect=lambda actor,individual,data,mime:normalize_image(data,mime,max_side=2048)
+    response=client.post(PATH,headers=AUTH|{'Content-Type':mime},content=image)
+    assert response.status_code==400 and response.json()=={'detail':{'code':code}}
