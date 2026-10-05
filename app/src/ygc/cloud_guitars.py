@@ -37,7 +37,7 @@ class CloudGuitars:
             raise ValueError('Invalid page.')
         with self.operations.access('admin_read',actor):
             with connect(self.settings,'chronicle') as con:
-                con.execute('SET TRANSACTION READ ONLY')
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
                 con.execute("SET LOCAL statement_timeout='5s'")
                 con.execute("SET LOCAL lock_timeout='2s'")
                 escaped=q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
@@ -45,8 +45,9 @@ class CloudGuitars:
                 rows=con.execute(f'''SELECT {COLUMNS} FROM individuals WHERE id>%s
                     AND (manufacturer ILIKE %s OR model ILIKE %s OR serial_number ILIKE %s)
                     ORDER BY id LIMIT %s''',(after,pattern,pattern,pattern,limit+1)).fetchall()
+                total=con.execute('SELECT COUNT(*) AS total FROM individuals').fetchone()['total']
                 more=len(rows)>limit;rows=rows[:limit]
-                return {'items':[dict(row) for row in rows], 'next_after':rows[-1]['id'] if more else None}
+                return {'total':total,'items':[dict(row) for row in rows], 'next_after':rows[-1]['id'] if more else None}
 
     def detail(self,actor,individual_id):
         if type(individual_id)!=int or not 0<individual_id<=MAX_ID:raise ValueError('Invalid identifier.')

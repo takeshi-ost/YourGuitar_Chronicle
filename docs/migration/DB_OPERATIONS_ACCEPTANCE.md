@@ -14,6 +14,10 @@
 
 データ入りの復元・初期化、ID予約・最新登録・Admin/BAN保持、所有状態の再評価は隔離PostgreSQLで検証済みだが、実クラウドでのデータ内容検証の代わりとはしない。実復旧試験は部分完了とする。試験データを追加できる段階で、保存→変更→復元による保存時点との比較、初期化→復元、対象外DBの不変を確認する。登録・認証・管理設定の全レコードが不存在であるとは扱わない。
 
+## データ入り試験の進捗（2026-10-05）
+
+利用者が手動Crawlの完了・事前保存・ギター限定・重複防止を確認し、Chronicleに実データが入った。Crawlの定期実行と、それによる重複のない個体一覧の増加も利用者確認済み。データ入りの保存→追加収集→復元、初期化→復元と対象外ユーザー情報の維持はまだ未確認。[Crawl受入状況](CLOUD_REVERB_CRAWL.md#利用者によるcrawl受入状況2026-10-05)を参照。上記の空データ時の結果は過去の確認として保持する。
+
 ## 操作する画面
 
 [Account](https://ygc-staging-accounts-rgmjxrs5kq-an.a.run.app/account)から認証済みの運営用YGCアカウントでSign Inし、[BrowserConsole](https://ygc-staging-accounts-rgmjxrs5kq-an.a.run.app/console)を開く。Google Cloud IAMのログインだけではYGC Admin操作を認証しない。

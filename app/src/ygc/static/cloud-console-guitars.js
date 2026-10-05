@@ -25,14 +25,14 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
     const params=new URLSearchParams({q:query,limit:'25'}),after=history.at(-1);if(after)params.set('after',String(after));
     const result=await request('/api/admin/guitars?'+params);
     if(current!==epoch)return;
-    if(!Array.isArray(result.items)||result.items.length>25||!(result.next_after===null||typeof result.next_after==='string'&&/^[1-9][0-9]*$/.test(result.next_after)))throw Error('Invalid page');
+    if(typeof result.total!=='string'||!/^(0|[1-9][0-9]*)$/.test(result.total)||!Array.isArray(result.items)||result.items.length>25||!(result.next_after===null||typeof result.next_after==='string'&&/^[1-9][0-9]*$/.test(result.next_after)))throw Error('Invalid page');
     $('guitarRows').replaceChildren();next=result.next_after;
     for(const row of result.items){
       const tr=document.createElement('tr');
       for(const field of ['manufacturer','model','year','serial_number']){const td=document.createElement('td');td.textContent=row[field]??'—';tr.append(td)}
       const td=document.createElement('td'),button=document.createElement('button');button.textContent=t('action.detail');button.onclick=()=>detail(row.id);td.append(button);tr.append(td);$('guitarRows').append(tr);
     }
-    $('guitarStatus').textContent=result.items.length?t('guitars.page_count',{count:result.items.length}):t('guitars.empty');
+    $('guitarStatus').textContent=t('guitars.total_count',{count:result.total});
   }
   function refresh(){return action(page)}
   function detail(id){return action(async current=>{
