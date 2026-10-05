@@ -1,6 +1,6 @@
 # Reverb CrawlのPostgreSQL接続
 
-2026-10-05。クラウド向けのCrawl DBアダプター、IAM専用Job、Admin APIとConsoleを実装した。現時点では実クラウド配置・Reverb認証・実Crawlは未完了。利用者はトークン取得済みと回答しているが、Secret登録の完了はまだ確認できていない。
+2026-10-05。クラウド向けのCrawl DBアダプター、IAM専用Job、Admin APIとConsoleを実装した。Secret version 1の登録と有効状態を確認し、専用Job/Schedulerを配置した。DB接続とReverb認証の読取り試験は成功。Console配置後の実Crawl・データ内容の受入は未完了。
 
 ## データ保存と所有状態
 
@@ -54,3 +54,14 @@ Jobの既定は--check-only（読取り接続確認だけ）。--probe-onlyはRe
 5. データが入った段階で[DB復旧受入](DB_OPERATIONS_ACCEPTANCE.md)の保存→変更→復元、初期化→復元、対象外DB・最新ユーザー情報の維持を確認する。
 
 画像付きChronicle（media_assets）の復元、ユーザー向けTopPageや残るクラウド編集APIは後続。ReverbのListing画像URLはClaimの外部根拠として保持し、今回media_assetsに画像をコピーしない。
+
+## ステージング接続確認（2026-10-05）
+
+- 実装はPR #33でCI成功後main `7173c5d`へ統合。
+- Cloud Build `d035711e-96ae-47f8-9d62-9ee2570b54de`が成功。イメージdigest `sha256:4a104e702e5f836cc5e92576dd4869bec68127295eeb513d93b525f3c26963bb`。
+- 専用Jobのcheck-only実行 `ygc-staging-reverb-crawl-w4w7z`とprobe-only実行 `ygc-staging-reverb-crawl-kthqv`が成功。どちらもDB内容を変更しない。
+- Backup/Scheduled Backup/Maintenance Jobも同じイメージに更新。初期化・復元・実Crawlはエージェントから実行していない。
+- 初回配置でgcloudの未作成Job応答「Cannot find job」を修正し、専用Job/Schedulerの作成成功を確認。応答の回帰テストを追加。
+
+- Consoleを同じイメージで配置し、ready revision `ygc-staging-accounts-00014-g85`を確認。公開health/ready/Console/Crawl JSは200、匿名Crawl GET/POSTとバックアップGETは401。既存Offlineモードとメッセージを維持した。Auto設定を書き換える管理者操作は行っていない。
+- 管理者ブラウザでの実Crawl、定期開始、データ入り復旧は上記5項目の受入待ち。

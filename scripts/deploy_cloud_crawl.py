@@ -24,7 +24,7 @@ def main():
     def exists(*parts):
         result=subprocess.run(['gcloud',*parts,'--project='+project,'--format=value(name)'],capture_output=True,text=True)
         if result.returncode==0:return True
-        if 'NOT_FOUND' in result.stderr or 'not found' in result.stderr:return False
+        if 'NOT_FOUND' in result.stderr or 'not found' in result.stderr or (parts[:3]==('run','jobs','describe') and 'Cannot find job [' in result.stderr):return False
         raise RuntimeError('Resource status unavailable.')
     # Missing user-supplied credential stops all IAM/resource mutations.
     if cli('secrets','versions','describe',args.reverb_secret_version,'--secret=ygc-staging-reverb-token','--format=value(state)')!='ENABLED':raise RuntimeError('Reverb secret version must be enabled.')

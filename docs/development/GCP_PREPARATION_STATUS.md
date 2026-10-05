@@ -184,3 +184,8 @@ PR #31のWeb revision `ygc-staging-accounts-00013-5fb` とIAM専用メンテナ�
 ## Reverb Crawl接続の実装（2026-10-05）
 
 PostgreSQLのCrawlアダプター、Chronicleだけの実行前保存、専用Job、Admin APIとConsoleのCrawl Now/Auto/実行ログを実装。利用者はReverbトークン取得済みと回答し、Secret Managerでygc-staging-reverb-tokenを作成する手順を案内した。実配置・認証・実CrawlはSecret登録完了後に進める。旧「未移植」記述は上記までの履歴で、現在は実装の検証と認証情報の準備段階。[仕様・Secret手順・確認一覧](../migration/CLOUD_REVERB_CRAWL.md)を参照。DB管理の操作受入は完了し、データ入りの実復旧試験は残る。
+
+
+2026-10-05追記：Reverb Secret version 1の有効状態を確認し、専用Crawl Job/Schedulerを配置。check-onlyによるDB接続とprobe-onlyによるReverb認証が成功した。PR #33はCI成功後mainへ統合済み。実Crawlとデータ入り復旧受入は引き続き利用者のブラウザ確認待ち。[配置・確認記録](../migration/CLOUD_REVERB_CRAWL.md#ステージング接続確認2026-10-05)を参照。
+
+Console ready revision `ygc-staging-accounts-00014-g85`の配置、health/ready、匿名Crawl操作拒否、既存Offline維持を確認した。実管理者によるCrawlとデータ入り復旧は未実施。
