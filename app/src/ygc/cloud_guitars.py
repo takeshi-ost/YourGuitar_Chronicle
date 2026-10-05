@@ -59,3 +59,7 @@ class CloudGuitars:
                 row=con.execute(f'SELECT {COLUMNS} FROM individuals WHERE id=%s',(individual_id,)).fetchone()
                 if row is None:raise GuitarMissing()
                 return dict(row)
+
+    def chronicle(self,actor,individual_id,*,after=0,limit=25):
+        from ygc.cloud_chronicle import read
+        return read(self.settings,self.operations,actor,individual_id,after=after,limit=limit)

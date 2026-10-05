@@ -84,3 +84,33 @@ def test_bigint_response_preserves_decimal_precision(api):
     assert result['items'][0]['id']==result['next_after']==str(value)
     assert result['total']==str(value)
     assert service.list.return_value['items'][0]['id']==value
+
+
+def test_chronicle_uses_canonical_admin_and_precision(api):
+    client,verifier,service=api;value=2**63-1
+    service.chronicle.return_value=dict(items=[dict(id=value,author_user_id=value,claim_type='listing')],total=value,next_after=value)
+    response=client.get('/api/admin/guitars/1/chronicle?after=5&limit=10',headers=AUTH)
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    assert response.json()['items'][0]['author_user_id']==str(value)
+    assert response.json()['total']==response.json()['next_after']==str(value)
+    service.chronicle.assert_called_once_with('canonical',1,after=5,limit=10)
+
+
+@pytest.mark.parametrize('failure,status',[('missing',401),('email',403),('member',403),('disabled',403)])
+def test_chronicle_rejects_before_history_read(api,failure,status):
+    client,verifier,service=api;headers=AUTH
+    if failure=='missing':headers={}
+    if failure=='email':verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    if failure=='member':verifier.accounts.resolve_identity.return_value['role']='member'
+    if failure=='disabled':verifier.accounts.resolve_identity.side_effect=PermissionError()
+    assert client.get('/api/admin/guitars/1/chronicle',headers=headers).status_code==status
+    service.chronicle.assert_not_called()
+
+
+def test_chronicle_has_no_mutation_routes_and_strict_parameters(api):
+    client,verifier,service=api
+    for query in ['q=name','after=0','viewer_id=1','limit=51','after=1&after=2']:
+        assert client.get('/api/admin/guitars/1/chronicle?'+query,headers=AUTH).status_code==400
+    for method in ['post','put','delete']:
+        assert getattr(client,method)('/api/admin/guitars/1/chronicle',headers=AUTH).status_code==405
+    service.chronicle.assert_not_called()
