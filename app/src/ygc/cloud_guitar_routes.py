@@ -1,9 +1,10 @@
-"""Admin-only reading; no raw rows, private evidence, image URLs or writes."""
+"""Verified Admin reading and fenced Claim decisions; no private evidence."""
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_guitars import parameters,positive_id,GuitarMissing
+from ygc.claim_revision import ClaimConflict
 
 
 def guitar_router(verifier,service):
@@ -55,6 +56,31 @@ def guitar_router(verifier,service):
         except ValueError:raise HTTPException(400,'Invalid Chronicle page.',headers=headers) from None
         except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
         except Exception:raise HTTPException(503,'Chronicle unavailable.',headers=headers) from None
+    @router.post('/api/admin/guitars/{individual_id}/claims/{claim_id}/verification')
+    async def moderate(request:Request,individual_id:str,claim_id:str):
+        who=await actor(request)
+        try:
+            if request.query_params or not request.headers.get('content-type','').startswith('application/json'):
+                raise ValueError()
+            raw=await request.body()
+            if len(raw)>1024:raise ValueError()
+            import json
+            def unique(pairs):
+                data={}
+                for key,value in pairs:
+                    if key in data:raise ValueError()
+                    data[key]=value
+                return data
+            data=json.loads(raw,object_pairs_hook=unique)
+            if not isinstance(data,dict) or set(data)!={'action','revision'}:raise ValueError()
+            result=await run_in_threadpool(service.moderate,who,positive_id(individual_id),positive_id(claim_id),**data)
+            return JSONResponse(result,headers=headers)
+        except GuitarMissing:raise HTTPException(404,'Claim not found.',headers=headers) from None
+        except ClaimConflict:
+            raise HTTPException(409,'Claim changed or database maintenance is running. Refresh before retrying.',headers=headers) from None
+        except (ValueError,TypeError):raise HTTPException(400,'Invalid decision.',headers=headers) from None
+        except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Decision unavailable. Refresh before retrying.',headers=headers) from None
     @router.get('/api/admin/guitars/{individual_id}')
     async def detail(request:Request,individual_id:str):return await execute(request,individual_id)
     return router

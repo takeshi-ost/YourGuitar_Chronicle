@@ -58,6 +58,35 @@ def run(app,accounts,operations,storage,aid):
     browser.chronicle(aid,items[0]['id'])
     with real_connect(app,'chronicle') as con:
         assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s',(items[0]['id'],)).fetchone()['current_owner_user_id']==before
+    # Admin force verification uses the shared business transaction and audit.
+    from ygc.claim_revision import ClaimConflict
+    def target_claim():return next(r for r in browser.chronicle(aid,items[0]['id'])['items'] if r['claim_type']=='specification')
+    target=target_claim();cid=target['id'];individual=items[0]['id'];previous=target['verification_status'];token=target['revision']
+    with connect(app,'chronicle') as con:audits=con.execute('SELECT COUNT(*) AS n FROM claim_admin_actions').fetchone()['n']
+    for mode in ('normal','read_only','offline','admin_only'):
+        state=operations.details(aid);operations.set_mode(aid,mode=mode,message='fixture',version=state['version'])
+        current=target_claim()
+        browser.moderate(aid,individual,cid,action='negative',revision=current['revision'])
+        current=target_claim();assert current['verification_status']=='negative'
+        browser.moderate(aid,individual,cid,action='unverified',revision=current['revision'])
+    try:browser.moderate(aid,individual,cid,action='positive',revision=token)
+    except ClaimConflict:pass
+    else:raise AssertionError('Stale decision accepted')
+    with connect(app,'operations') as guard:
+        guard.execute('SELECT pg_advisory_xact_lock(79432190)')
+        try:browser.moderate(aid,individual,cid,action='positive',revision=target_claim()['revision'])
+        except ClaimConflict:pass
+        else:raise AssertionError('Concurrent maintenance accepted')
+    try:browser.moderate(registered['app_user_id'],individual,cid,action='positive',revision=target_claim()['revision'])
+    except PermissionError:pass
+    else:raise AssertionError('Non-admin write accepted')
+    browser.moderate(aid,individual,cid,action=previous,revision=target_claim()['revision'])
+    with connect(app,'chronicle') as con:
+        assert con.execute('SELECT COUNT(*) AS n FROM claim_admin_actions').fetchone()['n']==audits+9
+        audit=con.execute('SELECT actor FROM claim_admin_actions WHERE claim_id=%s ORDER BY id DESC LIMIT 1',(cid,)).fetchone()
+        assert audit['actor']=='identity-platform:'+aid
+    state=operations.details(aid);operations.set_mode(aid,mode='offline',message='fixture',version=state['version'])
+    print('PostgreSQL Admin verification: all modes, audit, stale decision, maintenance mutex and non-admin rejection passed.')
     print('PostgreSQL Chronicle read: Listing/Specification/Ownership, fixed fields, source privacy, descending cursor and unchanged owner passed.')
     print('PostgreSQL Crawl: canonical non-login Automation ID, mixed-scope filtering, durable cursor/log, Listing/Evidence, duplicate/relisting Acquire and Lost passed.')
     # A registered Owner is not displaced by a new external listing.

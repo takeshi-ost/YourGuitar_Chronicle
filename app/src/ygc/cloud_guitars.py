@@ -1,4 +1,4 @@
-"""Explicit read-only Chronicle projection for the administrator console."""
+"""Bounded administrator guitar reads and fenced Claim decisions."""
 from ygc.db.postgres import connect
 
 FIELDS = ('id','manufacturer','model','finish','year','serial_number',
@@ -63,3 +63,25 @@ class CloudGuitars:
     def chronicle(self,actor,individual_id,*,after=0,limit=25):
         from ygc.cloud_chronicle import read
         return read(self.settings,self.operations,actor,individual_id,after=after,limit=limit)
+
+    def moderate(self,actor,individual_id,claim_id,*,action,revision):
+        import re
+        from ygc.claim_revision import ClaimConflict
+        from ygc.platform_boundaries import ActorContext
+        from ygc.db.postgres_ownership import PostgresOwnership
+        if action not in ('positive','negative','unverified') or not isinstance(revision,str) or not re.fullmatch('[0-9a-f]{64}',revision):
+            raise ValueError('Invalid decision.')
+        if any(type(v) is not int or not 0<v<=MAX_ID for v in (individual_id,claim_id)):
+            raise ValueError('Invalid identifier.')
+        # Take the maintenance/Crawl mutex before Accounts and Operations locks.
+        # This prevents updates racing reset/restore and avoids reversing job lock order.
+        with connect(self.settings,'operations') as catalog:
+            if not catalog.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ClaimConflict('Maintenance or Crawl is running.')
+            with self.operations.access('admin_write',actor) as (_,mode,account):
+                principal=ActorContext(account['id'],'identity-platform',None,True,account['app_user_id'])
+                result=PostgresOwnership(self.settings).admin_moderate_claim(claim_id,principal,action,
+                    expected_revision=revision,expected_individual_id=individual_id)
+                if not result:raise GuitarMissing()
+                # No snapshots, evidence or canonical account rows cross this API.
+                return dict(claim_id=str(claim_id),individual_id=str(individual_id),verification_status=action)

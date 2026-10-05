@@ -64,7 +64,7 @@ def main():
     app.include_router(account_router(verifier,DOCUMENTS));app.include_router(operations_router(verifier,ops,SimpleNamespace(status=lambda:dict(backend='gcs',content='available',accounts='unavailable',check='read_only'))))
     from ygc.cloud_guitar_routes import guitar_router
     from ygc.cloud_guitars import FIELDS,GuitarMissing
-    guitar_reads=[]
+    guitar_reads=[];decisions=[];claim_states={};claim_versions={}
     rows=[dict.fromkeys(FIELDS) | dict(id=i,manufacturer='<img src=x onerror=alert(1)>',model='Model '+str(i),year='1960',serial_number='S'+str(i)) for i in range(1,29)]
     class Guitars:
         def list(self,actor,*,q,after,limit):
@@ -74,9 +74,16 @@ def main():
                 return dict(total=len(rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
         def chronicle(self,actor,individual_id,*,after,limit):
             with ops.access('admin_read',actor):
-                claims=[dict(id=i,author_user_id=1,author_name='<b>Automation</b>',claim_type='listing',verification_status='positive' if i%3==0 else 'negative' if i%3==1 else 'unverified',effective_status='active',occurred_at='2026-10-05',created_at='now',field_name=None,value_text=None,body='<img src=x>',items=[dict(field_name='serial_number',value_text='S'+str(individual_id))]) for i in range(1,29)]
+                claims=[dict(id=i,author_user_id=1,author_name='<b>Automation</b>',claim_type='listing',verification_status='positive' if i%3==0 else 'negative' if i%3==1 else 'unverified',revision=str(claim_versions.get(i,0)).zfill(64),effective_status='active',occurred_at='2026-10-05',created_at='now',field_name=None,value_text=None,body='<img src=x>',items=[dict(field_name='serial_number',value_text='S'+str(individual_id))]) for i in range(1,29)]
+                for row in claims:row['verification_status']=claim_states.get(row['id'],row['verification_status'])
                 selected=[row for row in reversed(claims) if after==0 or row['id']<after]
                 return dict(items=selected[:limit],total=len(claims),next_after=selected[limit-1]['id'] if len(selected)>limit else None)
+        def moderate(self,actor,individual_id,claim_id,*,action,revision):
+            from ygc.claim_revision import ClaimConflict
+            with ops.access('admin_write',actor):
+                if revision!=str(claim_versions.get(claim_id,0)).zfill(64):raise ClaimConflict()
+                decisions.append((individual_id,claim_id,action));claim_states[claim_id]=action;claim_versions[claim_id]=claim_versions.get(claim_id,0)+1
+                return dict(claim_id=str(claim_id),individual_id=str(individual_id),verification_status=action)
         def detail(self,actor,individual_id):
             with ops.access('admin_read',actor):
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
@@ -90,6 +97,12 @@ def main():
             with ops.access('admin_read',actor):
                 matching=[r for r in user_rows if r['id']>after and q.lower() in r['display_name'].lower()]
                 return dict(total=len(user_rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+        def moderate(self,actor,individual_id,claim_id,*,action,revision):
+            from ygc.claim_revision import ClaimConflict
+            with ops.access('admin_write',actor):
+                if revision!=str(claim_versions.get(claim_id,0)).zfill(64):raise ClaimConflict()
+                decisions.append((individual_id,claim_id,action));claim_states[claim_id]=action;claim_versions[claim_id]=claim_versions.get(claim_id,0)+1
+                return dict(claim_id=str(claim_id),individual_id=str(individual_id),verification_status=action)
         def detail(self,actor,individual_id):
             with ops.access('admin_read',actor):
                 if not 1<=individual_id<=len(user_rows):raise UserMissing()
@@ -250,6 +263,23 @@ def main():
                 assert page.locator('#chronicleRows .negative[open], #chronicleRows .unverified[open]').count()==0
                 page.locator('#chronicleNext').click();expect(page.locator('#chronicleRows details')).to_have_count(3)
                 page.locator('#chroniclePrevious').click();expect(page.locator('#chronicleRows details')).to_have_count(25)
+                card=page.locator('#chronicleRows details').filter(has=page.locator('.claim-admin-decision')).first
+                card.locator('summary').click()
+                if card.get_attribute('open') is None:card.locator('summary').click()
+                card.locator('.claim-admin-decision').click()
+                expect(page.locator('#claimDecisionDialog')).to_be_visible()
+                before=len(decisions);page.locator('#claimDecisionCancel').click();assert len(decisions)==before
+                card.locator('.claim-admin-decision').click();page.keyboard.press('Escape');expect(page.locator('#claimDecisionDialog')).not_to_be_visible();assert len(decisions)==before
+                card.locator('.claim-admin-decision').click();page.mouse.click(2,2);expect(page.locator('#claimDecisionDialog')).not_to_be_visible();assert len(decisions)==before
+                card.locator('.claim-admin-decision').click();page.locator('#claimDecisionValue').select_option('positive');page.locator('#claimDecisionConfirm').click()
+                expect(page.locator('#claimDecisionStatus')).to_have_text('Decision saved. Guitar details and history have been refreshed.')
+                assert len(decisions)==before+1 and decisions[-1][2]=='positive'
+                expect(page.locator('#chronicleRows details').first).to_have_attribute('open','')
+                page.locator('#chronicleRows .claim-admin-decision').first.click();claim_versions[28]+=1
+                page.locator('#claimDecisionValue').select_option('negative');page.locator('#claimDecisionConfirm').click()
+                expect(page.locator('#claimDecisionStatus')).to_have_text('The Claim changed or Crawl/maintenance is running. Refresh before reviewing again.')
+                assert len(decisions)==before+1
+                page.locator('#chronicleRefresh').click();expect(page.locator('#chronicleRows details')).to_have_count(25)
                 assert page.locator('#guitarDetailFields img').count()==0
                 assert page.evaluate('document.documentElement.scrollHeight<=innerHeight')
                 page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()

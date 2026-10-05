@@ -1231,7 +1231,7 @@
   "users.field_created_at": "登録日時",
   "users.field_updated_at": "更新日時",
   "chronicle.heading": "クロニクル",
-  "chronicle.read_only": "Claim履歴の閲覧。判定・編集操作は今後接続します。",
+  "chronicle.read_only": "Claim履歴と管理者による判定。Claim編集と画像は未接続です。",
   "chronicle.empty": "Claim履歴はありません。",
   "chronicle.total": "履歴総数：{count}件",
   "chronicle.positive": "肯定",
@@ -1249,7 +1249,7 @@
   "chronicle.type_comment": "コメント",
   "chronicle.type_statement": "主張",
   "guitars.heading": "ギターDB管理",
-  "guitars.read_only": "個体情報とクロニクルの閲覧。編集と画像表示は今後接続します。",
+  "guitars.read_only": "個体情報・Claim履歴と管理者による判定。編集と画像は未接続です。",
   "guitars.search": "メーカー・モデル・シリアル番号",
   "guitars.search_button": "検索",
   "guitars.empty": "該当するギターはありません。",
@@ -1330,5 +1330,12 @@
   "crawl.succeeded": "クロールが完了しました。",
   "crawl.failed": "クロールが失敗しました。再実行前に実行段階と保護用バックアップを確認してください。",
   "crawl.unknown": "結果を確認できていません。再実行前に更新してください。",
-  "crawl.busy": "クロールまたはDB管理操作がすでに待機・実行中です。"
+  "crawl.busy": "クロールまたはDB管理操作がすでに待機・実行中です。",
+  "chronicle.admin_decision": "管理者による判定",
+  "chronicle.decision_warning": "Claim #{id}：現在は{state}です。管理者権限で判定を上書きし、現在の所有者と個体情報を再評価します。紐付いたFormer Ownerのペアは同時に変更します。",
+  "chronicle.apply_decision": "判定を適用",
+  "chronicle.cancel_decision": "キャンセル",
+  "chronicle.decision_saved": "判定を保存し、個体情報と履歴を更新しました。",
+  "chronicle.decision_conflict": "Claimが変更されたか、Crawl／DBメンテナンスが実行中です。再取得してから再確認してください。",
+  "chronicle.decision_unavailable": "結果を確認できませんでした。再操作する前に履歴を再取得してください。"
 }

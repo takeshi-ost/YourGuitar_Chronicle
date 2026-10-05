@@ -16,7 +16,7 @@ def read(settings,operations,actor,individual_id,*,after=0,limit=25):
             con.execute("SET LOCAL lock_timeout='2s'")
             if not con.execute('SELECT 1 FROM individuals WHERE id=%s',(individual_id,)).fetchone():raise GuitarMissing()
             total=con.execute('SELECT COUNT(*) AS total FROM claims WHERE individual_id=%s',(individual_id,)).fetchone()['total']
-            rows=con.execute('''SELECT c.id,c.author_user_id,u.display_name AS author_name,c.claim_type,
+            rows=con.execute('''SELECT c.id,c.individual_id,c.admin_verification,c.updated_at,c.author_user_id,u.display_name AS author_name,c.claim_type,
               c.field_name,left(c.value_text,2000) AS value_text,left(c.body,2000) AS body,c.ownership_kind,
               c.occurred_at,c.created_at,c.status,c.verification_status,
               CASE WHEN u.ban_status='normal' THEN c.status ELSE 'inactive' END AS effective_status
@@ -37,5 +37,9 @@ def read(settings,operations,actor,individual_id,*,after=0,limit=25):
                   FROM (SELECT *,row_number() OVER(PARTITION BY claim_id ORDER BY id) AS n
                         FROM claim_spec_items WHERE claim_id=ANY(%s)) AS bounded WHERE n<=20 ORDER BY claim_id,n''',(ids,)).fetchall()
                 for item in specs:items[item['claim_id']].append(dict(field_name=item['field_name'],value_text=item['value_text']))
-            for row in rows:row['items']=items[row['id']]
+            from ygc.claim_revision import revision
+            for row in rows:
+                row['revision']=revision(row)
+                for private in ('individual_id','admin_verification','updated_at'):row.pop(private)
+                row['items']=items[row['id']]
             return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)

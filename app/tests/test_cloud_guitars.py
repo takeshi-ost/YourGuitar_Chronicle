@@ -114,3 +114,52 @@ def test_chronicle_has_no_mutation_routes_and_strict_parameters(api):
     for method in ['post','put','delete']:
         assert getattr(client,method)('/api/admin/guitars/1/chronicle',headers=AUTH).status_code==405
     service.chronicle.assert_not_called()
+
+
+def test_admin_decision_uses_canonical_actor(api):
+    client,verifier,service=api
+    service.moderate.return_value=dict(claim_id='2',individual_id='1',verification_status='negative')
+    response=client.post('/api/admin/guitars/1/claims/2/verification',headers=AUTH,json=dict(action='negative',revision='a'*64))
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    service.moderate.assert_called_once_with('canonical',1,2,action='negative',revision='a'*64)
+
+
+@pytest.mark.parametrize('payload',[{},[],dict(action='positive',revision='a'*64,actor='injected')])
+def test_invalid_decision_payload_never_executes(api,payload):
+    client,verifier,service=api
+    assert client.post('/api/admin/guitars/1/claims/2/verification',headers=AUTH,json=payload).status_code==400
+    service.moderate.assert_not_called()
+
+
+def test_duplicate_decision_keys_and_large_payload(api):
+    client,verifier,service=api
+    for raw in ('{"action":"positive","action":"negative","revision":"x"}','x'*1025):
+        assert client.post('/api/admin/guitars/1/claims/2/verification',headers=AUTH|{'Content-Type':'application/json'},content=raw).status_code==400
+    service.moderate.assert_not_called()
+
+
+@pytest.mark.parametrize('failure,status',[('missing',401),('email',403),('member',403),('disabled',403)])
+def test_decision_auth_rejected_before_write(api,failure,status):
+    client,verifier,service=api;headers=AUTH
+    if failure=='missing':headers={}
+    if failure=='email':verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    if failure=='member':verifier.accounts.resolve_identity.return_value['role']='member'
+    if failure=='disabled':verifier.accounts.resolve_identity.side_effect=PermissionError('private')
+    assert client.post('/api/admin/guitars/1/claims/2/verification',headers=headers,json=dict(action='positive',revision='a'*64)).status_code==status
+    service.moderate.assert_not_called()
+
+
+def test_decision_conflict_and_errors_private(api):
+    from ygc.claim_revision import ClaimConflict
+    client,verifier,service=api
+    for error,status in [(ClaimConflict('private'),409),(ValueError('private'),400),(PermissionError('private'),403),(RuntimeError('private'),503)]:
+        service.moderate.side_effect=error
+        result=client.post('/api/admin/guitars/1/claims/2/verification',headers=AUTH,json=dict(action='positive',revision='a'*64))
+        assert result.status_code==status and 'private' not in result.text
+
+
+@pytest.mark.parametrize('action,revision',[('delete','a'*64),('invalid','a'*64),('positive','x'),('positive',None)])
+def test_service_invalid_decision_no_database(action,revision):
+    from ygc.cloud_guitars import CloudGuitars
+    service=CloudGuitars(None,None)
+    with pytest.raises(ValueError):service.moderate('actor',1,2,action=action,revision=revision)
