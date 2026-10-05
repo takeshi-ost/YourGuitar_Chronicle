@@ -1208,7 +1208,7 @@
   "avatar.restricted": "現在、この画像操作は制限されています。",
   "avatar.failed": "画像操作に失敗しました。更新して現在の画像を確認してください。",
   "users.heading": "ユーザーDB管理",
-  "users.read_only": "アカウントと所有情報の閲覧。編集は未接続です。",
+  "users.read_only": "アカウント・所有情報の閲覧と管理者によるプロフィール編集。",
   "users.search": "名前またはアカウントID",
   "users.search_button": "検索",
   "users.detail": "ユーザー詳細",
@@ -1343,5 +1343,13 @@
   "users.ownership_refresh": "所有一覧を再取得",
   "users.ownership_empty": "この区分のギターはありません。",
   "users.ownership_total": "ギター総数：{count}",
-  "users.ownership_unavailable": "所有情報を取得できませんでした。再取得してください。"
+  "users.ownership_unavailable": "所有情報を取得できませんでした。再取得してください。",
+  "users.edit_profile": "プロフィールを編集",
+  "users.refresh_detail": "詳細を再取得",
+  "users.save_profile": "プロフィールを保存",
+  "users.profile_notice": "このアカウントの表示名・国・地域・自己紹介を変更します。",
+  "users.profile_saved": "プロフィールを保存しました。関連する個体情報への反映は少し遅れることがあります。",
+  "users.profile_conflict": "プロフィールが変更されたか、DBメンテナンスが実行中です。詳細を再取得してから編集してください。",
+  "users.profile_invalid": "入力項目と文字数を確認してください。",
+  "users.profile_unavailable": "保存結果を確認できませんでした。再操作する前に詳細を再取得してください。"
 }

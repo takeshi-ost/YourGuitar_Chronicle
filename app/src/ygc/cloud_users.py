@@ -56,9 +56,9 @@ class CloudUsers:
                 con.execute('SET TRANSACTION READ ONLY')
                 con.execute("SET LOCAL statement_timeout='5s'")
                 con.execute("SET LOCAL lock_timeout='2s'")
-                row=con.execute(f'SELECT {COLUMNS} FROM account_records WHERE id=%s',(individual_id,)).fetchone()
+                row=con.execute(f'SELECT {COLUMNS},projection_version FROM account_records WHERE id=%s',(individual_id,)).fetchone()
                 if row is None:raise UserMissing()
-                return dict(row)
+                result=dict(row);result['profile_revision']=str(result.pop('projection_version'));return result
 
     def guitars(self,actor,user_id,*,kind,after=0,limit=25):
         from ygc.owned_guitar_visibility import VISIBLE_SQL
@@ -86,3 +86,30 @@ class CloudUsers:
                     rows=con.execute(f'SELECT i.id,i.manufacturer,i.model,i.year,i.serial_number FROM {table} WHERE {scope} AND i.id>%s ORDER BY i.id LIMIT %s',params+(after,limit+1)).fetchall()
                     more=len(rows)>limit;rows=[dict(row) for row in rows[:limit]]
                     return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)
+
+    def edit_profile(self,actor,user_id,body):
+        import json,uuid
+        from ygc.cloud_profile import validate,ProfileConflict
+        from ygc.db.postgres_accounts import now
+        if type(user_id) is not int or not 0<user_id<=MAX_ID:raise ValueError('Invalid identifier.')
+        version,fields=validate(body)
+        with connect(self.settings,'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ProfileConflict('Database maintenance or Crawl is running.')
+            with self.operations.account_access('admin_write',actor) as (con,mode,account):
+                con.execute("SET LOCAL lock_timeout='2s'")
+                con.execute("SET LOCAL statement_timeout='5s'")
+                target=con.execute('SELECT * FROM account_records WHERE id=%s FOR UPDATE',(user_id,)).fetchone()
+                if not target:raise UserMissing()
+                if target['projection_version']!=version:raise ProfileConflict('Profile changed; reload before editing.')
+                timestamp=now()
+                result=con.execute('''UPDATE account_records SET display_name=%s,location_country=%s,location_region=%s,bio=%s,updated_at=%s
+                    WHERE id=%s RETURNING projection_version''',(*fields.values(),timestamp,user_id)).fetchone()
+                changed=[key for key,value in fields.items() if target[key]!=value]
+                con.execute('INSERT INTO account_metadata(key,value) VALUES(%s,%s)',
+                    ('admin_profile:'+str(uuid.uuid4()),json.dumps(dict(action='admin_profile_edit',actor_app_user_id=account['app_user_id'],
+                      target_app_user_id=target['app_user_id'],changed_fields=changed,previous_revision=version,
+                      revision=result['projection_version'],occurred_at=timestamp))))
+            # Account commit and outbox enqueue precede releasing the service-mode fence.
+            # The existing projection Job handles Chronicle updates and retry after failures.
+            return dict(id=str(user_id),profile_revision=str(result['projection_version']),saved=True)

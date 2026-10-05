@@ -102,6 +102,17 @@ def run(app,accounts,operations,storage,aid):
     with connect(app,'chronicle') as con:
         assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s',(target,)).fetchone()['current_owner_user_id']==registered['id']
     assert repo.record_reverb_unavailable('owner-pending')['reason']=='not_current_external_source'
+    # Admin profile editing uses the same durable projection and keeps ownership IDs stable.
+    from ygc.cloud_users import CloudUsers
+    users=CloudUsers(app,operations);profile=users.detail(aid,registered['id'])
+    users.edit_profile(aid,registered['id'],dict(revision=profile['profile_revision'],fields=dict(display_name='Renamed Owner',location_country='Japan',location_region='Tokyo',bio='Profile test')))
+    assert users.detail(aid,registered['id'])['display_name']=='Renamed Owner'
+    accounts.drain_projection()
+    with connect(app,'chronicle') as con:
+        snapshot=con.execute('SELECT current_owner_user_id,current_owner_name FROM individuals WHERE id=%s',(target,)).fetchone()
+        assert snapshot['current_owner_user_id']==registered['id'] and snapshot['current_owner_name']=='Renamed Owner'
+    assert target in {r['id'] for r in users.guitars(aid,registered['id'],kind='owned')['items']}
+
     print('PostgreSQL Crawl ownership: external Acquire waits for registered Owner and Lost cannot remove user ownership passed.')
 
     from unittest.mock import Mock,patch

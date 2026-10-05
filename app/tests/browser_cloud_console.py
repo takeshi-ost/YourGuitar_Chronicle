@@ -91,12 +91,19 @@ def main():
     app.include_router(guitar_router(verifier,Guitars()))
     from ygc.cloud_user_routes import user_router
     from ygc.cloud_users import FIELDS as USER_FIELDS,UserMissing
-    user_rows=[dict.fromkeys(USER_FIELDS)|dict(id=i,display_name='<b>User '+str(i)+'</b>',account_type='user',role='admin' if i==1 else 'member',disabled=0,ban_status='normal',bio='Profile '+str(i)) for i in range(1,29)]
+    user_rows=[dict.fromkeys(USER_FIELDS)|dict(id=i,display_name='<b>User '+str(i)+'</b>',account_type='user',role='admin' if i==1 else 'member',disabled=0,ban_status='normal',bio='Profile '+str(i),profile_revision='1') for i in range(1,29)]
     class Users:
         def list(self,actor,*,q,after,limit):
             with ops.access('admin_read',actor):
                 matching=[r for r in user_rows if r['id']>after and q.lower() in r['display_name'].lower()]
                 return dict(total=len(user_rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+        def edit_profile(self,actor,user_id,body):
+            from ygc.cloud_profile import ProfileConflict
+            with ops.access('admin_write',actor):
+                record=user_rows[user_id-1]
+                if record['profile_revision']!=body['revision']:raise ProfileConflict()
+                record.update(body['fields']);record['profile_revision']=str(int(record['profile_revision'])+1)
+                return dict(id=str(user_id),saved=True,profile_revision=record['profile_revision'])
         def guitars(self,actor,user_id,*,kind,after,limit):
             with ops.access('admin_read',actor):
                 records=rows if user_id==1 and kind=='owned' else rows[:1] if user_id==1 else []
@@ -249,6 +256,20 @@ def main():
                 page.locator('#userRows button').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0
+                page.locator('#userProfileEdit').click();expect(page.locator('#userProfileDialog')).to_be_visible()
+                page.locator('#userProfile_display_name').fill('Canceled name');page.keyboard.press('Escape')
+                assert user_rows[0]['display_name']=='<b>User 1</b>'
+                page.locator('#userProfileEdit').click();page.mouse.click(2,2);expect(page.locator('#userProfileDialog')).not_to_be_visible()
+                page.locator('#userProfileEdit').click();page.locator('#userProfileCancel').click();expect(page.locator('#userProfileDialog')).not_to_be_visible()
+                page.locator('#userProfileEdit').click();page.locator('#userProfile_display_name').fill('<b>Edited admin</b>');page.locator('#userProfile_bio').fill('Edited bio');page.locator('#userProfileSave').click()
+                expect(page.locator('#userProfileStatus')).to_have_text('Profile saved. Related guitar information may take a little longer to update.')
+                expect(page.locator('#userDetailFields')).to_contain_text('<b>Edited admin</b>');assert page.locator('#userDetailFields b').count()==0
+                page.locator('#userProfileEdit').click();user_rows[0]['profile_revision']='3';page.locator('#userProfileSave').click()
+                expect(page.locator('#userProfileStatus')).to_have_text('The profile changed or database maintenance is running. Refresh detail before editing again.')
+                page.locator('#userDetailRefresh').click();expect(page.locator('#userDetailFields')).to_contain_text('Edited bio')
+                page.locator('#userProfileEdit').click();page.locator('#userProfile_display_name').fill('<b>User 1</b>');page.locator('#userProfile_bio').fill('Profile 1');page.locator('#userProfileSave').click()
+                expect(page.locator('#userProfileStatus')).to_have_text('Profile saved. Related guitar information may take a little longer to update.')
+
                 owned=page.locator('#userGuitars_owned');former=page.locator('#userGuitars_formerly_owned')
                 expect(owned.locator('.user-owned-guitars button')).to_have_count(25)
                 expect(owned).to_contain_text('Total guitars: 28');expect(former.locator('.user-owned-guitars button')).to_have_count(1)

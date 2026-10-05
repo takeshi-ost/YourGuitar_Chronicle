@@ -212,3 +212,7 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 2026-10-05追記：Admin強制判定（PR #40）は必須CI成功・main統合・ステージング配置済み。利用者がモーダル、取消し・外クリック、判定保存・再読み込み、Read only / Offline中の管理者操作、2タブの競合拒否、SignOut後の制限をすべて確認し、操作対象を元の状態へ戻したと報告した。この範囲の受入は完了。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#管理者判定の利用者受入2026-10-05)を参照。履歴25件超の実クラウドページ移動は引き続き対象データ待ち。通常Owner判定・申請審議・Claim本文編集・画像付き復旧等は後続範囲。
 
 次の移行範囲はUser DetailのOwned / Formerly Owned閲覧。既存の所有者再評価結果と共有した過去所有の表示条件を使用し、個体リンクをProduct Detailへ接続する。現在所有・過去所有の実データがない区分は操作受入と内容比較を分けて記録する。[仕様・確認手順](../migration/CLOUD_BROWSER_CONSOLE.md#user-detailのowned--formerly-owned2026-10-05)を参照。
+
+2026-10-05の所有一覧受入：PR #41はCI成功・main統合・配置済み。利用者が空表示、ユーザー切替・再取得・左右独立スクロール、SignOut後の制限に問題なしと報告した。所有履歴の分類・総数・個体リンク、および25件超のページ移動は対象データがなく実クラウドでは未確認。隔離試験の成功と区別してデータ待ちとして残す。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#所有一覧の利用者受入2026-10-05)を参照。
+
+次の移行範囲はBrowser Consoleの管理者プロフィール編集。表示名・国・地域・自己紹介をAccounts正本へ保存し、既存の投影Jobで関連Snapshotへ反映する。正本Admin/モードの保存フェンス、比較版による競合拒否、監査との原子性、Crawl/復元/初期化との排他を確認する。[仕様・受入手順](../migration/CLOUD_BROWSER_CONSOLE.md#user-detailの管理者プロフィール編集2026-10-05)を参照。権限変更・BAN・一般ユーザー編集画面は後続範囲。
