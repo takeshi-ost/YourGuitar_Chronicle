@@ -90,6 +90,15 @@ def main():
             record.update(fields);record['version']=version+1
             return dict(saved=True)
     app.include_router(self_profile_router(TestVerifier(),Profiles()))
+    from ygc.cloud_self_guitars_routes import self_guitars_router
+    class Guitars:
+        def own_guitars(self,actor,*,kind,after,limit):
+            if failures.get('ownership'):raise PermissionError()
+            first=records.get('fixture-new@example.invalid',{}).get('app_user_id')
+            rows=[dict(id=i,manufacturer='<b>Maker</b>',model='Model '+str(i),year=1960+i,serial_number='S'+str(i)) for i in range(1,29)] if actor==first and kind=='owned' else [dict(id=50,manufacturer='Maker',model='Former',year=None,serial_number=None)] if actor==first else []
+            page=[row for row in rows if row['id']>after][:limit+1];more=len(page)>limit;page=page[:limit]
+            return dict(items=page,total=len(rows),next_after=page[-1]['id'] if more else None)
+    app.include_router(self_guitars_router(TestVerifier(),Guitars()))
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
@@ -168,6 +177,19 @@ def main():
                 expect(page.locator('#sendVerification')).not_to_be_visible()
                 ready()
                 expect(page.locator('#verificationStatus')).to_have_text('Email address verified.')
+                owned=page.locator('#selfGuitars_owned');former=page.locator('#selfGuitars_formerly_owned')
+                expect(owned.locator('li')).to_have_count(25);expect(owned).to_contain_text('Total guitars: 28')
+                expect(former.locator('li')).to_have_count(1);expect(former).to_contain_text('Former')
+                assert owned.locator('b,img').count()==0
+                owned.get_by_role('button',name='Next',exact=True).click();expect(owned.locator('li')).to_have_count(3)
+                owned.get_by_role('button',name='Previous',exact=True).click();expect(owned.locator('li')).to_have_count(25)
+                failures['ownership']=True
+                owned.get_by_role('button',name='Refresh',exact=True).click()
+                expect(owned).to_contain_text('restricted');expect(page.locator('#selfGuitars li')).to_have_count(0)
+                expect(owned.get_by_role('button',name='Next',exact=True)).to_be_disabled()
+                failures['ownership']=False
+                owned.get_by_role('button',name='Refresh',exact=True).click();expect(owned.locator('li')).to_have_count(25)
+                former.get_by_role('button',name='Refresh',exact=True).click();expect(former.locator('li')).to_have_count(1)
                 expect(page.locator('#selfProfile')).to_be_visible()
                 expect(page.locator('#selfProfileValues')).to_contain_text('Browser Cloud User')
                 for cancel in ('button','escape','outside'):
@@ -227,6 +249,8 @@ def main():
                 expect(page.locator('#signOut')).not_to_be_visible()
                 expect(page.locator('#accountSummary')).not_to_be_visible()
                 expect(page.locator('#selfProfile')).not_to_be_visible()
+                expect(page.locator('#selfGuitars')).not_to_be_visible()
+                expect(page.locator('#selfGuitars li')).to_have_count(0)
                 expect(page.locator('#accountAvatar')).not_to_be_visible()
                 page.locator('#email').fill('new@example.invalid')
                 page.locator('#password').fill('bad')
@@ -266,10 +290,14 @@ def main():
                 page.locator('#sendVerification').click()
                 expect(page.locator('#status')).to_contain_text('確認メールを送信しました')
                 assert page.evaluate('window.fixtureVerificationLanguage') == 'ja'
+                page.evaluate("sessionStorage.setItem('verified-orphan@example.invalid','true')")
+                page.locator('#refreshVerification').click()
+                expect(page.locator('#selfGuitars_owned')).to_contain_text('この区分のギターはありません。')
+                expect(page.locator('#selfGuitars li')).to_have_count(0)
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 context.close()
                 browser.close()
-            print('Cloud account browser: self profile cancel/save/reload/conflict/SignOut/mobile, registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')
+            print('Cloud account browser: self profile and ownership paging/empty/privacy/restriction/SignOut/mobile, registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')
         finally:
             server.should_exit = True
             thread.join(timeout=10)

@@ -209,6 +209,12 @@ def run(port):
             for mode in MODES:
                 version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
                 assert user_browser.guitars(aid,account_id,kind='owned')['total']==25
+                for actor in (aid,bid):
+                    for kind in ('owned','formerly_owned'):
+                        if mode in ('normal','read_only') or (mode=='admin_only' and actor==aid):
+                            target=a if actor==aid else b
+                            assert user_browser.own_guitars(actor,kind=kind)==user_browser.guitars(aid,target['id'],kind=kind)
+                        else:rejected(PermissionError,lambda:user_browser.own_guitars(actor,kind=kind))
             rejected(PermissionError,lambda:user_browser.guitars(bid,account_id,kind='owned'))
             rejected(UserMissing,lambda:user_browser.guitars(aid,999999,kind='owned'))
             assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items']==[]
@@ -223,6 +229,16 @@ def run(port):
             assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items']==[]
             with connect(app,'chronicle') as con:
                 con.execute('DELETE FROM claims WHERE id=%s',(claim,));con.execute('DELETE FROM user_guitars WHERE id=%s',(link,))
+            previous_mode=operations.details(aid)
+            version=operations.set_mode(aid,mode='normal',message='Test',version=version)['version']
+            # Projection UUID mismatch cannot expose an unrelated numeric-ID participant.
+            with connect(app,'chronicle') as con:
+                con.execute('UPDATE individuals SET current_owner_user_id=%s WHERE id=%s',(a['id'],gids[0]))
+            assert user_browser._guitars(a['id'],'wrong-fixture-uuid','owned',0,25)['total']==0
+            assert user_browser.own_guitars(aid,kind='owned')['total']==1
+            with connect(app,'chronicle') as con:con.execute('UPDATE individuals SET current_owner_user_id=NULL WHERE id=%s',(gids[0],))
+            version=operations.set_mode(aid,mode=previous_mode['mode'],message=previous_mode['message'],version=version)['version']
+            print('PostgreSQL self ownership: canonical ID/UUID, mode matrix, shared visibility and other-account isolation passed.')
             print('PostgreSQL user reads: canonical Accounts, total/search/cursor, fixed profile fields, all modes and member refusal passed.')
             # Populated v2 projection rows contain timezone-aware timestamps.
             from ygc.cloud_db_snapshot import snapshot,verify_snapshot

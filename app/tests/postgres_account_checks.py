@@ -39,6 +39,9 @@ def run(port):
                 assert not bootstrap(owner, target, role)
                 assert status(app, target)['version'] == 2
                 raises(ValueError, lambda: migrate(app, target, role))
+            name=owner.database('operations')
+            admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
+            created.append(name);bootstrap(owner,'operations',role)
             def register(subject, **extra):
                 return store.ensure_identity(issuer='verified-test-issuer', subject=subject, display_name=subject, **extra)
             with ThreadPoolExecutor(max_workers=4) as pool:
@@ -211,7 +214,14 @@ def transitions(app, store, a, b, c):
             assert kind=='admin_read' and actor==a['app_user_id']
             yield
     browser=CloudUsers(app,ReadGate())
-    def owned_ids(user,kind):return {r['id'] for r in browser.guitars(a['app_user_id'],user['id'],kind=kind)['items']}
+    from ygc.db.postgres_operations import PostgresOperations
+    ops=PostgresOperations(app)
+    with connect(app,'operations') as con:con.execute("UPDATE settings SET mode='normal' WHERE id=1")
+    own_browser=CloudUsers(app,ops)
+    def owned_ids(user,kind):
+        result={r['id'] for r in browser.guitars(a['app_user_id'],user['id'],kind=kind)['items']}
+        assert result=={r['id'] for r in own_browser.own_guitars(user['app_user_id'],kind=kind)['items']}
+        return result
     with connect(app, 'chronicle') as con:
         individual = con.execute("""INSERT INTO individuals(manufacturer,normalized_manufacturer,serial_number,
             normalized_serial,created_at,updated_at,current_owner_user_id)
