@@ -127,6 +127,23 @@ def run(port):
                 version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
                 assert len(guitars.list(aid)['items'])==25
             print('PostgreSQL guitar reads: bounded keyset pages, literal wildcard search, fixed fields, missing IDs, Admin mode matrix and member refusal passed.')
+            from ygc.cloud_users import CloudUsers,FIELDS as USER_FIELDS,UserMissing
+            user_browser=CloudUsers(app,operations)
+            users_page=user_browser.list(aid)
+            assert users_page['total']>=2 and users_page['items']
+            account_id=users_page['items'][0]['id']
+            user_record=user_browser.detail(aid,account_id)
+            assert set(user_record)==set(USER_FIELDS)
+            assert not {'identity_subject','identity_provider','avatar_storage_path','date_of_birth'} & set(user_record)
+            assert user_browser.list(aid,q='not-present-fixture')['items']==[]
+            assert user_browser.list(aid,q='not-present-fixture')['total']==users_page['total']
+            assert user_browser.list(aid,after=account_id)['total']==users_page['total']
+            rejected(UserMissing,lambda:user_browser.detail(aid,999999))
+            rejected(PermissionError,lambda:user_browser.list(bid))
+            for mode in MODES:
+                version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                assert user_browser.detail(aid,account_id)['id']==account_id
+            print('PostgreSQL user reads: canonical Accounts, total/search/cursor, fixed profile fields, all modes and member refusal passed.')
             # Populated v2 projection rows contain timezone-aware timestamps.
             from ygc.cloud_db_snapshot import snapshot,verify_snapshot
             assert accounts.drain_projection()>0

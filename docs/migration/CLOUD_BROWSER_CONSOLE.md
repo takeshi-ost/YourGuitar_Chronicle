@@ -67,3 +67,14 @@ PR #31の必須CI成功・main統合・実配置、非公開Jobの4DB読取り�
 
 
 個体総数表示：ページ内件数を廃止し、Chronicleのindividuals全体をCOUNTして総数を表示する。検索・ページ移動で総数を絞り込まず、一覧と総数を同じ読取りスナップショットで取得する。Refreshで最新状態を再取得し、Crawlや復元・初期化前後の差分を確認する。
+
+
+## User DB ManagementとUser Detail
+
+Accounts正本の読取りを接続。左Mainにユーザー一覧・総数・名前/ID検索・25件単位のPrevious/Next、右DetailにUser Detailを配置する。ヘッダーUser DBの位置リンクは左右それぞれの該当領域へジャンプし、ジャンプ後もスクロールは独立。未選択時も右パネルは画面高に合わせ、詳細は1項目ずつ表示する。
+
+Adminの確認済みIdentity Platform認証とAccounts正本の現在権限を各APIで確認する。全メンテナンスモードで閲覧可能。一般ユーザー・無効化ユーザー・未確認メール・SignOut後は管理APIで拒否する。数値IDと件数は文字列で返してBIGINT精度を保ち、取得SQLの対象列を固定する。表示項目はID/UUID、名前、アカウント種別、権限、ログイン有効状態、BAN状態、国/地域、自己紹介、登録/更新日時。Identity資格情報・生トークン・Storageパスは返さない。
+
+Automation等のログインできないsourceアカウントも一覧と総数に含む。編集、権限変更、BAN操作、Owned/Formerly Owned、SNS表示は別の後続範囲。Accountsの変更やGoogle認証ユーザーの追加/削除は今回行わない。
+
+配置後の確認：Adminで再読み込みし、User DBの表示、既存登録ユーザーとsourceアカウント、検索・総数・Detailの該当表示、左右独立スクロールを確認する。SignOut/一般ユーザーでは管理表示が利用できないことも確認する。
