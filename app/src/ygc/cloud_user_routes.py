@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import QueryParams
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_users import parameters,positive_id,UserMissing
+from ygc.cloud_profile import ProfileConflict
 
 
 def user_router(verifier,service):
@@ -58,6 +59,30 @@ def user_router(verifier,service):
         except ValueError:raise HTTPException(400,'Invalid ownership page.',headers=headers) from None
         except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
         except Exception:raise HTTPException(503,'Ownership data unavailable.',headers=headers) from None
+    @router.put('/api/admin/users/{user_id}/profile')
+    async def edit_profile(request:Request,user_id:str):
+        who=await actor(request)
+        try:
+            if request.query_params or not request.headers.get('content-type','').startswith('application/json'):raise ValueError()
+            import json
+            raw=await request.body()
+            if len(raw)>20000:raise ValueError()
+            def unique(pairs):
+                data={}
+                for key,value in pairs:
+                    if key in data:raise ValueError()
+                    data[key]=value
+                return data
+            body=json.loads(raw,object_pairs_hook=unique)
+            from ygc.cloud_profile import validate
+            validate(body)
+            result=await run_in_threadpool(service.edit_profile,who,positive_id(user_id),body)
+            return JSONResponse(result,headers=headers)
+        except UserMissing:raise HTTPException(404,'User not found.',headers=headers) from None
+        except ProfileConflict:raise HTTPException(409,'Profile changed or maintenance is running. Refresh before editing.',headers=headers) from None
+        except (ValueError,TypeError):raise HTTPException(400,'Invalid profile.',headers=headers) from None
+        except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Save result unavailable. Refresh before retrying.',headers=headers) from None
     @router.get('/api/admin/users/{individual_id}')
     async def detail(request:Request,individual_id:str):return await execute(request,individual_id)
     return router

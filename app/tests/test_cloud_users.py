@@ -119,3 +119,48 @@ def test_owned_page_failures_private(api):
         service.guitars.side_effect=failure
         response=client.get('/api/admin/users/1/guitars',headers=AUTH)
         assert response.status_code==status and 'private' not in response.text
+
+
+def profile_body():return dict(revision='1',fields=dict(display_name='Name',location_country='Japan',location_region='Tokyo',bio='Bio'))
+
+
+def test_profile_edit_uses_canonical_admin(api):
+    client,verifier,service=api
+    service.edit_profile.return_value=dict(id='1',saved=True,profile_revision='2')
+    response=client.put('/api/admin/users/1/profile',headers=AUTH,json=profile_body())
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    service.edit_profile.assert_called_once_with('canonical',1,profile_body())
+
+
+@pytest.mark.parametrize('failure,status',[('missing',401),('email',403),('member',403),('disabled',403)])
+def test_profile_edit_rejects_before_save(api,failure,status):
+    client,verifier,service=api;headers=AUTH
+    if failure=='missing':headers={}
+    if failure=='email':verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    if failure=='member':verifier.accounts.resolve_identity.return_value['role']='member'
+    if failure=='disabled':verifier.accounts.resolve_identity.side_effect=PermissionError('private')
+    assert client.put('/api/admin/users/1/profile',headers=headers,json=profile_body()).status_code==status
+    service.edit_profile.assert_not_called()
+
+
+@pytest.mark.parametrize('body',[{},[],dict(revision='1',fields={'role':'admin'}),dict(revision='1',fields={},actor='injected')])
+def test_profile_invalid_payload_never_saves(api,body):
+    client,verifier,service=api
+    assert client.put('/api/admin/users/1/profile',headers=AUTH,json=body).status_code==400
+    service.edit_profile.assert_not_called()
+
+
+def test_profile_duplicate_keys_and_size_rejected(api):
+    client,verifier,service=api
+    for raw in ('{"revision":"1","revision":"2","fields":{}}','x'*20001):
+        assert client.put('/api/admin/users/1/profile',headers=AUTH|{'Content-Type':'application/json'},content=raw).status_code==400
+    service.edit_profile.assert_not_called()
+
+
+def test_profile_failures_private(api):
+    from ygc.cloud_profile import ProfileConflict
+    client,verifier,service=api
+    for failure,status in [(ProfileConflict('private'),409),(UserMissing(),404),(PermissionError('private'),403),(RuntimeError('private'),503)]:
+        service.edit_profile.side_effect=failure
+        response=client.put('/api/admin/users/1/profile',headers=AUTH,json=profile_body())
+        assert response.status_code==status and 'private' not in response.text

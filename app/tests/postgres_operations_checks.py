@@ -133,7 +133,7 @@ def run(port):
             assert users_page['total']>=2 and users_page['items']
             account_id=users_page['items'][0]['id']
             user_record=user_browser.detail(aid,account_id)
-            assert set(user_record)==set(USER_FIELDS)
+            assert set(user_record)==set(USER_FIELDS)|{'profile_revision'}
             assert not {'identity_subject','identity_provider','avatar_storage_path','date_of_birth'} & set(user_record)
             assert user_browser.list(aid,q='not-present-fixture')['items']==[]
             assert user_browser.list(aid,q='not-present-fixture')['total']==users_page['total']
@@ -143,6 +143,29 @@ def run(port):
             for mode in MODES:
                 version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
                 assert user_browser.detail(aid,account_id)['id']==account_id
+            from ygc.cloud_profile import ProfileConflict
+            def profile():return user_browser.detail(aid,b['id'])
+            original=profile()
+            updates=dict(display_name='Updated member',location_country='Japan',location_region='Tokyo',bio='Updated bio')
+            for mode in MODES:
+                version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                before=profile();result=user_browser.edit_profile(aid,b['id'],dict(revision=before['profile_revision'],fields=updates))
+                after=profile();assert after['display_name']=='Updated member' and after['profile_revision']==result['profile_revision']
+                assert all(after[k]==original[k] for k in ('id','app_user_id','account_type','role','disabled','ban_status'))
+                rejected(ProfileConflict,lambda:user_browser.edit_profile(aid,b['id'],dict(revision=before['profile_revision'],fields=updates)))
+            rejected(PermissionError,lambda:user_browser.edit_profile(bid,b['id'],dict(revision=profile()['profile_revision'],fields=updates)))
+            with connect(app,'operations') as guard:
+                guard.execute('SELECT pg_advisory_xact_lock(79432190)')
+                rejected(ProfileConflict,lambda:user_browser.edit_profile(aid,b['id'],dict(revision=profile()['profile_revision'],fields=updates)))
+            before=profile()
+            with connect(owner,'accounts') as con:con.execute(sql.SQL('REVOKE INSERT ON account_metadata FROM {}').format(sql.Identifier(role)))
+            rejected(psycopg.errors.InsufficientPrivilege,lambda:user_browser.edit_profile(aid,b['id'],dict(revision=before['profile_revision'],fields={**updates,'display_name':'Rollback'})))
+            assert profile()==before
+            with connect(owner,'accounts') as con:con.execute(sql.SQL('GRANT INSERT ON account_metadata TO {}').format(sql.Identifier(role)))
+            with connect(app,'accounts') as con:
+                audits=con.execute("SELECT value FROM account_metadata WHERE key LIKE 'admin_profile:%'").fetchall()
+                assert len(audits)==4 and all(json.loads(r['value'])['actor_app_user_id']==aid for r in audits)
+            print('PostgreSQL Admin profiles: all modes, canonical authority, CAS, maintenance exclusion, audit atomicity and retained identity/roles passed.')
             # Materialized current ownership is authoritative; unaccepted Former Owner claims are hidden.
             assert accounts.drain_projection()>0
             gids=[r['id'] for r in first['items']]

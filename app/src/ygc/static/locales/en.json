@@ -1208,7 +1208,7 @@
   "avatar.restricted": "This image operation is currently restricted.",
   "avatar.failed": "Image operation failed. Refresh to check the current image.",
   "users.heading": "User DB Management",
-  "users.read_only": "Read-only account and ownership records. Editing is not yet connected.",
+  "users.read_only": "Account and ownership records with administrator profile editing.",
   "users.search": "Name or account ID",
   "users.search_button": "Search",
   "users.detail": "User Detail",
@@ -1343,5 +1343,13 @@
   "users.ownership_refresh": "Refresh ownership",
   "users.ownership_empty": "No guitars in this category.",
   "users.ownership_total": "Total guitars: {count}",
-  "users.ownership_unavailable": "Ownership data unavailable. Refresh to retry."
+  "users.ownership_unavailable": "Ownership data unavailable. Refresh to retry.",
+  "users.edit_profile": "Edit profile",
+  "users.refresh_detail": "Refresh detail",
+  "users.save_profile": "Save profile",
+  "users.profile_notice": "Update this account’s display name, country, region and bio.",
+  "users.profile_saved": "Profile saved. Related guitar information may take a little longer to update.",
+  "users.profile_conflict": "The profile changed or database maintenance is running. Refresh detail before editing again.",
+  "users.profile_invalid": "Check the profile fields and their lengths.",
+  "users.profile_unavailable": "The save result could not be confirmed. Refresh detail before trying again."
 }
