@@ -16,7 +16,17 @@ from ygc.collectors.reverb import ReverbAPICollector
 from ygc.incremental_crawl import advance_program,program_status,restart_program
 
 KIND='reverb_crawl_request_v1'
-SUMMARY_LIMIT=400
+DEFAULT_SUMMARY_LIMIT=2000
+
+
+def validate_limit(value):
+    if type(value) is not int or not 1<=value<=2000:raise ValueError('Invalid Crawl count.')
+    return value
+
+
+def configured_limit(con):
+    row=con.execute('SELECT reason FROM events WHERE reason LIKE %s ORDER BY id DESC LIMIT 1',('{"action": "crawl_settings",%',)).fetchone()
+    return validate_limit(json.loads(row['reason']).get('summary_limit',DEFAULT_SUMMARY_LIMIT)) if row else DEFAULT_SUMMARY_LIMIT
 
 
 def find(con,token):
@@ -49,7 +59,7 @@ def perform(settings,storage,collector,execution,token=None,progress=lambda stag
             mode=catalog.execute('SELECT mode FROM settings WHERE id=1').fetchone()['mode']
             if token is None:
                 if not config['enabled'] or config['next_run']>time.time() or mode!='normal':return {'status':'ok','skipped':True}
-                token=str(uuid.uuid4());record=dict(kind=KIND,request_id=token,state='starting',source='scheduled',created_at=datetime.now(timezone.utc).isoformat(),year_min=config['year_min'],year_max=config['year_max'])
+                token=str(uuid.uuid4());record=dict(kind=KIND,request_id=token,state='starting',source='scheduled',created_at=datetime.now(timezone.utc).isoformat(),year_min=config['year_min'],year_max=config['year_max'],summary_limit=configured_limit(catalog))
                 event=catalog.execute('INSERT INTO events(occurred_at,mode,reason) VALUES(%s,%s,%s) RETURNING id',(record['created_at'],mode,json.dumps(record,separators=(',',':')))).fetchone()
             else:
                 if str(uuid.UUID(token))!=token:raise ValueError('Invalid request.')
@@ -63,6 +73,7 @@ def perform(settings,storage,collector,execution,token=None,progress=lambda stag
                     PostgresAccounts._active(actor)
                     if actor['role']!='admin':raise PermissionError('Admin revoked.')
             low,high=record['year_min'],record['year_max']
+            limit=validate_limit(record.get('summary_limit',DEFAULT_SUMMARY_LIMIT))
             if type(low) is not int or type(high) is not int or not 1800<=low<=high<=2100:raise ValueError('Invalid years.')
             record['started_at']=datetime.now(timezone.utc).isoformat()
             record['execution']=execution
@@ -73,7 +84,7 @@ def perform(settings,storage,collector,execution,token=None,progress=lambda stag
             if record['source']=='scheduled' and program_status(repo,'electric_acoustic',low,high)['finished']:
                 restart_program(repo,'electric_acoustic',low,high)
             progress('crawl')
-            result=advance_program(repo,collector,'electric_acoustic',low,high,_summary_limit=SUMMARY_LIMIT)
+            result=advance_program(repo,collector,'electric_acoustic',low,high,_summary_limit=limit)
             record['counts']={key:value for key,value in result.items() if type(value) is int}
             if record['source']=='scheduled':
                 catalog.execute('UPDATE auto_crawl SET next_run=%s WHERE id=1 AND year_min=%s AND year_max=%s AND interval_seconds=%s AND next_run=%s',

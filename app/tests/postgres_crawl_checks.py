@@ -61,7 +61,7 @@ def run(app,accounts,operations,storage,aid):
     from ygc.cloud_backup_job import KIND as BACKUP_KIND
     import json,uuid,time
     client=Mock();client.start.return_value='private-operation';control=CrawlControl(operations,client)
-    token=str(uuid.uuid4());data=dict(request_id=token,year_min=1970,year_max=1979)
+    token=str(uuid.uuid4());data=dict(request_id=token,year_min=1970,year_max=1979,summary_limit=3)
     assert control.start(aid,data)==control.start(aid,data) and client.start.call_count==1
     from ygc.cloud_maintenance_control import MaintenanceControl
     from ygc.cloud_backup_control import BackupBusy
@@ -69,7 +69,9 @@ def run(app,accounts,operations,storage,aid):
     except BackupBusy:pass
     else:raise AssertionError('Maintenance accepted a pending Crawl.')
     first=Collector()
-    assert perform(app,storage,first,'fixture-crawl',token)['saved_before_crawl']
+    with patch('ygc.cloud_crawl_job.advance_program',wraps=advance_program) as advance:
+        assert perform(app,storage,first,'fixture-crawl',token)['saved_before_crawl']
+        assert advance.call_args.kwargs['_summary_limit']==3
     with connect(app,'operations') as con:
         archives=[json.loads(row['reason']) for row in con.execute('SELECT reason FROM events WHERE reason LIKE %s',('{"kind":"'+BACKUP_KIND+'",%',))]
         assert archives[-1]['target']=='chronicle' and archives[-1]['source']=='crawl'
@@ -81,8 +83,8 @@ def run(app,accounts,operations,storage,aid):
         else:raise AssertionError('Crawl ran after failed safety copy.')
     assert not before.requests
     assert perform(app,storage,before,'scheduled-off')['skipped']
-    config=control.configure(aid,dict(year_min=1970,year_max=1979,interval_hours=1,enabled=True))
-    assert config['enabled'] and config['interval_hours']==1
+    config=control.configure(aid,dict(year_min=1970,year_max=1979,interval_hours=1,enabled=True,summary_limit=3))
+    assert config['enabled'] and config['interval_hours']==1 and control.details(aid)['summary_limit']==3
     with connect(app,'operations') as con:con.execute('UPDATE auto_crawl SET next_run=0')
     assert perform(app,storage,Collector(),'scheduled-maintenance')['skipped']
     version=operations.details(aid)['version'];mode=operations.details(aid)['mode']
@@ -90,6 +92,6 @@ def run(app,accounts,operations,storage,aid):
     assert perform(app,storage,Collector(),'scheduled-due')['saved_before_crawl']
     assert control.details(aid)['next_run']>time.time()
     assert perform(app,storage,Collector(),'scheduled-repeat')['skipped']
-    control.configure(aid,dict(year_min=1950,year_max=1980,interval_hours=1,enabled=False))
+    control.configure(aid,dict(year_min=1950,year_max=1980,interval_hours=1,enabled=False,summary_limit=2000))
     operations.set_mode(aid,mode=mode,message='Test',version=operations.details(aid)['version'])
     print('PostgreSQL Crawl Job: persistent intent/retry, Chronicle-only safety save, failed-save network refusal, scheduler OFF/mode/due and next-run fencing passed.')

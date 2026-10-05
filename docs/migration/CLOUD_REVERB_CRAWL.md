@@ -6,7 +6,7 @@
 
 既存のincremental_crawl / candidate処理とRepositoryのListing・Acquire・Lost・Specification・Observation判定を使う。PostgreSQL側では既知の4テーブルのINSERT IDをRETURNINGで返し、外部掲載の既知ID照合を明示したJSONBクエリへ切り分ける。SQLiteへ接続するフォールバックやランタイムのスキーマ初期化は行わない。ローカルでも使う2箇所の重複INSERTは双方で使えるON CONFLICT DO NOTHINGに揃えた。
 
-対象はElectricとAcoustic Guitarsの両方。カテゴリなしをタイトルからギターと推定せず、詳細でも種類・製造年を確認する。既存の両カテゴリを一つの実行ログへ集約する処理を維持し、Jobでは1回最大400件の検索結果に制限する。途中カーソル・候補・詳細・完了ログはChronicleで保持し、次回に続きから処理する。既存個体・Listing IDの重複、曖昧な個体照合、Ownerありの再掲載Acquire承認待ち、ユーザーOwnerにLostを適用しない規則を維持する。
+対象はElectricとAcoustic Guitarsの両方。カテゴリなしをタイトルからギターと推定せず、詳細でも種類・製造年を確認する。既存の両カテゴリを一つの実行ログへ集約する処理を維持し、Jobでは1回に処理する検索結果を1〜2,000件で指定でき、初期値は2,000件。件数はElectric/Acoustic両カテゴリ合計で、1件・奇数でも超過しない。条件による除外や既知IDを含むため、新規登録数とは異なる。途中カーソル・候補・詳細・完了ログはChronicleで保持し、次回に続きから処理する。既存個体・Listing IDの重複、曖昧な個体照合、Ownerありの再掲載Acquire承認待ち、ユーザーOwnerにLostを適用しない規則を維持する。
 
 AutomationはAccounts正本の通常の正整数ID予約とUUIDを持つsourceアカウントとして作る。disabled=1、member、Google Identityリンクなしでログインできない。metadataキー system_actor:automation を使い再実行で増殖させない。ユーザー新規登録と同じ連番を使い衝突を防ぐ。復元時も最新Accountsの再投影対象となる。CrawlはAccountsをバックアップしない。
 
@@ -20,7 +20,7 @@ AutomationはAccounts正本の通常の正整数ID予約とUUIDを持つsource�
 
 ## Consoleと自動実行
 
-左のWeb Crawlに製造年の範囲、Auto Crawl間隔（1〜168時間）、Crawl Now、Crawl Run Logを配置する。右OperationsのBackground jobsにCrawl / Reverbのチェックボックスと実際にJobが始まった最終日時を表示する。チェックボックスでAutoのON/OFFを保存する。実行中にもOFFにでき、開始済みJobをキャンセルせず新規の自動開始を止める。左右のスクロールは独立を維持する。
+左のWeb Crawlに製造年の範囲、件数（初期値2,000）、Auto Crawl間隔（1〜168時間）、Crawl Now、Crawl Run Logを配置する。右OperationsのBackground jobsにCrawl / Reverbのチェックボックスと実際にJobが始まった最終日時を表示する。チェックボックスでAutoのON/OFFを保存する。実行中にもOFFにでき、開始済みJobをキャンセルせず新規の自動開始を止める。左右のスクロールは独立を維持する。
 
 自動実行はIAM Schedulerが毎時Jobを呼ぶ。Auto=ON、Normal、期限到達、未完了のCrawl/DB管理要求なしの場合だけ始まる。初回は指定間隔に最大約1時間の待ちが加わる。カーソルが完了した次の自動周期では検索を再開して新着を検出する。成功後のnext_runは設定が途中で変わっていないときだけ更新する。OFF・メンテナンス中の新規開始を止めるが、開始済み実行のキャンセルは行わない。
 
@@ -65,3 +65,5 @@ Jobの既定は--check-only（読取り接続確認だけ）。--probe-onlyはRe
 
 - Consoleを同じイメージで配置し、ready revision `ygc-staging-accounts-00014-g85`を確認。公開health/ready/Console/Crawl JSは200、匿名Crawl GET/POSTとバックアップGETは401。既存Offlineモードとメッセージを維持した。Auto設定を書き換える管理者操作は行っていない。
 - 管理者ブラウザでの実Crawl、定期開始、データ入り復旧は上記5項目の受入待ち。
+
+件数設定はOperationsの管理設定イベントに保存し、Auto再開時も使用する。既存設定に件数がない場合は2,000件を使う。手動要求は件数を固定して保存し、同じ要求UUIDで違う件数への再利用を拒否する。追加DDLは不要。少数件数・設定再読み込み・Jobへの値伝達は隔離試験で確認する。実行時間の上限に達した場合は完了を前提にせず、ログ・カーソルと保護用保存を確認して再開する。

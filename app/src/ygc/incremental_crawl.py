@@ -247,12 +247,19 @@ def advance_program(repository: Repository, collector: Any, category: str,
         totals: dict = {}
         samples = []
         combined_run_id = repository.start_run("reverb")
+        limit=_summary_limit or MAX_SUMMARIES
+        budgets={"electric":(limit+1)//2,"acoustic":limit//2}
+        if limit==1:
+            states={name:program_status(repository,name,year_min,year_max) for name in CATEGORY_QUERY}
+            selected=min(states,key=lambda name:(states[name]["finished"],states[name]["processed"]))
+            budgets={name:int(name==selected) for name in CATEGORY_QUERY}
         for selected in CATEGORY_QUERY:
+            if budgets[selected]==0:continue
             if selected == "acoustic":
                 _pause(time.monotonic())  # Keep the request gap across both searches.
             result = advance_program(repository, collector, selected, year_min, year_max,
-                progress_callback, _summary_limit=max(1, (_summary_limit or MAX_SUMMARIES) // 2),
-                _finalize=selected == "acoustic", _run_category=category,
+                progress_callback, _summary_limit=budgets[selected],
+                _finalize=selected == "acoustic" or budgets["acoustic"]==0, _run_category=category,
                 _run_id=combined_run_id, _count_offset=totals)
             samples.extend(result.get("rejected_samples", []))
             totals["rejected_samples"] = samples[:3]
