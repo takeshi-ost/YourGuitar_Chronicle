@@ -1,0 +1,90 @@
+from unittest.mock import Mock
+import json
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from ygc.cloud_application_routes import application_router
+from ygc.cloud_applications import listing_input, revision_id, verify_restored_applications
+from ygc.cloud_content_media import encode_reference
+from ygc.identity_platform import VerifiedIdentity
+from test_cloud_avatar import Storage, png
+
+REV='a'*32
+AUTH={'Authorization':'Bearer token'}
+BASE='/api/auth/applications'
+
+
+@pytest.fixture
+def api():
+    verifier=Mock();verifier.verify.return_value=VerifiedIdentity('issuer','subject','',True)
+    verifier.accounts.resolve_identity.return_value={'app_user_id':'canonical','role':'member'}
+    service=Mock();service.list.return_value={'items':[]};service.start.return_value={'revision':REV,'status':'draft'}
+    service.upload.return_value={'revision':REV,'photos':['closeup']};service.submit.return_value={'status':'pending'};service.cancel.return_value={'status':'cancelled'};service.image.return_value=b'jpeg'
+    app=FastAPI();app.include_router(application_router(verifier,service))
+    with TestClient(app) as client:yield client,verifier,service
+
+
+def test_applicant_bound_api_and_private_photos(api):
+    client,verifier,service=api
+    assert client.get(BASE,headers=AUTH).json()=={'items':[]}
+    body={'kind':'acquire','individual_id':'12'}
+    response=client.post(BASE,headers=AUTH,json=body)
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    service.start.assert_called_once_with('canonical',body)
+    path=BASE+'/'+REV
+    assert client.post(path+'/photos/closeup',headers=AUTH|{'Content-Type':'image/png'},content=png()).status_code==200
+    service.upload.assert_called_once_with('canonical',REV,'closeup',png(),'image/png')
+    response=client.get(path+'/photos/closeup',headers=AUTH)
+    assert response.content==b'jpeg' and response.headers['x-content-type-options']=='nosniff'
+    assert client.post(path+'/submit',headers=AUTH,json={'acquisition_date':'2020-01-01','body':''}).json()['status']=='pending'
+    assert client.post(path+'/cancel',headers=AUTH,json={}).json()['status']=='cancelled'
+
+
+@pytest.mark.parametrize('case,status',[('missing',401),('invalid',401),('unverified',403),('disabled',403),('unavailable',503)])
+def test_invalid_identity_never_reaches_applications(api,case,status):
+    client,verifier,service=api;headers=AUTH
+    if case=='missing':headers={}
+    if case=='invalid':verifier.verify.side_effect=PermissionError('private')
+    if case=='unavailable':verifier.verify.side_effect=RuntimeError('private')
+    if case=='unverified':verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    if case=='disabled':verifier.accounts.resolve_identity.side_effect=PermissionError('private')
+    response=client.get(BASE,headers=headers)
+    assert response.status_code==status and 'private' not in response.text
+    service.list.assert_not_called()
+
+
+def test_reject_oversize_bad_timezone_role_and_request_shape(api):
+    client,verifier,service=api
+    assert client.get(BASE+'?user_id=1',headers=AUTH).status_code==400
+    assert client.get(BASE,headers=AUTH|{'X-YGC-Timezone':'Bad/Zone'}).status_code==400
+    assert client.post(BASE,headers=AUTH,json=[]).status_code==400
+    assert client.post(BASE+'/'+REV+'/cancel',headers=AUTH,json={'user_id':1}).status_code==400
+    assert client.get(BASE+'/'+REV+'/photos/reference',headers=AUTH).status_code==400
+    assert client.post(BASE+'/'+REV+'/photos/closeup',headers=AUTH|{'Content-Type':'image/png'},content=b'x'*(8*1024*1024+1)).status_code==413
+    service.list.assert_not_called();service.start.assert_not_called();service.upload.assert_not_called();service.image.assert_not_called();service.cancel.assert_not_called()
+
+
+def test_date_timezone_reaches_worker_and_does_not_leak_between_requests(api):
+    from ygc.claim_dates import viewer_timezone
+    client,verifier,service=api
+    service.start.side_effect=lambda actor,data:{'timezone':viewer_timezone.get().key}
+    assert client.post(BASE,headers=AUTH|{'X-YGC-Timezone':'Asia/Tokyo'},json={}).json()=={'timezone':'Asia/Tokyo'}
+    assert client.post(BASE,headers=AUTH,json={}).json()=={'timezone':'UTC'}
+
+
+def test_listing_known_serial_date_and_exact_fields():
+    good=dict(manufacturer=' Fender ',serial_number=' TEST123 ',occurred_at='2020-01-01')
+    assert listing_input(good)['manufacturer']=='Fender'
+    for change in ({'manufacturer':' '},{'serial_number':'unknown'},{'serial_number':'---'},{'occurred_at':'9999-01-01'},{'applicant_id':1}):
+        with pytest.raises(ValueError):listing_input(good|change)
+    for value in ('../photo','A'*32,True):
+        with pytest.raises(ValueError):revision_id(value)
+
+
+def test_restore_checks_both_private_photos_and_exact_storage_generation():
+    store=Storage();ref=store.put('content',b'image',content_type='image/jpeg')
+    row=dict(images=json.dumps(dict(closeup=encode_reference(ref),overview=encode_reference(ref))),image_meta=json.dumps(dict(storage='gcs-content-v1')),status='pending')
+    verify_restored_applications(store,[row])
+    with pytest.raises(ValueError):verify_restored_applications(store,[row|{'images':None}])
+    store.delete(ref)
+    with pytest.raises(KeyError):verify_restored_applications(store,[row])

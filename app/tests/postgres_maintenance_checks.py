@@ -102,6 +102,16 @@ def run(app,accounts,operations,store,aid,bid):
     with connect(app,'chronicle') as con:
         assert con.execute('SELECT 1 FROM individuals WHERE id=%s',(added,)).fetchone()
     store.objects[reference]=image_bytes
+    from ygc.cloud_applications import references
+    with connect(app,'chronicle') as con:
+        application=con.execute("SELECT * FROM acquire_applications WHERE request_kind='listing' AND status='pending' LIMIT 1").fetchone()
+    if application:
+        proof=decode_reference(references(application)['closeup']);proof_bytes=store.objects.pop(proof)
+        try:perform(app,store,queue('chronicle','restore',old),'missing-proof-fixture')
+        except KeyError:pass
+        else:raise AssertionError('Missing private application photo accepted for restore.')
+        with connect(app,'chronicle') as con:assert con.execute('SELECT 1 FROM individuals WHERE id=%s',(added,)).fetchone()
+        store.objects[proof]=proof_bytes
     token=queue('chronicle','restore',old)
     assert perform(app,store,token,'restore-fixture')['safety_backup']
     assert perform(app,store,token,'repeat-fixture')['already_completed']

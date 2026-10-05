@@ -5881,7 +5881,7 @@ class Repository:
                 FROM ranked
                 WHERE row_number = 1
                 ORDER BY
-                    field_name COLLATE NOCASE
+                    LOWER(field_name)
                 """,
                 (
                     individual_id,

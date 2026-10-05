@@ -2,6 +2,7 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 import {createGuitars} from './cloud-account-guitars.js';
 import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
+import {createApplications} from './cloud-account-applications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
@@ -9,6 +10,7 @@ let auth,policies,mode='signin',busy=false,state=null;
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
 const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -33,7 +35,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();
+  avatar.render();profile.render();guitars.render();applications.render();
 }
 async function documents(){
   policies=null;
@@ -41,7 +43,7 @@ async function documents(){
   $('terms').checked=$('privacy').checked=false;
 }
 function update(result){
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear()}
   state=result;
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
@@ -112,6 +114,7 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await applications.refresh().catch(applications.failed);
   if(state?.user&&state.identity?.email_verified===true)await guitars.refresh();
   if(state?.user&&state.identity?.email_verified===true)await profile.refresh().catch(profile.failed);
   if(state?.user&&state.identity?.email_verified===true){

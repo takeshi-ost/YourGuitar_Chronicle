@@ -1,6 +1,6 @@
 # クラウドの所有登録・Acquire審議
 
-2026-10-06。所有登録・Acquire申請を段階的に接続する。現在の実装は審議担当の認証とMCP接続診断までであり、クラウドのListing/Acquire申請・写真提出・審議結果反映・Owner承認は未接続。Ownedの実データ確認を完了扱いにしない。
+2026-10-06。所有登録・Acquire申請を段階的に接続する。審議担当の認証・MCP接続診断に続き、Listing/Acquire申請の作成・写真提出・本人確認・取消を実装。審議キューのMCP接続・結果反映・Owner承認は未接続で、提出後はpendingのまま。Ownedの実データ確認を完了扱いにしない。
 
 ## 認証境界
 
@@ -36,6 +36,35 @@ app/.venv/bin/python -m ygc.cloud_review_bridge \
 3. Review OFF中も回答を保持し申請/Claimへ反映しない。古いlease・取消・期限・初期化/復元・Crawl・重複登録・正本投影を反映時に再確認する。
 4. Listingは通過後に個体/Positive Listingを作り、Acquireは現OwnerがユーザーならUnverifiedとして承認待ちにする。申請採用で現Owner承認を代替しない。
 5. Current Ownerの他人Claim判定・自己判定禁止・A→B→Cの権限移動・Adminの別経路を、設計の遷移表と実PostgreSQLで回帰確認する。一般画面と管理画面から受入し、Owned/Formerly Ownedの未確認を解消する。
+
+## 本人による申請・写真提出（2026-10-06）
+
+`/account` に「所有申請」を追加。未登録ギターはMaker・既知Serial・仕様・取得日・説明を入力し、登録済み個体はGuitar IDを指定して申請する。Create applicationの明示操作で下書きをChronicleへ保存し、8文字のChallengeと24時間の写真提出期限を返す。未保存のChallengeプレビューは後続の一般TopPage統合時に接続する。下書き保存ではIndividual・Claimを作らず、所有状態を変更しない。
+
+APIは `/api/auth/applications`、`/{revision}/photos/{closeup|overview}`、`/{revision}/submit`、`/{revision}/cancel`。Identity Platformの確認済み本人とAccounts正本の有効性を毎回確認し、対象申請はapplicant_idで限定する。Adminにも他ユーザーの申請・根拠写真をこの本人用APIから閲覧させない。管理者用の審査画面は別の後続範囲。
+
+近接・全体写真は8 MiB／800万画素以下の静止JPEG・PNG・WebPを受け付け、最大辺2048pxのJPEGへ正規化して非公開content Storageに保存する。DBのimagesはbase64ではなく固定generation参照で、image_meta.storage=`gcs-content-v1`によりローカル方式と区別する。参照や署名付きURLを画面のJSONへ返さず、本人認証付きバイナリ配信だけを使用する。一般ギャラリーへ追加しない。モーダル外クリック・Escape・SignOutで画像URLとファイル入力を解放する。
+
+同じ申請の作成・提出の再送を重複させない。Maker＋Serialの既存個体、Current Ownerの自己Acquire、既知Serialなし、係争、期限切れ、写真不足、未来日付、対象Serial変更を拒否する。日付はX-YGC-Timezoneで入力者の暦日を評価する。Acquire提出時に登録仕様と比較元をサーバーで固定し、既存Storage画像または承認済みReverb画像を取得できない場合は「比較元なし」に置き換えず停止する。期待値を審議担当へ開示する処理はまだ追加しない。
+
+通常ユーザー操作のモード制限を適用し、Read onlyでは閲覧だけ、Offlineでは閲覧・提出とも停止する。Adminが本人申請を行う場合も通常の申請経路を使用する。Crawl／初期化／復元の共通mutexとAccounts投影確認を通して更新し、写真参照とイベントは同じChronicleトランザクションで保存する。未コミットの画像だけを補償削除し、保存済み画像はバックアップからの復元のため保持する。画像の物理整理は別の残作業。
+
+一覧は進行中の申請を優先して最大50件、進行中は本人ごと最大25件。古い履歴のページ移動、一般TopPageからの個体選択、管理者表示、審議処理は後続。
+
+Chronicle保存に申請と写真参照を含め、復元・初期化後の復元では通常Media画像に加えて根拠写真のgenerationを検証する。写真欠損時はDBの置換前に拒否する。この確認にはmaintenance Jobも同じ新しいイメージへ配置する必要がある。
+
+利用者確認（未確認）:
+
+1. Normalで `/account` に確認済み本人として入り、「未登録のギターを登録する」で下書きを作成する。Challengeと期限を確認し、個体総数・Ownedが増えないことを確認する。
+2. 紙のChallengeとSerialを写した近接・全体写真を提出し、「審査待ち」、写真表示、再読み込み後の維持を確認する。外クリック・Escapeで閉じる。
+3. BrowserConsoleで既存個体のIDを確認し、「登録済みギターの所有を申請する」で下書き・取得日・写真を提出する。現在Ownerの自己Acquireは拒否し、他ユーザー／外部Ownerの個体は提出だけでOwnerを変えない。
+4. 下書き／審査待ちを取り消し、再読み込み後に取消済みであることを確認する。SignOut後や別ユーザーでは元の申請・画像を表示しない。
+5. Read onlyでは申請閲覧・写真表示だけ、Offlineではこれらも停止することを確認し、試験後のモードを元へ戻す。
+6. 根拠写真を提出した状態でChronicleを保存し、申請取消後に復元して申請・写真が戻ることを確認する。初期化→同じ保存から復元でも写真を確認する。ユーザー・Admin・ログインは維持する。
+
+ここまででは審査による採用や所有権の移動は実施しない。Owner決定とOwned分類の内容確認は審議・承認を接続してから行う。
+
+隔離検証：Python840件・JavaScript71件・Chromium・一時PostgreSQLが成功。申請の反復作成/提出、イベント保存失敗時のDBロールバックと画像補償削除、他人の写真拒否、申請期限、正本投影、Crawl/メンテナンス排他、写真欠損時の復元拒否を確認。既存のOwner移転・自己判定禁止・別経路のAdmin判定の回帰も成功。実サービスの操作受入は上記の利用者確認後に記録する。
 
 検証：Python830件・JavaScript71件・ブラウザ・隔離PostgreSQLが成功。署名検証の呼出しと正しいaudience、異なるissuer/sub/email/audience、匿名・通常ユーザー資格の拒否、診断の非更新、トークン発行先制限と401の非再送を確認。
 
