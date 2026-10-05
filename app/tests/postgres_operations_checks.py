@@ -143,10 +143,35 @@ def run(port):
             for mode in MODES:
                 version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
                 assert user_browser.detail(aid,account_id)['id']==account_id
+            # Materialized current ownership is authoritative; unaccepted Former Owner claims are hidden.
+            assert accounts.drain_projection()>0
+            gids=[r['id'] for r in first['items']]
+            with connect(app,'chronicle') as con:
+                con.execute('UPDATE individuals SET current_owner_user_id=%s WHERE id=ANY(%s)',(account_id,gids))
+            page=user_browser.guitars(aid,account_id,kind='owned',limit=1)
+            assert page['total']==25 and len(page['items'])==1 and page['next_after'] is not None
+            following=user_browser.guitars(aid,account_id,kind='owned',after=page['next_after'],limit=1)
+            assert following['items'][0]['id']>page['items'][0]['id']
+            for mode in MODES:
+                version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                assert user_browser.guitars(aid,account_id,kind='owned')['total']==25
+            rejected(PermissionError,lambda:user_browser.guitars(bid,account_id,kind='owned'))
+            rejected(UserMissing,lambda:user_browser.guitars(aid,999999,kind='owned'))
+            assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items']==[]
+            with connect(app,'chronicle') as con:con.execute('UPDATE individuals SET current_owner_user_id=NULL WHERE id=ANY(%s)',(gids,))
+            with connect(app,'chronicle') as con:
+                link=con.execute("INSERT INTO user_guitars(user_id,individual_id,ownership_status,created_at,updated_at) VALUES(%s,%s,'former_owner','now','now') RETURNING id",(account_id,gids[0])).fetchone()['id']
+                claim=con.execute("INSERT INTO claims(individual_id,author_user_id,claim_type,field_name,value_text,ownership_kind,ownership_source,verification_status,created_at,updated_at) VALUES(%s,%s,'ownership','owner',%s,'acquire','former_owner','unverified','now','now') RETURNING id",(gids[0],account_id,str(account_id))).fetchone()['id']
+            assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items']==[]
+            with connect(app,'chronicle') as con:con.execute("UPDATE claims SET verification_status='positive' WHERE id=%s",(claim,))
+            assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items'][0]['id']==gids[0]
+            with connect(app,'chronicle') as con:con.execute("UPDATE claims SET verification_status='negative' WHERE id=%s",(claim,))
+            assert user_browser.guitars(aid,account_id,kind='formerly_owned')['items']==[]
+            with connect(app,'chronicle') as con:
+                con.execute('DELETE FROM claims WHERE id=%s',(claim,));con.execute('DELETE FROM user_guitars WHERE id=%s',(link,))
             print('PostgreSQL user reads: canonical Accounts, total/search/cursor, fixed profile fields, all modes and member refusal passed.')
             # Populated v2 projection rows contain timezone-aware timestamps.
             from ygc.cloud_db_snapshot import snapshot,verify_snapshot
-            assert accounts.drain_projection()>0
             for target in ('accounts','chronicle'):
                 data,meta=snapshot(app,target)
                 assert verify_snapshot(data,target,meta['sha256'])['schema_version']==2

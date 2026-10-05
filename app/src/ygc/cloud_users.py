@@ -59,3 +59,30 @@ class CloudUsers:
                 row=con.execute(f'SELECT {COLUMNS} FROM account_records WHERE id=%s',(individual_id,)).fetchone()
                 if row is None:raise UserMissing()
                 return dict(row)
+
+    def guitars(self,actor,user_id,*,kind,after=0,limit=25):
+        from ygc.owned_guitar_visibility import VISIBLE_SQL
+        if kind not in ('owned','formerly_owned') or type(user_id) is not int or not 0<user_id<=MAX_ID or type(after) is not int or not 0<=after<=MAX_ID or type(limit) is not int or not 1<=limit<=50:
+            raise ValueError('Invalid ownership page.')
+        with self.operations.access('admin_read',actor):
+            with connect(self.settings,'accounts') as source:
+                source.execute('SET TRANSACTION READ ONLY')
+                source.execute("SET LOCAL statement_timeout='5s'")
+                user=source.execute('SELECT app_user_id FROM account_records WHERE id=%s',(user_id,)).fetchone()
+                if not user:raise UserMissing()
+                with connect(self.settings,'chronicle') as con:
+                    con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                    con.execute("SET LOCAL statement_timeout='5s'")
+                    con.execute("SET LOCAL lock_timeout='2s'")
+                    if kind=='owned':
+                        where='i.current_owner_user_id=%s'
+                        table='individuals i JOIN users u ON u.id=i.current_owner_user_id'
+                    else:
+                        table='user_guitars ug JOIN individuals i ON i.id=ug.individual_id JOIN users u ON u.id=ug.user_id'
+                        where="ug.user_id=%s AND ug.ownership_status='former_owner' AND "+VISIBLE_SQL
+                    scope=f"{where} AND u.app_user_id=%s"
+                    params=(user_id,user['app_user_id'])
+                    total=con.execute(f'SELECT COUNT(*) AS total FROM {table} WHERE {scope}',params).fetchone()['total']
+                    rows=con.execute(f'SELECT i.id,i.manufacturer,i.model,i.year,i.serial_number FROM {table} WHERE {scope} AND i.id>%s ORDER BY i.id LIMIT %s',params+(after,limit+1)).fetchall()
+                    more=len(rows)>limit;rows=[dict(row) for row in rows[:limit]]
+                    return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)

@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import QueryParams
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_users import parameters,positive_id,UserMissing
 
@@ -41,6 +42,22 @@ def user_router(verifier,service):
         except Exception:raise HTTPException(503,'User data unavailable.',headers=headers) from None
     @router.get('/api/admin/users')
     async def listing(request:Request):return await execute(request)
+    @router.get('/api/admin/users/{user_id}/guitars')
+    async def guitars(request:Request,user_id:str):
+        who=await actor(request)
+        try:
+            query=request.query_params
+            if set(query)-{'kind','after','limit'} or any(len(query.getlist(k))!=1 for k in query):raise ValueError()
+            kind=query.get('kind','owned')
+            if kind not in ('owned','formerly_owned'):raise ValueError()
+            _,after,limit=parameters(QueryParams([(k,v) for k,v in query.multi_items() if k!='kind']))
+            result=await run_in_threadpool(service.guitars,who,positive_id(user_id),kind=kind,after=after,limit=limit)
+            return JSONResponse(dict(items=[{**r,'id':str(r['id'])} for r in result['items']],total=str(result['total']),
+                next_after=str(result['next_after']) if result['next_after'] is not None else None),headers=headers)
+        except UserMissing:raise HTTPException(404,'User not found.',headers=headers) from None
+        except ValueError:raise HTTPException(400,'Invalid ownership page.',headers=headers) from None
+        except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Ownership data unavailable.',headers=headers) from None
     @router.get('/api/admin/users/{individual_id}')
     async def detail(request:Request,individual_id:str):return await execute(request,individual_id)
     return router
