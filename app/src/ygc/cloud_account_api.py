@@ -18,7 +18,7 @@ from ygc.identity_platform import IdentityPlatformIdentity
 from ygc.cloud_account_page import install, public_config
 
 
-def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None,maintenance_client=None):
+def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None,maintenance_client=None,crawl_client=None):
     config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
@@ -36,6 +36,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
             if backup_client is not None:
                 backup_client.close()
             if maintenance_client is not None:maintenance_client.close()
+            if crawl_client is not None:crawl_client.close()
             if storage is not None:
                 storage.close()
 
@@ -48,6 +49,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_backup_control import BackupControl
     from ygc.cloud_maintenance_control import MaintenanceControl
     app.include_router(backup_router(verifier,operations,BackupControl(operations,backup_client) if backup_client is not None else None,MaintenanceControl(operations,maintenance_client) if maintenance_client is not None else None))
+    from ygc.cloud_crawl_control import CrawlControl
+    from ygc.cloud_crawl_routes import crawl_router
+    app.include_router(crawl_router(verifier,CrawlControl(operations,crawl_client)))
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
     @app.get('/health')
     def health():

@@ -170,6 +170,9 @@ def run(port):
             store.objects.update(avatar_store.objects)
             maintenance_checks(app,accounts,operations,store,aid,bid)
             version=operations.details(aid)['version']
+            from postgres_crawl_checks import run as crawl_checks
+            crawl_checks(app,accounts,operations,store,aid)
+            version=operations.details(aid)['version']
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:
                 con.execute(sql.SQL('REVOKE INSERT ON events FROM {}').format(sql.Identifier(role)))

@@ -66,6 +66,10 @@ MARKETPLACE_SOURCES_SQL = """
 """
 
 
+def source_records_sql(con):
+    return getattr(con, "marketplace_sources_sql", MARKETPLACE_SOURCES_SQL)
+
+
 def known_listing_ids(con, source_site: str, ids: list[str]) -> set[str]:
     """Find persisted sources, including unregistered legacy crawl records."""
     ids = [str(value) for value in ids if value]
@@ -74,7 +78,7 @@ def known_listing_ids(con, source_site: str, ids: list[str]) -> set[str]:
         chunk = ids[start:start + 500]
         marks = ','.join('?' for _ in chunk)
         found.update(str(row[0]) for row in con.execute(
-            f"WITH sources AS ({MARKETPLACE_SOURCES_SQL}) "
+            f"WITH sources AS ({source_records_sql(con)}) "
             "SELECT source_listing_id FROM sources WHERE source_site=? "
             f"AND source_listing_id IN ({marks})", [source_site, *chunk]))
     return found

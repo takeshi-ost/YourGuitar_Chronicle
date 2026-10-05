@@ -13,7 +13,7 @@ from ygc import config
 from ygc.crawl_detail_cache import save_detail
 from ygc.crawl_candidates import candidate_ids, defer_listing, reconcile_candidates, stage_candidate
 from ygc.db.repository import Repository, utcnow
-from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids
+from ygc.db.source_records import MARKETPLACE_SOURCES_SQL, known_listing_ids, source_records_sql
 from ygc.reverb_adapter import is_brand_new, _category_text, to_listing_claim_data, to_provenance_observation
 
 
@@ -126,9 +126,9 @@ def _save_program(repository: Repository, key: tuple, **fields: Any) -> None:
 def _program(repository: Repository, key: tuple) -> dict:
     with repository.connect() as con:
         con.execute(
-            "INSERT OR IGNORE INTO crawl_programs "
+            "INSERT INTO crawl_programs "
             "(source_site, category, year_min, year_max, updated_at) "
-            "VALUES ('reverb', ?, ?, ?, ?)", (*key, utcnow()),
+            "VALUES ('reverb', ?, ?, ?, ?) ON CONFLICT DO NOTHING", (*key, utcnow()),
         )
         return dict(con.execute(
             "SELECT * FROM crawl_programs WHERE source_site = 'reverb' "
@@ -177,7 +177,7 @@ def _recheck(repository: Repository, collector: Any, last_request: float) -> tup
     now = datetime.now(timezone.utc)
     with repository.connect() as con:
         candidates = list(con.execute(
-            f"""WITH sources AS ({MARKETPLACE_SOURCES_SQL})
+            f"""WITH sources AS ({source_records_sql(con)})
                SELECT o.source_listing_id, c.api_url, c.missing_since
                FROM sources o LEFT JOIN crawl_listing_checks c
                  ON c.source_site = 'reverb'
@@ -251,7 +251,7 @@ def advance_program(repository: Repository, collector: Any, category: str,
             if selected == "acoustic":
                 _pause(time.monotonic())  # Keep the request gap across both searches.
             result = advance_program(repository, collector, selected, year_min, year_max,
-                progress_callback, _summary_limit=max(1, MAX_SUMMARIES // 2),
+                progress_callback, _summary_limit=max(1, (_summary_limit or MAX_SUMMARIES) // 2),
                 _finalize=selected == "acoustic", _run_category=category,
                 _run_id=combined_run_id, _count_offset=totals)
             samples.extend(result.get("rejected_samples", []))
@@ -368,9 +368,9 @@ def advance_program(repository: Repository, collector: Any, category: str,
                                     counts["serial_candidates"] += 1
                                     with repository.connect() as con:
                                         con.execute(
-                                            "INSERT OR IGNORE INTO crawl_listing_checks "
+                                            "INSERT INTO crawl_listing_checks "
                                             "(source_site, source_listing_id, api_url) "
-                                            "VALUES ('reverb', ?, ?)", (listing_id, detail_url),
+                                            "VALUES ('reverb', ?, ?) ON CONFLICT DO NOTHING", (listing_id, detail_url),
                                         )
                                 else:
                                     counts["missing_identity"] += 1
