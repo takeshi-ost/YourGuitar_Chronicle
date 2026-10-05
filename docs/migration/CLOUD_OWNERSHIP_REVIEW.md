@@ -37,4 +37,6 @@ app/.venv/bin/python -m ygc.cloud_review_bridge \
 4. Listingは通過後に個体/Positive Listingを作り、Acquireは現OwnerがユーザーならUnverifiedとして承認待ちにする。申請採用で現Owner承認を代替しない。
 5. Current Ownerの他人Claim判定・自己判定禁止・A→B→Cの権限移動・Adminの別経路を、設計の遷移表と実PostgreSQLで回帰確認する。一般画面と管理画面から受入し、Owned/Formerly Ownedの未確認を解消する。
 
-検証：Python830件・JavaScript71件・ブラウザ・隔離PostgreSQLが成功。署名検証の呼出しと正しいaudience、異なるissuer/sub/email/audience、匿名・通常ユーザー資格の拒否、診断の非更新、トークン発行先制限と401の非再送を確認。実Google認証とクライアント登録は配置後に確認する。
+検証：Python830件・JavaScript71件・ブラウザ・隔離PostgreSQLが成功。署名検証の呼出しと正しいaudience、異なるissuer/sub/email/audience、匿名・通常ユーザー資格の拒否、診断の非更新、トークン発行先制限と401の非再送を確認。
+
+2026-10-06、PR #47をCI成功後にマージ・配置。実Google認証によるinitialize・tools/list・接続診断が成功し、匿名アクセスは401。health・ready・BrowserConsoleは200。Codexの既存設定を保持して `ygc_staging_review` を追加済み。現在のチャットのツール一覧への反映にはVS CodeのCodex拡張機能の再読み込みが必要。その後にチャットから診断ツールを実行し、上記の申請キュー実装へ進む。診断結果は `queues_connected=false`、`data_changed=false` であり、所有登録・Acquireの受入完了を意味しない。
