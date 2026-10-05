@@ -283,6 +283,8 @@ def run(port):
             print('PostgreSQL backup policy: independent persistent settings, strict Admin gate, exact archive pruning and disabled scheduled save passed.')
             from postgres_maintenance_checks import run as maintenance_checks
             store.objects.update(avatar_store.objects)
+            from postgres_application_checks import run as application_checks
+            application_checks(app,accounts,operations,store,aid,bid)
             maintenance_checks(app,accounts,operations,store,aid,bid)
             version=operations.details(aid)['version']
             from postgres_crawl_checks import run as crawl_checks

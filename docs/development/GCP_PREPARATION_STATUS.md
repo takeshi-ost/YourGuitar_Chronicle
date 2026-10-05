@@ -235,3 +235,5 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 
 
 2026-10-06：所有登録・Acquire審議の接続に先立ち、専用審議SAのGoogle OIDC認証とMCP接続診断を実装。既存審議は推論APIではなく外部GPTのMCP観察結果をYGCが判定する方式を維持する。クラウドの申請・写真提出・審議キュー・Claim反映・Owner承認はまだ未接続。[実装境界と後続手順](../migration/CLOUD_OWNERSHIP_REVIEW.md)を参照。本人Ownedの実データ受入は未確認のまま維持する。
+
+2026-10-06続行：利用者が審議用MCPの稼働中表示を確認。Google OIDCの直接診断とCodex新規起動のツール読込も成功しており、申請実装を継続。Listing/Acquireの本人用申請・24時間Challenge・非公開根拠写真の提出/表示・取消・写真を含む復元検証を追加した。申請・提出でIndividual/Claim/Ownerは変更せずpendingに留める。審議MCPのキューと結果反映、Owner承認、一般TopPage統合、管理用申請表示は後続。今回の[利用者確認](../migration/CLOUD_OWNERSHIP_REVIEW.md#本人による申請写真提出2026-10-06)とOwned実データ受入は未確認。

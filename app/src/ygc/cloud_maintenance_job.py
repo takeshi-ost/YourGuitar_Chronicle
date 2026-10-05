@@ -59,6 +59,8 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                 if target=='chronicle':
                     from ygc.cloud_content_media import verify_restored_media
                     verify_restored_media(storage,rows['media_assets'])
+                    from ygc.cloud_applications import verify_restored_applications
+                    verify_restored_applications(storage,rows['acquire_applications'])
             with connect(settings,'accounts') as source:
                 source.execute("SET LOCAL lock_timeout='5s'")
                 # Blocks writes and row-locking projection workers; plain identity reads remain possible.

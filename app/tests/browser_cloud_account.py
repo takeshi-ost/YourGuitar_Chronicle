@@ -99,12 +99,36 @@ def main():
             page=[row for row in rows if row['id']>after][:limit+1];more=len(page)>limit;page=page[:limit]
             return dict(items=page,total=len(rows),next_after=page[-1]['id'] if more else None)
     app.include_router(self_guitars_router(TestVerifier(),Guitars()))
+    from ygc.cloud_application_routes import application_router
+    applications={}
+    class Applications:
+        def list(self,actor):return dict(items=[row.copy() for who,row in applications.values() if who==actor])
+        def start(self,actor,data):
+            revision=format(len(applications)+1,'032x');payload=data.get('payload')
+            row=dict(revision=revision,kind=data['kind'],individual_id=data.get('individual_id'),serial=payload['serial_number'] if payload else 'S12',challenge='ABCD1234',expires_at=2000000000,status='draft',payload=payload,photos=[],acquisition_date=payload['occurred_at'] if payload else None,body=payload['body'] if payload else '')
+            applications[revision]=(actor,row);return row.copy()
+        def upload(self,actor,revision,role,data,mime):
+            from ygc.cloud_avatar import normalize_image
+            normalize_image(data,mime);who,row=applications[revision];assert actor==who
+            if role not in row['photos']:row['photos'].append(role)
+            return row.copy()
+        def submit(self,actor,revision,data):
+            who,row=applications[revision];assert actor==who and set(row['photos'])=={'closeup','overview'}
+            row['status']='pending';return row.copy()
+        def cancel(self,actor,revision):
+            who,row=applications[revision];assert actor==who;row['status']='cancelled';return row.copy()
+        def image(self,actor,revision,role):
+            who,row=applications[revision];assert actor==who and role in row['photos']
+            from ygc.cloud_avatar import normalize_image
+            return normalize_image(png(),'image/png')
+    Applications.storage=storage
+    app.include_router(application_router(TestVerifier(),Applications()))
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
     @app.middleware('http')
     async def observe(request, call_next):
-        if request.method == 'POST':
+        if request.method == 'POST' and request.headers.get('content-type','').startswith('application/json'):
             captured.append(await request.json())
             if failures['register'] and request.url.path == '/api/auth/register':
                 failures['register'] = False
@@ -130,9 +154,13 @@ def main():
                         route.abort()
                 context.route('https://www.gstatic.com/**', intercept)
                 page = context.new_page()
+                page_errors=[]
+                page.on('pageerror',lambda error:page_errors.append(str(error)))
                 def ready():
                     page.goto(url)
-                    page.wait_for_function('window.YGCCloudAccountReady')
+                    try:page.wait_for_function('window.YGCCloudAccountReady')
+                    except Exception:
+                        raise AssertionError('Cloud account did not initialize: '+repr(page_errors)) from None
                 ready()
                 page.locator('#showRegistration').click()
                 page.locator('#email').fill('new@example.invalid')
@@ -190,6 +218,31 @@ def main():
                 failures['ownership']=False
                 owned.get_by_role('button',name='Refresh',exact=True).click();expect(owned.locator('li')).to_have_count(25)
                 former.get_by_role('button',name='Refresh',exact=True).click();expect(former.locator('li')).to_have_count(1)
+                page.locator('#applicationListing').click()
+                page.locator('#application_manufacturer').fill('<b>Fender</b>')
+                page.locator('#application_serial_number').fill('TEST123')
+                page.locator('#application_occurred_at').fill('2020-01-01')
+                page.locator('#applicationCreate').click()
+                expect(page.locator('#applicationDialog')).to_contain_text('ABCD1234')
+                for role in ('closeup','overview'):
+                    page.locator('#application_'+role).set_input_files({'name':role+'.png','mimeType':'image/png','buffer':png()})
+                page.locator('#applicationSubmit').click()
+                expect(page.locator('#applicationDialog')).to_contain_text('Pending review')
+                expect(owned.locator('li')).to_have_count(25)
+                page.locator('#applicationDialog').get_by_role('button',name='View closeup',exact=True).click()
+                expect(page.locator('#applicationDialog img').first).to_be_visible()
+                page.mouse.click(1,1);expect(page.locator('#applicationDialog')).not_to_be_visible()
+                assert page.locator('#applicationDialog img').first.get_attribute('src') is None
+                ready();expect(page.locator('#selfApplications li')).to_have_count(1)
+                page.locator('#selfApplications').get_by_role('button',name='Detail',exact=True).click()
+                page.locator('#applicationCancel').click();expect(page.locator('#applicationDialog')).to_contain_text('Cancelled')
+                page.keyboard.press('Escape');expect(page.locator('#applicationDialog')).not_to_be_visible()
+                page.locator('#applicationAcquire').click();page.locator('#application_individual_id').fill('12')
+                page.locator('#applicationCreate').click()
+                expect(page.locator('#application_occurred_at')).to_be_enabled()
+                page.locator('#application_occurred_at').fill('2020-01-02')
+                page.locator('#applicationCancel').click();page.keyboard.press('Escape')
+                expect(page.locator('#selfApplications li')).to_have_count(2)
                 expect(page.locator('#selfProfile')).to_be_visible()
                 expect(page.locator('#selfProfileValues')).to_contain_text('Browser Cloud User')
                 for cancel in ('button','escape','outside'):
@@ -251,6 +304,8 @@ def main():
                 expect(page.locator('#selfProfile')).not_to_be_visible()
                 expect(page.locator('#selfGuitars')).not_to_be_visible()
                 expect(page.locator('#selfGuitars li')).to_have_count(0)
+                expect(page.locator('#selfApplications')).not_to_be_visible()
+                expect(page.locator('#selfApplications li')).to_have_count(0)
                 expect(page.locator('#accountAvatar')).not_to_be_visible()
                 page.locator('#email').fill('new@example.invalid')
                 page.locator('#password').fill('bad')
