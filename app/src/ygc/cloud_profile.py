@@ -1,4 +1,4 @@
-"""Strict administrator profile patch; authority and credentials are excluded."""
+"""Strict shared profile patch; authority and credentials are excluded."""
 from ygc.registration_fields import DISPLAY_NAME_MAX
 
 FIELDS=('display_name','location_country','location_region','bio')

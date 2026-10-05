@@ -1351,5 +1351,9 @@
   "users.profile_saved": "Profile saved. Related guitar information may take a little longer to update.",
   "users.profile_conflict": "The profile changed or database maintenance is running. Refresh detail before editing again.",
   "users.profile_invalid": "Check the profile fields and their lengths.",
-  "users.profile_unavailable": "The save result could not be confirmed. Refresh detail before trying again."
+  "users.profile_unavailable": "The save result could not be confirmed. Refresh detail before trying again.",
+  "self_profile.heading": "Your profile",
+  "self_profile.restricted": "Profile access is restricted by the service mode or your account status.",
+  "self_profile.failed": "Profile could not be loaded. Refresh before editing.",
+  "self_profile.notice": "Update your display name, country, region and bio. Changes to related guitars may take a little longer to appear."
 }

@@ -1,10 +1,12 @@
 import {loadCloudAuth} from './cloud-auth-loader.js';
+import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
 let auth,policies,mode='signin',busy=false,state=null;
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
+const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -29,7 +31,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();
+  avatar.render();profile.render();
 }
 async function documents(){
   policies=null;
@@ -37,7 +39,7 @@ async function documents(){
   $('terms').checked=$('privacy').checked=false;
 }
 function update(result){
-  if(state?.user?.app_user_id!==result?.user?.app_user_id)avatar.clear();
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear()}
   state=result;
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
@@ -108,6 +110,7 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await profile.refresh().catch(profile.failed);
   if(state?.user&&state.identity?.email_verified===true){
     try{await avatar.refresh()}catch(error){avatar.failed(error)}
   }
@@ -119,7 +122,7 @@ async function avatarAction(work){
 $('avatarForm').onsubmit=event=>{event.preventDefault();avatarAction(()=>avatar.save($('avatarFile').files[0]))};
 $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
-try{auth=await loadCloudAuth();await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(()=>avatar.refresh())}
+try{auth=await loadCloudAuth();await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(loadAvatar)}
 catch(error){$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');
 globalThis.YGCCloudAccountReady=true;

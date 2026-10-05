@@ -77,6 +77,19 @@ def main():
     app = FastAPI()
     app.include_router(avatar_router(TestVerifier(),AvatarOperations(),storage))
     app.include_router(account_router(TestVerifier(), DOCUMENTS))
+    from ygc.cloud_self_profile_routes import self_profile_router
+    from ygc.cloud_profile import validate,ProfileConflict
+    class Profiles:
+        def own_profile(self,actor):
+            record=next(row for row in records.values() if row['app_user_id']==actor)
+            return dict(profile_revision=str(record.get('version',1)),fields={key:record.get(key,'') for key in ('display_name','location_country','location_region','bio')})
+        def edit_own_profile(self,actor,body):
+            version,fields=validate(body)
+            record=next(row for row in records.values() if row['app_user_id']==actor)
+            if record.get('version',1)!=version:raise ProfileConflict()
+            record.update(fields);record['version']=version+1
+            return dict(saved=True)
+    app.include_router(self_profile_router(TestVerifier(),Profiles()))
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
@@ -155,6 +168,46 @@ def main():
                 expect(page.locator('#sendVerification')).not_to_be_visible()
                 ready()
                 expect(page.locator('#verificationStatus')).to_have_text('Email address verified.')
+                expect(page.locator('#selfProfile')).to_be_visible()
+                expect(page.locator('#selfProfileValues')).to_contain_text('Browser Cloud User')
+                for cancel in ('button','escape','outside'):
+                    page.locator('#selfProfileEdit').click()
+                    page.locator('#selfProfile_display_name').fill('Unsaved')
+                    if cancel=='button':page.locator('#selfProfileCancel').click()
+                    elif cancel=='escape':page.keyboard.press('Escape')
+                    else:page.mouse.click(1,1)
+                    expect(page.locator('#selfProfileDialog')).not_to_be_visible()
+                    assert records['fixture-new@example.invalid']['display_name']=='Browser Cloud User'
+                page.locator('#selfProfileEdit').click()
+                page.locator('#selfProfile_display_name').fill('<b>Updated profile</b>')
+                page.locator('#selfProfile_location_country').fill('Japan')
+                page.locator('#selfProfile_location_region').fill('Tokyo')
+                page.locator('#selfProfile_bio').fill('First line\nSecond line')
+                page.locator('#selfProfileSave').click()
+                expect(page.locator('#selfProfileStatus')).to_contain_text('Profile saved')
+                expect(page.locator('#accountSummary')).to_contain_text('<b>Updated profile</b>')
+                assert page.locator('#selfProfileValues b').count()==0
+                ready()
+                expect(page.locator('#selfProfileValues')).to_contain_text('Second line')
+                page.set_viewport_size({'width':390,'height':844})
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                page.locator('#selfProfileEdit').click()
+                assert page.locator('#selfProfileDialog').evaluate('(el)=>el.getBoundingClientRect().width<=innerWidth')
+                if os.getenv('YGC_BROWSER_ARTIFACTS'):
+                    page.screenshot(path=str(artifacts / 'cloud-self-profile-mobile.png'),full_page=True)
+                page.locator('#selfProfileCancel').click()
+                page.set_viewport_size({'width':1280,'height':900})
+                page.locator('#selfProfileEdit').click()
+                records['fixture-new@example.invalid']['version']+=1
+                page.locator('#selfProfileSave').click()
+                expect(page.locator('#selfProfileStatus')).to_contain_text('profile changed')
+                expect(page.locator('#selfProfileEdit')).to_be_disabled()
+                page.locator('#selfProfileRefresh').click()
+                expect(page.locator('#selfProfileEdit')).to_be_enabled()
+                page.locator('#selfProfileEdit').click()
+                page.locator('#selfProfile_display_name').fill('Browser Cloud User')
+                page.locator('#selfProfileSave').click()
+                expect(page.locator('#selfProfileStatus')).to_contain_text('Profile saved')
                 expect(page.locator('#accountAvatar')).to_be_visible()
                 page.locator('#avatarFile').set_input_files({'name':'avatar.png','mimeType':'image/png','buffer':png()})
                 page.locator('#avatarUpload').click()
@@ -173,6 +226,7 @@ def main():
                 page.locator('#signOut').click()
                 expect(page.locator('#signOut')).not_to_be_visible()
                 expect(page.locator('#accountSummary')).not_to_be_visible()
+                expect(page.locator('#selfProfile')).not_to_be_visible()
                 expect(page.locator('#accountAvatar')).not_to_be_visible()
                 page.locator('#email').fill('new@example.invalid')
                 page.locator('#password').fill('bad')
@@ -215,7 +269,7 @@ def main():
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 context.close()
                 browser.close()
-            print('Cloud account browser: registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')
+            print('Cloud account browser: self profile cancel/save/reload/conflict/SignOut/mobile, registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')
         finally:
             server.should_exit = True
             thread.join(timeout=10)

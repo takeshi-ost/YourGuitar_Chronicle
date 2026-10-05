@@ -1351,5 +1351,9 @@
   "users.profile_saved": "プロフィールを保存しました。関連する個体情報への反映は少し遅れることがあります。",
   "users.profile_conflict": "プロフィールが変更されたか、DBメンテナンスが実行中です。詳細を再取得してから編集してください。",
   "users.profile_invalid": "入力項目と文字数を確認してください。",
-  "users.profile_unavailable": "保存結果を確認できませんでした。再操作する前に詳細を再取得してください。"
+  "users.profile_unavailable": "保存結果を確認できませんでした。再操作する前に詳細を再取得してください。",
+  "self_profile.heading": "あなたのプロフィール",
+  "self_profile.restricted": "サービスモードまたはアカウント状態により、プロフィールの操作が制限されています。",
+  "self_profile.failed": "プロフィールを取得できませんでした。編集前に再取得してください。",
+  "self_profile.notice": "表示名・国・地域・自己紹介を変更します。関連ギターへの反映には少し時間がかかる場合があります。"
 }

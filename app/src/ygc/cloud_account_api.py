@@ -56,6 +56,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app.include_router(crawl_router(verifier,CrawlControl(operations,crawl_client)))
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
     app.include_router(user_router(verifier,CloudUsers(settings,operations)))
+    from ygc.cloud_self_profile_routes import self_profile_router
+    app.include_router(self_profile_router(verifier,CloudUsers(settings,operations)))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

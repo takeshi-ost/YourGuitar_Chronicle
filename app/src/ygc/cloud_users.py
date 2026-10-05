@@ -1,4 +1,4 @@
-"""Read-only canonical Accounts records for the administrator console."""
+"""Canonical Accounts reads and fenced administrator/self profile updates."""
 from ygc.db.postgres import connect
 
 FIELDS = ('id','app_user_id','display_name','account_type','role','disabled','ban_status',
@@ -87,19 +87,32 @@ class CloudUsers:
                     more=len(rows)>limit;rows=[dict(row) for row in rows[:limit]]
                     return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)
 
+    def own_profile(self,actor):
+        from ygc.cloud_profile import FIELDS as PROFILE_FIELDS
+        with self.operations.account_access('user_read',actor) as (con,mode,account):
+            return dict(profile_revision=str(account['projection_version']),
+                        fields={key:account[key] or '' for key in PROFILE_FIELDS})
+
+    def edit_own_profile(self,actor,body):
+        return self._edit_profile(actor,None,body,own=True)
+
     def edit_profile(self,actor,user_id,body):
+        return self._edit_profile(actor,user_id,body,own=False)
+
+    def _edit_profile(self,actor,user_id,body,*,own):
         import json,uuid
         from ygc.cloud_profile import validate,ProfileConflict
         from ygc.db.postgres_accounts import now
-        if type(user_id) is not int or not 0<user_id<=MAX_ID:raise ValueError('Invalid identifier.')
+        if not own and (type(user_id) is not int or not 0<user_id<=MAX_ID):raise ValueError('Invalid identifier.')
         version,fields=validate(body)
         with connect(self.settings,'operations') as guard:
             if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
                 raise ProfileConflict('Database maintenance or Crawl is running.')
-            with self.operations.account_access('admin_write',actor) as (con,mode,account):
+            with self.operations.account_access('user_write' if own else 'admin_write',actor) as (con,mode,account):
                 con.execute("SET LOCAL lock_timeout='2s'")
                 con.execute("SET LOCAL statement_timeout='5s'")
-                target=con.execute('SELECT * FROM account_records WHERE id=%s FOR UPDATE',(user_id,)).fetchone()
+                if own:user_id=account['id']
+                target=account if own else con.execute('SELECT * FROM account_records WHERE id=%s FOR UPDATE',(user_id,)).fetchone()
                 if not target:raise UserMissing()
                 if target['projection_version']!=version:raise ProfileConflict('Profile changed; reload before editing.')
                 timestamp=now()
@@ -107,7 +120,7 @@ class CloudUsers:
                     WHERE id=%s RETURNING projection_version''',(*fields.values(),timestamp,user_id)).fetchone()
                 changed=[key for key,value in fields.items() if target[key]!=value]
                 con.execute('INSERT INTO account_metadata(key,value) VALUES(%s,%s)',
-                    ('admin_profile:'+str(uuid.uuid4()),json.dumps(dict(action='admin_profile_edit',actor_app_user_id=account['app_user_id'],
+                    (('self_profile:' if own else 'admin_profile:')+str(uuid.uuid4()),json.dumps(dict(action='self_profile_edit' if own else 'admin_profile_edit',actor_app_user_id=account['app_user_id'],
                       target_app_user_id=target['app_user_id'],changed_fields=changed,previous_revision=version,
                       revision=result['projection_version'],occurred_at=timestamp))))
             # Account commit and outbox enqueue precede releasing the service-mode fence.
