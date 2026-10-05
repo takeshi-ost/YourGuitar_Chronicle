@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--enable-backup-controls', action='store_true')
     parser.add_argument('--enable-db-maintenance', action='store_true')
     parser.add_argument('--enable-crawl-controls', action='store_true')
+    parser.add_argument('--enable-review-gateway',action='store_true')
     parser.add_argument('--gcloud', default='gcloud')
     args = parser.parse_args()
     if '@sha256:' not in args.image:
@@ -59,6 +60,14 @@ def main():
            'YGC_POSTGRES_HOST': '/cloudsql/' + instance, 'YGC_POSTGRES_USER': 'ygc_app',
            'YGC_POSTGRES_PREFIX': 'ygc_', 'YGC_FIREBASE_API_KEY': key,
            'YGC_FIREBASE_AUTH_DOMAIN': args.project + '.firebaseapp.com'}
+    if args.enable_review_gateway:
+        review='ygc-staging-review@'+args.project+'.iam.gserviceaccount.com'
+        subject=cli('iam','service-accounts','describe',review,'--format=value(uniqueId)')
+        audience=cli('run','services','describe',args.service,'--region='+args.region,'--format=value(status.url)')
+        from urllib.parse import urlsplit
+        parsed=urlsplit(audience)
+        if parsed.scheme!='https' or not parsed.hostname or not parsed.hostname.endswith('.run.app') or parsed.path or parsed.query or parsed.fragment or not subject.isdecimal():raise RuntimeError('Invalid review gateway configuration.')
+        env.update(YGC_REVIEW_AUDIENCE=audience,YGC_REVIEW_EMAIL=review,YGC_REVIEW_SUBJECT=subject)
     if args.enable_backup_controls:
         env['YGC_BACKUP_REGION'] = args.region
     if args.enable_db_maintenance:env['YGC_MAINTENANCE_REGION']=args.region

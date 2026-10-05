@@ -229,3 +229,9 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 
 
 次の移行範囲としてProduct Detailの管理用Media Claim画像を接続。private Storageへの正規化保存・Admin配信・監査とClaimの原子保存・画像付きChronicle復旧を実装する。所有登録と一般向け公開画面は別の後続範囲。実クラウド受入は[管理用画像の手順](../migration/CLOUD_BROWSER_CONSOLE.md#product-detailの管理用画像2026-10-05)に従い、確認済みとして先取りしない。
+
+
+2026-10-06の管理用画像受入：PR #45/#46は必須CI成功・main統合・配置済み。通常JPEGへの書き出しで画像追加に成功し、利用者が表示・モード制限・画像付き復元/初期化後の復元・最新ユーザー/Admin/ログイン維持の2〜5もすべて確認したと報告した。管理用Media Claim画像と画像付きChronicle復旧の受入は完了。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#管理用画像の利用者受入2026-10-06)を参照。元画像が複数枚形式だったとの可能性は直接検査しておらず断定しない。所有登録・Acquire審議・一般向け画面と画像の物理削除は後続で、既存の所有データ比較/実クラウド25件超ページ移動の未確認は維持する。
+
+
+2026-10-06：所有登録・Acquire審議の接続に先立ち、専用審議SAのGoogle OIDC認証とMCP接続診断を実装。既存審議は推論APIではなく外部GPTのMCP観察結果をYGCが判定する方式を維持する。クラウドの申請・写真提出・審議キュー・Claim反映・Owner承認はまだ未接続。[実装境界と後続手順](../migration/CLOUD_OWNERSHIP_REVIEW.md)を参照。本人Ownedの実データ受入は未確認のまま維持する。
