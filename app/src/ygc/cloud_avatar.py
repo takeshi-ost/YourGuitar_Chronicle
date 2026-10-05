@@ -36,7 +36,8 @@ def decode_reference(value):
     return ref
 
 
-def normalize_image(data, content_type):
+def normalize_image(data, content_type, *, max_side=512):
+    if max_side not in (512,2048):raise ValueError('Invalid image dimensions.')
     formats = {'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WEBP'}
     if content_type not in formats or not isinstance(data, bytes) or not 0 < len(data) <= MAX_UPLOAD:
         raise ValueError('Upload JPEG, PNG or WebP within the size limit.')
@@ -50,7 +51,7 @@ def normalize_image(data, content_type):
                 image.load()
                 oriented = ImageOps.exif_transpose(image)
                 try:
-                    oriented.thumbnail((512,512))
+                    oriented.thumbnail((max_side,max_side))
                     rgba = oriented.convert('RGBA')
                     canvas = Image.new('RGB',rgba.size,'white')
                     try:

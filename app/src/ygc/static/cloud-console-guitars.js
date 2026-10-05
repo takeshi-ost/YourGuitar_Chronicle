@@ -1,8 +1,10 @@
+import {createMediaBrowser} from './cloud-console-media.js';
 // Console data access remains separate from Operations availability.
 export function createGuitarBrowser({request,authorized,onUnauthorized}){
   const $=id=>document.getElementById(id),t=(key,params={})=>YGCI18n.t(key,params);
   let busy=false,epoch=0,next=null,history=[0],query='',selectedId=null,claimNext=null,claimHistory=[0];
   let pending=null;
+  const media=createMediaBrowser({request,authorized,selected:()=>selectedId,busy:()=>busy,work:action,onUnauthorized,updated:async current=>{await page(current);if(current!==epoch)return;await loadDetail(selectedId,current,false)}});
   const dialog=document.createElement('dialog');dialog.id='claimDecisionDialog';
   const title=document.createElement('h2'),description=document.createElement('p'),selection=document.createElement('select'),confirm=document.createElement('button'),cancel=document.createElement('button');
   selection.id='claimDecisionValue';confirm.id='claimDecisionConfirm';cancel.id='claimDecisionCancel';
@@ -38,6 +40,7 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
   };
   const fields=['id','manufacturer','model','finish','year','serial_number','location_country','location_region','current_owner_name','current_owner_type'];
   function render(){
+    media.render();
     $('guitarBrowser').hidden=$('cloudProductDetail').hidden=!authorized();
     for(const id of ['guitarSearch','guitarSearchSubmit','guitarRefresh'])$(id).disabled=busy||!authorized();
     $('guitarPrevious').disabled=busy||!authorized()||history.length<2;
@@ -48,8 +51,9 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
     $('chronicleNext').disabled=busy||!authorized()||claimNext===null;
     for(const button of document.querySelectorAll('#guitarRows button,#chronicleRows button'))button.disabled=busy||!authorized();
   }
-  function clear(){closeDecision();decisionStatus.textContent='';selectedId=null;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';epoch++;next=null;history=[0];query='';$('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarStatus').textContent='';$('guitarSearch').value='';$('guitarDetailEmpty').hidden=false;render()}
+  function clear(){media.clear();closeDecision();decisionStatus.textContent='';selectedId=null;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';epoch++;next=null;history=[0];query='';$('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarStatus').textContent='';$('guitarSearch').value='';$('guitarDetailEmpty').hidden=false;render()}
   function failed(error){
+    media.clear();
     selectedId=null;claimNext=null;$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';
     $('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarDetailEmpty').hidden=false;next=null;
     if([401,403].includes(error.status)){clear();onUnauthorized(error)}
@@ -99,13 +103,14 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
   }
   function refresh(){return action(page)}
   async function loadDetail(id,current,jump=true){
-    closeDecision();decisionStatus.textContent='';
+    media.clear();closeDecision();decisionStatus.textContent='';
     if(typeof id!=='string'||!/^[1-9][0-9]*$/.test(id))throw Error('Invalid identifier');
     const row=await request('/api/admin/guitars/'+id);
     if(current!==epoch)return;
     $('guitarDetailFields').replaceChildren();
     for(const field of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('guitars.field_'+field);dd.textContent=row[field]??'—';$('guitarDetailFields').append(dt,dd)}
     selectedId=id;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';render();await chronicle(current);if(current!==epoch)return;
+    await media.refresh();if(current!==epoch)return;
     $('guitarDetailEmpty').hidden=true;if(jump)$('cloudProductDetail').scrollIntoView({block:'start'});
   }
   function detail(id){return action(current=>loadDetail(id,current))}
