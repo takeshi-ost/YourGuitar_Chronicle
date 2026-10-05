@@ -41,6 +41,20 @@ def guitar_router(verifier,service):
         except Exception:raise HTTPException(503,'Guitar data unavailable.',headers=headers) from None
     @router.get('/api/admin/guitars')
     async def listing(request:Request):return await execute(request)
+    @router.get('/api/admin/guitars/{individual_id}/chronicle')
+    async def chronicle(request:Request,individual_id:str):
+        who=await actor(request)
+        try:
+            if 'q' in request.query_params:raise ValueError()
+            _,after,limit=parameters(request.query_params)
+            result=await run_in_threadpool(service.chronicle,who,positive_id(individual_id),after=after,limit=limit)
+            items=[{**row,'id':str(row['id']),'author_user_id':str(row['author_user_id'])} for row in result['items']]
+            return JSONResponse({'items':items,'total':str(result['total']),
+                'next_after':str(result['next_after']) if result['next_after'] is not None else None},headers=headers)
+        except GuitarMissing:raise HTTPException(404,'Guitar not found.',headers=headers) from None
+        except ValueError:raise HTTPException(400,'Invalid Chronicle page.',headers=headers) from None
+        except PermissionError:raise HTTPException(403,'Administrator access unavailable.',headers=headers) from None
+        except Exception:raise HTTPException(503,'Chronicle unavailable.',headers=headers) from None
     @router.get('/api/admin/guitars/{individual_id}')
     async def detail(request:Request,individual_id:str):return await execute(request,individual_id)
     return router

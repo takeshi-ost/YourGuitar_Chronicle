@@ -72,6 +72,11 @@ def main():
                 guitar_reads.append(actor)
                 matching=[r for r in rows if r['id']>after and q.lower() in r['model'].lower()]
                 return dict(total=len(rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+        def chronicle(self,actor,individual_id,*,after,limit):
+            with ops.access('admin_read',actor):
+                claims=[dict(id=i,author_user_id=1,author_name='<b>Automation</b>',claim_type='listing',verification_status='positive' if i%3==0 else 'negative' if i%3==1 else 'unverified',effective_status='active',occurred_at='2026-10-05',created_at='now',field_name=None,value_text=None,body='<img src=x>',items=[dict(field_name='serial_number',value_text='S'+str(individual_id))]) for i in range(1,29)]
+                selected=[row for row in reversed(claims) if after==0 or row['id']<after]
+                return dict(items=selected[:limit],total=len(claims),next_after=selected[limit-1]['id'] if len(selected)>limit else None)
         def detail(self,actor,individual_id):
             with ops.access('admin_read',actor):
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
@@ -238,11 +243,21 @@ def main():
                 expect(page.locator('#userPrevious')).to_be_disabled();expect(page.locator('#userNext')).to_be_disabled()
                 page.locator('#guitarRows button').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
+                expect(page.locator('#chronicleRows details')).to_have_count(25)
+                expect(page.locator('#chronicleStatus')).to_have_text('Total history records: 28')
+                assert page.locator('#chronicleRows img, #chronicleRows b').count()==0
+                assert page.locator('#chronicleRows .positive[open]').count()>0
+                assert page.locator('#chronicleRows .negative[open], #chronicleRows .unverified[open]').count()==0
+                page.locator('#chronicleNext').click();expect(page.locator('#chronicleRows details')).to_have_count(3)
+                page.locator('#chroniclePrevious').click();expect(page.locator('#chronicleRows details')).to_have_count(25)
                 assert page.locator('#guitarDetailFields img').count()==0
                 assert page.evaluate('document.documentElement.scrollHeight<=innerHeight')
                 page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarRows tr')).to_have_count(1)
                 expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
+                page.locator('#guitarRows button').first.click()
+                expect(page.locator('#guitarDetailFields')).to_contain_text('Model 28')
+                expect(page.locator('#chronicleRows')).to_contain_text('S28')
                 expect(page.locator('#guitarPrevious')).to_be_disabled();expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarSearch').fill('unknown');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')

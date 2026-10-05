@@ -197,3 +197,9 @@ Crawlの表示・手動実行/事前保存・ギター限定/重複防止・定�
 
 
 次の移行範囲はUser DB Management/User DetailのAccounts正本読取り。一覧・総数・検索・ページ移動・詳細表示を追加し、変更系API、Ownership/Owned表示、画像付き復旧は後続として維持する。今回のCrawl/Chronicle復旧受入結果と併せて文書を更新する。
+
+
+2026-10-05追記：User DB Management/User Detail（PR #38）はCI成功・main統合・配置を完了。利用者が一覧/総数、名前・ID検索、右Detailの1項目ずつの表示、左右独立スクロール、SignOut後の管理表示制限の5項目を全て確認済みと報告し、閲覧機能の受入は完了。[確認記録](../migration/CLOUD_BROWSER_CONSOLE.md#user-db閲覧の利用者受入2026-10-05)を参照。
+
+
+User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取りを追加。Claim履歴・判定/有効状態・Listing/Specificationの内容とページ移動を接続する。所有権の変更、判定・編集・投票、画像付き復旧は別の後続範囲。

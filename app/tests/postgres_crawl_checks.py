@@ -39,6 +39,26 @@ def run(app,accounts,operations,storage,aid):
     unavailable=repo.record_reverb_unavailable('later')
     assert unavailable['created'] and unavailable['owner_lost']
     assert not repo.record_reverb_unavailable('later')['created']
+    from ygc.cloud_guitars import CloudGuitars,GuitarMissing
+    from unittest.mock import patch
+    browser=CloudGuitars(app,operations)
+    history=browser.chronicle(aid,items[0]['id'],limit=1)
+    assert history['total']>=2 and len(history['items'])==1 and history['next_after'] is not None
+    following=browser.chronicle(aid,items[0]['id'],after=history['next_after'],limit=1)
+    assert following['total']==history['total'] and following['items'][0]['id']<history['items'][0]['id']
+    full=browser.chronicle(aid,items[0]['id'])
+    listing=[r for r in full['items'] if r['claim_type']=='listing'][0]
+    assert listing['author_user_id']==source and listing['effective_status']=='active'
+    assert any(item['field_name']=='serial_number' for item in listing['items'])
+    assert not {'payload_json','source_url','image_url','evidence','admin_verification'} & set(listing)
+    assert all(item['field_name'] not in ('source_url','image_url') for item in listing['items'])
+    from ygc.db.postgres import connect as real_connect
+    with real_connect(app,'chronicle') as con:
+        before=con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s',(items[0]['id'],)).fetchone()['current_owner_user_id']
+    browser.chronicle(aid,items[0]['id'])
+    with real_connect(app,'chronicle') as con:
+        assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s',(items[0]['id'],)).fetchone()['current_owner_user_id']==before
+    print('PostgreSQL Chronicle read: Listing/Specification/Ownership, fixed fields, source privacy, descending cursor and unchanged owner passed.')
     print('PostgreSQL Crawl: canonical non-login Automation ID, mixed-scope filtering, durable cursor/log, Listing/Evidence, duplicate/relisting Acquire and Lost passed.')
     # A registered Owner is not displaced by a new external listing.
     with repo.connect() as con:

@@ -78,3 +78,29 @@ Adminの確認済みIdentity Platform認証とAccounts正本の現在権限を�
 Automation等のログインできないsourceアカウントも一覧と総数に含む。編集、権限変更、BAN操作、Owned/Formerly Owned、SNS表示は別の後続範囲。Accountsの変更やGoogle認証ユーザーの追加/削除は今回行わない。
 
 配置後の確認：Adminで再読み込みし、User DBの表示、既存登録ユーザーとsourceアカウント、検索・総数・Detailの該当表示、左右独立スクロールを確認する。SignOut/一般ユーザーでは管理表示が利用できないことも確認する。
+
+
+### User DB閲覧の利用者受入（2026-10-05）
+
+PR #38は必須CI成功後mainへ統合し、ステージングへ配置済み。利用者が案内した5項目すべてを確認したと報告した。
+
+| 確認項目 | 状態 |
+| --- | --- |
+| 左User DB Managementの一覧・総数 | 確認済み |
+| 名前またはIDによる検索 | 確認済み |
+| Detailで右に該当ユーザーを1項目ずつ表示 | 確認済み |
+| 左右の独立スクロール | 確認済み |
+| SignOut後の管理表示制限 | 確認済み |
+
+閲覧機能の受入は完了。一般ユーザーのAPI拒否・全モードでのAdmin閲覧は隔離試験で検証済みであり、今回の利用者報告に含まれない実ブラウザ操作まで確認済みとは扱わない。編集・BAN・Ownership表示は後続。
+
+
+## Product DetailのChronicle読取り
+
+Chronicle正本のClaim履歴をProduct Detail内へ接続する。初期25件、IDの降順カーソルでPrevious/Nextを使い、個体ごとの履歴総数を表示する。Refreshで選択中個体の最新履歴を再取得する。Positiveは展開カード、Unverifiedはタグ、Negativeは点から詳細を展開する。非活性ClaimとBANによる非活性状態は管理履歴として明示する。
+
+表示対象はClaim種類・判定状態・有効状態・投稿者名・日時・本文/値と、固定したListing項目・最大20個のSpecification項目。画像・Storage参照・申請の非公開説明・Evidence payload・GPT診断は取得しない。テキストはDOMのtextContentで表示する。名前や値の長さを制限し、Adminの現在資格を毎回確認する。追加の編集・判定・投票操作は提供しない。所有権、Claimの判定状態、Snapshotには書込みしない。
+
+隔離PostgreSQLではListing/Specification/Ownershipの取得、個体単位のページング、除外フィールド、所有者不変を確認し、既存の自己判定禁止・Acquire承認待ち・譲渡後の権限移動・管理者別経路も共通回帰試験で確認する。
+
+配置後の確認：収集済み個体のDetailを開き、ChronicleのListing/Specificationなどと履歴総数、展開/折畳み、Refresh、複数履歴のPrevious/Next、別個体へ切り替えた際の該当履歴表示を確認する。SignOut後は履歴を閲覧できないことも確認する。
