@@ -189,3 +189,11 @@ PostgreSQLのCrawlアダプター、Chronicleだけの実行前保存、専用Jo
 2026-10-05追記：Reverb Secret version 1の有効状態を確認し、専用Crawl Job/Schedulerを配置。check-onlyによるDB接続とprobe-onlyによるReverb認証が成功した。PR #33はCI成功後mainへ統合済み。実Crawlとデータ入り復旧受入は引き続き利用者のブラウザ確認待ち。[配置・確認記録](../migration/CLOUD_REVERB_CRAWL.md#ステージング接続確認2026-10-05)を参照。
 
 Console ready revision `ygc-staging-accounts-00014-g85`の配置、health/ready、匿名Crawl操作拒否、既存Offline維持を確認した。実管理者によるCrawlとデータ入り復旧は未実施。
+
+
+### 最新の利用者受入結果（2026-10-05）
+
+Crawlの表示・手動実行/事前保存・ギター限定/重複防止・定期実行による重複のない増加を確認済み。データ入りChronicleについて、手動保存→追加Crawl→保存時点への復元、初期化→同じ保存からの個体復元、ユーザー登録・Admin権限・ログイン維持も全て正常完了と利用者から報告を受けた。前節の「未実施」「確認待ち」は当時の状態で、この範囲の受入は完了。他DB単独のデータ入り内容比較、画像付きChronicle復旧、残るコンテンツ編集API・画面共通化は別の後続範囲。[受入結果](../migration/DB_OPERATIONS_ACCEPTANCE.md)を参照。
+
+
+次の移行範囲はUser DB Management/User DetailのAccounts正本読取り。一覧・総数・検索・ページ移動・詳細表示を追加し、変更系API、Ownership/Owned表示、画像付き復旧は後続として維持する。今回のCrawl/Chronicle復旧受入結果と併せて文書を更新する。

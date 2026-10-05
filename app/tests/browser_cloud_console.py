@@ -77,6 +77,20 @@ def main():
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
                 return rows[individual_id-1]
     app.include_router(guitar_router(verifier,Guitars()))
+    from ygc.cloud_user_routes import user_router
+    from ygc.cloud_users import FIELDS as USER_FIELDS,UserMissing
+    user_rows=[dict.fromkeys(USER_FIELDS)|dict(id=i,display_name='<b>User '+str(i)+'</b>',account_type='user',role='admin' if i==1 else 'member',disabled=0,ban_status='normal',bio='Profile '+str(i)) for i in range(1,29)]
+    class Users:
+        def list(self,actor,*,q,after,limit):
+            with ops.access('admin_read',actor):
+                matching=[r for r in user_rows if r['id']>after and q.lower() in r['display_name'].lower()]
+                return dict(total=len(user_rows),items=matching[:limit],next_after=matching[limit-1]['id'] if len(matching)>limit else None)
+        def detail(self,actor,individual_id):
+            with ops.access('admin_read',actor):
+                if not 1<=individual_id<=len(user_rows):raise UserMissing()
+                return user_rows[individual_id-1]
+    app.include_router(user_router(verifier,Users()))
+
     from ygc.cloud_backup_routes import backup_router
     backup_calls=[]
     class BackupControl:
@@ -210,6 +224,18 @@ def main():
                 expect(page.locator('#guitarPrevious')).to_be_enabled()
                 expect(page.locator('#guitarNext')).to_be_disabled()
                 page.locator('#guitarPrevious').click();expect(page.locator('#guitarRows tr')).to_have_count(25)
+                expect(page.locator('#userRows tr')).to_have_count(25)
+                expect(page.locator('#userStatus')).to_have_text('Total accounts: 28')
+                assert page.locator('#userRows b').count()==0
+                page.locator('#userNext').click();expect(page.locator('#userRows tr')).to_have_count(3)
+                page.locator('#userPrevious').click();expect(page.locator('#userRows tr')).to_have_count(25)
+                page.locator('#userRows button').first.click()
+                expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
+                assert page.locator('#userDetailFields b').count()==0
+                page.locator('#userSearch').fill('User 28');page.locator('#userSearchSubmit').click()
+                expect(page.locator('#userRows tr')).to_have_count(1)
+                expect(page.locator('#userStatus')).to_have_text('Total accounts: 28')
+                expect(page.locator('#userPrevious')).to_be_disabled();expect(page.locator('#userNext')).to_be_disabled()
                 page.locator('#guitarRows button').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
                 assert page.locator('#guitarDetailFields img').count()==0

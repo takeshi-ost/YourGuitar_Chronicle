@@ -39,6 +39,6 @@ def install(app, config):
     @app.get('/assets/{filename}')
     def asset(filename: str):
         if filename not in ('identity-platform-auth.js', 'cloud-auth-loader.js',
-                            'cloud-account-page.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-guitars.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
+                            'cloud-account-page.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-guitars.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')
         return FileResponse(STATIC / filename, headers={'Cache-Control': 'no-store'})
