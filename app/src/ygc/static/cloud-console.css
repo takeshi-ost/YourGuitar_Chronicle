@@ -13,3 +13,5 @@
 .user-owned-guitars button{display:block;width:100%;text-align:left;margin:6px 0;overflow-wrap:anywhere}
 
 #userProfileDialog{max-width:32rem;max-height:85vh;overflow:auto;border-radius:12px;padding:24px}#userProfileDialog::backdrop{background:rgba(0,0,0,.45)}#userProfileDialog label,#userProfileDialog input{display:block;width:100%}#userProfileDialog button{margin:12px 8px 0 0}
+
+#mediaPreview{display:block;max-width:100%;max-height:65dvh;object-fit:contain}#contentMediaPanel li{margin:8px 0}#contentMediaPanel input{max-width:100%}

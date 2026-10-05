@@ -1357,5 +1357,11 @@
   "self_profile.failed": "Profile could not be loaded. Refresh before editing.",
   "self_profile.notice": "Update your display name, country, region and bio. Changes to related guitars may take a little longer to appear.",
   "users.previous": "Previous",
-  "users.next": "Next"
+  "users.next": "Next",
+  "content_media.heading": "Images",
+  "content_media.save": "Add image as Media Claim",
+  "content_media.total": "Total images: {count}",
+  "content_media.saved": "Image saved as a Media Claim. Review its verification in Chronicle.",
+  "content_media.failed": "Images unavailable. Refresh to try again.",
+  "content_media.save_failed": "Save result could not be confirmed. Refresh images and Chronicle before retrying."
 }

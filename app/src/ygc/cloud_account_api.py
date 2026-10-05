@@ -55,6 +55,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_crawl_routes import crawl_router
     app.include_router(crawl_router(verifier,CrawlControl(operations,crawl_client)))
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
+    from ygc.cloud_content_media import CloudContentMedia
+    from ygc.cloud_content_media_routes import content_media_router
+    app.include_router(content_media_router(verifier,CloudContentMedia(settings,operations,storage)))
     app.include_router(user_router(verifier,CloudUsers(settings,operations)))
     from ygc.cloud_self_profile_routes import self_profile_router
     app.include_router(self_profile_router(verifier,CloudUsers(settings,operations)))

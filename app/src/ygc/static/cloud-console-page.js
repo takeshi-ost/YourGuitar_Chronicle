@@ -28,9 +28,10 @@ function error(error){
   $('consoleStatus').textContent=t(error.status===409?'console.conflict':error.status===403?'console.admin_required':error.status===401||error.code==='sign_in_required'?'console.sign_in_required':'console.unavailable');
   controls();
 }
-async function request(path,options){
+async function request(path,options,binary=false){
   const response=await auth.authorizedFetch(path,options,true);
   if(!response.ok)throw Object.assign(Error('Operation unavailable'),{status:response.status});
+  if(binary){if(!response.headers.get('Content-Type')?.startsWith('image/jpeg'))throw Error('Unexpected image');const blob=await response.blob();if(blob.size>25*1024*1024)throw Error('Image too large');return blob}
   return response.json();
 }
 function display(row){

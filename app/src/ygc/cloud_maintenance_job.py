@@ -56,8 +56,9 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                     from ygc.cloud_avatar import decode_reference
                     for user in rows['account_records']:
                         if user['avatar_storage_path']:storage.get(decode_reference(user['avatar_storage_path']))
-                if target=='chronicle' and rows['media_assets']:
-                    raise ValueError('Content media restoration requires the cloud media adapter.')
+                if target=='chronicle':
+                    from ygc.cloud_content_media import verify_restored_media
+                    verify_restored_media(storage,rows['media_assets'])
             with connect(settings,'accounts') as source:
                 source.execute("SET LOCAL lock_timeout='5s'")
                 # Blocks writes and row-locking projection workers; plain identity reads remain possible.

@@ -224,3 +224,8 @@ User DB閲覧の受入完了に続き、Product DetailのChronicle正本読取�
 2026-10-05の本人プロフィール編集受入：PR #43は必須CI成功・main統合・配置済み。利用者が案内した6項目を確認できたと報告し、操作受入は完了。関連個体への同期と所有分類の実データ比較、所有一覧/Chronicleの25件超ページ移動は既存の対象データ待ちを維持する。[確認記録](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人プロフィール編集の利用者受入2026-10-05)を参照。
 
 次の接続はAccountページの本人Owned / Formerly Owned閲覧。Browser Consoleと分類クエリを共有し、正本の本人ID/UUID・有効状態・通常のサービスモードで読取りを制限する。一般向けProduct Detailへのリンクや所有権変更は後続。[仕様・確認手順](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人のowned--formerly-owned閲覧2026-10-05)を参照。
+
+2026-10-05の本人所有一覧確認：PR #44は必須CI成功・main統合・配置済み。利用者が確認できた空表示の範囲に問題なしと報告した。チャットの2〜6（再取得/再読み込み、分類・総数・個体情報、25件超ページ移動、モード制限、SignOut/ユーザー切替）は未確認。所有ギターをまだ登録できていないため、全体受入完了とはせず、所有登録の接続後にデータ入り確認を再案内する。[確認記録](../migration/CLOUD_ACCOUNT_REGISTRATION.md#本人所有一覧の利用者確認2026-10-05)を参照。
+
+
+次の移行範囲としてProduct Detailの管理用Media Claim画像を接続。private Storageへの正規化保存・Admin配信・監査とClaimの原子保存・画像付きChronicle復旧を実装する。所有登録と一般向け公開画面は別の後続範囲。実クラウド受入は[管理用画像の手順](../migration/CLOUD_BROWSER_CONSOLE.md#product-detailの管理用画像2026-10-05)に従い、確認済みとして先取りしない。

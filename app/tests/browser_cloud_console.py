@@ -89,6 +89,26 @@ def main():
                 if not 1<=individual_id<=len(rows):raise GuitarMissing()
                 return rows[individual_id-1]
     app.include_router(guitar_router(verifier,Guitars()))
+    from ygc.cloud_content_media_routes import content_media_router
+    from ygc.cloud_avatar import normalize_image
+    from test_cloud_avatar import png
+    image_data=normalize_image(png(),'image/png',max_side=2048);image_records={3:list(range(1,27))}
+    class Media:
+        storage=True
+        def listing(self,actor,individual,*,after):
+            with ops.access('admin_read',actor):
+                ids=image_records.get(individual,[]);following=[i for i in ids if i>after]
+                return dict(total=str(len(ids)),items=[dict(id=str(i),captured_at='2026-10-05') for i in following[:25]],next_after=str(following[24]) if len(following)>25 else None)
+        def upload(self,actor,individual,data,mime):
+            with ops.access('admin_write',actor):
+                assert mime=='image/png' and data==png()
+                image_records.setdefault(individual,[]).append(1)
+                return dict(media_id='1',claim_id='29',verification_status='unverified')
+        def get(self,actor,individual,media):
+            with ops.access('admin_read',actor):
+                if media not in image_records.get(individual,[]):raise GuitarMissing()
+                return image_data
+    app.include_router(content_media_router(verifier,Media()))
     from ygc.cloud_user_routes import user_router
     from ygc.cloud_users import FIELDS as USER_FIELDS,UserMissing
     user_rows=[dict.fromkeys(USER_FIELDS)|dict(id=i,display_name='<b>User '+str(i)+'</b>',account_type='user',role='admin' if i==1 else 'member',disabled=0,ban_status='normal',bio='Profile '+str(i),profile_revision='1') for i in range(1,29)]
@@ -253,6 +273,29 @@ def main():
                 assert page.locator('#userRows b').count()==0
                 page.locator('#userNext').click();expect(page.locator('#userRows tr')).to_have_count(3)
                 page.locator('#userPrevious').click();expect(page.locator('#userRows tr')).to_have_count(25)
+                page.locator('#guitarRows button').first.click()
+                expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 0')
+                page.locator('#contentMediaFile').set_input_files(dict(name='photo.png',mimeType='image/png',buffer=png()))
+                page.locator('#contentMediaSave').click()
+                expect(page.locator('#contentMediaStatus')).to_contain_text('Image saved as a Media Claim')
+                expect(page.locator('#contentMediaRows button')).to_have_count(1)
+                page.locator('#contentMediaRows button').click()
+                expect(page.locator('#contentMediaDialog')).to_be_visible()
+                expect(page.locator('#mediaPreview')).to_have_js_property('naturalWidth',800)
+                page.mouse.click(2,2);expect(page.locator('#contentMediaDialog')).not_to_be_visible()
+                assert page.locator('#mediaPreview').get_attribute('src') is None
+                page.locator('#contentMediaRows button').click();expect(page.locator('#contentMediaDialog')).to_be_visible();page.keyboard.press('Escape')
+                expect(page.locator('#contentMediaDialog')).not_to_be_visible()
+                page.locator('#guitarRows button').nth(1).click()
+                expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 0')
+                page.locator('#guitarRows button').nth(2).click()
+                expect(page.locator('#contentMediaRows button')).to_have_count(25)
+                page.locator('#contentMediaPanel button').filter(has_text='Next').click()
+                expect(page.locator('#contentMediaRows button')).to_have_count(1)
+                page.locator('#contentMediaPanel button').filter(has_text='Previous').click()
+                expect(page.locator('#contentMediaRows button')).to_have_count(25)
+                page.locator('#guitarRows button').first.click()
+                expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 1')
                 page.locator('#userRows button').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0

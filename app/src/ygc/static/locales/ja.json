@@ -1357,5 +1357,11 @@
   "self_profile.failed": "プロフィールを取得できませんでした。編集前に再取得してください。",
   "self_profile.notice": "表示名・国・地域・自己紹介を変更します。関連ギターへの反映には少し時間がかかる場合があります。",
   "users.previous": "前へ",
-  "users.next": "次へ"
+  "users.next": "次へ",
+  "content_media.heading": "画像",
+  "content_media.save": "Media Claimとして画像を追加",
+  "content_media.total": "画像総数：{count}",
+  "content_media.saved": "画像をMedia Claimとして保存しました。判定状態はクロニクルで確認してください。",
+  "content_media.failed": "画像を取得できませんでした。再取得してください。",
+  "content_media.save_failed": "保存結果を確認できませんでした。再試行前に画像とクロニクルを再取得してください。"
 }
