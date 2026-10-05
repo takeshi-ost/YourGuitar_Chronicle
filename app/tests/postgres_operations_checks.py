@@ -166,6 +166,37 @@ def run(port):
                 audits=con.execute("SELECT value FROM account_metadata WHERE key LIKE 'admin_profile:%'").fetchall()
                 assert len(audits)==4 and all(json.loads(r['value'])['actor_app_user_id']==aid for r in audits)
             print('PostgreSQL Admin profiles: all modes, canonical authority, CAS, maintenance exclusion, audit atomicity and retained identity/roles passed.')
+            # Self edits use only the locked canonical actor, and never Admin mode bypass.
+            for mode in MODES:
+                version=operations.set_mode(aid,mode=mode,message='Test',version=version)['version']
+                for actor,target in ((bid,b),(aid,a)):
+                    if mode=='normal' or (mode=='admin_only' and actor==aid):
+                        own=user_browser.own_profile(actor)
+                        before_other=user_browser.detail(aid,a['id'] if actor==bid else b['id'])
+                        result=user_browser.edit_own_profile(actor,dict(revision=own['profile_revision'],fields=updates))
+                        assert result['id']==str(target['id'])
+                        assert user_browser.own_profile(actor)['fields']==updates
+                        assert user_browser.detail(aid,a['id'] if actor==bid else b['id'])==before_other
+                        rejected(ProfileConflict,lambda:user_browser.edit_own_profile(actor,dict(revision=own['profile_revision'],fields=updates)))
+                    else:
+                        before=user_browser.detail(aid,target['id'])
+                        rejected(PermissionError,lambda:user_browser.edit_own_profile(actor,dict(revision=before['profile_revision'],fields=updates)))
+                        assert user_browser.detail(aid,target['id'])==before
+                        if mode=='read_only':assert user_browser.own_profile(actor)['profile_revision']==before['profile_revision']
+                        else:rejected(PermissionError,lambda:user_browser.own_profile(actor))
+            version=operations.set_mode(aid,mode='normal',message='Test',version=version)['version']
+            before=user_browser.own_profile(bid)
+            with connect(app,'operations') as guard:
+                guard.execute('SELECT pg_advisory_xact_lock(79432190)')
+                rejected(ProfileConflict,lambda:user_browser.edit_own_profile(bid,dict(revision=before['profile_revision'],fields=updates)))
+            with connect(owner,'accounts') as con:con.execute(sql.SQL('REVOKE INSERT ON account_metadata FROM {}').format(sql.Identifier(role)))
+            rejected(psycopg.errors.InsufficientPrivilege,lambda:user_browser.edit_own_profile(bid,dict(revision=before['profile_revision'],fields=updates)))
+            assert user_browser.own_profile(bid)==before
+            with connect(owner,'accounts') as con:con.execute(sql.SQL('GRANT INSERT ON account_metadata TO {}').format(sql.Identifier(role)))
+            with connect(app,'accounts') as con:
+                audits=con.execute("SELECT value FROM account_metadata WHERE key LIKE 'self_profile:%'").fetchall()
+                assert len(audits)==3 and all(json.loads(r['value'])['actor_app_user_id']==json.loads(r['value'])['target_app_user_id'] for r in audits)
+            print('PostgreSQL self profiles: own canonical target, service mode matrix, CAS, exclusion, atomic audit and other accounts unchanged passed.')
             # Materialized current ownership is authoritative; unaccepted Former Owner claims are hidden.
             assert accounts.drain_projection()>0
             gids=[r['id'] for r in first['items']]

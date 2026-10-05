@@ -112,6 +112,17 @@ def run(app,accounts,operations,storage,aid):
         snapshot=con.execute('SELECT current_owner_user_id,current_owner_name FROM individuals WHERE id=%s',(target,)).fetchone()
         assert snapshot['current_owner_user_id']==registered['id'] and snapshot['current_owner_name']=='Renamed Owner'
     assert target in {r['id'] for r in users.guitars(aid,registered['id'],kind='owned')['items']}
+    previous_mode=operations.details(aid)
+    operations.set_mode(aid,mode='normal',message='Self profile test',version=previous_mode['version'])
+    own=users.own_profile(registered['app_user_id'])
+    users.edit_own_profile(registered['app_user_id'],dict(revision=own['profile_revision'],fields={**own['fields'],'display_name':'Self edited Owner'}))
+    accounts.drain_projection()
+    with connect(app,'chronicle') as con:
+        snapshot=con.execute('SELECT current_owner_user_id,current_owner_name FROM individuals WHERE id=%s',(target,)).fetchone()
+        assert snapshot['current_owner_user_id']==registered['id'] and snapshot['current_owner_name']=='Self edited Owner'
+    operations.set_mode(aid,mode=previous_mode['mode'],message=previous_mode['message'],version=operations.details(aid)['version'])
+    assert target in {r['id'] for r in users.guitars(aid,registered['id'],kind='owned')['items']}
+
 
     print('PostgreSQL Crawl ownership: external Acquire waits for registered Owner and Lost cannot remove user ownership passed.')
 
