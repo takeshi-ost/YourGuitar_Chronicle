@@ -20,7 +20,7 @@ from ygc.identity_platform import IdentityPlatformIdentity
 from ygc.cloud_account_page import install, public_config
 
 
-def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None,maintenance_client=None,crawl_client=None):
+def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None,maintenance_client=None,crawl_client=None,review_verifier=None):
     config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
@@ -35,6 +35,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
             yield
         finally:
             verifier.close()
+            if review_verifier is not None:review_verifier.close()
             if backup_client is not None:
                 backup_client.close()
             if maintenance_client is not None:maintenance_client.close()
@@ -45,6 +46,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     app.include_router(account_router(verifier, DOCUMENTS))
+    if review_verifier is not None:
+        from ygc.cloud_review_gateway import review_gateway
+        app.include_router(review_gateway(review_verifier))
     operations = PostgresOperations(settings)
     app.include_router(operations_router(verifier, operations, storage))
     app.include_router(avatar_router(verifier, operations, storage))

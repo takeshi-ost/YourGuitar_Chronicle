@@ -27,13 +27,17 @@ def application():
     backup_client = None
     maintenance_client = None
     crawl_client = None
+    review_verifier = None
     try:
+        if os.environ.get('YGC_REVIEW_AUDIENCE'):
+            from ygc.cloud_review_identity import ReviewIdentity
+            review_verifier=ReviewIdentity(os.environ['YGC_REVIEW_AUDIENCE'],os.environ.get('YGC_REVIEW_EMAIL',''),os.environ.get('YGC_REVIEW_SUBJECT',''))
         if os.environ.get('YGC_BACKUP_REGION'):
             backup_client = BackupJobClient(project, os.environ['YGC_BACKUP_REGION'])
         if os.environ.get('YGC_MAINTENANCE_REGION'):
             maintenance_client=MaintenanceJobClient(project,os.environ['YGC_MAINTENANCE_REGION'])
         if os.environ.get('YGC_CRAWL_REGION'):crawl_client=CrawlJobClient(project,os.environ['YGC_CRAWL_REGION'])
-        return create_app(settings, storage=storage, backup_client=backup_client,maintenance_client=maintenance_client,crawl_client=crawl_client, project_id=project,
+        return create_app(settings, storage=storage, backup_client=backup_client,maintenance_client=maintenance_client,crawl_client=crawl_client, review_verifier=review_verifier,project_id=project,
                       tenant=os.environ.get('YGC_IDENTITY_TENANT', ''),
                       web_config={'apiKey': os.environ.get('YGC_FIREBASE_API_KEY', ''),
                                   'authDomain': os.environ.get('YGC_FIREBASE_AUTH_DOMAIN', '')})
@@ -41,6 +45,7 @@ def application():
         if backup_client is not None:backup_client.close()
         if maintenance_client is not None:maintenance_client.close()
         if crawl_client is not None:crawl_client.close()
+        if review_verifier is not None:review_verifier.close()
         storage.close()
         raise
 
