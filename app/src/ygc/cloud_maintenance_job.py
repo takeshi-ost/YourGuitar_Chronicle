@@ -104,6 +104,7 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                         catalog.execute('INSERT INTO review_settings VALUES(1,0)')
                         for name in TARGETS:catalog.execute('INSERT INTO backup_schedules(target,enabled,interval_hours,generations,next_run) VALUES(%s,0,24,10,0)',(name,))
                     # Restoring a control DB never silently reactivates automated writers.
+                    catalog.execute('DELETE FROM paused_review_answers')
                     catalog.execute('UPDATE auto_crawl SET enabled=0');catalog.execute('UPDATE review_settings SET enabled=0')
                     catalog.execute('UPDATE backup_schedules SET enabled=0,next_run=0')
                 else:
@@ -122,6 +123,7 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                                 accounts=PostgresAccounts(settings)
                                 for account in current:accounts._apply_projection(dest,account,force_rebuild=True)
                         else:replace_content(dest,header,rows,sequences,current)
+                if target=='chronicle':catalog.execute('DELETE FROM paused_review_answers')
                 source.commit()
             if target=='accounts':
                 progress('reconcile_accounts');PostgresAccounts(settings).reconcile_projection()

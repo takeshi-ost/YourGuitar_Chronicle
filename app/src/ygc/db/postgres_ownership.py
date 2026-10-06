@@ -2,9 +2,9 @@
 
 Uses the same algorithms as SQLite inside fenced PG transactions. These methods
 accept a server-resolved ActorContext. Admin verification is connected to the
-cloud console; normal Owner/Transfer routes remain separate migration work.
-Acquire image review, reset/backup and the remaining Repository methods are not
-silently delegated to SQLite.
+cloud console; normal Owner responses also use these fenced transactions.
+Transfer routes remain separate migration work. Cloud image review uses its own
+fenced adapter; remaining Repository methods are not delegated to SQLite.
 """
 from contextlib import contextmanager, nullcontext
 from pathlib import Path

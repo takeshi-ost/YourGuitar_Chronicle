@@ -289,6 +289,8 @@ def run(port):
             version=operations.details(aid)['version']
             from postgres_crawl_checks import run as crawl_checks
             crawl_checks(app,accounts,operations,store,aid)
+            from postgres_review_checks import run as review_checks
+            review_checks(app,accounts,operations,store,aid,bid)
             version=operations.details(aid)['version']
             # A failed audit must roll back the mode update too.
             with connect(owner,'operations') as con:

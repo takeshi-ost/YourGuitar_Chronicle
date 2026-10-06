@@ -48,7 +48,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app.include_router(account_router(verifier, DOCUMENTS))
     if review_verifier is not None:
         from ygc.cloud_review_gateway import review_gateway
-        app.include_router(review_gateway(review_verifier))
+        from ygc.cloud_review import CloudReview
+        app.include_router(review_gateway(review_verifier,CloudReview(settings,storage)))
     operations = PostgresOperations(settings)
     app.include_router(operations_router(verifier, operations, storage))
     app.include_router(avatar_router(verifier, operations, storage))
@@ -70,6 +71,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_applications import CloudApplications
     from ygc.cloud_application_routes import application_router
     app.include_router(application_router(verifier,CloudApplications(settings,operations,storage)))
+    from ygc.cloud_owner_routes import owner_router
+    from ygc.cloud_owner import CloudOwner
+    app.include_router(owner_router(verifier,CloudOwner(settings,operations)))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

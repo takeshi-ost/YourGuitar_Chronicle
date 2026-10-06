@@ -6,7 +6,7 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const modes={normal:'ui.normal_a7248eeb',read_only:'ui.read_only_8ac76735',offline:'ui.offline_a1794783',admin_only:'console.admin_only'};
 const defaultMessage=mode=>mode==='normal'?'':t('console.default_'+mode);
-let auth,settings=null,authorized=false,busy=false;
+let auth,settings=null,reviewState=null,reviewPending=null,authorized=false,busy=false;
 const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error,maintenanceMode:()=>!!settings&&settings.mode!=='normal'});
 const crawl=createCrawlBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
@@ -16,14 +16,16 @@ function controls(){
   users.render();guitars.render();backups.render();crawl.render();
   $('consoleControls').hidden=!authorized;
   $('consoleRefresh').disabled=busy||!authorized;
+  $('reviewToggle').disabled=busy||!authorized||reviewState===null;
+  $('reviewConfirm').disabled=busy||!authorized||!reviewPending;
   $('operationsSave').disabled=busy||!authorized||!settings;
   $('operationsMode').disabled=$('operationsMessage').disabled=busy||!authorized;
   $('consoleSignOut').hidden=!auth?.signedIn;
   $('consoleSignOut').disabled=busy;
 }
-function clear(){authorized=false;users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
+function clear(){reviewState=null;reviewPending=null;globalThis.YGCOverlays.close($('reviewDialog'));$('reviewStatus').textContent='—';authorized=false;users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
 function error(error){
-  settings=null;
+  settings=null;reviewState=null;
   if([401,403].includes(error.status)||error.code==='sign_in_required')clear();
   $('consoleStatus').textContent=t(error.status===409?'console.conflict':error.status===403?'console.admin_required':error.status===401||error.code==='sign_in_required'?'console.sign_in_required':'console.unavailable');
   controls();
@@ -42,8 +44,9 @@ function display(row){
   $('operationsMessage').value=row.message||defaultMessage(row.mode);
 }
 async function refresh(){
-  settings=null;
+  settings=null;reviewState=null;
   display(await request('/api/admin/operations'));
+  displayReview(await request('/api/admin/operations/review'));
   $('webStatus').textContent=t('ui.responding_98047c1e');
   try{
     const ready=await fetch('/ready',{cache:'no-store',credentials:'omit',redirect:'error'});
@@ -62,6 +65,20 @@ async function action(work){
   if(busy)return;busy=true;controls();
   try{await work()}catch(e){error(e)}finally{busy=false;controls()}
 }
+function displayReview(row){
+  if(typeof row?.enabled!=='boolean')throw Error('Invalid review state');reviewState=row.enabled;
+  $('reviewStatus').textContent=t(row.enabled?'review.on':'review.off');$('reviewToggle').textContent=t(row.enabled?'review.disable':'review.enable');
+}
+$('reviewToggle').onclick=()=>{
+  if(busy||!authorized||reviewState===null)return;reviewPending={enabled:!reviewState,expected_enabled:reviewState};
+  $('reviewWarning').textContent=t(reviewPending.enabled?'review.confirm_on':'review.confirm_off');controls();globalThis.YGCOverlays.open($('reviewDialog'));
+};
+$('reviewCancel').onclick=()=>globalThis.YGCOverlays.close($('reviewDialog'));
+$('reviewDialog').addEventListener('ygc:closed',()=>{reviewPending=null;controls()});
+$('reviewConfirm').onclick=()=>{
+  if(busy||!authorized||!reviewPending)return;const payload={...reviewPending};globalThis.YGCOverlays.close($('reviewDialog'));
+  action(async()=>{displayReview(await request('/api/admin/operations/review',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));$('consoleStatus').textContent=t('ui.settings_saved_ae493e21')});
+};
 $('consoleRefresh').onclick=()=>action(async()=>{await refresh();$('consoleStatus').textContent=t('console.ready')});
 $('operationsMode').onchange=()=>{$('operationsMessage').value=defaultMessage($('operationsMode').value)};
 $('maintenanceForm').onsubmit=event=>{

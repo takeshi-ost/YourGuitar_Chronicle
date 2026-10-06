@@ -58,3 +58,29 @@ def test_bridge_refreshes_short_lived_credentials_without_retrying_writes(monkey
     with pytest.raises(httpx.HTTPStatusError):bridge.send(dict(jsonrpc='2.0',id=1,method='ping'))
     assert len(calls)==2 and calls[1].headers['Authorization']=='Bearer signed-token' and bridge.token is None
     bridge.close()
+
+
+def test_queue_gateway_exact_tools_and_sanitized_errors():
+    from ygc.cloud_review import CloudReview
+    import json
+    verifier=Mock();service=Mock();service.tools.return_value=CloudReview.tools()
+    service.call_tool.return_value={'jobs':[],'remaining_revisions':[]}
+    app=FastAPI();app.include_router(review_gateway(verifier,service))
+    with TestClient(app) as client:
+        def call(name,args={}):
+            return client.post('/api/review/mcp',headers={'Authorization':'Bearer fixture'},
+                json=dict(jsonrpc='2.0',id=1,method='tools/call',params=dict(name=name,arguments=args)))
+        assert call(TOOL).status_code==200
+        assert json.loads(call(TOOL).json()['result']['content'][0]['text'])['queues_connected']
+        service.call_tool.assert_not_called()
+        assert call('ygc_pending_listing').status_code==200
+        service.call_tool.assert_called_once_with('ygc_pending_listing',{})
+        for invalid in ('ygc_pending_test','ygc_arbitrary',[],{}):
+            assert call(invalid).json()['error']['code']==-32602
+        service.call_tool.side_effect=ValueError('secret token')
+        response=call('ygc_pending_listing')
+        assert response.json()['error']['code']==-32602 and 'secret token' not in response.text
+        verifier.verify.side_effect=PermissionError('private')
+        service.call_tool.reset_mock()
+        assert call('ygc_pending_listing').status_code==401
+        service.call_tool.assert_not_called()

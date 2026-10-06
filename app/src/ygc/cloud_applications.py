@@ -99,10 +99,14 @@ class CloudApplications:
     @staticmethod
     def detail(row):
         status='expired' if row['status']=='draft' and row['expires_at']<=time.time() else row['status']
+        result=json.loads(row['result']) if row.get('result') else {}
         return dict(revision=row['revision'],kind=row['request_kind'],individual_id=str(row['individual_id']) if row['individual_id'] else None,
             serial=row['serial'],challenge=row['challenge'],expires_at=row['expires_at'],status=status,
             payload=json.loads(row['listing_payload']) if row['listing_payload'] else None,
-            acquisition_date=row['acquisition_date'],body=row['body'] or '',photos=[role for role in references(row) if role!='reference'])
+            acquisition_date=row['acquisition_date'],body=row['body'] or '',photos=[role for role in references(row) if role!='reference'],
+            claim_id=str(row['claim_id']) if row.get('claim_id') else None,
+            verification_status=row.get('claim_verification'),
+            reasons=result.get('adjudication',{}).get('reasons',[]))
 
     @staticmethod
     def find(con,user,revision):
@@ -117,7 +121,7 @@ class CloudApplications:
 
     def list(self,actor):
         with self.transaction(actor) as (con,user):
-            rows=con.execute('''SELECT * FROM acquire_applications WHERE applicant_id=%s
+            rows=con.execute('''SELECT *, (SELECT verification_status FROM claims WHERE id=acquire_applications.claim_id) AS claim_verification FROM acquire_applications WHERE applicant_id=%s
                 ORDER BY CASE WHEN status IN ('pending','processing','error') OR (status='draft' AND expires_at>%s) THEN 0 ELSE 1 END,
                 created_at DESC,revision DESC LIMIT 50''',(user,time.time())).fetchall()
             return dict(items=[self.detail(row) for row in rows])
@@ -196,6 +200,15 @@ class CloudApplications:
                 self.event(con,revision,'cancelled');row=row|{'status':'cancelled'}
             elif row['status']!='cancelled':raise ValueError('Application is already decided.')
             return self.detail(row)
+
+    def retry(self,actor,revision):
+        with self.transaction(actor,True) as (con,user):
+            row=self.find(con,user,revision)
+            if row['status']=='pending':return self.detail(row)
+            if row['status']!='error' or row['claim_id']:raise ValueError('Only failed applications can be retried.')
+            con.execute("UPDATE acquire_applications SET status='pending',completed_at=NULL,received=NULL,result=NULL,report=NULL,error=NULL,attempts=0,lease_token=NULL,lease_until=NULL,product_observations=NULL WHERE revision=%s",(revision,))
+            self.event(con,revision,'retry')
+            return self.detail(self.find(con,user,revision))
 
     def submit(self,actor,revision,data):
         if not isinstance(data,dict) or set(data)-{'acquisition_date','body'}:raise ValueError('Invalid submission.')

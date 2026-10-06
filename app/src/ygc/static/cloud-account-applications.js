@@ -7,7 +7,7 @@ export function createApplications({auth,state,busy,work}){
   root.append(heading,notice,add,acquire,refreshButton,status,list);
   const dialog=node('dialog'),title=node('h2'),detail=node('p'),form=node('form'),fields=node('fieldset'),photos=node('fieldset'),message=node('p');
   dialog.id='applicationDialog';title.id='applicationTitle';dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
-  const inputs={},files={},previews={},urls=new Set();let selected=null,kind=null,epoch=0;
+  const inputs={},files={},previews={},urls=new Set();let selected=null,kind=null,epoch=0,accountEpoch=0,refreshEpoch=0;
   const keys=['manufacturer','serial_number','model','finish','year','individual_id','occurred_at','body'];
   for(const key of keys){
     const label=node('label',t('applications.'+key)),input=node(key==='body'?'textarea':'input');input.id='application_'+key;label.htmlFor=input.id;
@@ -25,17 +25,21 @@ export function createApplications({auth,state,busy,work}){
     });
   }
   const limits=node('p',t('avatar.limits')),save=node('button',t('applications.create')),submit=button('applications.submit','applicationSubmit'),cancel=button('applications.cancel','applicationCancel'),close=button('action.close');
-  save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);dialog.append(title,detail,form,photos,submit,cancel,message,close);document.body.append(dialog);
+  const retry=button('applications.retry','applicationRetry');let retryReady=false;
+  save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);dialog.append(title,detail,form,photos,submit,cancel,retry,message,close);document.body.append(dialog);
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true);
+  const account=()=>state()?.user?.app_user_id;
+  const sameAccount=(version,id)=>version===accountEpoch&&eligible()&&id===account();
   function clearImages(){for(const url of urls)URL.revokeObjectURL(url);urls.clear();for(const role of ['closeup','overview']){files[role].value='';previews[role].image.removeAttribute('src');previews[role].image.hidden=true}}
-  function closeDialog(){epoch++;selected=null;clearImages();form.reset();message.textContent=''}
+  function closeDialog(){epoch++;selected=null;clearImages();form.reset();message.textContent='';retryReady=false}
   dialog.addEventListener('ygc:closed',closeDialog);close.onclick=()=>globalThis.YGCOverlays.close(dialog);
-  function clear(){epoch++;list.replaceChildren();status.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
+  function clear(){accountEpoch++;refreshEpoch++;epoch++;list.replaceChildren();status.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
   function render(){
     root.hidden=!eligible();add.disabled=acquire.disabled=refreshButton.disabled=busy()||!eligible();
     const draft=selected?.status==='draft';fields.disabled=photos.disabled=busy();save.disabled=busy()||Boolean(selected);save.hidden=Boolean(selected);submit.disabled=busy()||!draft;
     form.hidden=Boolean(selected)&&!(kind==='acquire'&&draft);photos.hidden=!selected;submit.hidden=!draft;cancel.hidden=!selected||!['draft','pending','processing','error'].includes(selected.status);cancel.disabled=busy();
     for(const role of ['closeup','overview']){files[role].disabled=busy()||!draft;previews[role].view.disabled=busy()||!selected?.photos.includes(role)}
+    retry.hidden=selected?.status!=='error';retry.disabled=busy();
     if(!eligible())clear();
   }
   function error(error){return t(error.status===403||error.status===401?'self_profile.restricted':error.code&&['image_format','image_pixel_limit','image_size_limit','invalid_image'].includes(error.code)?'content_media.'+error.code:error.status===400?'applications.invalid':error.status===409?'applications.conflict':'applications.failed')}
@@ -46,7 +50,9 @@ export function createApplications({auth,state,busy,work}){
   }
   function post(path,body){return request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
   async function refresh(){
-    const version=epoch,data=await request();if(version!==epoch||!eligible())return;
+    // Dismissing details does not invalidate the account's application list.
+    const version=accountEpoch,id=account(),latest=++refreshEpoch,data=await request();
+    if(!sameAccount(version,id)||latest!==refreshEpoch)return;
     list.replaceChildren();
     for(const row of data.items){
       const item=node('li'),label=node('span',t('applications.'+row.kind)+' · '+row.serial+' · '+t('applications.status_'+row.status)),view=button('applications.detail');
@@ -59,7 +65,7 @@ export function createApplications({auth,state,busy,work}){
     await work(async()=>{try{await fn()}catch(err){if(version!==epoch||!eligible())return;message.textContent=status.textContent=error(err);if([401,403].includes(err.status)){globalThis.YGCOverlays.close(dialog);list.replaceChildren()}}finally{render()}});
   }
   function show(){
-    clearImages();title.textContent=t('applications.'+kind);message.textContent='';
+    clearImages();title.textContent=t('applications.'+kind);message.textContent='';retryReady=false;retry.textContent=t('applications.retry');
     for(const key of keys){const visible=selected?kind==='acquire'&&['occurred_at','body'].includes(key):key==='occurred_at'||key==='body'||(kind==='acquire'?key==='individual_id':key!=='individual_id');inputs[key].label.hidden=inputs[key].input.hidden=!visible;inputs[key].input.disabled=!visible;inputs[key].input.required=visible&&['manufacturer','serial_number','individual_id','occurred_at'].includes(key)}
     if(selected){
       inputs.occurred_at.input.value=selected.acquisition_date||today();inputs.body.input.value=selected.body||'';
@@ -67,7 +73,10 @@ export function createApplications({auth,state,busy,work}){
         (selected.individual_id?t('applications.individual_id')+': '+selected.individual_id+'\n':'')+
         t('applications.challenge',{challenge:selected.challenge,expires:new Date(selected.expires_at*1000).toLocaleString()})+'\n'+t('applications.status_'+selected.status)+
         (selected.acquisition_date?'\n'+t('applications.occurred_at')+': '+selected.acquisition_date:'')+
-        (selected.body?'\n'+t('applications.body')+': '+selected.body:'');
+        (selected.body?'\n'+t('applications.body')+': '+selected.body:'')+
+        (selected.claim_id?'\n'+t('applications.claim_result',{id:selected.claim_id,state:t('chronicle.'+(selected.verification_status||'unverified'))}):'')+
+        (selected.status==='accepted'&&selected.verification_status==='unverified'?'\n'+t('applications.owner_waiting'):'')+
+        (selected.reasons?.length?'\n'+selected.reasons.join('\n'):'');
     }else{form.reset();inputs.occurred_at.input.value=today();detail.textContent=t('applications.instructions')}
     inputs.occurred_at.input.max=today();render();globalThis.YGCOverlays.open(dialog);
   }
@@ -93,5 +102,15 @@ export function createApplications({auth,state,busy,work}){
     if(version!==epoch||!eligible())return;selected=row;clearImages();show();await refresh();
   });
   cancel.onclick=()=>action(async()=>{const version=epoch,row=await post('/'+selected.revision+'/cancel',{});if(version!==epoch||!eligible())return;selected=row;show();await refresh()});
+  retry.onclick=()=>{
+    if(busy()||selected?.status!=='error')return;
+    if(!retryReady){retryReady=true;retry.textContent=t('applications.retry_confirm');message.textContent=t('applications.retry_notice');return}
+    action(async()=>{
+      const version=epoch,accountVersion=accountEpoch,id=account(),revision=selected.revision,row=await post('/'+revision+'/retry',{});
+      if(!sameAccount(accountVersion,id))return;
+      if(version===epoch&&revision===selected?.revision){selected=row;show()}
+      await refresh();
+    });
+  };
   return {render,refresh,clear,failed:err=>{clear();status.textContent=error(err)}};
 }

@@ -17,8 +17,68 @@ from ygc.db.postgres_operations import ModeConflict
 from ygc.identity_platform import VerifiedIdentity
 
 
+def check_review_controls(page, operations, writes):
+    """Use the real dialog and API to check cancellation and stale-state saves."""
+    page.locator('#maintenanceTab').click()
+    toggle=page.locator('#reviewToggle');dialog=page.locator('#reviewDialog')
+    expect(page.locator('#reviewStatus')).to_have_text('Review OFF')
+    expect(toggle).to_have_text('Enable review')
+    original_url=page.url
+    original_history=page.evaluate('history.length')
+    original_overflow=page.evaluate('document.body.style.overflow')
+    for dismissal in ('close', 'escape', 'backdrop'):
+        toggle.click()
+        expect(dialog).to_be_visible()
+        expect(page.locator('#reviewWarning')).to_contain_text('Retained answers may be applied')
+        assert not writes and operations.review_enabled is False
+        if dismissal=='close':page.locator('#reviewCancel').click()
+        elif dismissal=='escape':page.keyboard.press('Escape')
+        else:page.mouse.click(2,2)
+        expect(dialog).to_be_hidden()
+        expect(page.locator('#reviewConfirm')).to_be_disabled()
+        expect(toggle).to_be_focused()
+        assert page.url==original_url and page.evaluate('history.length')==original_history
+        assert page.evaluate('document.body.style.overflow')==original_overflow
+        assert not writes and operations.review_enabled is False
+
+    toggle.click();page.locator('#reviewConfirm').click()
+    expect(dialog).to_be_hidden()
+    expect(page.locator('#reviewStatus')).to_have_text('Review ON')
+    expect(toggle).to_have_text('Disable review')
+    expect(toggle).to_be_enabled()
+    assert writes==[('admin-uuid', {'enabled':True,'expected_enabled':False})]
+    page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
+    page.locator('#maintenanceTab').click()
+    expect(page.locator('#reviewStatus')).to_have_text('Review ON')
+    toggle.click()
+    expect(page.locator('#reviewWarning')).to_contain_text('Answers already in progress are retained')
+    assert len(writes)==1
+    page.locator('#reviewConfirm').click()
+    expect(page.locator('#reviewStatus')).to_have_text('Review OFF')
+    expect(toggle).to_be_enabled()
+    assert writes[-1]==('admin-uuid', {'enabled':False,'expected_enabled':True})
+
+    # Another administrator changes the value after this page loaded it.
+    toggle.click();operations.review_enabled=True
+    page.locator('#reviewConfirm').click()
+    expect(page.locator('#consoleStatus')).to_have_text('Settings changed. Refresh before saving again.')
+    expect(toggle).to_be_disabled()
+    assert len(writes)==3 and writes[-1][1]=={'enabled':True,'expected_enabled':False}
+    assert operations.review_enabled is True
+    page.locator('#consoleRefresh').click()
+    expect(page.locator('#reviewStatus')).to_have_text('Review ON')
+    expect(toggle).to_be_enabled()
+    toggle.click();page.locator('#reviewConfirm').click()
+    expect(page.locator('#reviewStatus')).to_have_text('Review OFF')
+    expect(toggle).to_be_enabled()
+    assert len(writes)==4 and writes[-1][1]=={'enabled':False,'expected_enabled':True}
+    assert operations.review_enabled is False
+    page.locator('#statusTab').click()
+
+
 def main():
     calls=[]
+    review_writes=[]
     class Accounts:
         def resolve_identity(self, **identity):
             admin=identity['subject'].endswith('admin@example.invalid')
@@ -30,6 +90,14 @@ def main():
             if not bearer_token.startswith('fixture-'):raise PermissionError()
             return VerifiedIdentity('fixture-issuer',bearer_token,'',bearer_token.startswith('fixture-verified-'))
     class Operations:
+        review_enabled=False
+        def review_status(self,actor):
+            with self.access('admin_read',actor):return {'enabled':self.review_enabled}
+        def set_review(self,actor,**data):
+            with self.access('admin_write',actor):
+                review_writes.append((actor,dict(data)))
+                if data['expected_enabled']!=self.review_enabled:raise ModeConflict()
+                self.review_enabled=data['enabled'];return {'enabled':self.review_enabled}
         row=dict(mode='offline',message='<img src=x onerror=alert(1)>',version=1)
         fail=None
         policies={t:dict(target=t,enabled=0,interval_hours=24,generations=10,next_run=0,last_at=None,last_status=None,last_error=None) for t in ('accounts','chronicle','operations','authentication')}
@@ -207,6 +275,8 @@ def main():
                 expect(page.locator('#consoleControls')).to_be_hidden();assert not calls
                 open_console('admin@example.invalid')
                 expect(page.locator('#operationsStatus')).to_have_text('Offline')
+                check_review_controls(page,ops,review_writes)
+                assert not crawl_calls and not maintenance_calls and not backup_calls
                 expect(page.locator('#cloudCrawl')).to_be_visible()
                 expect(page.locator('#crawlLimit')).to_have_value('2000');page.locator('#crawlLimit').fill('3');page.locator('#crawlYearMin').fill('1960');page.locator('#crawlInterval').fill('2');page.locator('#crawlConfigSave').click()
                 expect(page.locator('#crawlYearMin')).to_have_value('1960')
@@ -403,12 +473,19 @@ def main():
                 ops.fail=PermissionError();page.click('#consoleRefresh');expect(page.locator('#consoleControls')).to_be_hidden();expect(page.locator('#consoleIdentity')).to_have_text('')
                 ops.fail=None;page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.click('#consoleSignOut');expect(page.locator('#consoleControls')).to_be_hidden()
+                expect(page.locator('#reviewStatus')).to_have_text('—');expect(page.locator('#reviewToggle')).to_be_disabled()
+                expect(page.locator('#reviewDialog')).to_be_hidden();assert len(review_writes)==4
                 open_console('admin@example.invalid');page.goto(base+'/account');page.wait_for_function('window.YGCCloudAccountReady===true');expect(page.locator('#consoleLink')).to_be_visible()
                 page.goto(base+'/console');page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.locator('[data-language-picker]').select_option('ja');page.wait_for_function('document.documentElement.lang==="ja"&&window.YGCCloudConsoleReady===true')
                 expect(page.locator('#operationsStatus')).to_have_text('管理者のみ')
+                page.locator('#maintenanceTab').click()
+                expect(page.locator('#reviewStatus')).to_have_text('審議 OFF')
+                expect(page.locator('#reviewToggle')).to_have_text('審議をONにする')
+                page.locator('#reviewToggle').click();expect(page.locator('#reviewDialog')).to_be_visible()
+                page.locator('#reviewCancel').click();assert len(review_writes)==4
                 directory=os.getenv('YGC_BROWSER_ARTIFACTS')
                 if directory:
                     from pathlib import Path
@@ -417,6 +494,6 @@ def main():
         finally:
             server.should_exit=True;thread.join(timeout=10)
             if thread.is_alive():raise RuntimeError('Cloud Console test server did not stop')
-    print('Cloud Console: identity gates, mode save/reload, version conflict, role revocation, SignOut, tabs, independent scrolling, mobile and Japanese passed.')
+    print('Cloud Console: identity gates, Review ON/OFF confirmation/cancellation and compare-and-set conflict, mode save/reload, role revocation, SignOut, tabs, independent scrolling, mobile and Japanese passed.')
 
 if __name__=='__main__':main()
