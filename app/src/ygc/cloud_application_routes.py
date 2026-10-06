@@ -54,9 +54,9 @@ def application_router(verifier,service):
                     import json
                     data=json.loads(raw)
                     if not isinstance(data,dict):raise ValueError()
-                    if action=='cancel':
+                    if action in ('cancel','retry'):
                         if data:raise ValueError()
-                        result=await run_in_threadpool(service.cancel,who,revision)
+                        result=await run_in_threadpool(service.cancel if action=='cancel' else service.retry,who,revision)
                     elif action=='submit':
                         if service.storage is None:raise HTTPException(503,'Image storage unavailable.',headers=headers)
                         result=await run_in_threadpool(service.submit,who,revision,data)
@@ -77,6 +77,8 @@ def application_router(verifier,service):
     async def submit(request:Request,revision:str):return await handle(request,revision,'submit')
     @router.post('/api/auth/applications/{revision}/cancel')
     async def cancel(request:Request,revision:str):return await handle(request,revision,'cancel')
+    @router.post('/api/auth/applications/{revision}/retry')
+    async def retry(request:Request,revision:str):return await handle(request,revision,'retry')
     @router.api_route('/api/auth/applications/{revision}/photos/{role}',methods=['GET','POST'])
     async def photo(request:Request,revision:str,role:str):return await handle(request,revision,role=role)
     return router

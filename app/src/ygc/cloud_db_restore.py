@@ -104,6 +104,8 @@ def replace_content(con,header,rows,sequences,current):
     for table in reversed(ordered):con.execute(sql.SQL('DELETE FROM {}').format(sql.Identifier(table)))
     for table in ordered:insert(con,table,header['tables'][table],self_order(rows[table],self_refs[table]))
     if header['target']=='chronicle':
+        # A saved lease never authorizes a callback against restored state.
+        con.execute("UPDATE acquire_applications SET status=CASE WHEN status='processing' THEN 'pending' ELSE status END,lease_token=NULL,lease_until=NULL")
         accounts=PostgresAccounts(None)
         for account in current:accounts._apply_projection(con,account,force_rebuild=True)
     advance_sequences(con,before,sequences)

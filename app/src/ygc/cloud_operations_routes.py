@@ -72,4 +72,25 @@ def operations_router(verifier, operations, storage=None):
             raise HTTPException(400, 'Send only mode, message and version.', headers={'Cache-Control': 'no-store'}) from None
         return await execute(operations.set_mode, actor, **data)
 
+    @router.get('/api/admin/operations/review')
+    async def review_status(request: Request):
+        return await execute(operations.review_status, await admin_identity(request))
+
+    @router.put('/api/admin/operations/review')
+    async def review_mode(request: Request):
+        actor = await admin_identity(request)
+        if request.query_params or request.headers.get('content-encoding') or request.headers.get('content-type','').split(';')[0] != 'application/json':
+            raise HTTPException(400, 'Invalid review settings.', headers={'Cache-Control':'no-store'})
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body)>1024:raise HTTPException(413, 'Request too large.')
+        try:
+            import json
+            data=json.loads(body)
+            if not isinstance(data,dict) or set(data)!={'enabled','expected_enabled'}:raise ValueError()
+        except (ValueError,TypeError,UnicodeError):
+            raise HTTPException(400,'Invalid review settings.') from None
+        return await execute(operations.set_review,actor,**data)
+
     return router

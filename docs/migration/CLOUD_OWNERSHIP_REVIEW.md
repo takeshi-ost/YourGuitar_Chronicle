@@ -2,6 +2,36 @@
 
 2026-10-06。所有登録・Acquire申請を段階的に接続する。審議担当の認証・MCP接続診断に続き、Listing/Acquire申請の作成・写真提出・本人確認・取消を実装。審議キューのMCP接続・結果反映・Owner承認は未接続で、提出後はpendingのまま。Ownedの実データ確認を完了扱いにしない。
 
+## ローカル実装追加（2026-10-06、未配置）
+
+この節は後続のローカル変更。上記の配置済み状態を更新するものではない。利用者の承認でMacの既存ブリッジによる接続診断だけを1回実施し、`status=ok`、`authentication=google_oidc`、`queues_connected=false`、`data_changed=false`を確認した。Cloud単独実行や継続的審議は確認していない。以下の実装のpush・配置・実データでの審議・権限変更は未実施。
+
+- 専用OIDCゲートにAcquire/Listingの各5ツールを接続。診断を含め11ツール。`CloudReview`を接続したサーバーでは診断の`queues_connected=true`は実装接続を示すだけで、Review ONや動作受入を意味しない。
+- 2時間のleaseを1件ずつ発行し、3回の時間切れでerror停止。pending取得は1バッチ最大500件。画像は固定generationから取得し、送信画像のSHA-256と寸法をclaimedイベントへ保存する。期待Serial/Challenge・Storage参照・申請者IDはキューに返さない。提出済み申請は写真提出期限を過ぎても審議できる。
+- 独立したMaker/Model/Finish観察を保存してから仕様を開示する。変更された観察は拒否し、採否は既存のListing/Acquireルールで決める。ListingのIndividual/Positive Claim、Acquireと日付Evidence、申請結果、通知はChronicleの同一トランザクションで確定する。既存ユーザーOwnerがいるAcquireはUnverifiedに留める。
+- Review OFF中は新規確保・画像取得を停止し、進行中leaseの観察／結果／失敗をOperationsの`paused_review_answers`に保持する。Chronicleは変更しない。ON復帰後のキュー取得で保留回答を先に反映し、同一回答の再送ではClaim・通知を重複作成しない。保留中の取消、lease差し替え、無効アカウント、個体・比較元・登録仕様変更、競合登録を再確認する。
+- Crawl/maintenance共通mutexとAccounts正本→Chronicle投影のロックを保持。投影遅延は停止する。Chronicle復元ではprocessingをpendingに戻して全leaseを破棄する。Chronicle初期化／復元とOperations初期化／復元では保留回答を破棄し、保存済みの古い実行権限を復活させない。
+- Admin専用 `GET/PUT /api/admin/operations/review` を追加。PUTは`enabled`と`expected_enabled`の真偽値を要求し監査記録を残す。既定OFFは変更しない。ONへの切替自体では審議担当を起動せず、次のMCP呼出しで処理する。
+- 本人認証の `GET /api/auth/guitars/{individual}/owner-responses` と `POST /api/auth/guitars/{individual}/owner-responses/{claim}` を追加。POSTは`stance`と表示時のClaim `revision`を要求する。所有を置き換えるAcquireのNegativeには`reason`が必須で、申請者に共有する理由を画面でも確認する。Current Ownerによる他人Claimの判定・自己判定禁止・移転後の権限移動は既存共通処理を使い、Admin強制判定とは分離する。
+
+`/account` のOwned一覧から、他ユーザーClaimの内容・判定・所有権移動の注意を表示し、確認後にOwner判定を送信するUIを追加。判定後はOwned/Formerly Ownedを再取得する。本人の申請詳細にはClaim状態と採否理由を表示し、errorのみ確認操作で再開できる。再開は本人・モード・mutexを検証し、旧leaseと試行回数をリセットする。`/console`には確認付きReview ON/OFFを追加し、表示時のenabledを送る。定期起動、Admin用申請一覧・手動採否は未実装。実ブラウザの隔離検証は下記の最終検証で完了した。申請写真は現在のCloud提出画面の非公開条件を維持し、採用Listingの代表写真公開は公開同意と配信経路を接続するまで行わない（ローカル試作の公開Media生成をそのまま有効化しない）。申請写真は専用Evidenceとして保持し、次のAcquireの比較元に使用する。
+
+隔離検証：Python848件、JavaScript75件、PostgreSQL18の4DB統合チェックが成功。UIのDOMテストはOwnerの確認前非送信・確定後の所有一覧更新・競合表示・SignOut時破棄、採否理由のテキスト表示、再開確認、Review切替のcompare-and-setを確認。新規チェックはListing/Acquire・Owner移転と自己判定禁止、通知保存失敗時の全体ロールバック、同一結果再送、OFF保留、取消、lease更新と3回停止、写真欠損、実スナップショット復元後の旧lease拒否、競合Listingの二重個体作成防止、正本アカウント無効化・投影遅延を確認。既存A→B→C／Admin別経路の回帰も実行済み。実サービス受入とUI実確認は未実施。
+
+### 仮想PCの独立レビュー修正
+
+2026-10-06、未コミット・未配置のまま5点を修正: 保留失敗反映後の旧lease再検証、写真欠損/破損によるキュー全体停止の防止、Owner Negative理由の検証/確認/通知、Specification/Repairの構造化内容表示、再開中のダイアログ終了後の本人一覧更新。写真障害は当該申請だけerrorとして扱い、DB/通知/権限/サービス障害を正常完了に置き換えない。本人による再開でのみ旧leaseをリセットし、同一確定結果の再送は引き続き冪等。
+
+審査5点修正時の仮想PCaggregateはPython900件・JavaScript95件成功。依存整合性・スキーマ生成・差分空白検証も成功。この時点の検証は実SQLite/in-process/DOMであり、Cloudの制限下では実PostgreSQLとChromiumを実行していなかった。
+
+### 修正後の最終検証
+
+2026-10-06、利用者の個別承認により、残る2種類の検証をMacで実行した。PostgreSQL18.6の一時4DB統合チェックはexit 0。Chrome154 / Playwright1.63のbrowser runner全7グループもexit 0（Overlay部品、27種類の背景終了、ユーザーjourney、Cloud account、18件の申請再開/中断、Owner、Console）。
+
+途中、multipart PNGのリクエスト本文を文字列として記録する既存テストfixtureがUnicodeDecodeErrorになったため、post_data_bufferでbytesを保持し、認証入力漏出チェックもbytes比較へ変更した。Macへ同期して全browser runnerを再実行し成功。Cloudで3件のPython回帰を追加し、最終aggregateは **Python903件・JavaScript95件成功**。テスト用プロセスは終了確認済み。
+
+実サービス受入・手動目視・配置・実データ審議・Cloud単独認証・自動/定期起動の完了を意味しない。commit/push/PRなし。詳しくは[最終引き継ぎ](../history/VM_HANDOFF_2026-10-06.md)を参照。
+
 ## 認証境界
 
 ### 中断・次回の再開地点（2026-10-06）

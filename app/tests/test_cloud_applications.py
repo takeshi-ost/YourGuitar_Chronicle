@@ -88,3 +88,15 @@ def test_restore_checks_both_private_photos_and_exact_storage_generation():
     with pytest.raises(ValueError):verify_restored_applications(store,[row|{'images':None}])
     store.delete(ref)
     with pytest.raises(KeyError):verify_restored_applications(store,[row])
+
+
+def test_retry_requires_canonical_applicant_and_empty_payload(api):
+    client, verifier, service=api
+    service.retry.return_value={'status':'pending'}
+    path=BASE+'/'+REV+'/retry'
+    assert client.post(path,headers=AUTH,json={}).json()=={'status':'pending'}
+    service.retry.assert_called_once_with('canonical',REV)
+    assert client.post(path,headers=AUTH,json={'applicant_id':2}).status_code==400
+    verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    assert client.post(path,headers=AUTH,json={}).status_code==403
+    assert service.retry.call_count==1

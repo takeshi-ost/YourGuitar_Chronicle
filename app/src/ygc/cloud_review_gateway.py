@@ -1,4 +1,4 @@
-"""Authenticated MCP connection diagnostics; application queues are a later stage."""
+"""Dedicated-worker OIDC gate for diagnostics and optional review queues."""
 import json
 from fastapi import APIRouter,HTTPException,Request
 from fastapi.responses import JSONResponse,Response
@@ -8,7 +8,7 @@ from ygc.cloud_account_routes import bearer_token
 TOOL='ygc_review_connection_check'
 
 
-def review_gateway(verifier):
+def review_gateway(verifier, service=None):
     router=APIRouter();headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}
     @router.post('/api/review/mcp')
     async def endpoint(request:Request):
@@ -33,8 +33,16 @@ def review_gateway(verifier):
         def reply(**body):return JSONResponse(dict(jsonrpc='2.0',id=message['id'],**body),headers=headers)
         if method=='initialize':return reply(result=dict(protocolVersion='2025-03-26',capabilities={'tools':{}},serverInfo=dict(name='ygc-cloud-review',version='1')))
         if method=='ping':return reply(result={})
-        if method=='tools/list':return reply(result={'tools':[dict(name=TOOL,description='Check review connection only. Does not read images, claim applications or update data.',inputSchema=dict(type='object',properties={},additionalProperties=False))]})
+        if method=='tools/list':return reply(result={'tools':([] if service is None else service.tools())+[dict(name=TOOL,description='Check review connection only. Does not read images, claim applications or update data.',inputSchema=dict(type='object',properties={},additionalProperties=False))]})
         if method=='tools/call' and params.get('name')==TOOL and set(params)<={'name','arguments'} and params.get('arguments',{})=={}:
-            return reply(result={'content':[dict(type='text',text=json.dumps(dict(status='ok',authentication='google_oidc',queues_connected=False,data_changed=False)))]})
+            return reply(result={'content':[dict(type='text',text=json.dumps(dict(status='ok',authentication='google_oidc',queues_connected=service is not None,data_changed=False)))]})
+        if method=='tools/call' and service is not None and set(params)<={'name','arguments'} and isinstance(params.get('name'),str) and params.get('name') in {t['name'] for t in service.tools()}:
+            try:
+                result=await run_in_threadpool(service.call_tool,params['name'],params.get('arguments',{}))
+                return reply(result=result if 'content' in result else {'content':[dict(type='text',text=json.dumps(result))]})
+            except (ValueError,TypeError,PermissionError):
+                return reply(error=dict(code=-32602,message='Review request rejected. Check state, lease and arguments.'))
+            except Exception:
+                return reply(error=dict(code=-32603,message='Review unavailable. Refresh state before retrying.'))
         return reply(error=dict(code=-32602 if method=='tools/call' else -32601,message='Unsupported tool or method.'))
     return router

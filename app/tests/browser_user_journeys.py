@@ -71,7 +71,7 @@ def main(repository):
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         sent = []
-        page.on('request', lambda request: sent.append(request.post_data or ''))
+        page.on('request', lambda request: sent.append(request.post_data_buffer or b''))
         ready(page, base+'/user-view')
         # A language selection must change actual rendered labels and survive reload.
         page.locator('[data-language-picker]').select_option('ja')
@@ -97,7 +97,7 @@ def main(repository):
             assert con.execute('SELECT COUNT(*) FROM accounts.account_consents WHERE app_user_id=(SELECT app_user_id FROM users WHERE id=?)', (user,)).fetchone()[0] == 2
         sign_out(page)
         sign_in(page, user)
-        assert all('discarded@example.invalid' not in body and 'not-a-real-secret' not in body for body in sent)
+        assert all(b'discarded@example.invalid' not in body and b'not-a-real-secret' not in body for body in sent)
         # Listing: submit through the real form, apply simulated GPT observations.
         ready(page, base+'/users/'+str(user))
         page.locator('#newGuitarAction').click()

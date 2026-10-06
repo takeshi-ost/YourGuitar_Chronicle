@@ -40,6 +40,10 @@ def main():
                 journeys(repository)
                 from browser_cloud_account import main as cloud_account
                 cloud_account()
+                from browser_cloud_applications_retry import main as cloud_applications_retry
+                cloud_applications_retry()
+                from browser_cloud_owner import main as cloud_owner
+                cloud_owner()
                 from browser_cloud_console import main as cloud_console
                 cloud_console()
             finally:

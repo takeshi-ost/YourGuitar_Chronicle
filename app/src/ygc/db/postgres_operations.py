@@ -96,3 +96,22 @@ class PostgresOperations:
             con.execute('INSERT INTO events(occurred_at,mode,reason) VALUES(%s,%s,%s)',
                         (datetime.now(timezone.utc).isoformat(), mode, json.dumps(audit)))
             return dict(updated)
+
+    def review_status(self, app_user_id):
+        with self.access('admin_read', app_user_id) as (con, _, actor):
+            return {'enabled': bool(con.execute('SELECT enabled FROM review_settings WHERE id=1').fetchone()['enabled'])}
+
+    def set_review(self, app_user_id, *, enabled, expected_enabled):
+        if type(enabled) is not bool or type(expected_enabled) is not bool:
+            raise ValueError('Boolean review state required.')
+        with connect(self.settings, 'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ModeConflict('Maintenance or review is running.')
+            with self.access('admin_write', app_user_id) as (con, state, actor):
+                previous = bool(con.execute('SELECT enabled FROM review_settings WHERE id=1 FOR UPDATE').fetchone()['enabled'])
+                if previous != expected_enabled:
+                    raise ModeConflict('Review status changed.')
+                con.execute('UPDATE review_settings SET enabled=%s WHERE id=1', (int(enabled),))
+                con.execute('INSERT INTO events(occurred_at,mode,reason) VALUES(%s,%s,%s)',
+                    (datetime.now(timezone.utc).isoformat(), state['mode'], json.dumps({'action':'review_mode','actor':actor['app_user_id'],'enabled':enabled})))
+                return {'enabled': enabled}
