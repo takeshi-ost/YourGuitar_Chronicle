@@ -94,7 +94,7 @@ class CloudApplications:
                 with PostgresAccounts(self.settings).content_transaction(actor,(account['id'],)) as (con,canonical):
                     con.execute("SET LOCAL statement_timeout='5s'")
                     con.execute("SET LOCAL lock_timeout='2s'")
-                    yield con,canonical['id']
+                    yield con,canonical['id'],mode
 
     @staticmethod
     def detail(row):
@@ -120,11 +120,13 @@ class CloudApplications:
         con.execute('INSERT INTO acquire_application_events(revision,at,kind) VALUES(%s,%s,%s)',(revision,datetime.now(timezone.utc).isoformat(),kind))
 
     def list(self,actor):
-        with self.transaction(actor) as (con,user):
+        with self.transaction(actor) as (con,user,mode):
             rows=con.execute('''SELECT *, (SELECT verification_status FROM claims WHERE id=acquire_applications.claim_id) AS claim_verification FROM acquire_applications WHERE applicant_id=%s
                 ORDER BY CASE WHEN status IN ('pending','processing','error') OR (status='draft' AND expires_at>%s) THEN 0 ELSE 1 END,
                 created_at DESC,revision DESC LIMIT 50''',(user,time.time())).fetchall()
-            return dict(items=[self.detail(row) for row in rows])
+            # user_read already fences admin_only to a canonical Admin; even
+            # an Admin acting as an applicant cannot write during read_only.
+            return dict(items=[self.detail(row) for row in rows],can_write=mode['mode'] in ('normal','admin_only'))
 
     def start(self,actor,data):
         if not isinstance(data,dict) or set(data)-{'kind','payload','individual_id'}:raise ValueError('Invalid application.')
@@ -132,7 +134,7 @@ class CloudApplications:
         payload=listing_input(data.get('payload')) if kind=='listing' else None
         individual=positive_id(data.get('individual_id')) if kind=='acquire' else None
         if kind not in ('listing','acquire') or (kind=='listing' and 'individual_id' in data) or (kind=='acquire' and 'payload' in data):raise ValueError('Invalid application kind.')
-        with self.transaction(actor,True) as (con,user):
+        with self.transaction(actor,True) as (con,user,_):
             shared=ObservationConnection(con)
             if kind=='listing':
                 ids=duplicates(shared,payload)
@@ -172,7 +174,7 @@ class CloudApplications:
         if role not in ('closeup','overview'):raise ValueError('Invalid photo role.')
         image=normalize_image(data,mime,max_side=2048);candidate=None;committing=False
         try:
-            with self.transaction(actor,True) as (con,user):
+            with self.transaction(actor,True) as (con,user,_):
                 row=self.find(con,user,revision);self.draft(row)
                 images=references(row);candidate=self.storage.put('content',image,content_type='image/jpeg')
                 images[role]=encode_reference(candidate)
@@ -187,13 +189,13 @@ class CloudApplications:
 
     def image(self,actor,revision,role):
         if role not in ('closeup','overview'):raise ValueError('Invalid photo role.')
-        with self.transaction(actor) as (con,user):
+        with self.transaction(actor) as (con,user,_):
             row=self.find(con,user,revision);path=references(row).get(role)
             if not path:raise GuitarMissing()
             return self.storage.get(decode_reference(path))
 
     def cancel(self,actor,revision):
-        with self.transaction(actor,True) as (con,user):
+        with self.transaction(actor,True) as (con,user,_):
             row=self.find(con,user,revision)
             if row['status'] in ('draft','pending','processing','error'):
                 con.execute("UPDATE acquire_applications SET status='cancelled',completed_at=%s,lease_token=NULL,lease_until=NULL WHERE revision=%s",(datetime.now(timezone.utc).isoformat(),revision))
@@ -202,7 +204,7 @@ class CloudApplications:
             return self.detail(row)
 
     def retry(self,actor,revision):
-        with self.transaction(actor,True) as (con,user):
+        with self.transaction(actor,True) as (con,user,_):
             row=self.find(con,user,revision)
             if row['status']=='pending':return self.detail(row)
             if row['status']!='error' or row['claim_id']:raise ValueError('Only failed applications can be retried.')
@@ -217,7 +219,7 @@ class CloudApplications:
         validate_claim_date(date)
         candidate=None;committing=False
         try:
-            with self.transaction(actor,True) as (con,user):
+            with self.transaction(actor,True) as (con,user,_):
                 row=self.find(con,user,revision)
                 if row['status']=='pending':
                     if row['acquisition_date']!=date or row['body']!=body:raise ValueError('Submission already recorded with different details.')

@@ -102,7 +102,7 @@ def main():
     from ygc.cloud_application_routes import application_router
     applications={}
     class Applications:
-        def list(self,actor):return dict(items=[row.copy() for who,row in applications.values() if who==actor])
+        def list(self,actor):return dict(items=[row.copy() for who,row in applications.values() if who==actor],can_write=True)
         def start(self,actor,data):
             revision=format(len(applications)+1,'032x');payload=data.get('payload')
             row=dict(revision=revision,kind=data['kind'],individual_id=data.get('individual_id'),serial=payload['serial_number'] if payload else 'S12',challenge='ABCD1234',expires_at=2000000000,status='draft',payload=payload,photos=[],acquisition_date=payload['occurred_at'] if payload else None,body=payload['body'] if payload else '')

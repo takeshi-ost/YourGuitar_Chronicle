@@ -17,6 +17,7 @@ def run(app,accounts,operations,store,aid,bid):
     before=operations.details(aid)
     operations.set_mode(aid,mode='normal',message='',version=before['version'])
     accounts.drain_projection();service=CloudApplications(app,operations,store)
+    assert service.list(bid)['can_write'] is True
     payload=dict(manufacturer='Fender',serial_number='INTAKE001',model='Intake test',finish='',year='',occurred_at='2020-01-01',body='Private explanation')
     listing=service.start(bid,dict(kind='listing',payload=payload));revision=listing['revision']
     assert listing['status']=='draft' and len(listing['challenge'])==8
@@ -65,9 +66,18 @@ def run(app,accounts,operations,store,aid,bid):
     for mode in ('read_only','offline','admin_only'):
         state=operations.details(aid);operations.set_mode(aid,mode=mode,message='test',version=state['version'])
         rejected(PermissionError,lambda:service.start(bid,dict(kind='listing',payload=payload|{'serial_number':'MODE001'})))
-        if mode=='read_only':assert service.list(bid)['items']
-        else:rejected(PermissionError,lambda:service.image(bid,revision,'overview'))
+        rejected(PermissionError,lambda:service.cancel(bid,revision))
+        if mode=='read_only':
+            assert service.list(bid)['items'] and service.list(bid)['can_write'] is False
+            assert service.list(aid)['can_write'] is False
+            assert service.image(bid,revision,'overview').startswith(b'\xff\xd8')
+            rejected(PermissionError,lambda:service.cancel(aid,revision))
+        else:
+            rejected(PermissionError,lambda:service.list(bid))
+            rejected(PermissionError,lambda:service.image(bid,revision,'overview'))
+        if mode=='admin_only':assert service.list(aid)['can_write'] is True
     state=operations.details(aid);operations.set_mode(aid,mode='normal',message='',version=state['version'])
+    assert service.list(bid)['can_write'] is True
     with connect(app,'operations') as guard:
         guard.execute('SELECT pg_advisory_xact_lock(79432190)')
         rejected(MediaConflict,lambda:service.cancel(bid,revision))

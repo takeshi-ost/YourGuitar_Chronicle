@@ -14,7 +14,7 @@ function environment(){
   let state={user:{app_user_id:'applicant',role:'admin',display_name:'Person'},identity:{email_verified:true}},busy=false;
   const calls=[],replies=[];
   const client={signedIn:true,restore:async()=>state,logout:async()=>{state=null},authorizedFetch:async(url,options={},verified)=>{calls.push({url,options,verified});const value=replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
-  const context=vm.createContext({document,URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
+  const context=vm.createContext({addEventListener(){},document,URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},detail(){}});for(const key of ['createUserBrowser','createCrawlBrowser','createBackupBrowser','createGuitarBrowser'])context[key]=noOp;
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.component?.render()}}};
   function load(file,name){let source=fs.readFileSync(path.join(__dirname,'../src/ygc/static',file),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');vm.runInContext(source+`;globalThis.component=${name}(args);`,Object.assign(context,{args}));return context.component}
@@ -39,9 +39,9 @@ test('Owner conflict stays visible and logout clears controls without submitting
 });
 test('Applicant result shows Claim state as text; retry requires second confirmation and error status',async()=>{
   const e=environment(),ui=e.load('cloud-account-applications.js','createApplications'),row={revision:'c'.repeat(32),kind:'acquire',serial:'S',individual_id:'12',status:'error',photos:[],expires_at:2000000000,claim_id:null,reasons:['<img src=x>']};
-  e.replies.push({items:[row]});await ui.refresh();const list=e.ids.get('selfApplications').children.at(-1);list.children[0].children[1].onclick();
+  e.replies.push({items:[row],can_write:true});await ui.refresh();const list=e.ids.get('selfApplications').children.at(-1);list.children[0].children[1].onclick();
   const retry=e.ids.get('applicationRetry');retry.onclick();assert.equal(e.calls.length,1);assert.equal(retry.hidden,false);
-  e.replies.push({...row,status:'pending'},{items:[{...row,status:'pending'}]});retry.onclick();await e.flush();assert.equal(e.calls[1].url,'/api/auth/applications/'+row.revision+'/retry');assert.deepEqual(JSON.parse(e.calls[1].options.body),{});assert.equal(retry.hidden,true);
+  e.replies.push({...row,status:'pending'},{items:[{...row,status:'pending'}],can_write:true});retry.onclick();await e.flush();assert.equal(e.calls[1].url,'/api/auth/applications/'+row.revision+'/retry');assert.deepEqual(JSON.parse(e.calls[1].options.body),{});assert.equal(retry.hidden,true);
   e.replies.push({items:[{...row,status:'accepted',claim_id:'23',verification_status:'unverified'}]});await ui.refresh();list.children[0].children[1].onclick();const detail=e.ids.get('applicationDialog').children[1];assert.match(detail.textContent,/owner_waiting/);assert.ok(detail.textContent.includes('<img src=x>'));assert.equal(detail.children.length,0);
 });
 test('Review switch confirms ON/OFF and sends compare-and-set without starting a job',async()=>{
