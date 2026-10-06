@@ -100,3 +100,67 @@ def test_retry_requires_canonical_applicant_and_empty_payload(api):
     verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
     assert client.post(path,headers=AUTH,json={}).status_code==403
     assert service.retry.call_count==1
+
+
+@pytest.mark.parametrize('method,path,payload,operation',[
+    ('get',BASE,None,'list'),
+    ('post',BASE,{'kind':'acquire','individual_id':'12'},'start'),
+    ('post',BASE+'/'+REV+'/cancel',{},'cancel'),
+    ('post',BASE+'/'+REV+'/retry',{},'retry'),
+    ('post',BASE+'/'+REV+'/submit',{'acquisition_date':'2020-01-01'},'submit'),
+    ('get',BASE+'/'+REV+'/photos/closeup',None,'image'),
+    ('post',BASE+'/'+REV+'/photos/closeup',None,'upload'),
+])
+@pytest.mark.parametrize('restriction',['service','account'])
+def test_application_service_mode_denial_is_distinct_from_authorization(api,method,path,payload,operation,restriction):
+    from ygc.db.postgres_operations import ServiceRestricted
+    client,verifier,service=api
+    getattr(service,operation).side_effect=(ServiceRestricted if restriction=='service' else PermissionError)('Private reason')
+    options={'headers':AUTH}
+    if operation=='upload':options={'headers':AUTH|{'Content-Type':'image/png'},'content':png()}
+    elif method=='post':options['json']=payload
+    response=getattr(client,method)(path,**options)
+    assert response.status_code==403
+    assert response.headers['cache-control']=='private, no-store'
+    assert response.headers['x-content-type-options']=='nosniff'
+    assert 'Private reason' not in response.text
+    if restriction=='service':assert response.json()=={'detail':{'code':'service_restricted'}}
+    else:assert isinstance(response.json()['detail'],str)
+
+
+@pytest.mark.parametrize('mode,writable',[('normal',True),('read_only',False),('admin_only',True)])
+def test_application_list_permission_comes_from_locked_read_transaction(monkeypatch,mode,writable):
+    from contextlib import contextmanager
+    from ygc.cloud_applications import CloudApplications
+    from ygc import cloud_applications as module
+    active=[]
+    con=Mock()
+    con.execute.return_value.fetchall.return_value=[]
+    operations=Mock()
+
+    @contextmanager
+    def access(kind,actor):
+        assert kind=='user_read' and actor=='canonical'
+        active.append('locked')
+        try:yield None,{'mode':mode},{'id':7}
+        finally:active.pop()
+
+    @contextmanager
+    def content(actor,ids):
+        assert active==['locked'] and actor=='canonical' and ids==(7,)
+        yield con,{'id':12}
+        assert active==['locked']
+
+    @contextmanager
+    def connect(settings,target):
+        assert target=='operations'
+        yield Mock()
+
+    operations.access.side_effect=access
+    accounts=Mock();accounts.content_transaction.side_effect=content
+    monkeypatch.setattr(module,'connect',connect)
+    monkeypatch.setattr(module,'PostgresAccounts',lambda settings:accounts)
+    result=CloudApplications(None,operations,None).list('canonical')
+    assert result=={'items':[],'can_write':writable}
+    assert active==[]
+    operations.access.assert_called_once_with('user_read','canonical')

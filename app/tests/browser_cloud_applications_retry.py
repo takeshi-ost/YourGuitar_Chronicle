@@ -1,4 +1,4 @@
-"""Application retry/dismissal browser regression, using fixture-only HTTP routes.
+"""Application retry, service-mode and dismissal browser regressions.
 
 Uses the real application module, overlay lifecycle, CSS and translations. The
 fixture auth wrapper pauses a delivered POST or GET response before handing it
@@ -8,9 +8,11 @@ boundary; this is not a Google authentication or live-service acceptance test.
 Run explicitly, or through run_browser_checks.py, when Chromium is permitted.
 """
 import json
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from PIL import Image
 from playwright.sync_api import expect, sync_playwright
 
 from browser_diagnostics import diagnostic_page
@@ -56,6 +58,14 @@ def application(status='error', serial='FIRST'):
                 expires_at=2000000000, claim_id=None, reasons=[])
 
 
+def listing_application(status='pending'):
+    return application(status) | dict(kind='listing', individual_id=None,
+        challenge='ABCD1234', photos=['closeup', 'overview'],
+        acquisition_date='2020-01-01', body='Private application explanation',
+        payload=dict(manufacturer='Fender', serial_number='FIRST', model='Fixture',
+                     finish='', year='', occurred_at='2020-01-01', body='Private application explanation'))
+
+
 def main():
     catalog = ui_resources()
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in (
@@ -63,7 +73,15 @@ def main():
         'cloud-account.css', 'ui-components.css')}
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(catalog) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    record = {'row': application(), 'requests': []}
+    photo = BytesIO()
+    Image.new('RGB', (12, 8), 'white').save(photo, format='JPEG')
+    record = {}
+
+    def reset(row=None, mode='normal'):
+        record.update(row=row or application(), requests=[], photo_reads=[],
+                      mode=mode, read_failure=None, write_failure=None)
+
+    reset()
     errors = []
     with sync_playwright() as playwright, diagnostic_page(playwright, 'browser_cloud_applications_retry') as page:
         page.on('pageerror', lambda error: errors.append(str(error)))
@@ -82,15 +100,40 @@ def main():
                 actor = request.headers.get('x-fixture-account')
                 assert actor in ('first', 'second')
                 record['requests'].append(('GET', actor))
+                if actor == 'first' and record['read_failure']:
+                    route.fulfill(status=record['read_failure'], json={'detail': 'Applicant unavailable.'})
+                    return
+                if actor == 'first' and record['mode'] == 'offline':
+                    route.fulfill(status=403, json={'detail': {'code': 'service_restricted'}})
+                    return
                 row = record['row'] if actor == 'first' else application('accepted', 'SECOND')
-                route.fulfill(json={'items': [row]})
-            elif path == '/api/auth/applications/' + REVISION + '/retry' and request.method == 'POST':
+                route.fulfill(json={'items': [row], 'can_write': actor == 'second' or record['mode'] == 'normal'})
+            elif path in ('/api/auth/applications/' + REVISION + '/retry',
+                          '/api/auth/applications/' + REVISION + '/cancel') and request.method == 'POST':
                 assert request.headers.get('x-fixture-account') == 'first'
                 assert request.post_data_json == {}
-                assert record['row']['status'] == 'error'
                 record['requests'].append(('POST', 'first'))
-                record['row'] = application('pending')
+                if record['write_failure']:
+                    route.fulfill(status=record['write_failure'], json={'detail': 'Applicant unavailable.'})
+                    return
+                if record['mode'] != 'normal':
+                    route.fulfill(status=403, json={'detail': {'code': 'service_restricted'}})
+                    return
+                if path.endswith('/retry'):
+                    assert record['row']['status'] == 'error'
+                    record['row'] = record['row'] | {'status': 'pending'}
+                else:
+                    assert record['row']['status'] in ('draft', 'pending', 'processing', 'error')
+                    record['row'] = record['row'] | {'status': 'cancelled'}
                 route.fulfill(json=record['row'])
+            elif path in ('/api/auth/applications/' + REVISION + '/photos/closeup',
+                          '/api/auth/applications/' + REVISION + '/photos/overview') and request.method == 'GET':
+                assert request.headers.get('x-fixture-account') == 'first'
+                role = path.rsplit('/', 1)[1]
+                assert role in record['row']['photos']
+                assert record['mode'] in ('normal', 'read_only') and not record['read_failure']
+                record['photo_reads'].append(role)
+                route.fulfill(content_type='image/jpeg', body=photo.getvalue())
             else:
                 raise AssertionError('Unexpected fixture request: ' + request.method + ' ' + request.url)
 
@@ -100,7 +143,7 @@ def main():
         listing = page.locator('#selfApplications')
 
         def begin(held_method):
-            record.update(row=application(), requests=[])
+            reset()
             page.goto(BASE + '/retry-fixture')
             page.wait_for_function('fixture.ready')
             expect(listing.locator('li')).to_contain_text('Review retry required')
@@ -169,8 +212,222 @@ def main():
                 else:
                     expect(listing.locator('li')).to_contain_text('Pending review')
                 checked += 1
+
+        def open_application(row=None, mode='normal'):
+            reset(row or listing_application(), mode)
+            page.goto(BASE + '/retry-fixture')
+            page.wait_for_function('fixture.ready')
+            listing.get_by_role('button', name='Detail', exact=True).click()
+            expect(dialog).to_be_visible()
+
+        def wait_idle():
+            page.wait_for_function('!fixture.busy')
+
+        def assert_mutations_blocked():
+            for identity in ('applicationListing', 'applicationAcquire', 'applicationCreate',
+                             'applicationSubmit', 'applicationCancel', 'applicationRetry',
+                             'application_closeup', 'application_overview'):
+                expect(page.locator('#' + identity)).to_be_disabled()
+            previous = list(record['requests'])
+            # Native disabled controls and direct/repeated handler calls must
+            # both refuse mutations, including the hidden form submit handler.
+            page.evaluate('''async () => {
+              for (const id of ['applicationListing','applicationAcquire',
+                  'applicationSubmit','applicationCancel','applicationRetry']) {
+                await document.getElementById(id).onclick();
+              }
+              document.querySelector('#applicationDialog form').onsubmit({preventDefault(){}});
+              await document.getElementById('applicationRetry').onclick();
+            }''')
+            wait_idle()
+            assert record['requests'] == previous
+
+        def assert_private_cleared():
+            expect(listing.locator('li')).to_have_count(0)
+            expect(dialog).not_to_be_visible()
+            assert 'FIRST' not in dialog.text_content()
+            assert 'Private application explanation' not in dialog.text_content()
+            assert page.locator('#applicationDialog img[src]').count() == 0
+            expect(page.locator('#applicationListing')).to_be_disabled()
+
+        # Read-only affects every mutation while retaining details, photo GETs
+        # and refresh. Actual Chromium disabled-state checks catch fieldset
+        # inheritance errors that a lightweight DOM fixture cannot model.
+        for viewport in ({'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}):
+            page.set_viewport_size(viewport)
+            open_application(mode='read_only')
+            expect(listing.locator('li')).to_contain_text('Pending review')
+            expect(dialog).to_contain_text('Applications are read-only.')
+            expect(page.locator('#applicationCancel')).to_be_visible()
+            assert_mutations_blocked()
+            for role in ('closeup', 'overview'):
+                view = dialog.get_by_role('button', name='View ' + role, exact=True)
+                expect(view).to_be_enabled()
+                view.click()
+                wait_idle()
+            assert record['photo_reads'] == ['closeup', 'overview']
+            expect(dialog.locator('img')).to_have_count(2)
+            page.wait_for_function('''() => [...document.querySelectorAll('#applicationDialog img')]
+                .every(image => !image.hidden && image.complete && image.naturalWidth === 12)''')
+            expect(page.locator('#applicationRefresh')).to_be_enabled()
+            assert record['requests'] == [('GET', 'first')]
+            expect(dialog).to_contain_text('Private application explanation')
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            checked += 1
+
+        # Cover the visible submit/retry states as well as pending cancellation.
+        for status, control in (('draft', 'applicationSubmit'), ('error', 'applicationRetry')):
+            open_application(listing_application(status), 'read_only')
+            expect(page.locator('#' + control)).to_be_visible()
+            assert_mutations_blocked()
+            assert record['requests'] == [('GET', 'first')]
+            checked += 1
+
+        # A server mode change can beat the stale normal-mode UI. A rejected
+        # cancellation revalidates reading without losing the list or dialog.
+        open_application()
+        expect(page.locator('#applicationCancel')).to_be_enabled()
+        record['mode'] = 'read_only'
+        page.locator('#applicationCancel').click()
+        wait_idle()
+        assert record['requests'] == [('GET', 'first'), ('POST', 'first'), ('GET', 'first')]
+        assert record['row']['status'] == 'pending'
+        expect(listing.locator('li')).to_contain_text('FIRST')
+        expect(listing.locator('li')).to_contain_text('Pending review')
+        expect(dialog).to_be_visible()
+        expect(dialog).to_contain_text('The service mode changed.')
+        assert_mutations_blocked()
+        record['mode'] = 'normal'
+        page.locator('#applicationRefresh').click()
+        wait_idle()
+        expect(page.locator('#applicationCancel')).to_be_enabled()
+        expect(dialog).not_to_contain_text('Applications are read-only.')
+        page.locator('#applicationCancel').click()
+        wait_idle()
+        assert record['row']['status'] == 'cancelled'
+        expect(listing.locator('li')).to_contain_text('Cancelled')
+        expect(page.locator('#applicationCancel')).not_to_be_visible()
+        checked += 1
+
+        # Refresh/focus should update access on an already open draft without
+        # discarding the user's unsaved input. A disabled create handler also
+        # needs coverage with selected=null, when the early selected guard
+        # cannot mask a missing permission check.
+        reset()
+        page.goto(BASE + '/retry-fixture')
+        page.wait_for_function('fixture.ready')
+        page.locator('#applicationListing').click()
+        page.locator('#application_manufacturer').fill('Unsaved maker')
+        page.locator('#application_serial_number').fill('UNSAVED123')
+        record['mode'] = 'read_only'
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+        wait_idle()
+        expect(page.locator('#applicationCreate')).to_be_visible()
+        assert_mutations_blocked()
+        expect(page.locator('#application_manufacturer')).to_have_value('Unsaved maker')
+        expect(page.locator('#application_serial_number')).to_have_value('UNSAVED123')
+        record['mode'] = 'normal'
+        page.locator('#applicationRefresh').click()
+        wait_idle()
+        expect(page.locator('#applicationCreate')).to_be_enabled()
+        expect(page.locator('#application_manufacturer')).to_have_value('Unsaved maker')
+        expect(page.locator('#application_serial_number')).to_have_value('UNSAVED123')
+        assert not any(method == 'POST' for method, _ in record['requests'])
+        checked += 1
+
+        # A mode denial is distinguishable from revoked read/auth access. All
+        # inaccessible reads purge private rows, details and cached photo URLs.
+        for failure in ('offline', 401, 403):
+            open_application()
+            dialog.get_by_role('button', name='View closeup', exact=True).click()
+            wait_idle()
+            expect(dialog.locator('img[src]')).to_have_count(1)
+            if failure == 'offline':
+                record['mode'] = 'offline'
+            else:
+                record['read_failure'] = failure
+            page.locator('#applicationRefresh').click()
+            wait_idle()
+            assert_private_cleared()
+            checked += 1
+
+        for failure in ('offline', 401, 403):
+            open_application()
+            if failure == 'offline':
+                record['mode'] = 'offline'
+            else:
+                record['write_failure'] = failure
+            page.locator('#applicationCancel').click()
+            wait_idle()
+            assert_private_cleared()
+            expected = [('GET', 'first'), ('POST', 'first')]
+            if failure == 'offline':
+                expected.append(('GET', 'first'))
+            assert record['requests'] == expected
+            assert record['row']['status'] == 'pending'
+            checked += 1
+
+        # Dismissing before a denied POST arrives must still update account
+        # access, but it must never reopen the user's dismissed dialog.
+        for failure in ('read_only', 403):
+            open_application()
+            if failure == 'read_only':
+                record['mode'] = 'read_only'
+            else:
+                record['write_failure'] = failure
+            page.evaluate("fixture.hold='POST'")
+            page.locator('#applicationCancel').click()
+            page.wait_for_function("fixture.waiting==='POST'")
+            page.keyboard.press('Escape')
+            expect(dialog).not_to_be_visible()
+            release()
+            expect(dialog).not_to_be_visible()
+            if failure == 'read_only':
+                expect(listing.locator('li')).to_contain_text('FIRST')
+                expect(listing.locator('li')).to_contain_text('Pending review')
+                expect(page.locator('#applicationListing')).to_be_disabled()
+                assert record['requests'] == [('GET', 'first'), ('POST', 'first'), ('GET', 'first')]
+            else:
+                assert_private_cleared()
+                assert record['requests'] == [('GET', 'first'), ('POST', 'first')]
+            assert page.evaluate('document.body.style.overflow') == ''
+            checked += 1
+
+        # A late denial belongs only to its original account epoch, including
+        # a sign-out and return to the same account identifier.
+        for failure in ('read_only', 403):
+            for transition in ('other account', 'sign out', 'sign out and return'):
+                open_application()
+                if failure == 'read_only':
+                    record['mode'] = 'read_only'
+                else:
+                    record['write_failure'] = failure
+                page.evaluate("fixture.hold='POST'")
+                page.locator('#applicationCancel').click()
+                page.wait_for_function("fixture.waiting==='POST'")
+                if transition == 'other account':
+                    page.evaluate("async () => await fixture.switchAccount('second')")
+                else:
+                    page.evaluate('async () => await fixture.switchAccount(null)')
+                    if transition == 'sign out and return':
+                        page.evaluate("async () => await fixture.switchAccount('first')")
+                previous = list(record['requests'])
+                release()
+                assert record['requests'] == previous
+                expect(dialog).not_to_be_visible()
+                if transition == 'other account':
+                    expect(listing.locator('li')).to_contain_text('SECOND')
+                    expect(listing.locator('li')).not_to_contain_text('FIRST')
+                    expect(page.locator('#applicationListing')).to_be_enabled()
+                elif transition == 'sign out':
+                    expect(listing).not_to_be_visible()
+                    expect(listing.locator('li')).to_have_count(0)
+                else:
+                    expect(listing.locator('li')).to_contain_text('FIRST')
+                    expect(listing.locator('li')).to_contain_text('Pending review')
+                checked += 1
         assert not errors, errors
-    print(f'{checked} application retry journeys: response races, dismissal, repeat clicks and account isolation passed')
+    print(f'{checked} application journeys: retry, service modes, private reads, denial recovery, dismissal and account isolation passed')
 
 
 if __name__ == '__main__':

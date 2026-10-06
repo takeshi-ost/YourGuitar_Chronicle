@@ -132,7 +132,7 @@ def main():
 
     @app.get('/api/auth/applications')
     def applications():
-        return {'items': []}
+        return {'items': [], 'can_write': True}
 
     install(app, public_config({'apiKey': 'fixture-key',
         'authDomain': 'fixture-project.firebaseapp.com'}, project_id='fixture-project', tenant=''))

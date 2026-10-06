@@ -9,6 +9,7 @@ from ygc.cloud_applications import revision_id
 from ygc.cloud_avatar import MAX_UPLOAD, ImageUploadInvalid
 from ygc.cloud_content_media import MediaConflict
 from ygc.cloud_guitars import GuitarMissing
+from ygc.db.postgres_operations import ServiceRestricted
 
 
 def application_router(verifier,service):
@@ -65,6 +66,7 @@ def application_router(verifier,service):
         except HTTPException:raise
         except GuitarMissing:raise HTTPException(404,'Application or image not found.',headers=headers) from None
         except MediaConflict:raise HTTPException(409,'Crawl or database maintenance is running.',headers=headers) from None
+        except ServiceRestricted:raise HTTPException(403,{'code':'service_restricted'},headers=headers) from None
         except PermissionError:raise HTTPException(403,'Verified applicant and service access required.',headers=headers) from None
         except ImageUploadInvalid as error:raise HTTPException(400,{'code':error.code},headers=headers) from None
         except (ValueError,TypeError,UnicodeError,ZoneInfoNotFoundError):raise HTTPException(400,'Invalid application, expired draft or pending account projection.',headers=headers) from None

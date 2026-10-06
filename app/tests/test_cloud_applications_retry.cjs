@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 
 const account=id=>({user:{app_user_id:id},identity:{email_verified:true}});
 const application=(status='error',serial='FIRST')=>({revision:'c'.repeat(32),kind:'acquire',serial,individual_id:'12',status,photos:[],expires_at:2000000000,claim_id:null,reasons:[]});
-const page=(...items)=>({items});
+const page=(...items)=>({items,can_write:true});
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}}
 function environment(){
   const ids=new Map(),listeners={};
@@ -32,15 +32,16 @@ function environment(){
     calls.push({url,options,verified,account:state?.user?.app_user_id});
     assert.ok(replies.length,'Every request must have an explicit fixture response');
     const reply=await replies.shift();if(reply instanceof Error)throw reply;
-    return {ok:true,json:async()=>reply};
+    return reply?.httpStatus?{ok:false,status:reply.httpStatus,json:async()=>({detail:{code:reply.code}})}:{ok:true,json:async()=>reply,blob:async()=>new Blob(['photo'])};
   }};
-  const context=vm.createContext({document,URL,Intl,Date,console,CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:key=>key}});context.window=context;
+  const context=vm.createContext({document,URL,Blob,Intl,Date,console,CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:key=>key}});context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/overlays.js'),'utf8'),context);
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}};
   const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-applications.js'),'utf8').replace('export function','function');
   vm.runInContext(source+';globalThis.create=createApplications;',context);component=context.create(args);
   const dialog=ids.get('applicationDialog'),list=root.children.at(-1),retry=ids.get('applicationRetry');
-  return {component,calls,replies,root,dialog,list,retry,
+  return {component,calls,replies,root,dialog,list,retry,ids,
+    focus(){for(const listener of listeners.focus||[])listener()},
     async start(){replies.push(page(application()));await component.refresh();list.children[0].children[1].onclick();retry.onclick();assert.equal(calls.length,1)},
     confirm(){retry.onclick()},
     dismiss(kind){
@@ -111,4 +112,133 @@ test('Repeated refreshes keep the newest response when an older response arrives
   const e=environment(),older=deferred();e.replies.push(older.promise,page(application('processing')));
   const first=e.component.refresh();await e.component.refresh();older.resolve(page(application('error')));await first;
   assert.match(e.listText(),/status_processing/);assert.doesNotMatch(e.listText(),/status_error/);
+});
+
+const denied=(status=403,code)=>({httpStatus:status,code});
+async function open(e,status='pending',can_write=true){
+  const row={...application(status),photos:['closeup','overview']};
+  e.replies.push({items:[row],can_write});await e.component.refresh();e.list.children[0].children[1].onclick();return row;
+}
+function control(e,id){return e.ids.get(id)}
+function form(e){return e.dialog.querySelector('form')}
+function message(e){return e.dialog.children.at(-2).textContent}
+
+for(const status of ['draft','pending','processing','error']){
+  test(`Read-only ${status} applications keep details/photos while all mutations are blocked locally`,async()=>{
+    const e=environment();await open(e,status,false);
+    for(const id of ['applicationListing','applicationAcquire','applicationCreate','applicationSubmit','applicationCancel','applicationRetry','application_closeup','application_overview'])assert.equal(control(e,id).disabled,true,id);
+    assert.equal(form(e).children[0].disabled,true);
+    for(const id of ['applicationListing','applicationAcquire','applicationSubmit','applicationCancel','applicationRetry'])control(e,id).onclick();
+    form(e).onsubmit({preventDefault(){}});await e.flush();assert.equal(e.calls.length,1,'No mutation handler may start a request');
+    const photos=e.dialog.querySelectorAll('fieldset')[1],view=photos.children[2];assert.equal(photos.disabled,false);assert.equal(view.disabled,false);
+    e.replies.push({});view.onclick();await e.flush();assert.equal(e.calls.length,2);assert.match(e.calls[1].url,/photos\/closeup$/);assert.equal(e.calls[1].options.method,undefined);
+    assert.equal(photos.children[3].hidden,false);assert.match(e.listText(),/FIRST/);assert.equal(e.dialog.open,true);
+  });
+}
+
+for(const capability of [undefined,null,'true',1,false]){
+  test(`Missing/invalid write capability ${String(capability)} fails closed`,async()=>{
+    const e=environment();await open(e,'pending',capability===undefined?null:capability);
+    if(capability===undefined){e.replies.push({items:[application('pending')]});await e.component.refresh()}
+    assert.equal(control(e,'applicationCancel').disabled,true);control(e,'applicationCancel').onclick();await e.flush();assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+  });
+}
+
+test('Initial application creation is blocked until a successful permission-bearing read',async()=>{
+  const e=environment();e.component.render();control(e,'applicationListing').onclick();form(e).onsubmit({preventDefault(){}});await e.flush();assert.equal(e.calls.length,0);assert.equal(e.dialog.open,false);
+});
+
+test('Mode refresh updates an open draft without erasing its fields and normal restores mutations',async()=>{
+  const e=environment(),row=await open(e,'draft');control(e,'application_body').value='Unsaved note';
+  e.replies.push({items:[row],can_write:false});await control(e,'applicationRefresh').onclick();await e.flush();
+  assert.equal(e.dialog.open,true);assert.equal(control(e,'application_body').value,'Unsaved note');assert.equal(control(e,'applicationSubmit').disabled,true);assert.match(e.listText(),/FIRST/);
+  e.replies.push({items:[row],can_write:true});e.focus();await e.flush();assert.equal(control(e,'applicationSubmit').disabled,false);assert.equal(e.dialog.open,true);assert.equal(control(e,'application_body').value,'Unsaved note');
+});
+
+test('A read-only transition invalidates a prepared retry confirmation',async()=>{
+  const e=environment(),row=await open(e,'error');e.retry.onclick();assert.equal(e.retry.textContent,'applications.retry_confirm');
+  e.replies.push({items:[row],can_write:false});await e.component.refresh();e.retry.onclick();
+  e.replies.push({items:[row],can_write:true});await e.component.refresh();e.retry.onclick();await e.flush();assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);assert.equal(e.retry.textContent,'applications.retry_confirm');
+});
+
+for(const dismissal of [null,'escape','close','backdrop']){
+  test(`Service-denied cancellation revalidates and keeps the list after ${dismissal||'no dismissal'}`,async()=>{
+    const e=environment(),post=deferred(),row=await open(e);e.replies.push(post.promise,{items:[row],can_write:false});control(e,'applicationCancel').onclick();
+    if(dismissal)e.dismiss(dismissal);post.resolve(denied(403,'service_restricted'));await e.flush();
+    assert.equal(e.calls.length,3);assert.equal(e.calls[1].options.method,'POST');assert.equal(e.calls[2].options.method,undefined);
+    assert.match(e.listText(),/FIRST.*status_pending/);assert.equal(e.dialog.open,!dismissal);assert.equal(control(e,'applicationCancel').disabled,true);
+    assert.equal(e.root.children.at(-2).textContent,'applications.service_restricted');
+    control(e,'applicationCancel').onclick();await e.flush();assert.equal(e.calls.length,3);
+  });
+}
+
+for(const status of [400,409,503]){
+  test(`Cancellation HTTP ${status} retains the current application list and shows the error`,async()=>{
+    const e=environment();await open(e);e.replies.push(denied(status));control(e,'applicationCancel').onclick();await e.flush();
+    assert.match(e.listText(),/FIRST.*status_pending/);assert.equal(e.dialog.open,true);assert.ok(message(e));assert.equal(e.calls.length,2);
+  });
+}
+
+for(const failure of [denied(401),denied(403),denied(403,'service_restricted'),denied(503)]){
+  test(`Service-denied cancellation clears private rows when recovery fails ${failure.httpStatus}/${failure.code||''}`,async()=>{
+    const e=environment();await open(e);e.replies.push(denied(403,'service_restricted'),failure);control(e,'applicationCancel').onclick();await e.flush();
+    assert.equal(e.list.children.length,0);assert.equal(e.dialog.open,false);assert.equal(e.dialog.children[1].textContent,'');assert.equal(control(e,'applicationCancel').disabled,true);
+  });
+}
+
+for(const status of [401,403]){
+  test(`A generic authorization ${status} clears private content even after dialog dismissal`,async()=>{
+    const e=environment(),post=deferred();await open(e);e.replies.push(post.promise);control(e,'applicationCancel').onclick();e.dismiss('close');post.resolve(denied(status));await e.flush();assert.equal(e.list.children.length,0);assert.equal(e.calls.length,2);
+  });
+}
+
+for(const failure of [denied(403,'service_restricted'),denied(401),denied(503)]){
+  test(`A delayed denial ${failure.httpStatus}/${failure.code||''} never affects a different account`,async()=>{
+    const e=environment(),post=deferred();await open(e);e.replies.push(post.promise);control(e,'applicationCancel').onclick();e.changeAccount(account('second'),{clear:false});
+    e.replies.push(page(application('accepted','CURRENT')));await e.component.refresh();const calls=e.calls.length;post.resolve(failure);await e.flush();assert.equal(e.calls.length,calls);assert.match(e.listText(),/CURRENT/);assert.doesNotMatch(e.listText(),/FIRST/);assert.equal(e.dialog.open,false);
+  });
+}
+
+for(const result of [page(application('pending')),denied(403),denied(503)]){
+  test(`Stale recovery response ${result.httpStatus||'success'} is discarded after sign-out and return`,async()=>{
+    const e=environment(),recovery=deferred();await open(e);e.replies.push(denied(403,'service_restricted'),recovery.promise);control(e,'applicationCancel').onclick();await e.flush();
+    e.changeAccount(null);e.changeAccount(account('first'));e.replies.push(page(application('accepted','CURRENT')));await e.component.refresh();recovery.resolve(result);await e.flush();assert.match(e.listText(),/CURRENT.*status_accepted/);assert.equal(e.dialog.open,false);assert.equal(control(e,'applicationListing').disabled,false);
+  });
+}
+
+test('A stale failing list refresh cannot erase a newer successful list or permissions',async()=>{
+  const e=environment(),old=deferred();e.replies.push(old.promise,page(application('pending','CURRENT')));const first=e.component.refresh();await e.component.refresh();old.resolve(denied(403));await first;assert.match(e.listText(),/CURRENT/);assert.equal(control(e,'applicationListing').disabled,false);
+});
+
+test('Normal-mode cancellation succeeds once after returning from read-only',async()=>{
+  const e=environment(),row=await open(e,'pending',false);e.replies.push({items:[row],can_write:true});await e.component.refresh();
+  e.replies.push({...row,status:'cancelled'},page({...row,status:'cancelled'}));control(e,'applicationCancel').onclick();control(e,'applicationCancel').onclick();await e.flush();
+  assert.match(e.listText(),/status_cancelled/);assert.equal(control(e,'applicationCancel').hidden,true);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,1);
+});
+
+test('Successful cancellation after dismissal still refreshes the list without reopening details',async()=>{
+  const e=environment(),post=deferred(),row=await open(e);e.replies.push(post.promise,page({...row,status:'cancelled'}));control(e,'applicationCancel').onclick();e.dismiss('close');post.resolve({...row,status:'cancelled'});await e.flush();assert.match(e.listText(),/status_cancelled/);assert.equal(e.dialog.open,false);
+});
+
+for(const kind of ['Listing','Acquire']){
+  test(`An already-open new ${kind} form cannot submit after a read-only transition`,async()=>{
+    const e=environment();e.replies.push(page());await e.component.refresh();control(e,'application'+kind).onclick();
+    e.replies.push({items:[],can_write:false});await e.component.refresh();form(e).onsubmit({preventDefault(){}});await e.flush();
+    assert.equal(e.calls.length,2);assert.equal(control(e,'applicationCreate').disabled,true);assert.equal(e.dialog.open,true);
+  });
+}
+
+for(const transition of ['read-only','sign-out']){
+  test(`Photo submission stops between uploads after ${transition}`,async()=>{
+    const e=environment(),upload=deferred(),row=await open(e,'draft');
+    for(const role of ['closeup','overview'])control(e,'application_'+role).files=[{size:10,type:'image/png'}];
+    e.replies.push(upload.promise);control(e,'applicationSubmit').onclick();assert.equal(e.calls.length,2);
+    if(transition==='sign-out')e.changeAccount(null);
+    else{e.replies.push({items:[row],can_write:false});await e.component.refresh()}
+    const calls=e.calls.length;upload.resolve(row);await e.flush();assert.equal(e.calls.length,calls);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,1);
+  });
+}
+
+test('Delayed private photo data is discarded and never displayed in a different account',async()=>{
+  const e=environment(),photo=deferred();await open(e);const photos=e.dialog.querySelectorAll('fieldset')[1];e.replies.push(photo.promise);photos.children[2].onclick();e.changeAccount(account('second'),{clear:false});photo.resolve({});await e.flush();assert.equal(photos.children[3].hidden,true);assert.equal(photos.children[3].src,undefined);assert.equal(e.list.children.length,0);assert.equal(e.dialog.children[1].textContent,'');
 });

@@ -85,7 +85,7 @@ def review_setup(tmp_path):
         @contextmanager
         def transaction(self, actor, write=False):
             with repo.connect() as con:
-                yield RetryConnection(con), actor
+                yield RetryConnection(con), actor, {'mode': 'normal'}
 
     worker = Worker(None, store)
     intake = Intake(None, None, store)
