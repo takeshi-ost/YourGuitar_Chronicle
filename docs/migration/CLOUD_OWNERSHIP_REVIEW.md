@@ -4,6 +4,22 @@
 
 ## 認証境界
 
+### 中断・次回の再開地点（2026-10-06）
+
+利用者の依頼で作業を中断。直近のListing/Acquire申請受付・写真提出・本人表示・取消のクラウド実装は配置済みだが、下記「利用者確認」の6項目はまだ実施されていない。審議キュー・結果反映・Owner承認も未接続のまま。
+
+次回はWeb版Codex Cloudの環境作成・審査専用認証・接続診断から再開する。Cloud接続確認後に、未実施の直近実装のブラウザ確認を再開する。環境作成の案内地点は「設定 → Codex Cloud → Environments → Create environment」。Web版への接続済み・実装受入済みと推定しない。
+
+中断時の配置はPR #49（mainへマージ済み）、Cloud Run revision `ygc-staging-accounts-00028-l9b`。Web版へ移す方針と本中断メモは、チャット移行に伴う文書PRへ含める。[次回の引き継ぎ記録](../history/HANDOFF_2026-10-06.md)から再開する。中断中は追加の実装・配置・審議・サービスモード変更を行わない。
+
+### 審議実行環境の変更方針（2026-10-06）
+
+利用者の指定により、今後の審議担当はローカルPCのCodexではなくWeb版のCodex Cloudへ移す。以下に記載するローカルstdio設定は既存の接続診断用であり、最終的な運用方式ではない。現時点ではCloud環境の作成・認証・接続試験は未完了で、審議キューも未接続。
+
+[Codex Cloud環境の公式手順](https://learn.chatgpt.com/docs/environments/cloud-environments)に従い、専用環境を作成し、リポジトリ・依存関係・通信先を設定する。ローカルの絶対パス、config.toml、gcloudログインに依存させない。専用SAの短期認証をCloud環境から取得する方式を別途設計し、既存のGoogle OIDC検証を維持する。ローカルの資格情報やSA秘密鍵をリポジトリへコピーしない。
+
+環境公開後、新規Cloudタスクから接続診断を確認し、その後に画像取得・独立観察・結果提出を接続する。Cloudタスクでの実行と、申請を契機とする常時自動実行は別の受入項目とする。自動起動方式と利用可能な機能を確認するまで、PC不要の常時自動審議が完成したとは扱わない。採否・Owner承認・Review OFF時の保留は引き続きYGC側が管理する。
+
 申請者はIdentity PlatformとAccounts正本で識別する。審議担当は専用SA `ygc-staging-review@your-guitar-chronicle-staging.iam.gserviceaccount.com`（不変ID `116488081755920377234`）のGoogle署名付き短期OIDCトークンで識別する。Cloud Runの正規URLをaudienceとして固定し、署名・有効期限・issuer・audience・subject・email・email_verifiedを確認する。通常のYGCログイントークンやAdminのメールだけでは審議担当になれない。
 
 運営Googleアカウントに、当該SA上の `roles/iam.serviceAccountOpenIdTokenCreator` だけを付与する。SAにDB、Storage、YGC Admin、プロジェクト上の追加権限や秘密鍵は付与しない。IAM Credentials APIでIDトークンを発行し、最大50分メモリに保持する。固定キーやSecret値をクライアント設定へ記載しない。資格情報・内部例外はstdio/MCP出力に含めない。署名検証用の取得は10秒、接続は30秒でタイムアウトする。
