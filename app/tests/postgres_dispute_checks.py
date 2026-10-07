@@ -618,7 +618,7 @@ def authority_modes_and_projection_checks(w):
         w.unchanged(PermissionError, lambda: w.service.decide(w.actor(name), int(case['id']), data))
     # Chronicle has no canonical role. Revoking the Accounts role is immediate,
     # even if the old admin tab retains a valid version and projection receipt.
-    w.canonical('admin', role='user')
+    w.canonical('admin', role='member')
     try:
         w.unchanged(PermissionError, lambda: w.service.decide(w.actor('admin'), int(case['id']), data))
         w.unchanged(PermissionError, lambda: w.service.detail(w.actor('admin'), int(case['id']), admin=True))
