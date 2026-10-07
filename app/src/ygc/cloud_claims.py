@@ -1,30 +1,35 @@
-"""Authenticated author's Specification/Incident CRUD using the shared Claim rules.
+"""Authenticated author's bounded Claim CRUD using the shared Claim rules.
 
-Only these two types are exposed here. Listing/Identity Correction/Ownership
-and media consent have separate workflows. Reads return an author's complete
+Listing/Identity Correction/Ownership and public photo consent have separate
+workflows. Reads return an author's complete
 content privately; they do not expand the public catalog projection.
 """
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import re
+import threading
 
 from ygc.claim_dates import validate_claim_date, viewer_timezone
 from ygc.claim_revision import ClaimConflict
 from ygc.cloud_guitars import GuitarMissing, MAX_ID
 from ygc.cloud_owner import specification_items, content_revision as claim_revision
+from ygc.cloud_claim_media import MAX_IMAGES, MAX_TOTAL_UPLOAD, media_rows, media_projection, image_reference
+from ygc.cloud_avatar import normalize_image, ImageUploadInvalid
+from ygc.cloud_content_media import encode_reference
 from ygc.cloud_public_catalog import CLAIM_TYPES, GUITAR_FIELDS, STATES, identifier
 from ygc.db.postgres import connect
 from ygc.db.postgres_ownership import BoundRepository, PostgresOwnership
 from ygc.db.postgres_queries import ObservationConnection, SharedCursor, qmark_parameters
 from ygc.platform_boundaries import ActorContext
 
-TYPES = ('specification', 'incident')
+TYPES = ('specification', 'incident', 'media')
+MEDIA_UPLOADS = threading.BoundedSemaphore(2)
 
 
 class ClaimConnection(ObservationConnection):
     """The bounded shared creation methods need generated IDs and item batches."""
     def execute(self, query, parameters=None):
-        if re.match(r'\s*INSERT\s+INTO\s+(claims|notifications)\s*\(', query, re.I):
+        if re.match(r'\s*INSERT\s+INTO\s+(claims|notifications|media_assets)\s*\(', query, re.I):
             cursor = self.connection.execute(qmark_parameters(query) + ' RETURNING id', parameters or ())
             result = SharedCursor(cursor)
             result.lastrowid = cursor.fetchone()['id']
@@ -42,7 +47,7 @@ def expected_revision(data):
     return data['revision']
 
 
-def payload(data, *, editing=False):
+def payload(data, *, editing=False, media_upload=False):
     if not isinstance(data, dict):
         raise ValueError('Invalid Claim.')
     common = {'claim_type', 'body', 'occurred_at'}
@@ -52,6 +57,8 @@ def payload(data, *, editing=False):
         allowed |= {'specification_kind', 'items'}
     elif kind == 'incident':
         allowed.add('incident_kind')
+    elif kind == 'media' and (editing or media_upload):
+        pass
     else:
         raise ValueError('Unsupported Claim type.')
     if set(data) != allowed:
@@ -90,7 +97,7 @@ def payload(data, *, editing=False):
             seen.add(field)
             normalized.append(dict(field_name=field, value_text=item['value_text'].strip()))
         result['items'] = normalized
-    elif result['incident_kind'] not in ('damage', 'lost', 'theft') or not result['body']:
+    elif kind == 'incident' and (result['incident_kind'] not in ('damage', 'lost', 'theft') or not result['body']):
         raise ValueError('Invalid Incident kind or detail.')
     return result
 
@@ -101,12 +108,13 @@ def own_projection(connection, row):
             'body', 'occurred_at', 'status', 'verification_status', 'created_at', 'updated_at')},
         'specification_kind': (row['specification_kind'] or 'specification') if row['claim_type'] == 'specification' else None,
         'incident_kind': row['value_text'] if row['claim_type'] == 'incident' else None,
-        'spec_items': specification_items(connection, row), 'revision': claim_revision(connection, row)}
+        'spec_items': specification_items(connection, row), 'revision': claim_revision(connection, row),
+        **media_projection(connection, row)}
 
 
 class CloudClaims:
-    def __init__(self, settings, operations):
-        self.settings, self.operations = settings, operations
+    def __init__(self, settings, operations, storage=None):
+        self.settings, self.operations, self.storage = settings, operations, storage
 
     @contextmanager
     def transaction(self, actor, individual, *, write=False):
@@ -144,7 +152,7 @@ class CloudClaims:
               WHERE c.individual_id=i.id AND c.status='active' AND u.ban_status='normal'
                 AND c.claim_type IN ({marks}) AND c.verification_status IN ({states}))
               OR EXISTS (SELECT 1 FROM claims c WHERE c.individual_id=i.id
-                AND c.author_user_id=? AND c.claim_type IN ('specification','incident')))''',
+                AND c.author_user_id=? AND c.claim_type IN ('specification','incident','media')))''',
             (individual, *CLAIM_TYPES, *STATES, user)).fetchone()
         if not row:
             raise GuitarMissing()
@@ -156,7 +164,7 @@ class CloudClaims:
         with self.transaction(actor, individual) as (repo, user, can_write):
             guitar = self._individual(repo, individual, user)
             rows = repo.connection.execute('''SELECT * FROM claims WHERE individual_id=? AND author_user_id=?
-                AND claim_type IN ('specification','incident') AND (?=0 OR id<?)
+                AND claim_type IN ('specification','incident','media') AND (?=0 OR id<?)
                 ORDER BY id DESC LIMIT ?''', (individual, user, after, after, limit + 1)).fetchall()
             return {'individual': guitar, 'can_write': can_write,
                 'items': [own_projection(repo.connection, row) for row in rows[:limit]],
@@ -176,6 +184,81 @@ class CloudClaims:
             repo.create_claim_notification(claim)
             return {'claim': own_projection(repo.connection, repo.connection.execute(
                 'SELECT * FROM claims WHERE id=?', (claim,)).fetchone())}
+
+    def create_media(self, actor, individual, data, images):
+        # Bound retained normalized groups while the shared DB fence is busy.
+        # This is per process, not a persistent quota or distributed rate limit.
+        if not MEDIA_UPLOADS.acquire(blocking=False):
+            raise ClaimConflict('Media uploads are busy; retry later.')
+        try:
+            return self._create_media(actor, individual, data, images)
+        finally:
+            MEDIA_UPLOADS.release()
+
+    def _create_media(self, actor, individual, data, images):
+        data = payload(data, media_upload=True)
+        if data['claim_type'] != 'media' or self.storage is None:
+            raise ValueError('Private Media storage is required.')
+        normalized, total = [], 0
+        # Normalize each bounded upload before holding the write locks. Input
+        # may be a lazy iterable over spooled files; retain only normalized JPEGs.
+        for raw, mime in images:
+            if len(normalized) >= MAX_IMAGES:
+                raise ValueError('A Media Claim can contain up to 10 images.')
+            if isinstance(raw, bytes):
+                total += len(raw)
+            if total > MAX_TOTAL_UPLOAD:
+                raise ImageUploadInvalid('image_size_limit')
+            normalized.append(normalize_image(raw, mime, max_side=2048))
+        if not normalized:
+            raise ValueError('At least one image is required.')
+        candidates, committing = [], False
+        try:
+            with self.transaction(actor, individual, write=True) as (repo, user, _):
+                for image in normalized:
+                    candidates.append(self.storage.put('content', image, content_type='image/jpeg'))
+                claim, _ = repo.create_media_claim_group(user, individual,
+                    media_items=[dict(storage_path=encode_reference(ref), mime_type='image/jpeg')
+                                 for ref in candidates],
+                    occurred_at=data['occurred_at'], caption=data['body'])
+                repo.create_claim_notification(claim)
+                result = {'claim': own_projection(repo.connection, repo.connection.execute(
+                    'SELECT * FROM claims WHERE id=?', (claim,)).fetchone())}
+                # Retain objects if a DB commit's outcome is uncertain. Never
+                # delete prior photos, inactive evidence or backup references.
+                committing = True
+            return result
+        except Exception:
+            if not committing:
+                for candidate in candidates:
+                    try:
+                        self.storage.delete(candidate)
+                    except Exception:
+                        pass
+            raise
+
+    def image(self, actor, individual, claim, media, expected):
+        identifier(claim)
+        identifier(media)
+        expected_revision({'revision': expected})
+        with self.transaction(actor, individual) as (repo, user, _):
+            row = repo.connection.execute('SELECT * FROM claims WHERE id=?', (claim,)).fetchone()
+            if not row or row['individual_id'] != individual or row['claim_type'] != 'media':
+                raise GuitarMissing()
+            if row['author_user_id'] != user:
+                author = repo.connection.execute("SELECT 1 FROM users WHERE id=? AND ban_status='normal'",
+                                                (row['author_user_id'],)).fetchone()
+                if not author or claim not in repo.owner_verifiable_claim_ids(individual, user):
+                    raise GuitarMissing()
+            attachments = media_rows(repo.connection, row)
+            selected = next((item for item in attachments if item['id'] == media), None)
+            if selected is None:
+                raise GuitarMissing()
+            if claim_revision(repo.connection, row) != expected:
+                raise ClaimConflict('Claim changed; reload before viewing its images.')
+            # Authorization, the exact attachment and its immutable generation
+            # stay fenced while reading bytes. No public or signed URL is used.
+            return self.storage.get(image_reference(selected))
 
     @staticmethod
     def _current(repo, individual, claim, user, expected):
@@ -198,7 +281,7 @@ class CloudClaims:
                     specification_kind=data['specification_kind'], items=data['items'],
                     occurred_at=data['occurred_at'], body=data['body'])
             else:
-                if data['incident_kind'] != row['value_text']:
+                if row['claim_type'] == 'incident' and data['incident_kind'] != row['value_text']:
                     raise ValueError('Incident kind cannot change.')
                 updated = repo.update_claim(claim, user, occurred_at=data['occurred_at'], body=data['body'])
             if not updated:

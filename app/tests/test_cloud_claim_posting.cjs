@@ -7,9 +7,11 @@ const page=(rows=[],extra={})=>({individual:guitar(),items:rows,next_after:null,
 const denied=(httpStatus=403,code='service_restricted')=>({httpStatus,code});
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}};
 function environment({initial=account(),search='',fullPage=false}={}){
- const ids=new Map(),listeners={};
+ const ids=new Map(),listeners={},createdUrls=[],revokedUrls=[],photoCalls=[],photoReplies=[];
+ class MediaURL extends URL{static createObjectURL(blob){const url='blob:fixture-'+(createdUrls.length+1);createdUrls.push(url);return url}static revokeObjectURL(url){revokedUrls.push(url)}}
  class Element{
-  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this._text='';this.classList={add(){},remove(){}};this.isConnected=true;this.tabIndex=0}
+  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this._text='';this.classList={add(){},remove(){}};this.isConnected=true;this.tabIndex=0;this.naturalWidth=640;this.naturalHeight=480}
+  async decode(){}
   set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
   set textContent(value){this._text=String(value);this.children=[]}get textContent(){return this._text+this.children.map(n=>n.textContent).join('')}
   set innerHTML(value){throw Error('Claims must be text-only')}
@@ -36,17 +38,19 @@ function environment({initial=account(),search='',fullPage=false}={}){
   async refreshVerification(){authCalls.push({name:'refreshVerification'});return this.account=account()},
   async authorizedFetch(url,options={},verified){
    if(url.startsWith('/api/public/guitars/'))return catalogResponse(url,options,{authorized:true,verified});
+   if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private jpeg'],{type:'image/jpeg'}));if(value instanceof Error)throw value;return value?.httpStatus?{ok:false,status:value.httpStatus}:{ok:true,blob:async()=>value}}
    calls.push({url,options,verified,account:args.state()?.user?.app_user_id});
-   assert.match(url,/^\/api\/auth\/guitars\/[1-9][0-9]*\/claims(?:[/?]|$)/);
+   assert.match(url,/^\/api\/auth\/guitars\/[1-9][0-9]*\/(?:claims(?:[/?]|$)|media-claims$)/);
    if(options.method&&options.method!=='GET')assert.ok(replies.length,'Write requires an explicit fixture');
    const id=url.split('/')[4];return response(replies.length?replies.shift():page(defaultRows,{individual:guitar(id)}));
   },
  };
- const context=vm.createContext({document,URL,URLSearchParams,Blob,Intl,Date,console,location:{search,origin:'https://ygc.example'},CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:(key,params={})=>key+(Object.keys(params).length?JSON.stringify(params):'')}});
+ const context=vm.createContext({AbortController,document,URL:MediaURL,URLSearchParams,Blob,File,FormData,Intl,Date,console,location:{search,origin:'https://ygc.example'},CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:(key,params={})=>key+(Object.keys(params).length?JSON.stringify(params):'')}});
  context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
  function catalogResponse(url,options,extra={}){publicCalls.push({url,options,...extra});return response(publicReplies.length?publicReplies.shift():guitar(url.split('/').at(-1)))}context.fetch=catalogResponse;
  vm.runInContext(fs.readFileSync(path.join(staticPath,'overlays.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-applications.js'),'utf8').split('export function createApplications')[0].replaceAll('export function','function'),context);
+ vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-media.js'),'utf8').replaceAll('export function','function'),context);
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-claims.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createClaims;context.createClaims=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){},setCatalogIntent(){}});
@@ -55,7 +59,7 @@ function environment({initial=account(),search='',fullPage=false}={}){
  if(fullPage){ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context)}
  else{component=context.createClaims({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}
  const control=id=>ids.get(id),dialog=control('claimDialog'),form=control('claimForm');
- return {component,context,client,control,dialog,form,calls,replies,publicCalls,publicReplies,authCalls,authReplies,ready,
+ return {component,context,client,createdUrls,revokedUrls,photoCalls,photoReplies,control,dialog,form,calls,replies,publicCalls,publicReplies,authCalls,authReplies,ready,
   get list(){return control('claimsList')},get status(){return control('catalogClaimStatus').textContent},
   start(){control('catalogClaimStart').onclick()},submit(){form.onsubmit({preventDefault(){}})},open(index=0){return this.list.children[index].children[1].onclick()},dismiss(){control('claimClose').onclick()},
   changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},
@@ -208,4 +212,62 @@ for(const failure of [Error('response lost'),denied(503,'temporarily_unavailable
 
 test('Preflight transport failure does not mark a create as ambiguously committed because no write was attempted',async()=>{
  const e=environment();await e.component.setCatalogIntent('12');e.start();populated(e);e.replies.push(Error('preflight failed'));e.submit();await e.flush();assert.equal(writes(e).length,0);assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimCheckSubmission').hidden,true);
+});
+
+const mediaClaim=(extra={})=>claim({claim_type:'media',specification_kind:null,incident_kind:null,spec_items:[],media_items:[{id:'31',mime_type:'image/jpeg'}],...extra});
+const imageFile=(name='private.png',type='image/png')=>new File(['fixture private pixels'],name,{type});
+async function selectMedia(e,files=[imageFile()]){e.control('claimKind').value='media';e.control('claimKind').onchange();e.control('claimMediaInput').files=files;e.control('claimMediaInput').onchange();await e.flush()}
+
+test('Media creation uses exactly multipart metadata and original images after a fresh access check',async()=>{
+ const e=environment(),files=[imageFile('private.png'),imageFile('private.webp','image/webp')];await e.component.setCatalogIntent('12');e.start();await selectMedia(e,files);
+ assert.equal(e.control('claimBody').required,false);assert.equal(e.control('claimField_0').required,false);assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,2);
+ field(e,'claimBody','  Caption <img onerror=x>  ');field(e,'claimDate','');e.rows([mediaClaim()]);e.replies.push(page(),{claim:mediaClaim()});e.submit();e.submit();await e.flush();
+ assert.equal(writes(e).length,1);const sent=writes(e)[0];assert.equal(sent.url,'/api/auth/guitars/12/media-claims');assert.equal(sent.options.method,'POST');assert.equal(sent.verified,true);assert.equal(sent.options.headers['Content-Type'],undefined);
+ const data=sent.options.body;assert.ok(data instanceof FormData);assert.deepEqual([...data.keys()],['metadata','images','images']);assert.deepEqual(JSON.parse(data.get('metadata')),{claim_type:'media',body:'Caption <img onerror=x>',occurred_at:null});
+ assert.deepEqual(data.getAll('images').map(f=>[f.name,f.type]),files.map(f=>[f.name,f.type]));assert.equal(await data.getAll('images')[0].text(),await files[0].text());
+ assert.equal(e.control('claimMediaInput').hidden,true);assert.equal(e.control('claimKind').disabled,true);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(e.publicCalls.length,0);
+ assert.deepEqual(e.photoCalls.map(c=>c.url),['/api/auth/guitars/12/claims/23/media/31?revision='+'a'.repeat(64)]);assert.equal(e.photoCalls[0].verified,true);assert.equal(e.photoCalls[0].options.cache,'no-store');
+ e.dismiss();assert.deepEqual(e.revokedUrls.sort(),e.createdUrls.sort());assert.equal(e.control('claimMediaPhotos').children.length,0);
+});
+
+test('Media edits change only caption/date while preserving Verification and immutable attachments',async()=>{
+ const e=environment(),row=mediaClaim({verification_status:'positive',occurred_at:'2026-01-01T11:22:33Z'});e.rows([row]);await e.component.setCatalogIntent('12');e.open();await e.flush();
+ assert.equal(e.control('claimKind').disabled,true);assert.equal(e.control('claimMediaInput').hidden,true);field(e,'claimBody','edited');e.control('claimKind').value='theft';e.replies.push(page([row]),{claim:row});e.submit();await e.flush();
+ const sent=writes(e)[0];assert.equal(sent.options.method,'PATCH');assert.deepEqual(JSON.parse(sent.options.body),{claim_type:'media',body:'edited',occurred_at:'2026-01-01T11:22:33Z',revision:row.revision});assert.match(e.control('claimSavedState').textContent,/chronicle.positive/);
+});
+
+test('Own inactive Media photos stay viewable with edits and deactivation disabled',async()=>{
+ const e=environment();e.rows([mediaClaim({status:'inactive'})]);await e.component.setCatalogIntent('12');e.open();await e.flush();assert.equal(e.control('claimSave').disabled,true);assert.equal(e.control('claimDeactivate').hidden,true);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(writes(e).length,0);
+});
+
+for(const files of [[],Array.from({length:11},()=>imageFile()),[imageFile('animation.gif','image/gif')],[{type:'image/png',size:8*1024*1024+1}],Array.from({length:4},()=>({type:'image/png',size:8*1024*1024}))])test('Invalid Media count/type/per-image/combined size cannot write',async()=>{
+ const e=environment();await e.component.setCatalogIntent('12');e.start();await selectMedia(e,files);assert.equal(e.control('claimSave').disabled,true);assert.match(e.control('claimMediaMessage').textContent,/media_invalid/);e.submit();await e.flush();assert.equal(writes(e).length,0);
+});
+
+test('A Media upload with an unknown result keeps original files and needs a fresh list plus explicit retry',async()=>{
+ const e=environment(),file=imageFile();await e.component.setCatalogIntent('12');e.start();await selectMedia(e,[file]);field(e,'claimBody','UNCONFIRMED MEDIA');e.replies.push(page(),Error('upload response lost'));e.submit();await e.flush();
+ assert.equal(writes(e).length,1);assert.equal(e.control('claimSave').disabled,true);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(e.control('claimMediaInput').files[0],file);
+ e.submit();e.control('claimRetryCreate').onclick();await e.flush();assert.equal(writes(e).length,1);e.rows([mediaClaim({body:'UNCONFIRMED MEDIA'})]);await e.control('claimCheckSubmission').onclick();assert.match(e.control('claimUncertainResults').textContent,/UNCONFIRMED MEDIA/);assert.equal(e.control('claimSave').disabled,true);assert.equal(writes(e).length,1);
+ e.control('claimRetryCreate').onclick();assert.equal(writes(e).length,1);e.replies.push(page([mediaClaim()]),{claim:mediaClaim()});e.submit();await e.flush();assert.equal(writes(e).length,2);assert.equal(writes(e)[1].options.body.getAll('images')[0],file);
+});
+
+for(const interruption of ['close','intent','signout','account','unverified'])test(`Late private Media bytes after ${interruption} cannot create or retain blob URLs`,async()=>{
+ const e=environment(),held=deferred();e.rows([mediaClaim()]);await e.component.setCatalogIntent('12');e.photoReplies.push(held.promise);e.open();await e.flush();
+ if(interruption==='close')e.dismiss();else if(interruption==='intent')await e.component.setCatalogIntent('13');else e.changeAccount(interruption==='signout'?null:account(interruption==='account'?'second':'first',interruption!=='unverified'));
+ held.resolve(new Blob(['private'],{type:'image/jpeg'}));await e.flush();assert.equal(e.dialog.open,false);assert.equal(e.createdUrls.length,0);assert.equal(e.control('claimMediaPhotos').children.length,0);
+});
+
+for(const status of [401,403,404])test(`Private Media denial ${status} revokes loaded photos, closes the editor, and refreshes access`,async()=>{
+ const e=environment(),row=mediaClaim({media_items:[{id:'31',mime_type:'image/jpeg'},{id:'32',mime_type:'image/jpeg'}]});e.rows([row]);await e.component.setCatalogIntent('12');e.photoReplies.push(new Blob(['private'],{type:'image/jpeg'}),denied(status));e.open();await e.flush();
+ assert.equal(e.dialog.open,false);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.equal(e.createdUrls.length,1);assert.deepEqual(e.revokedUrls,e.createdUrls);assert.equal(e.calls.filter(c=>c.url.endsWith('/claims')).length,2);assert.equal(writes(e).length,0);
+});
+
+test('Stale Media revision clears photos and preserves caption edits until explicit rebase',async()=>{
+ const e=environment(),row=mediaClaim(),changed=mediaClaim({revision:'b'.repeat(64),body:'REMOTE CAPTION'});e.rows([row]);await e.component.setCatalogIntent('12');e.photoReplies.push(denied(409));e.replies.push(page([changed]));e.open();field(e,'claimBody','MY CAPTION');await e.flush();assert.equal(e.dialog.open,true);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.equal(e.control('claimSave').disabled,true);assert.match(e.control('claimLatest').textContent,/REMOTE CAPTION/);
+ e.control('claimKeepEdits').onclick();await e.flush();assert.equal(e.control('claimBody').value,'MY CAPTION');assert.ok(e.photoCalls.at(-1).url.endsWith('b'.repeat(64)));assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(writes(e).length,0);
+});
+
+test('Read-only Media is readable and a legacy unavailable photo does not disable authorized caption editing',async()=>{
+ const e=environment();e.replies.push(page([mediaClaim()],{can_write:false}));await e.component.setCatalogIntent('12');e.open();await e.flush();assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(e.control('claimSave').disabled,true);e.dismiss();
+ e.replies.push(page([mediaClaim()]));await e.component.refresh();e.photoReplies.push(denied(400));e.open();await e.flush();assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimMediaReload').hidden,false);assert.match(e.control('claimMediaMessage').textContent,/media_failed/);
 });

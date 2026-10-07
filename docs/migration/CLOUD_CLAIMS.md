@@ -1,15 +1,15 @@
 # Cloud Claim 投稿・編集
 
-2026-10-07。公開 Product Detail から選択した個体について、認証済みの投稿者が Specification / Repair と Incident を管理する移植単位。実環境への配置・Service Mode 変更はこの実装とは別に承認する。
+2026-10-07。公開 Product Detail から選択した個体について、認証済みの投稿者が Specification / Repair と Incident を管理する移植単位。後続の非公開Media投稿は[Cloud Media Claim](CLOUD_MEDIA_CLAIMS.md)に追加。実環境への配置・Service Mode 変更はこの実装とは別に承認する。
 
 ## 操作と境界
 
 - 公開 Product Detail の Add Claim から `/account?claim={id}` へ進み、サインイン・登録・メール確認を跨いでも対象を保持する。ページを開く、認証を完了する、対象を選ぶだけでは Claim を作らない。
 - メール確認済みの有効アカウントだけが投稿する。操作主体は Bearer の検証結果と Accounts 正本から決定し、入力のユーザーID・ロール・Verification は受け付けない。
-- 自分が投稿した Specification / Repair / Incident の内容、作成日・更新日、Verification、有効／無効状態を個体単位で確認する。ほかの投稿者の本文や非公開情報はこの一覧へ混ぜない。Inactive も自身の管理一覧では残す。
+- 自分が投稿した Specification / Repair / Incident / Media の内容、作成日・更新日、Verification、有効／無効状態を個体単位で確認する。ほかの投稿者の本文や非公開情報はこの一覧へ混ぜない。Inactive も自身の管理一覧では残す。
 - Specification / Repair は最大50項目、項目名120文字・値500文字、本文2000文字。既存の任意項目と複数項目を欠落させず読み戻す。Incident は Damage / Lost / Theft と必須の本文2000文字。未来日付は既存のタイムゾーン規則で拒否する。
 - Incident の編集は日付・本文のみ。種別は既存ローカル編集と同じく変更できない。Specification / Repair は専用編集経路で種別・項目・日付・本文を扱う。
-- Listing、Identity Correction、Ownership、Event、Media はこの汎用編集APIへ入れない。Listing の訂正は既存の専用 Identity Correction 経路が必要。Transfer / Release とその承認は別の移植単位。Inherit の新規作成は既に廃止されている。
+- Listing、Identity Correction、Ownership、Event はこの汎用編集APIへ入れない。Mediaの新規投稿は専用multipart入口、日付・キャプション編集は同じ本人編集APIを使う。Listing の訂正は既存の専用 Identity Correction 経路が必要。Transfer / Release とその承認は別の移植単位。Inherit の新規作成は既に廃止されている。
 - Deactivate は通常のソフト削除。復活、ハード削除、管理者による他人の編集は提供しない。
 
 ## 既存ルールと競合
@@ -42,6 +42,6 @@ Accounts 正本、投影の一致、個体に関係する参加者、Operations 
 
 PR54の公開投影を変更しない。承認済みの固定 Specification 項目だけが従来の公開対象。Incident本文・任意仕様ラベル・自由記述・投稿者・所在地・Evidence・画像・revisionは公開しない。写真の公開同意や非公開Evidenceの公開再利用は導入しない。
 
-後続単位は Event / Media（非公開保存・配信／公開同意の境界を確定してから）、Transfer / Release と受諾・係争の統合、Listing訂正の専用導線。所有権の移転・再取得・自己判定禁止・旧Ownerの権限喪失は別々に簡略化せず、既存の遷移例をまとめて移植する。
+非公開Mediaの保存・配信は[後続単位](CLOUD_MEDIA_CLAIMS.md)に実装。公開写真の同意は未決定。残る後続単位は Event、Transfer / Release と受諾・係争の統合、Listing訂正の専用導線。所有権の移転・再取得・自己判定禁止・旧Ownerの権限喪失は別々に簡略化せず、既存の遷移例をまとめて移植する。
 
 使い捨てSQLiteのサービス／HTTP検証、Node UI検証、使い捨てPostgreSQL／Chromiumスイートを用意した。クラウド仮想環境で拒否されているPostgreSQLサーバー・Chromium実行を迂回しない。実PG・ブラウザはMacまたは通常CIの同一checkpointで確認する。実データ・実認証・写真審議・Owner承認・Service Mode・Review設定・IAM・bucketは触らない。

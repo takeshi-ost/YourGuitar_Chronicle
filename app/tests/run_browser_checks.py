@@ -52,6 +52,8 @@ def main():
                 cloud_public_catalog()
                 from browser_cloud_claim_posting import main as cloud_claim_posting
                 cloud_claim_posting()
+                from browser_cloud_media_claims import main as cloud_media_claims
+                cloud_media_claims()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

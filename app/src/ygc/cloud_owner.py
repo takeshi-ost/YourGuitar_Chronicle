@@ -8,6 +8,7 @@ from ygc.cloud_guitars import positive_id
 from ygc.db.postgres import connect
 from ygc.db.postgres_ownership import PostgresOwnership
 from ygc.platform_boundaries import ActorContext
+from ygc.cloud_claim_media import media_rows, media_projection
 
 
 def specification_items(connection, row):
@@ -34,6 +35,8 @@ def content_revision(connection, row):
         'value_text', 'body', 'occurred_at', 'author_user_id')}
     content['revision'] = revision(row)
     content['spec_items'] = specification_items(connection, row)
+    if row['claim_type'] == 'media':
+        content['media_items'] = media_rows(connection, row)
     return hashlib.sha256(json.dumps(content, ensure_ascii=True, sort_keys=True,
                                     separators=(',', ':')).encode()).hexdigest()
 
@@ -66,8 +69,11 @@ class CloudOwner:
                 decline_reason_required=disputes.eligible(repo.connection, disputes.candidate(repo.connection, row['id'])),
                 verification_status=row['verification_status'], created_at=row['created_at'],
                 updated_at=row['updated_at'], revision=content_revision(repo.connection, row))
+                | media_projection(repo.connection, row)
                 for claim in sorted(ids,reverse=True)
-                if (row := repo.connection.execute('SELECT c.*,u.display_name AS author_name FROM claims c JOIN users u ON u.id=c.author_user_id WHERE c.id=?', (claim,)).fetchone())]}
+                if (row := repo.connection.execute('''SELECT c.*,u.display_name AS author_name
+                    FROM claims c JOIN users u ON u.id=c.author_user_id WHERE c.id=?
+                    AND (c.claim_type<>'media' OR u.ban_status='normal')''', (claim,)).fetchone())]}
 
     def respond(self, actor, individual, claim, data):
         positive_id(str(claim))
@@ -80,7 +86,16 @@ class CloudOwner:
             reason = reason.strip()
         with self.transaction(actor, individual, write=True) as (repo, user):
             row = repo.connection.execute('SELECT * FROM claims WHERE id=? FOR UPDATE', (claim,)).fetchone()
-            if not row or row['individual_id'] != individual or content_revision(repo.connection, row) != data['revision']:
+            if not row or row['individual_id'] != individual:
+                raise ClaimConflict('Claim changed; reload before responding.')
+            if row['claim_type'] == 'media':
+                if (claim not in repo.owner_verifiable_claim_ids(individual, user)
+                        or not repo.connection.execute("SELECT 1 FROM users WHERE id=? AND ban_status='normal'",
+                                                       (row['author_user_id'],)).fetchone()):
+                    # A handoff/BAN revokes the photo review even if the Claim
+                    # itself did not change. Signal the UI to discard old blobs.
+                    raise ClaimConflict('Media Claim is no longer available for review.')
+            if content_revision(repo.connection, row) != data['revision']:
                 raise ClaimConflict('Claim changed; reload before responding.')
             if not repo.set_claim_response_in_connection(repo.connection, claim, user, data['stance'], reason):
                 raise ClaimConflict('Claim is no longer active.')

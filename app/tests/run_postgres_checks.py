@@ -233,3 +233,6 @@ if __name__ == '__main__':
 
         from postgres_claim_checks import run as claim_checks
         claim_checks(port)
+
+        from postgres_media_claim_checks import run as media_claim_checks
+        media_claim_checks(port)

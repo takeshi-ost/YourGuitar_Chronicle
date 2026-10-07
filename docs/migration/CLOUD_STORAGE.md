@@ -54,3 +54,7 @@ Crawl/復旧と排他し、Accounts正本と投影の整合を保存時に再確
 画像一覧は管理用途で全Verification状態を含み、25件単位のページ移動を使用する。Positiveだけを公開ギャラリーに反映する一般画面の仕様とは別の管理経路。画像を閉じた際・個体切替・SignOut時にBlob URLと表示を破棄する。
 
 検証：Python819件・JavaScript71件・共通ブラウザ・隔離PostgreSQLが成功。画像サイズとEXIF正規化、権限/本文制限、個体IDの組合せ、固定参照、監査失敗時のDB巻戻しと新規画像だけの補償、正本投影待ちの拒否、全モードのAdmin操作、25件超ページ移動、画像欠損の復旧拒否、画像付き初期化/復元を確認した。実クラウド受入は[管理用画像](CLOUD_BROWSER_CONSOLE.md#product-detailの管理用画像2026-10-05)として別記する。
+
+## 一般投稿者の非公開Media（2026-10-07 checkpoint）
+
+本人による新規写真のMedia Claim投稿、日付・キャプション編集、無効化、本人／現在Ownerの認可付き配信を追加。既存contentスコープと固定generation参照を再利用し、schema・IAM・公開ACLは変更しない。公開写真や所有審議写真の再利用は導入しない。実配置は別承認。入力上限・認可・補償・検証は[Cloud Media Claim](CLOUD_MEDIA_CLAIMS.md)を参照。
