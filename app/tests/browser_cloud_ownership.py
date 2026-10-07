@@ -25,7 +25,7 @@ ATTACK = '<img src=x onerror=globalThis.fixtureXss=true>'
 
 
 def main():
-    names = ('cloud-account-page.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
+    names = ('cloud-account-page.js', 'cloud-account-identity.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
         'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js',
         'cloud-account-media.js', 'cloud-account-ownership.js', 'cloud-account.css',
         'cloud-public-catalog.js', 'cloud-public-catalog.css', 'cloud-auth-loader.js',
@@ -135,6 +135,8 @@ def main():
                 route.fulfill(json={'items': [], 'can_write': store['can_write'], 'individual': guitar, 'next_after': None})
             elif store['restricted']:
                 route.fulfill(status=403, json={'detail': {'code': 'service_restricted'}})
+            elif path == '/api/auth/identity-corrections':
+                route.fulfill(json={'items': [], 'next_after': None, 'can_write': store['can_write']})
             elif path == '/api/auth/ownership-transfers':
                 route.fulfill(json={'viewer_user_id': users[actor]['id'], 'items': [row for row in own_items(actor) if row['ownership_kind'] == 'transfer'], 'next_after': None, 'can_write': store['can_write']})
             elif path == ROOT + '/ownership':

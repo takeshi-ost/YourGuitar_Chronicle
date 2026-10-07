@@ -5562,9 +5562,6 @@ class Repository:
         normalized_maker = normalize_manufacturer(
             maker
         )
-        normalized_model = normalize_model(
-            model_value
-        )
         normalized_serial = normalize_serial(
             serial
         )
@@ -5580,6 +5577,17 @@ class Repository:
         now = utcnow()
 
         with self.connect() as con:
+            # A direct SQLite caller needs a write reservation before reading
+            # identity/duplicates. Bound cloud callers already own their fenced
+            # PostgreSQL transaction (shared with Listing, Crawl and moderation).
+            if isinstance(con, sqlite3.Connection) and not con.in_transaction:
+                con.execute("BEGIN IMMEDIATE")
+            user = con.execute(
+                "SELECT id FROM users WHERE id=? AND account_type<>'source' AND ban_status='normal'",
+                (user_id,),
+            ).fetchone()
+            if not user:
+                raise ValueError("An active user is required")
             listing_claim = con.execute(
                 """
                 SELECT *
@@ -5626,10 +5634,6 @@ class Repository:
                 FROM individuals
                 WHERE id <> ?
                   AND normalized_manufacturer = ?
-                  AND COALESCE(
-                        normalized_model,
-                        ''
-                      ) = COALESCE(?, '')
                   AND normalized_serial = ?
                 ORDER BY id
                 LIMIT 1
@@ -5637,15 +5641,13 @@ class Repository:
                 (
                     individual["id"],
                     normalized_maker,
-                    normalized_model,
                     normalized_serial,
                 ),
             ).fetchone()
             if duplicate:
-                raise ValueError(
-                    "Identity Correction would duplicate "
-                    f"Individual #{duplicate['id']}. "
-                    "Consider merging the Individuals instead."
+                from ygc.claim_revision import ClaimConflict
+                raise ClaimConflict(
+                    "Identity Correction would duplicate an existing Individual."
                 )
 
             values = {
@@ -5743,6 +5745,20 @@ class Repository:
                     ) in changes
                 ],
             )
+
+            # A later-dated correction may override only some proposed fields.
+            # Check the final evaluated Maker+Serial too: the resulting hybrid
+            # must not collide merely because the input pair itself was unique.
+            resulting = evaluate_observation(con, int(individual["id"])).values
+            duplicate = con.execute(
+                """SELECT 1 FROM individuals WHERE id<>?
+                   AND normalized_manufacturer=? AND normalized_serial=? LIMIT 1""",
+                (individual["id"], normalize_manufacturer(resulting["manufacturer"]),
+                 normalize_serial(resulting["serial_number"])),
+            ).fetchone()
+            if duplicate:
+                from ygc.claim_revision import ClaimConflict
+                raise ClaimConflict("Identity Correction would duplicate an existing Individual.")
 
             self._rebuild_individual_snapshot_in_connection(
                 con,

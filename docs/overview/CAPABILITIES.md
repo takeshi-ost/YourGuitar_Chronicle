@@ -30,3 +30,7 @@
 ## Cloud Event（2026-10-07 checkpoint）
 
 Eventの投稿・作者編集・無効化、任意の非公開写真と完全なOwner確認を[追加](../migration/CLOUD_EVENT_CLAIMS.md)。既存のVerification・写真の非公開範囲・Observationを維持する。Identity Correctionは後続の別単位。公開・配置は別承認。
+
+## Cloud Identity Correction（2026-10-07 checkpoint）
+
+本人の有効なListing一覧と専用の訂正入口、旧値／新値確認、revision競合防止、本人用訂正履歴を[追加](../migration/CLOUD_IDENTITY_CORRECTION.md)。Current OwnerでなくてもListing作者が訂正でき、元Listingを残したPositiveな訂正として扱う。訂正に限る正規化Maker / Serial重複検査を用い、全体のunique制約や自動Mergeは変更しない。実PG／Chromiumの最終受入と公開・配置は別ゲート。

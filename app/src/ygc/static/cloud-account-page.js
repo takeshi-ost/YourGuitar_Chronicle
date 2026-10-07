@@ -5,6 +5,7 @@ import {createAvatar} from './cloud-account-avatar.js';
 import {createApplications,readCatalogIntent} from './cloud-account-applications.js';
 import {createClaims,readClaimIntent} from './cloud-account-claims.js';
 import {createOwnership,readOwnershipIntent} from './cloud-account-ownership.js';
+import {createIdentityCorrections} from './cloud-account-identity.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
@@ -15,6 +16,7 @@ const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:av
 const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
 let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search),ownershipIntent=readOwnershipIntent(location.search);
 applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);
 globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
@@ -42,7 +44,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();
+  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();
 }
 async function documents(){
   policies=null;
@@ -51,7 +53,7 @@ async function documents(){
 }
 function update(result,refreshCatalog=false){
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear()}
   state=result;
   if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
@@ -123,6 +125,7 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await identityCorrections.refresh();
   if(state?.user&&state.identity?.email_verified===true)await ownership.refresh();
   if(state?.user&&state.identity?.email_verified===true)await applications.refresh().catch(applications.failed);
   if(state?.user&&state.identity?.email_verified===true)await guitars.refresh();

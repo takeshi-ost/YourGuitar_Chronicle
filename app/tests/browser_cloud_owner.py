@@ -130,6 +130,10 @@ def main():
     app.include_router(self_profile_router(verifier, store))
     app.include_router(owner_router(verifier, store))
 
+    @app.get('/api/auth/identity-corrections')
+    def identity_corrections():
+        return {'items': [], 'next_after': None, 'can_write': True}
+
     @app.get('/api/auth/ownership-transfers')
     def ownership_transfers(request: Request):
         identity = Verifier().verify(bearer_token=request.headers['authorization'].removeprefix('Bearer '))

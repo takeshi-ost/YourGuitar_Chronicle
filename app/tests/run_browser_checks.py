@@ -56,6 +56,8 @@ def main():
                 cloud_media_claims()
                 from browser_cloud_event_claims import main as cloud_event_claims
                 cloud_event_claims()
+                from browser_cloud_identity_correction import main as cloud_identity_correction
+                cloud_identity_correction()
                 from browser_cloud_ownership import main as cloud_ownership
                 cloud_ownership()
             finally:

@@ -45,3 +45,15 @@ TransferはCurrent Ownerが相手を指定して申請し、相手がAccept / De
 メンテナンス時の重要情報領域はサービス案内のみを表示する。Read-onlyでは更新できず、Offlineでは一般利用を停止する。
 
 詳細な条件は[Claim](../features/CLAIMS.md)、[申請](../features/OWNERSHIP_REQUESTS.md)、[Transfer](../features/TRANSFER_CLAIM.md)、[係争](../features/OWNERSHIP_DISPUTES.md)を参照。
+
+## クラウド版：自分のListingを訂正する
+
+この項目はクラウド版の追加checkpointに対応する。公開環境への配置は別途行う。
+
+1. メール確認済みの自分のアカウントで、本人のListing一覧を開く。所有者が変わっていても、自分が作成した有効なListingが対象になる。
+2. 対象のEditを選び、元Listingを残して別のIdentity Correctionを作る説明を確認する。
+3. 現在のMaker / Model / Year / Serialを訂正し、必要なら理由を入力する。
+4. 変更前と変更後を確認し、明示的に提出する。訂正は通常Ownerの承認待ちにはならない。
+5. 本人用の履歴で結果を確認する。競合や結果不明の表示が出た場合は、最新の履歴を読み直し、反映済みでないか確認してから操作する。
+
+同じメーカー・シリアルの別個体がある場合は訂正できない。ここで個体を自動統合しない。写真、所有者、所在地はこの操作では変更しない。
