@@ -44,6 +44,7 @@
 ## Gate 3: 承認後の適用順序
 
 1. 現在のmode、Review／Crawl／backupスケジュール、稼働image digest、schema version／checksum、公開headを再確認する。以後の操作は承認されたmaintenance windowで行い、既存のOffline／停止設定を意図せず変更しない。
+   DB内の自動実行flagとCloud SchedulerのENABLED／PAUSEDは別々に確認する。DB flagがOFFでもSchedulerから旧imageのJobが起動し得るため、それだけで停止済みとは判断しない。移行前に、別途承認された起動triggerの一時停止と実行中Jobの完了確認を行い、全consumerの対応image・schema整合を確認するまで自動再開しない。停止前の状態と承認された再開条件を記録する。
 2. Gate 2と保護用backupを確認する。新しいbackup／maintenance codeは旧v1／v2を読む互換性を持つ。
 3. 現行が検証済みChronicle 002であることを確認し、schema ownerで既存の明示migration入口から未適用の003を適用する。この入口は全pending revisionを順に適用するため、現行が001の場合は停止し、002＋003のchainを別途確認・承認する。Web runtimeにDDL権限を付けない。実行はtransaction内で、SQLとmanifest hashの完全一致を検証する。
 4. migration完了後、Chronicle v3／43業務table／累積checksumを確認する。原本BYTEAが不変、新reference tableが想定どおりであることを確認する。

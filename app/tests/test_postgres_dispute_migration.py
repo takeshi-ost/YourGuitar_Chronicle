@@ -6,9 +6,40 @@ from unittest.mock import Mock
 
 import pytest
 
+from dispute_storage_fixtures import legacy_archive_fixture
 from ygc.db import postgres
+from ygc.db.repository import Repository
 from ygc import cloud_disputes
 from ygc.cloud_dispute_storage import ORIGINAL_COLUMNS
+
+
+def test_legacy_archive_fixture_supports_projection_rebuild_without_changing_ownership(tmp_path):
+    repo = Repository(tmp_path / 'archive-fixture.db')
+    repo.init_db()
+    content = b'%PDF-1.4 synthetic archive proof\n%%EOF'
+    with repo.connect() as con:
+        con.execute('ALTER TABLE users ADD COLUMN app_user_id TEXT')
+        user, guitar, claim, case, evidence = legacy_archive_fixture(con, '2026-06-01T12:00:00+00:00', content)
+        # Exercise the same Observation rebuild required by Account projection
+        # during a Chronicle restore, without a PostgreSQL server.
+        for name in ('Synthetic archive member', 'Renamed archive member'):
+            con.execute('UPDATE users SET display_name=? WHERE id=?', (name, user['id']))
+            repo._rebuild_individual_snapshot_in_connection(con, guitar)
+            assert dict(con.execute('''SELECT manufacturer,model,serial_number,current_owner_user_id
+                FROM individuals WHERE id=?''', (guitar,)).fetchone()) == {
+                    'manufacturer': 'Synthetic', 'model': 'Archive',
+                    'serial_number': 'LEGACY-PROOF', 'current_owner_user_id': None}
+            assert not con.execute('SELECT 1 FROM user_guitars WHERE individual_id=?', (guitar,)).fetchone()
+            assert dict(con.execute('''SELECT dispute_id,claim_id,author_id,content
+                FROM ownership_dispute_evidence WHERE id=?''', (evidence,)).fetchone()) == {
+                    'dispute_id': case, 'claim_id': claim, 'author_id': user['id'], 'content': content}
+        assert con.execute('SELECT claim_type FROM claims WHERE id=?', (claim,)).fetchone()['claim_type'] == 'event'
+        assert not con.execute('SELECT 1 FROM media_assets').fetchone()
+        # This must remain a fixture repair, never permission to restore an
+        # Individual whose active Claims cannot establish its identity.
+        con.execute("UPDATE claims SET status='inactive' WHERE individual_id=? AND claim_type='listing'", (guitar,))
+        with pytest.raises(ValueError, match='Active Claims do not define a complete Individual identity'):
+            repo._rebuild_individual_snapshot_in_connection(con, guitar)
 
 
 def test_additive_originals_version_keeps_historical_schemas():

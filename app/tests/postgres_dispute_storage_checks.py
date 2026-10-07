@@ -12,12 +12,14 @@ import uuid
 import psycopg
 from psycopg import errors, sql
 
+from dispute_storage_fixtures import legacy_archive_fixture
 from postgres_dispute_checks import PrivateStorage, PDF, STAMP, insert_original
 from postgres_ownership_workflow_checks import rejected
 from ygc.cloud_db_restore import load, replace_content
 from ygc.cloud_db_snapshot import snapshot, verify_snapshot
 from ygc.db import postgres
 from ygc.db.postgres import PostgresSettings, bootstrap, connect, migrate, schema_versions, status
+from ygc.db.postgres_queries import ObservationConnection
 
 
 class RecordedConnection:
@@ -92,24 +94,8 @@ def run(port):
             created = True
             assert bootstrap(owner, 'chronicle', role)
             with connect(runtime, 'chronicle') as con:
-                user = con.execute('''INSERT INTO users(display_name,app_user_id,created_at,updated_at)
-                    VALUES('Synthetic archive member','synthetic-archive-member',%s,%s)
-                    RETURNING *''', (STAMP, STAMP)).fetchone()
+                user, guitar, claim, case, evidence = legacy_archive_fixture(ObservationConnection(con), STAMP, PDF)
                 current = [dict(user) | {'projection_version': 1}]
-                guitar = con.execute('''INSERT INTO individuals(manufacturer,model,serial_number,
-                    normalized_manufacturer,created_at,updated_at) VALUES('Synthetic','Archive',
-                    'LEGACY-PROOF','synthetic',%s,%s) RETURNING id''', (STAMP, STAMP)).fetchone()['id']
-                claim = con.execute('''INSERT INTO claims(individual_id,author_user_id,claim_type,
-                    created_at,updated_at) VALUES(%s,%s,'event',%s,%s) RETURNING id''',
-                    (guitar, user['id'], STAMP, STAMP)).fetchone()['id']
-                case = con.execute('''INSERT INTO ownership_disputes(individual_id,owner_id,
-                    locked_owner_id,status,created_at,updated_at) VALUES(%s,%s,%s,'resolved',%s,%s)
-                    RETURNING id''', (guitar, user['id'], user['id'], STAMP, STAMP)).fetchone()['id']
-                evidence = con.execute('''INSERT INTO ownership_dispute_evidence(dispute_id,
-                    claim_id,author_id,explanation,summary,filename,content_type,content,created_at)
-                    VALUES(%s,%s,%s,'Synthetic legacy proof','Private summary','document.pdf',
-                    'application/pdf',%s,%s) RETURNING id''',
-                    (case, claim, user['id'], PDF, STAMP)).fetchone()['id']
                 sequences = {row['sequencename'] for row in con.execute(
                     "SELECT sequencename FROM pg_sequences WHERE schemaname='public'")}
             archives = []
@@ -166,6 +152,11 @@ def run(port):
                 assert header == original_header and rows == original_rows
                 with connect(runtime, 'chronicle') as con:
                     assert not con.execute('SELECT 1 FROM ownership_dispute_originals').fetchone()
+                    assert con.execute('''SELECT manufacturer,model,serial_number,current_owner_user_id
+                        FROM individuals WHERE id=%s''', (guitar,)).fetchone() == {
+                            'manufacturer': 'Synthetic', 'model': 'Archive',
+                            'serial_number': 'LEGACY-PROOF', 'current_owner_user_id': None}
+                    assert not con.execute('SELECT 1 FROM user_guitars WHERE individual_id=%s', (guitar,)).fetchone()
                     assert con.execute('SELECT content FROM ownership_dispute_evidence WHERE id=%s', (evidence,)).fetchone()['content'] == PDF
                     assert not con.execute('SELECT 1 FROM ownership_dispute_evidence WHERE id=%s', (new_evidence,)).fetchone()
                     assert con.execute('SELECT version,checksum FROM ygc_schema_version WHERE id=1').fetchone() == {

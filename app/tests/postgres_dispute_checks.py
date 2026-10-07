@@ -182,6 +182,13 @@ class Workflow:
                     VALUES(%s,%s,%s,%s)''', (listing, field, value, STAMP))
             repo = BoundRepository(ObservationConnection(raw))
             repo._rebuild_individual_snapshot_in_connection(repo.connection, individual)
+            if owner:
+                # A completed initial Listing also materializes its owner's
+                # profile link. Rebuild only reclassifies existing links; it
+                # must not invent them for pending Acquire applicants.
+                raw.execute('''INSERT INTO user_guitars(user_id,individual_id,ownership_status,
+                    acquired_at,created_at,updated_at) VALUES(%s,%s,'current_owner',%s,%s,%s)''',
+                    (self.user(owner), individual, date, STAMP, STAMP))
         return individual
 
     def acquire(self, name='b', *, guitar=None, created=STAMP, occurred='2026-04-01',
@@ -306,9 +313,9 @@ class Workflow:
             assert row['serial_number'] == 'DISPUTE-' + str(guitar)
             relations = {row['user_id']: row['ownership_status'] for row in con.execute(
                 'SELECT user_id,ownership_status FROM user_guitars WHERE individual_id=%s', (guitar,))}
-            assert relations[self.user(name)] == 'current_owner'
+            assert relations.get(self.user(name)) == 'current_owner', relations
             for old in former:
-                assert relations[self.user(old)] == 'former_owner'
+                assert relations.get(self.user(old)) == 'former_owner', relations
 
     def mode(self, mode):
         actor = self.actor('admin')
@@ -702,9 +709,10 @@ def locked_owner_ban_projection_checks(w):
     guitar = w.guitar(owner=None)
     basis = w.acquire('a', guitar=guitar, occurred='2026-02-01')
     with connect(w.db_owner, 'chronicle') as raw:
-        raw.execute("UPDATE claims SET verification_status='positive' WHERE id=%s", (basis,))
         repo = BoundRepository(ObservationConnection(raw))
-        repo._rebuild_individual_snapshot_in_connection(repo.connection, guitar)
+        # Approval records the accepted Acquire's profile link before rebuild,
+        # exactly as the business path does; a raw status UPDATE skips that step.
+        repo.admin_moderate_claim_in_connection(repo.connection, basis, 'positive')
     claim = w.acquire(guitar=guitar)
     case = w.open(claim)
     w.current(guitar, 'a')
