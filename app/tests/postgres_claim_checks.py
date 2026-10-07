@@ -85,7 +85,9 @@ def run(port):
             accounts.drain_projection()
             operations.set_mode(records['admin']['app_user_id'], mode='normal', message='',
                                 version=operations.details(records['admin']['app_user_id'])['version'])
-            fixture = seed(app, records)
+            # Sequence initialization is privileged disposable fixture setup;
+            # service checks below still use the restricted runtime role.
+            fixture = seed(owner, records)
             # Any accidental write through the legacy Observation table fails.
             with connect(owner, 'chronicle') as con:
                 con.execute(sql.SQL('REVOKE INSERT,UPDATE,DELETE ON observations FROM {}')
