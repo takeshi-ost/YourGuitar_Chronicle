@@ -30,11 +30,14 @@ export function createGuitars({auth,state,busy,work,openOwnership}){
             const currentId=ownerId,result=await ownerRequest(currentId+'/owner-responses');
             if(!valid()||!eligible()||currentId!==ownerId||!dialog.open)return;
             renderOwnerRows(currentId,result,true);message.textContent=t('applications.service_restricted');
-          }catch{if(valid()){clearPhotos();claims.replaceChildren();canWrite=null;message.textContent=t('self_profile.restricted')}}
+          }catch{if(valid()){clearPhotos();claims.replaceChildren();canWrite=null;reload.hidden=false;message.textContent=t('self_profile.restricted')}}
         }else{
           message.textContent=t(error.status===409?'chronicle.decision_conflict':error.status===403?'self_profile.restricted':'chronicle.decision_unavailable');
-          if([401,403,404].includes(error.status)){clearPhotos();claims.replaceChildren();pending=null;canWrite=null}
-          else if(error.status===409){clearPhotos();canWrite=null;pending=null;reload.hidden=false;for(const button of claims.querySelectorAll('[data-owner-confirm]'))button.hidden=true}
+          // A failed read or uncertain decision must never leave an old
+          // approval live. Keep an explicit refresh path even on transport errors.
+          clearPhotos();canWrite=null;pending=null;reload.hidden=false;
+          for(const button of claims.querySelectorAll('[data-owner-confirm]'))button.hidden=true;
+          if([401,403,404].includes(error.status))claims.replaceChildren();
         }
       }finally{render()}
     });
@@ -70,8 +73,10 @@ export function createGuitars({auth,state,busy,work,openOwnership}){
     for(const row of result.items){
       const existing=previous.get(row.id+':'+row.revision);if(existing){existing._current=valid;for(const button of existing.querySelectorAll('[data-owner-confirm]'))button.hidden=true;claims.append(existing);continue}
       const card=document.createElement('section'),description=document.createElement('p'),select=document.createElement('select'),review=document.createElement('button'),confirm=document.createElement('button'),reasonLabel=document.createElement('label'),reason=document.createElement('textarea'),reasonHelp=document.createElement('p');
-      card._current=valid;const cardValid=()=>card._current();card._claimId=row.id;card._revision=row.revision;card._media=row.claim_type==='media';card._mediaReady=!card._media;
-      description.textContent=['#'+row.id,row.author_name,row.claim_type,row.specification_kind,row.ownership_kind,row.occurred_at,row.created_at?t('claims.created')+': '+row.created_at:null,row.updated_at?t('claims.updated')+': '+row.updated_at:null,...(row.spec_items?.length?row.spec_items.map(item=>item.field_name+': '+item.value_text):[row.field_name,row.value_text]),row.body].filter(Boolean).join(' · ');
+      // Only an explicit empty Event attachment list is text-only. Missing
+      // or malformed lists must go through the photo gate and fail closed.
+      card._current=valid;const cardValid=()=>card._current();card._claimId=row.id;card._revision=row.revision;card._media=row.claim_type==='media'||row.claim_type==='event'&&(!Array.isArray(row.media_items)||row.media_items.length>0);card._mediaReady=!card._media;
+      description.textContent=['#'+row.id,row.author_name,row.claim_type,row.specification_kind,row.ownership_kind,row.claim_type==='event'?t('claims.event_'+(row.event_kind||row.value_text)):null,row.occurred_at,row.created_at?t('claims.created')+': '+row.created_at:null,row.updated_at?t('claims.updated')+': '+row.updated_at:null,...(row.spec_items?.length?row.spec_items.map(item=>item.field_name+': '+item.value_text):row.claim_type==='event'?[]:[row.field_name,row.value_text]),row.body].filter(Boolean).join(' · ');
       select.setAttribute('aria-label',t('owner.decision'));for(const stance of ['positive','negative','unverified']){const option=document.createElement('option');option.value=stance;option.textContent=t('chronicle.'+stance);select.append(option)}select.value=row.verification_status;
       review.type=confirm.type='button';review.textContent=t('owner.review');confirm.textContent=t('chronicle.apply_decision');confirm.hidden=true;
       reason.id='ownerDeclineReason_'+row.id;reason.maxLength=4000;reasonLabel.setAttribute('for',reason.id);reasonLabel.textContent=t('owner.decline_reason');reasonHelp.id=reason.id+'_help';reasonHelp.textContent=t('owner.decline_reason_help');reason.setAttribute('aria-describedby',reasonHelp.id);

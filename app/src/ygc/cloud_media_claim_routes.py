@@ -1,4 +1,4 @@
-"""Verified, private multipart Media creation and Claim-bound photo delivery."""
+"""Verified, private multipart Media/Event creation and Claim-bound photo delivery."""
 import json
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -72,7 +72,7 @@ def media_claim_router(verifier, service):
     headers = {'Cache-Control': 'private, no-store', 'Vary': 'Authorization',
                'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin'}
 
-    async def handle(request, individual, claim=None, media=None):
+    async def handle(request, individual, claim=None, media=None, *, kind='media'):
         try:
             identity = await run_in_threadpool(verifier.verify, bearer_token=bearer_token(request))
         except HTTPException as error:
@@ -91,9 +91,9 @@ def media_claim_router(verifier, service):
             if request.headers.get('content-encoding') or len(request.headers.getlist('authorization')) != 1:
                 raise ValueError()
             individual, who = positive_id(individual), account['app_user_id']
-            if service.storage is None:
-                raise HTTPException(503, 'Image storage unavailable.', headers=headers)
             if request.method == 'GET':
+                if service.storage is None:
+                    raise HTTPException(503, 'Image storage unavailable.', headers=headers)
                 query = request.query_params
                 if set(query) != {'revision'} or len(query.getlist('revision')) != 1:
                     raise ValueError()
@@ -124,26 +124,30 @@ def media_claim_router(verifier, service):
                     yield chunk
 
             parser = MediaParser(request.headers, bounded_stream(), max_files=MAX_IMAGES,
-                                 max_fields=1, max_part_size=16 * 1024)
+                                 max_fields=1, max_part_size=(32 if kind == 'event' else 16) * 1024)
             form = await parser.parse()
-            if (not parser.complete or set(form) != {'metadata', 'images'}
+            fields = {'metadata', 'images'} if 'images' in form or kind == 'media' else {'metadata'}
+            if (not parser.complete or set(form) != fields
                     or len(form.getlist('metadata')) != 1 or not isinstance(form['metadata'], str)):
                 raise ValueError()
             uploads = form.getlist('images')
-            if not 1 <= len(uploads) <= MAX_IMAGES or any(not isinstance(item, UploadFile) for item in uploads):
+            if not (0 if kind == 'event' else 1) <= len(uploads) <= MAX_IMAGES or any(not isinstance(item, UploadFile) for item in uploads):
                 raise ValueError()
             data = payload(json.loads(form['metadata'], object_pairs_hook=unique_object), media_upload=True)
-            if data['claim_type'] != 'media':
+            if data['claim_type'] != kind:
                 raise ValueError()
+            if (uploads or kind == 'media') and service.storage is None:
+                raise HTTPException(503, 'Image storage unavailable.', headers=headers)
             # Read/normalize files serially in the worker. The parser spools
             # larger inputs; it never loads all raw photos into RAM together.
             images = ((item.file.read(MAX_UPLOAD + 1), item.content_type) for item in uploads)
-            result = await run_in_threadpool(service.create_media, who, individual, data, images)
+            create = service.create_event if kind == 'event' else service.create_media
+            result = await run_in_threadpool(create, who, individual, data, images)
             return JSONResponse(result, headers=headers)
         except HTTPException:
             raise
         except GuitarMissing:
-            raise HTTPException(404, 'Media Claim, photo or guitar not found.', headers=headers) from None
+            raise HTTPException(404, 'Claim, photo or guitar not found.', headers=headers) from None
         except ClaimConflict:
             raise HTTPException(409, 'Claim changed or maintenance is running. Reload before retrying.', headers=headers) from None
         except ServiceRestricted:
@@ -155,9 +159,9 @@ def media_claim_router(verifier, service):
         except ImageUploadInvalid as error:
             raise HTTPException(400, {'code': error.code}, headers=headers) from None
         except (ValueError, TypeError, UnicodeError, ZoneInfoNotFoundError, MultiPartException):
-            raise HTTPException(400, 'Invalid Media Claim, image or pending account projection.', headers=headers) from None
+            raise HTTPException(400, 'Invalid photo Claim, image or pending account projection.', headers=headers) from None
         except Exception:
-            raise HTTPException(503, 'Media result unavailable. Check saved Claims before retrying.', headers=headers) from None
+            raise HTTPException(503, 'Claim result unavailable. Check saved Claims before retrying.', headers=headers) from None
         finally:
             try:
                 # Disconnected/cancelled requests must still close disk-backed
@@ -173,6 +177,10 @@ def media_claim_router(verifier, service):
     @router.post('/api/auth/guitars/{individual}/media-claims')
     async def create(request: Request, individual: str):
         return await handle(request, individual)
+
+    @router.post('/api/auth/guitars/{individual}/event-claims')
+    async def event(request: Request, individual: str):
+        return await handle(request, individual, kind='event')
 
     @router.get('/api/auth/guitars/{individual}/claims/{claim}/media/{media}')
     async def image(request: Request, individual: str, claim: str, media: str):

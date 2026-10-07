@@ -1,7 +1,7 @@
 // Private Media never exposes storage references or authenticated API URLs in
 // markup. Each view owns its blob URLs and discards every late response.
-export function validateMediaItems(items){
-  if(!Array.isArray(items)||!items.length||items.length>10||items.some(item=>!item||typeof item.id!=='string'||!/^[1-9][0-9]{0,18}$/.test(item.id)||(item.id.length===19&&item.id>'9223372036854775807')||item.mime_type!=='image/jpeg')||new Set(items.map(item=>item.id)).size!==items.length)throw Error('Invalid private Media');
+export function validateMediaItems(items,{allowEmpty=false}={}){
+  if(!Array.isArray(items)||(!allowEmpty&&!items.length)||items.length>10||items.some(item=>!item||typeof item.id!=='string'||!/^[1-9][0-9]{0,18}$/.test(item.id)||(item.id.length===19&&item.id>'9223372036854775807')||item.mime_type!=='image/jpeg')||new Set(items.map(item=>item.id)).size!==items.length)throw Error('Invalid private Media');
   return Object.freeze(items.map(item=>Object.freeze({id:item.id,mime_type:'image/jpeg'})));
 }
 export function validMediaFiles(files){

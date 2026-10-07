@@ -40,7 +40,7 @@ function environment({initial=account(),search='',fullPage=false}={}){
    if(url.startsWith('/api/public/guitars/'))return catalogResponse(url,options,{authorized:true,verified});
    if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private jpeg'],{type:'image/jpeg'}));if(value instanceof Error)throw value;return value?.httpStatus?{ok:false,status:value.httpStatus}:{ok:true,blob:async()=>value}}
    calls.push({url,options,verified,account:args.state()?.user?.app_user_id});
-   assert.match(url,/^\/api\/auth\/guitars\/[1-9][0-9]*\/(?:claims(?:[/?]|$)|media-claims$)/);
+   assert.match(url,/^\/api\/auth\/guitars\/[1-9][0-9]*\/(?:claims(?:[/?]|$)|(?:media|event)-claims$)/);
    if(options.method&&options.method!=='GET')assert.ok(replies.length,'Write requires an explicit fixture');
    const id=url.split('/')[4];return response(replies.length?replies.shift():page(defaultRows,{individual:guitar(id)}));
   },
@@ -270,4 +270,73 @@ test('Stale Media revision clears photos and preserves caption edits until expli
 test('Read-only Media is readable and a legacy unavailable photo does not disable authorized caption editing',async()=>{
  const e=environment();e.replies.push(page([mediaClaim()],{can_write:false}));await e.component.setCatalogIntent('12');e.open();await e.flush();assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.equal(e.control('claimSave').disabled,true);e.dismiss();
  e.replies.push(page([mediaClaim()]));await e.component.refresh();e.photoReplies.push(denied(400));e.open();await e.flush();assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimMediaReload').hidden,false);assert.match(e.control('claimMediaMessage').textContent,/media_failed/);
+});
+
+const eventClaim=(extra={})=>claim({claim_type:'event',specification_kind:null,incident_kind:null,event_kind:'performance',spec_items:[],media_items:[],...extra});
+const selectEvent=(e,kind='performance')=>{e.control('claimKind').value='event';e.control('claimKind').onchange();field(e,'claimEventKind',kind);e.control('claimEventKind').onchange();field(e,'claimDate','2026-01-01');field(e,'claimBody','  Private event <img src=x>  ')};
+const eventPhotos=async(e,files=[imageFile()])=>{e.control('claimMediaInput').files=files;e.control('claimMediaInput').onchange();await e.flush()};
+
+for(const kind of ['exhibition','performance','recording','auction','other'])test(`Text-only Event ${kind} posts only JSON metadata after an explicit submit and fresh access check`,async()=>{
+ const e=environment();await e.component.setCatalogIntent('12');e.start();selectEvent(e,kind);
+ assert.deepEqual(e.control('claimEventKind').children.map(option=>option.value),['exhibition','performance','recording','auction','other']);assert.equal(e.control('claimEventKind').hidden,false);assert.equal(e.control('claimBody').required,true);assert.equal(e.control('claimDate').required,true);assert.match(e.control('claimDate').max,/^\d{4}-\d{2}-\d{2}$/);assert.equal(e.control('claimMediaInput').required,false);assert.equal(e.control('claimField_0').required,false);assert.equal(e.control('claimSave').disabled,false);assert.equal(writes(e).length,0);
+ const row=eventClaim({event_kind:kind});e.rows([row]);e.replies.push(page(),{claim:row});e.submit();e.submit();await e.flush();
+ assert.equal(writes(e).length,1);const sent=writes(e)[0];assert.equal(sent.url,'/api/auth/guitars/12/claims');assert.equal(sent.options.method,'POST');assert.equal(sent.options.headers['Content-Type'],'application/json');assert.equal(sent.verified,true);assert.deepEqual(JSON.parse(sent.options.body),{claim_type:'event',event_kind:kind,body:'Private event <img src=x>',occurred_at:'2026-01-01'});
+ assert.equal(e.photoCalls.length,0);assert.equal(e.control('claimKind').disabled,true);assert.equal(e.control('claimEventKind').disabled,true);assert.equal(e.control('claimEventKind').value,kind);assert.equal(e.control('claimMediaInput').hidden,true);assert.match(e.control('claimSavedState').textContent,new RegExp('claims.event_'+kind));assert.match(e.control('claimMediaMessage').textContent,/event_no_photos/);assert.equal(e.control('claimSavedState').children.length,0);assert.equal(e.publicCalls.length,0);
+});
+
+test('Event with ten new photos uses the dedicated multipart endpoint and the revision-bound private viewer',async()=>{
+ const e=environment(),files=Array.from({length:10},(_,i)=>imageFile(`private-${i}.png`)),row=eventClaim({event_kind:'recording',media_items:files.map((_,i)=>({id:String(31+i),mime_type:'image/jpeg'}))});await e.component.setCatalogIntent('12');e.start();selectEvent(e,'recording');await eventPhotos(e,files);
+ assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,10);e.rows([row]);e.replies.push(page(),{claim:row});e.submit();await e.flush();const sent=writes(e)[0];assert.equal(writes(e).length,1);assert.equal(sent.url,'/api/auth/guitars/12/event-claims');assert.ok(sent.options.body instanceof FormData);assert.equal(sent.options.headers['Content-Type'],undefined);assert.equal(sent.options.credentials,'omit');assert.equal(sent.options.redirect,'error');assert.equal(sent.verified,true);
+ assert.deepEqual([...sent.options.body.keys()],['metadata',...Array(10).fill('images')]);assert.deepEqual(JSON.parse(sent.options.body.get('metadata')),{claim_type:'event',event_kind:'recording',body:'Private event <img src=x>',occurred_at:'2026-01-01'});assert.deepEqual(sent.options.body.getAll('images'),files);assert.equal(e.photoCalls.length,10);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,10);e.dismiss();assert.deepEqual(e.revokedUrls.sort(),e.createdUrls.sort());
+});
+
+for(const [name,value] of [['claimEventKind','invalid'],['claimEventKind',''],['claimBody','   '],['claimDate','']])test(`Event requires valid ${name} before any request`,async()=>{
+ const e=environment();await e.component.setCatalogIntent('12');e.start();selectEvent(e);field(e,name,value);e.submit();await e.flush();assert.equal(writes(e).length,0);assert.equal(e.calls.length,1);assert.match(e.control('claimMessage').textContent,/claims.invalid/);
+});
+
+for(const files of [Array.from({length:11},()=>imageFile()),[imageFile('animation.gif','image/gif')],[{type:'image/png',size:8*1024*1024+1}],Array.from({length:4},()=>({type:'image/png',size:8*1024*1024}))])test('Invalid optional Event photos cannot silently produce a text-only Claim',async()=>{
+ const e=environment();await e.component.setCatalogIntent('12');e.start();selectEvent(e);await eventPhotos(e,files);assert.equal(e.control('claimSave').disabled,true);e.submit();await e.flush();assert.equal(writes(e).length,0);assert.match(e.control('claimMediaMessage').textContent,/media_invalid/);
+});
+
+test('Removing all new Event photos explicitly clears previews and submits a text-only Event',async()=>{
+ const e=environment();await e.component.setCatalogIntent('12');e.start();selectEvent(e);await eventPhotos(e);assert.equal(e.createdUrls.length,1);await eventPhotos(e,[]);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.equal(e.control('claimSave').disabled,false);assert.deepEqual(e.revokedUrls,e.createdUrls);e.rows([eventClaim()]);e.replies.push(page(),{claim:eventClaim()});e.submit();await e.flush();assert.equal(writes(e)[0].url,'/api/auth/guitars/12/claims');assert.equal(e.photoCalls.length,0);
+});
+
+for(const media_items of [[],[{id:'31',mime_type:'image/jpeg'}]])test('Event edits preserve subtype, attachments, original timestamp and Verification despite changed disabled controls',async()=>{
+ const e=environment(),row=eventClaim({event_kind:'auction',verification_status:'positive',occurred_at:'2026-01-01T12:34:56Z',media_items});e.rows([row]);await e.component.setCatalogIntent('12');e.open();await e.flush();field(e,'claimBody','Edited event');field(e,'claimEventKind','recording');field(e,'claimKind','media');assert.equal(e.control('claimMediaInput').hidden,true);e.replies.push(page([row]),{claim:row});e.submit();await e.flush();
+ assert.equal(writes(e)[0].options.method,'PATCH');assert.deepEqual(JSON.parse(writes(e)[0].options.body),{claim_type:'event',event_kind:'auction',body:'Edited event',occurred_at:'2026-01-01T12:34:56Z',revision:row.revision});assert.match(e.control('claimSavedState').textContent,/chronicle.positive/);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,media_items.length);assert.equal(e.control('claimEventKind').value,'auction');
+});
+
+test('Event date edit and soft deactivation keep the record and attached photos visible without further edits',async()=>{
+ const e=environment(),row=eventClaim({media_items:[{id:'31',mime_type:'image/jpeg'}]});e.rows([row]);await e.component.setCatalogIntent('12');e.open();await e.flush();field(e,'claimDate','2026-01-04');e.replies.push(page([row]),{claim:row});e.submit();await e.flush();assert.equal(JSON.parse(writes(e)[0].options.body).occurred_at,'2026-01-04');e.control('claimDeactivate').onclick();assert.match(e.control('claimMessage').textContent,/event_deactivate_help/);assert.equal(writes(e).length,1);
+ const inactive=eventClaim({...row,status:'inactive',revision:'c'.repeat(64)});e.rows([inactive]);e.replies.push(page([row]),{claim:inactive});e.control('claimDeactivate').onclick();e.control('claimDeactivate').onclick();await e.flush();assert.equal(writes(e).length,2);assert.match(writes(e)[1].url,/\/23\/deactivate$/);assert.deepEqual(JSON.parse(writes(e)[1].options.body),{revision:row.revision});assert.equal(e.control('claimSave').disabled,true);assert.equal(e.control('claimDeactivate').hidden,true);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);assert.match(e.list.textContent,/claims.inactive/);
+});
+
+for(const photos of [false,true])test(`Ambiguous Event creation (${photos?'photos':'text-only'}) retains the draft until a fresh list and explicit retry`,async()=>{
+ const e=environment(),file=imageFile();await e.component.setCatalogIntent('12');e.start();selectEvent(e,'other');if(photos)await eventPhotos(e,[file]);e.replies.push(page(),Error('response lost'));e.submit();await e.flush();assert.equal(writes(e).length,1);assert.equal(e.control('claimSave').disabled,true);assert.equal(e.control('claimEventKind').value,'other');assert.match(e.control('claimBody').value,/Private event/);e.submit();e.control('claimRetryCreate').onclick();await e.flush();assert.equal(writes(e).length,1);
+ const row=eventClaim({event_kind:'other',media_items:photos?[{id:'31',mime_type:'image/jpeg'}]:[]});e.rows([row]);await e.control('claimCheckSubmission').onclick();assert.match(e.control('claimUncertainResults').textContent,/event_other/);assert.equal(e.control('claimSave').disabled,true);e.control('claimRetryCreate').onclick();e.replies.push(page([row]),{claim:row});e.submit();await e.flush();assert.equal(writes(e).length,2);if(photos)assert.equal(writes(e)[1].options.body.getAll('images')[0],file);else assert.equal(writes(e)[1].url,'/api/auth/guitars/12/claims');
+});
+
+for(const interruption of ['close','intent','signout','account','unverified'])test(`Event photo completion after ${interruption} cannot reveal a stale private view`,async()=>{
+ const e=environment(),held=deferred();e.rows([eventClaim({media_items:[{id:'31',mime_type:'image/jpeg'}]})]);await e.component.setCatalogIntent('12');e.photoReplies.push(held.promise);e.open();await e.flush();if(interruption==='close')e.dismiss();else if(interruption==='intent')await e.component.setCatalogIntent('13');else e.changeAccount(interruption==='signout'?null:account('other',interruption!=='unverified'));held.resolve(new Blob(['private event'],{type:'image/jpeg'}));await e.flush();assert.equal(e.dialog.open,false);assert.equal(e.createdUrls.length,0);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.equal(writes(e).length,0);
+});
+
+test('Event Back/Forward and repeated opening discard photos and drafts without any mutation',async()=>{
+ const e=environment({fullPage:true,search:'?claim=12'});await e.ready;await e.flush();e.start();selectEvent(e);await eventPhotos(e);e.start();assert.match(e.control('claimBody').value,/Private event/);e.navigate('');await e.flush();assert.equal(e.dialog.open,false);assert.deepEqual(e.revokedUrls,e.createdUrls);e.navigate('?claim=12');await e.flush();e.start();assert.equal(e.control('claimKind').value,'specification');assert.equal(e.control('claimBody').value,'');assert.equal(e.control('claimEventKind').hidden,true);selectEvent(e);assert.equal(e.control('claimEventKind').disabled,false);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.equal(writes(e).length,0);
+});
+
+for(const photos of [false,true])test(`Event stale revision (${photos?'photos':'text-only'}) preserves input and requires explicit rebase`,async()=>{
+ const e=environment(),row=eventClaim({media_items:photos?[{id:'31',mime_type:'image/jpeg'}]:[]}),latest=eventClaim({...row,body:'LATEST EVENT',revision:'b'.repeat(64)});e.rows([row]);await e.component.setCatalogIntent('12');e.open();await e.flush();field(e,'claimBody','MY EVENT');e.rows([latest]);await e.component.refresh();assert.equal(e.control('claimSave').disabled,true);assert.match(e.control('claimLatest').textContent,/LATEST EVENT/);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.deepEqual(e.revokedUrls,e.createdUrls);e.submit();await e.flush();assert.equal(writes(e).length,0);e.control('claimKeepEdits').onclick();await e.flush();assert.equal(e.control('claimBody').value,'MY EVENT');assert.equal(e.control('claimEventKind').value,'performance');assert.equal(e.control('claimSave').disabled,false);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,photos?1:0);if(photos)assert.ok(e.photoCalls.at(-1).url.endsWith(latest.revision));
+});
+
+for(const bad of [{event_kind:'unknown'},{media_items:undefined},{media_items:null},{media_items:[{id:'31',mime_type:'image/png'}]},{incident_kind:'lost'},{specification_kind:'repair'}])test('Malformed Event author projection cannot enable a private editor or write',async()=>{
+ const e=environment();e.replies.push(page([eventClaim(bad)]));await e.component.setCatalogIntent('12');e.start();assert.equal(e.dialog.open,false);assert.equal(e.control('catalogClaimStart').disabled,true);assert.equal(e.photoCalls.length,0);assert.equal(writes(e).length,0);
+});
+
+for(const status of [401,403,404])test(`Event photo denial ${status} clears the author editor and rechecks access`,async()=>{
+ const e=environment(),row=eventClaim({media_items:[{id:'31',mime_type:'image/jpeg'},{id:'32',mime_type:'image/jpeg'}]});e.rows([row]);await e.component.setCatalogIntent('12');e.photoReplies.push(new Blob(['private'],{type:'image/jpeg'}),denied(status));e.open();await e.flush();assert.equal(e.dialog.open,false);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.deepEqual(e.revokedUrls,e.createdUrls);assert.equal(e.calls.length,2);assert.equal(writes(e).length,0);
+});
+
+test('Read-only Event remains viewable and an offline access refresh purges the private author dialog',async()=>{
+ const e=environment(),row=eventClaim({media_items:[{id:'31',mime_type:'image/jpeg'}]});e.rows([row]);e.replies.push(page([row],{can_write:false}));await e.component.setCatalogIntent('12');e.open();await e.flush();assert.equal(e.control('claimSave').disabled,true);assert.equal(e.control('claimMediaPhotos').querySelectorAll('img').length,1);e.dismiss();e.replies.push(page([row]));await e.component.refresh();e.open();await e.flush();field(e,'claimBody','UNSAVED');e.replies.push(page([row]),denied(503,'service_restricted'),denied(503,'service_restricted'));e.submit();await e.flush();assert.equal(e.dialog.open,false);assert.equal(e.control('claimMediaPhotos').children.length,0);assert.deepEqual(e.revokedUrls.sort(),e.createdUrls.sort());assert.equal(writes(e).length,1);
 });

@@ -1,10 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 function environment(){
-  const ids=new Map(),listeners={},createdUrls=[],revokedUrls=[],photoCalls=[],photoReplies=[];
+  const ids=new Map(),listeners={},createdUrls=[],revokedUrls=[],photoCalls=[],photoReplies=[],decodes=[];
   class MediaURL extends URL{static createObjectURL(){const url='blob:owner-'+(createdUrls.length+1);createdUrls.push(url);return url}static revokeObjectURL(url){revokedUrls.push(url)}}
   class Element{
     constructor(tag='div'){this.tag=tag;this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this.textContent='';this.naturalWidth=640;this.naturalHeight=480}
-    async decode(){}removeAttribute(key){delete this[key]}
+    async decode(){const value=await decodes.shift();if(value instanceof Error)throw value}removeAttribute(key){delete this[key]}
     set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
     append(...nodes){this.children.push(...nodes)}replaceChildren(...nodes){this.children=nodes}
     setAttribute(key,value){this[key]=value}addEventListener(key,fn){this.listeners[key]=fn}focus(){this.focused=true}
@@ -14,13 +14,13 @@ function environment(){
   const document={body:new Element('body'),createElement:tag=>new Element(tag),getElementById(id){if(!ids.has(id)){const e=new Element();e.id=id}return ids.get(id)}};
   let state={user:{app_user_id:'owner'},identity:{email_verified:true}},busy=false;
   const calls=[],replies=[];
-  const client={authorizedFetch:async(url,options={},verified)=>{if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private'],{type:'image/jpeg'}));return value?.status?{ok:false,status:value.status}:{ok:true,blob:async()=>value}}calls.push({url,options,verified});const value=await replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
+  const client={authorizedFetch:async(url,options={},verified)=>{if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private'],{type:'image/jpeg'}));if(value instanceof Error)throw value;return value?.status?{ok:false,status:value.status}:{ok:true,blob:async()=>value}}calls.push({url,options,verified});const value=await replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
   const context=vm.createContext({AbortController,addEventListener:(key,fn)=>(listeners[key]??=[]).push(fn),document,URL:MediaURL,URLSearchParams,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-media.js'),'utf8').replaceAll('export function','function'),context);
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.ui.render()}}};
   const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-guitars.js'),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');
   vm.runInContext(source+';globalThis.ui=createGuitars(args);',Object.assign(context,{args}));
-  return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},setBusy:value=>{busy=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
+  return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,decodes,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},setBusy:value=>{busy=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
 }
 const page=items=>({items,total:String(items.length),next_after:null});
 async function open(e,claim){
@@ -135,4 +135,57 @@ test('A completed older Owner decision refreshes lists while leaving a newer rev
  // Exercise the late-result fence independently of the global busy lock.
  e.setBusy(false);e.replies.push({items:[{...acquire,id:'24',body:'NEW PRIVATE REVIEW',revision:'b'.repeat(64)}],can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const freshCard=dialog.children[2].children[0];
  e.replies.push(page([{id:'12'}]),page([]));waiting.resolve({verification_status:'positive'});await e.flush();assert.equal(e.calls.length,7);assert.equal(dialog.open,true);assert.equal(dialog.children[2].children[0],freshCard);assert.match(freshCard.children[0].textContent,/NEW PRIVATE REVIEW/);freshCard.children[2].onclick();assert.equal(freshCard.children[3].hidden,false);
+});
+
+const eventClaim={...media,claim_type:'event',event_kind:'performance',body:'PRIVATE EVENT <img onerror=x>',occurred_at:'2026-01-01',media_items:[]};
+const posts=e=>e.calls.filter(call=>call.options.method==='POST');
+
+test('Owner can review a text-only Event without loading photos and sees subtype, complete date and body',async()=>{
+ const e=environment(),{card,description,select,review,confirm}=await open(e,eventClaim);assert.match(description.textContent,/claims.event_performance/);assert.match(description.textContent,/2026-01-01/);assert.match(description.textContent,/PRIVATE EVENT <img onerror=x>/);assert.equal(description.children.length,0);assert.equal(card.children.length,7);assert.equal(e.photoCalls.length,0);assert.equal(review.disabled,false);select.value='positive';review.onclick();assert.equal(confirm.hidden,false);assert.equal(posts(e).length,0);e.replies.push({verification_status:'positive'},page([{id:'12'}]),page([]));confirm.onclick();confirm.onclick();await e.flush();assert.equal(posts(e).length,1);assert.deepEqual(JSON.parse(posts(e)[0].options.body),{stance:'positive',revision:eventClaim.revision});assert.equal(e.photoCalls.length,0);
+});
+
+test('Owner Event approval waits for every attachment to decode, then confirms exactly its content revision',async()=>{
+ const e=environment(),waiting=held(),row={...eventClaim,media_items:[{id:'31',mime_type:'image/jpeg'},{id:'32',mime_type:'image/jpeg'}]};e.decodes.push(undefined,waiting.promise);const {card,select,review,confirm}=await open(e,row);assert.equal(e.photoCalls.length,0);card.children[10].onclick();card.children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,2);assert.equal(card.children[9].children.length,1);assert.equal(e.createdUrls.length,2);assert.equal(review.disabled,true);review.onclick();confirm.onclick();assert.equal(confirm.hidden,true);assert.equal(posts(e).length,0);waiting.resolve();await e.flush();assert.equal(card.children[9].children.length,2);assert.equal(review.disabled,false);select.value='positive';review.onclick();e.replies.push({verification_status:'positive'},page([{id:'12'}]),page([]));confirm.onclick();await e.flush();assert.equal(posts(e).length,1);assert.deepEqual(JSON.parse(posts(e)[0].options.body),{stance:'positive',revision:row.revision});assert.deepEqual(e.revokedUrls,e.createdUrls);
+});
+
+for(const media_items of [undefined,null,{},[{id:'31',mime_type:'image/png'}],[{id:'31',mime_type:'image/jpeg'},{id:'31',mime_type:'image/jpeg'}],Array.from({length:11},(_,i)=>({id:String(31+i),mime_type:'image/jpeg'}))])test('Missing or malformed Event attachment metadata never becomes a text-only approval',async()=>{
+ const e=environment(),{dialog,card,review,confirm}=await open(e,{...eventClaim,media_items});assert.equal(review.disabled,true);review.onclick();confirm.onclick();assert.equal(posts(e).length,0);card.children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,0);assert.equal(dialog.children[2].children.length,0);assert.equal(e.ids.get('ownerMediaReload').hidden,false);review.onclick();confirm.onclick();assert.equal(posts(e).length,0);
+});
+
+for(const failure of [400,401,403,404,409,500,'decode','transport'])test(`Event attached-photo failure ${failure} clears partial images and all pending decisions`,async()=>{
+ const e=environment(),row={...eventClaim,media_items:[{id:'31',mime_type:'image/jpeg'},{id:'32',mime_type:'image/jpeg'}]},waiting=held();e.photoReplies.push(new Blob(['first'],{type:'image/jpeg'}),waiting.promise);if(failure==='decode')e.decodes.push(undefined,Error('invalid image'));const {dialog,card,review,confirm}=await open(e,row);card.children[10].onclick();await e.flush();assert.equal(card.children[9].children.length,1);assert.equal(review.disabled,true);review.onclick();assert.equal(confirm.hidden,true);
+ if([401,403,404,409].includes(failure))e.replies.push({items:[{...row,revision:'b'.repeat(64)}],can_write:true});waiting.resolve(failure==='decode'?new Blob(['invalid'],{type:'image/jpeg'}):failure==='transport'?Error('photo unavailable'):{status:failure});await e.flush();assert.deepEqual(e.revokedUrls,e.createdUrls);assert.equal(card.children[9].children.length,0);assert.equal(e.ids.get('ownerMediaReload').hidden,false);assert.equal(posts(e).length,0);review.onclick();confirm.onclick();assert.equal(posts(e).length,0);for(const next of dialog.children[2].children){assert.equal(next.children[2].disabled,true);assert.equal(next.children[3].hidden,true)}
+});
+
+for(const interruption of ['close','signout','account','history','pagehide'])test(`Event Owner photo decode after ${interruption} cannot restore a stale review`,async()=>{
+ const e=environment(),waiting=held();e.decodes.push(waiting.promise);const {dialog,card,review,confirm}=await open(e,{...eventClaim,media_items:media.media_items});card.children[10].onclick();await e.flush();assert.equal(e.createdUrls.length,1);if(interruption==='close')dialog.children[4].onclick();else if(interruption==='history')e.dispatch('popstate');else if(interruption==='pagehide')e.dispatch('pagehide');else{e.setState(interruption==='signout'?null:{user:{app_user_id:'other'},identity:{email_verified:true}});e.ui.render()}waiting.resolve();await e.flush();assert.equal(dialog.open,false);assert.equal(dialog.children[2].children.length,0);assert.deepEqual(e.revokedUrls,e.createdUrls);review.onclick();confirm.onclick();assert.equal(posts(e).length,0);
+});
+
+test('Switching between Event and Media photo reviews cancels old photos and any earlier confirmation',async()=>{
+ const e=environment(),waiting=held(),rows=[{...eventClaim,media_items:media.media_items},{...media,id:'24',media_items:[{id:'32',mime_type:'image/jpeg'}]}];e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:rows,can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const cards=e.ids.get('ownerResponseDialog').children[2].children;cards[0].children[10].onclick();await e.flush();cards[0].children[2].onclick();assert.equal(cards[0].children[3].hidden,false);e.photoReplies.push(waiting.promise);cards[1].children[10].onclick();assert.equal(cards[0].children[3].hidden,true);assert.equal(cards[0].children[9].children.length,0);assert.equal(cards[0].children[2].disabled,true);cards[0].children[3].onclick();assert.equal(posts(e).length,0);cards[0].children[10].onclick();await e.flush();assert.equal(e.photoCalls[1].options.signal.aborted,true);waiting.resolve(new Blob(['OLD MEDIA'],{type:'image/jpeg'}));await e.flush();assert.equal(cards[1].children[9].children.length,0);assert.equal(cards[1].children[2].disabled,true);assert.equal(cards[0].children[9].children.length,1);assert.equal(cards[0].children[2].disabled,false);
+});
+
+for(const photos of [false,true])test(`Read-only Owner Event (${photos?'photos':'text-only'}) never enables a decision`,async()=>{
+ const e=environment(),row={...eventClaim,media_items:photos?media.media_items:[]};e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:[row],can_write:false});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const card=e.ids.get('ownerResponseDialog').children[2].children[0];if(photos){assert.equal(card.children[10].disabled,false);card.children[10].onclick();await e.flush();assert.equal(card.children[9].children.length,1)}for(const index of [1,2,3,5])assert.equal(card.children[index].disabled,true);card.children[2].onclick();card.children[3].onclick();assert.equal(posts(e).length,0);
+});
+
+test('A transient first Owner refresh exposes an explicit retry that restores current Event content',async()=>{
+ const e=environment();e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push(Error('temporary read unavailable'));await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const dialog=e.ids.get('ownerResponseDialog');assert.equal(dialog.open,true);assert.equal(dialog.children[2].children.length,0);assert.equal(e.ids.get('ownerMediaReload').hidden,false);assert.equal(e.ids.get('ownerMediaReload').disabled,false);e.replies.push({items:[eventClaim],can_write:true});await e.ids.get('ownerMediaReload').onclick();const card=dialog.children[2].children[0];assert.match(card.children[0].textContent,/PRIVATE EVENT/);assert.equal(card.children[2].disabled,false);assert.equal(posts(e).length,0);assert.equal(e.photoCalls.length,0);
+});
+
+test('Unknown Event Owner decision outcome revokes photos and requires a new list and photo review',async()=>{
+ const e=environment(),row={...eventClaim,media_items:media.media_items},{dialog,card,review,confirm}=await open(e,row);card.children[10].onclick();await e.flush();review.onclick();e.replies.push(Error('decision response lost'));confirm.onclick();await e.flush();assert.equal(posts(e).length,1);assert.equal(review.disabled,true);assert.equal(confirm.hidden,true);assert.deepEqual(e.revokedUrls,e.createdUrls);assert.equal(e.ids.get('ownerMediaReload').hidden,false);review.onclick();confirm.onclick();assert.equal(posts(e).length,1);
+ const changed={...row,verification_status:'positive',revision:'b'.repeat(64)};e.replies.push({items:[changed],can_write:true});await e.ids.get('ownerMediaReload').onclick();const fresh=dialog.children[2].children[0];assert.equal(fresh.children[2].disabled,true);assert.equal(fresh.children[3].hidden,true);assert.equal(e.photoCalls.length,1);fresh.children[10].onclick();await e.flush();assert.equal(fresh.children[2].disabled,false);assert.equal(fresh.children[1].value,'positive');assert.ok(e.photoCalls.at(-1).url.endsWith(changed.revision));assert.equal(posts(e).length,1);
+});
+
+for(const fresh of [Error('transient read unavailable'),Object.assign(Error('offline'),{status:503,code:'service_restricted'})])test('Owner Event service restriction followed by a failed refresh revokes content and still permits explicit retry',async()=>{
+ const e=environment(),row={...eventClaim,media_items:media.media_items},{dialog,card,review,confirm}=await open(e,row);card.children[10].onclick();await e.flush();review.onclick();e.replies.push(Object.assign(Error('read only'),{status:403,code:'service_restricted'}),fresh);confirm.onclick();await e.flush();assert.equal(dialog.children[2].children.length,0);assert.deepEqual(e.revokedUrls,e.createdUrls);assert.equal(e.ids.get('ownerMediaReload').hidden,false);review.onclick();confirm.onclick();assert.equal(posts(e).length,1);e.replies.push({items:[row],can_write:false});await e.ids.get('ownerMediaReload').onclick();const readable=dialog.children[2].children[0];assert.equal(readable.children[2].disabled,true);readable.children[10].onclick();await e.flush();assert.equal(readable.children[9].children.length,1);assert.equal(readable.children[2].disabled,true);assert.equal(posts(e).length,1);
+});
+
+test('Current Owner loss during Event photo read removes every private card and cannot retain approval',async()=>{
+ const e=environment(),waiting=held(),{dialog,card,review,confirm}=await open(e,{...eventClaim,media_items:media.media_items});e.photoReplies.push(waiting.promise);card.children[10].onclick();e.replies.push(Object.assign(Error('not current owner'),{status:404}));waiting.resolve({status:404});await e.flush();assert.equal(dialog.children[2].children.length,0);assert.equal(e.createdUrls.length,0);assert.equal(e.ids.get('ownerMediaReload').hidden,false);review.onclick();confirm.onclick();assert.equal(posts(e).length,0);
+});
+
+test('Existing Event value_text subtype is localized once in the Owner review description',async()=>{
+ const e=environment(),{description}=await open(e,{...eventClaim,event_kind:undefined,value_text:'recording'});assert.match(description.textContent,/claims.event_recording/);assert.equal(description.textContent.split('recording').length,2);
 });

@@ -34,7 +34,7 @@ ISSUER = 'local-claim-posting-fixture'
 PRIVATE = 'CLAIM-PRIVATE-DO-NOT-PUBLISH'
 BIG_ID = 9007199254741009
 OWN_FIELDS = {'id', 'individual_id', 'claim_type', 'specification_kind',
-              'incident_kind', 'field_name', 'value_text', 'body', 'occurred_at',
+              'incident_kind', 'event_kind', 'field_name', 'value_text', 'body', 'occurred_at',
               'status', 'verification_status', 'created_at', 'updated_at',
               'spec_items', 'revision'}
 PUBLIC_CLAIM_FIELDS = {'id', 'claim_type', 'ownership_kind', 'occurred_at',

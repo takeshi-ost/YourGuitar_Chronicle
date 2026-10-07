@@ -45,3 +45,7 @@ for(const status of [400,401,403,404,409,500])test(`Photo failure ${status} revo
 test('Local preview enforces dimensions and boundaries without any external request',async()=>{
  const e=environment();e.dimensions(4000,2000);await e.viewer.preview([new File(['local'], 'photo.png',{type:'image/png'})]);assert.equal(e.states.at(-1),true);assert.equal(e.calls.length,0);e.dimensions(4000,2001);await e.viewer.preview([new File(['local'], 'photo.png',{type:'image/png'})]);assert.equal(e.states.at(-1),false);assert.equal(e.errors.at(-1).status,400);assert.deepEqual(e.revoked,e.created);
 });
+
+test('Only explicitly text-only Event projections may validate an empty attachment list',()=>{
+ const e=environment(),validate=e.context.validateMediaItems;assert.throws(()=>validate([]));const empty=validate([],{allowEmpty:true});assert.equal(empty.length,0);assert.equal(Object.isFrozen(empty),true);for(const invalid of [undefined,null,{},[{id:'31',mime_type:'image/png'}]])assert.throws(()=>validate(invalid,{allowEmpty:true}));
+});

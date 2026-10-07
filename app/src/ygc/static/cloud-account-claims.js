@@ -1,6 +1,9 @@
 import {catalogIndividualId} from './cloud-account-applications.js';
 import {createPrivateMedia,validateMediaItems,validMediaFiles} from './cloud-account-media.js';
 
+const eventKinds=['exhibition','performance','recording','auction','other'];
+const photoClaim=row=>['media','event'].includes(row?.claim_type);
+
 export function readClaimIntent(search){
   const values=new URLSearchParams(search).getAll('claim');
   return values.length===0?null:values.length===1?(catalogIndividualId(values[0])||''):'';
@@ -23,7 +26,7 @@ export function createClaims({auth,state,busy,work}){
 
   const dialog=node('dialog','','claimDialog'),title=node('h2','','claimTitle'),guitarDetail=node('p','','claimGuitar'),savedState=node('p','','claimSavedState'),form=node('form','','claimForm'),fields=node('fieldset'),message=node('p','','claimMessage');
   dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
-  const kind=node('select','','claimKind'),date=node('input','','claimDate'),body=node('textarea','','claimBody'),items=node('div','','claimItems');
+  const kind=node('select','','claimKind'),eventKind=node('select','','claimEventKind'),date=node('input','','claimDate'),body=node('textarea','','claimBody'),items=node('div','','claimItems');
   date.type='date';body.maxLength=2000;
   const mediaInput=node('input','','claimMediaInput'),mediaHelp=node('p',t('claims.media_help'),'claimMediaHelp'),mediaPhotos=node('div','','claimMediaPhotos'),mediaMessage=node('p','','claimMediaMessage'),mediaReload=button('claims.media_reload','claimMediaReload');
   mediaInput.type='file';mediaInput.multiple=true;mediaInput.accept='image/jpeg,image/png,image/webp';mediaInput.setAttribute('aria-describedby','claimMediaHelp');mediaPhotos.className='claim-media-photos';mediaMessage.setAttribute('role','status');
@@ -32,7 +35,9 @@ export function createClaims({auth,state,busy,work}){
   const uncertainResults=node('p','','claimUncertainResults'),checkSubmission=button('claims.check_submission','claimCheckSubmission'),retryCreate=button('claims.retry_create','claimRetryCreate');
   const latest=node('p','','claimLatest'),rebase=button('claims.keep_edits','claimKeepEdits'),checkLatest=button('claims.check_latest','claimCheckLatest');
   const label=(input,key)=>{const n=node('label',t(key));n.htmlFor=input.id;return n};
-  fields.append(label(kind,'claims.kind'),kind,label(date,'claims.date'),date,items,addItem,label(body,'claims.body'),body,mediaLabel,mediaInput);form.append(fields,save);
+  const eventKindLabel=label(eventKind,'claims.event_kind');
+  for(const value of eventKinds){const option=node('option',t('claims.event_'+value));option.value=value;eventKind.append(option)}
+  fields.append(label(kind,'claims.kind'),kind,eventKindLabel,eventKind,label(date,'claims.date'),date,items,addItem,label(body,'claims.body'),body,mediaLabel,mediaInput);form.append(fields,save);
   const mediaSection=node('section','','claimMediaSection');mediaSection.append(mediaHelp,mediaMessage,mediaPhotos,mediaReload);
   dialog.append(title,guitarDetail,savedState,node('p',t('claims.editor_help')),form,mediaSection,deactivate,message,latest,rebase,checkLatest,uncertainResults,checkSubmission,retryCreate,close);document.body.append(dialog);
 
@@ -54,12 +59,13 @@ export function createClaims({auth,state,busy,work}){
     return Object.freeze(Object.fromEntries(publicFields.map(key=>[key,value[key]])));
   }
   function validateClaim(row,id){
-    if(!row||!catalogIndividualId(row.id)||row.individual_id!==id||!['specification','incident','media'].includes(row.claim_type)||!['active','inactive'].includes(row.status)||!['positive','negative','unverified'].includes(row.verification_status)||typeof row.revision!=='string'||!/^[a-f0-9]{64}$/.test(row.revision)||!(row.body===null||typeof row.body==='string')||!(row.occurred_at===null||typeof row.occurred_at==='string'))throw Error('Invalid own Claim');
+    if(!row||!catalogIndividualId(row.id)||row.individual_id!==id||!['specification','incident','media','event'].includes(row.claim_type)||!['active','inactive'].includes(row.status)||!['positive','negative','unverified'].includes(row.verification_status)||typeof row.revision!=='string'||!/^[a-f0-9]{64}$/.test(row.revision)||!(row.body===null||typeof row.body==='string')||!(row.occurred_at===null||typeof row.occurred_at==='string'))throw Error('Invalid own Claim');
     if(row.claim_type==='specification'&&(!['specification','repair'].includes(row.specification_kind)||!Array.isArray(row.spec_items)||row.spec_items.length>50||row.spec_items.some(item=>!item||typeof item.field_name!=='string'||typeof item.value_text!=='string')))throw Error('Invalid own specification');
     if(row.claim_type==='incident'&&!['damage','lost','theft'].includes(row.incident_kind))throw Error('Invalid own incident');
-    const media_items=row.claim_type==='media'?validateMediaItems(row.media_items):[];
-    if(row.claim_type==='media'&&(row.incident_kind!==null||!Array.isArray(row.spec_items)||row.spec_items.length))throw Error('Invalid Media fields');
-    return Object.freeze({id:row.id,individual_id:id,claim_type:row.claim_type,specification_kind:row.specification_kind,incident_kind:row.incident_kind,status:row.status,verification_status:row.verification_status,revision:row.revision,body:row.body,occurred_at:row.occurred_at,created_at:typeof row.created_at==='string'?row.created_at:null,updated_at:typeof row.updated_at==='string'?row.updated_at:null,media_items,spec_items:row.claim_type==='specification'?row.spec_items.map(item=>({field_name:item.field_name,value_text:item.value_text})):[]});
+    if(row.claim_type==='event'&&!eventKinds.includes(row.event_kind))throw Error('Invalid own Event');
+    const media_items=photoClaim(row)?validateMediaItems(row.media_items,{allowEmpty:row.claim_type==='event'}):[];
+    if(photoClaim(row)&&(row.specification_kind!==null||row.incident_kind!==null||!Array.isArray(row.spec_items)||row.spec_items.length))throw Error('Invalid photo Claim fields');
+    return Object.freeze({id:row.id,individual_id:id,claim_type:row.claim_type,specification_kind:row.specification_kind,incident_kind:row.incident_kind,event_kind:row.claim_type==='event'?row.event_kind:null,status:row.status,verification_status:row.verification_status,revision:row.revision,body:row.body,occurred_at:row.occurred_at,created_at:typeof row.created_at==='string'?row.created_at:null,updated_at:typeof row.updated_at==='string'?row.updated_at:null,media_items,spec_items:row.claim_type==='specification'?row.spec_items.map(item=>({field_name:item.field_name,value_text:item.value_text})):[]});
   }
   function validatePage(data,id){
     const individual=validateGuitar(data?.individual,id);
@@ -70,12 +76,12 @@ export function createClaims({auth,state,busy,work}){
   }
   function resetDialog(){
     dialogEpoch++;photoContext=null;media.clear();mediaFiles=[];mediaInput.value='';mediaMessage.textContent='';mediaFailed=false;selected=null;draftGuitar=null;editing=false;dateChanged=false;draftDate=null;fieldSequence=0;conflict=false;latestClaim=null;confirmDeactivate=false;uncertainCreate=false;submissionChecked=false;uncertainResults.textContent='';
-    itemInputs=[];items.replaceChildren();body.value=date.value='';kind.replaceChildren();guitarDetail.textContent=savedState.textContent=message.textContent=latest.textContent='';
+    itemInputs=[];items.replaceChildren();body.value=date.value='';eventKind.value='exhibition';kind.replaceChildren();guitarDetail.textContent=savedState.textContent=message.textContent=latest.textContent='';
   }
   dialog.addEventListener('ygc:closed',resetDialog);close.onclick=()=>globalThis.YGCOverlays.close(dialog);
   function purgePrivate(){readEpoch++;canWrite=null;rows=[];nextAfter=null;currentAfter=null;list.replaceChildren();status.textContent='';globalThis.YGCOverlays.close(dialog);resetDialog()}
   function clear(){renderedIdentity=identity();accountEpoch++;intentEpoch++;guitar=null;lookupState='';purgePrivate();renderedIdentity=identity()}
-  function rowName(row){return t('claims.'+(row.claim_type==='specification'?row.specification_kind:row.claim_type==='media'?'media':row.incident_kind))}
+  function rowName(row){return row.claim_type==='event'?t('claims.event')+' / '+t('claims.event_'+row.event_kind):t('claims.'+(row.claim_type==='specification'?row.specification_kind:photoClaim(row)?row.claim_type:row.incident_kind))}
   function rowSummary(row){return '#'+row.id+' · '+rowName(row)+' · '+(row.occurred_at||'')+' · '+t('claims.'+row.status)+' · '+t('chronicle.'+row.verification_status)}
   function contentSummary(row){return rowSummary(row)+(row.created_at?'\n'+t('claims.created')+': '+row.created_at:'')+(row.updated_at?'\n'+t('claims.updated')+': '+row.updated_at:'')+(row.spec_items.length?'\n'+row.spec_items.map(item=>item.field_name+': '+item.value_text).join('\n'):'')+(row.body?'\n'+row.body:'')}
   function renderList(){
@@ -89,11 +95,12 @@ export function createClaims({auth,state,busy,work}){
     intentLink.href=catalogIndividualId(guitarId)?'/guitars/'+guitarId:'/';intentLink.textContent=t(catalogIndividualId(guitarId)?'catalog.view_guitar':'catalog.browse');
     const hint=lookupState==='loading'?'catalog.acquire_loading':guitarId===''?'catalog.acquire_invalid':!guitar?'catalog.acquire_unavailable':!state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite===true?'claims.ready':canWrite===false?'applications.read_only':'applications.access_unavailable';
     intentStatus.textContent=t(hint);start.disabled=busy()||!writable();refreshButton.disabled=busy()||!catalogIndividualId(guitarId);more.hidden=nextAfter===null;more.disabled=busy()||!eligible();
-    const active=!selected||selected.status==='active',spec=['specification','repair'].includes(kind.value),isMedia=kind.value==='media';
+    const active=!selected||selected.status==='active',spec=['specification','repair'].includes(kind.value),isMedia=kind.value==='media',isEvent=kind.value==='event',hasMedia=isMedia||isEvent;
     fields.disabled=busy()||!writable()||!active;kind.disabled=Boolean(selected&&selected.claim_type!=='specification');
-    mediaSection.hidden=!isMedia;mediaInput.hidden=mediaLabel.hidden=!isMedia||Boolean(selected);mediaInput.required=isMedia&&!selected;mediaReload.hidden=!selected||!isMedia||!mediaFailed;mediaReload.disabled=busy()||!eligible();
+    eventKind.hidden=eventKindLabel.hidden=!isEvent;eventKind.required=isEvent;eventKind.disabled=Boolean(selected);date.required=isEvent;
+    mediaHelp.textContent=t(isEvent?'claims.event_help':'claims.media_help');mediaSection.hidden=!hasMedia;mediaInput.hidden=mediaLabel.hidden=!hasMedia||Boolean(selected);mediaInput.required=isMedia&&!selected;mediaReload.hidden=!selected||!hasMedia||!mediaFailed;mediaReload.disabled=busy()||!eligible();
     items.hidden=addItem.hidden=!spec;addItem.disabled=itemInputs.length>=50;
-    body.required=!spec&&!isMedia;save.textContent=t(selected?'claims.save':'claims.add');save.disabled=busy()||!writable()||!active||conflict||uncertainCreate||!editing||(isMedia&&!selected&&!mediaReady);
+    body.required=!spec&&!isMedia;save.textContent=t(selected?'claims.save':'claims.add');save.disabled=busy()||!writable()||!active||conflict||uncertainCreate||!editing||(hasMedia&&!selected&&(isMedia||mediaFiles.length>0)&&!mediaReady);
     deactivate.hidden=!selected||!active;deactivate.disabled=busy()||!writable()||conflict;deactivate.textContent=t(confirmDeactivate?'claims.deactivate_confirm':'claims.deactivate');
     latest.hidden=!conflict;rebase.hidden=!conflict||!latestClaim||latestClaim.status!=='active';rebase.disabled=busy()||!writable();checkLatest.hidden=!conflict;checkLatest.disabled=busy()||!eligible();
     checkSubmission.hidden=uncertainResults.hidden=!uncertainCreate;checkSubmission.disabled=busy()||!eligible();retryCreate.hidden=!uncertainCreate||!submissionChecked;retryCreate.disabled=busy()||!writable();
@@ -125,7 +132,7 @@ export function createClaims({auth,state,busy,work}){
         const page=validatePage(await ownRequest(id,after?'?after='+after:''),id);if(!isCurrent())return;
         guitar=page.individual;rows=page.items;currentAfter=after;nextAfter=page.next_after;canWrite=page.can_write;renderList();
         status.textContent=rows.length?'':t('claims.empty');
-        if(dialog.open&&selected?.claim_type==='media'){const fresh=rows.find(row=>row.id===selected.id);if(!fresh||fresh.revision!==selected.revision)showConflict(fresh)}
+        if(dialog.open&&photoClaim(selected)){const fresh=rows.find(row=>row.id===selected.id);if(!fresh||fresh.revision!==selected.revision)showConflict(fresh)}
       }else{const checked=await publicGuitar(id);if(!isCurrent())return;guitar=checked}
       lookupState='ready';render();return true;
     }catch(err){
@@ -152,21 +159,21 @@ export function createClaims({auth,state,busy,work}){
   }
   function show(row=null){
     resetDialog();editing=true;selected=row;draftGuitar=guitar;title.textContent=t(row?'claims.edit':'claims.add');guitarDetail.textContent=summary(draftGuitar);savedState.textContent=row?contentSummary(row):'';draftDate=row?.occurred_at??null;
-    const choices=row?.claim_type==='media'?['media']:row?.claim_type==='incident'?[row.incident_kind]:row?['specification','repair']:['specification','repair','damage','lost','theft','media'];
+    const choices=photoClaim(row)?[row.claim_type]:row?.claim_type==='incident'?[row.incident_kind]:row?['specification','repair']:['specification','repair','damage','lost','theft','media','event'];
     for(const value of choices){const option=node('option',t('claims.'+value));option.value=value;kind.append(option)}
-    kind.value=row?(row.claim_type==='specification'?row.specification_kind:row.claim_type==='media'?'media':row.incident_kind):'specification';
-    date.value=row?dateValue(row.occurred_at):today();date.max=today();body.value=row?.body||'';
+    kind.value=row?(row.claim_type==='specification'?row.specification_kind:photoClaim(row)?row.claim_type:row.incident_kind):'specification';
+    eventKind.value=row?.event_kind||'exhibition';date.value=row?dateValue(row.occurred_at):today();date.max=today();body.value=row?.body||'';
     if(row?.claim_type==='specification')for(const item of row.spec_items)addField(item.field_name,item.value_text);
     if(!row)addField();
-    render();globalThis.YGCOverlays.open(dialog);if(row?.claim_type==='media')loadPhotos(row);
+    render();globalThis.YGCOverlays.open(dialog);if(photoClaim(row))loadPhotos(row);
   }
   function showConflict(row){
-    conflict=true;if(selected?.claim_type==='media'){media.clear();mediaFailed=true;mediaMessage.textContent=t('claims.media_stale')}latestClaim=row||null;confirmDeactivate=false;message.textContent=t('claims.conflict');latest.textContent=row?t('claims.latest')+'\n'+contentSummary(row):t('claims.missing');render();
+    conflict=true;if(photoClaim(selected)){media.clear();mediaFailed=selected.media_items.length>0;mediaMessage.textContent=t('claims.media_stale')}latestClaim=row||null;confirmDeactivate=false;message.textContent=t('claims.conflict');latest.textContent=row?t('claims.latest')+'\n'+contentSummary(row):t('claims.missing');render();
   }
-  rebase.onclick=()=>{if(busy()||!writable()||!latestClaim||latestClaim.status!=='active'||!dialog.open)return;selected=latestClaim;latestClaim=null;conflict=false;message.textContent=t('claims.review_edits');savedState.textContent=contentSummary(selected);render();if(selected.claim_type==='media')loadPhotos(selected)};
+  rebase.onclick=()=>{if(busy()||!writable()||!latestClaim||latestClaim.status!=='active'||!dialog.open)return;selected=latestClaim;latestClaim=null;conflict=false;if(selected.claim_type==='event')eventKind.value=selected.event_kind;message.textContent=t('claims.review_edits');savedState.textContent=contentSummary(selected);render();if(photoClaim(selected))loadPhotos(selected)};
   kind.onchange=()=>{confirmDeactivate=false;media.clear();mediaFiles=[];mediaInput.value='';mediaFailed=false;mediaMessage.textContent='';for(const item of itemInputs){item.field.required=item.value.required=['specification','repair'].includes(kind.value)}render()};
   function mediaContext(){const version=accountEpoch,actor=identity(),selection=intentEpoch,id=guitarId,editor=dialogEpoch;return ()=>current(version,actor,selection,id)&&editor===dialogEpoch&&dialog.open}
-  function loadPhotos(row){photoContext=mediaContext();mediaFailed=false;mediaMessage.textContent=t('claims.media_loading');media.load(guitarId,row).then(()=>{if(photoContext?.()&&mediaReady)mediaMessage.textContent=''});render()}
+  function loadPhotos(row){photoContext=mediaContext();mediaFailed=false;if(!row.media_items.length){media.clear();mediaMessage.textContent=t('claims.event_no_photos');render();return}mediaMessage.textContent=t('claims.media_loading');media.load(guitarId,row).then(()=>{if(photoContext?.()&&mediaReady)mediaMessage.textContent=''});render()}
   async function photoError(error){
     mediaFailed=true;mediaMessage.textContent=t(!selected?'claims.media_invalid':'claims.media_failed');render();
     const valid=photoContext;if(!valid?.()||!selected)return;
@@ -177,11 +184,13 @@ export function createClaims({auth,state,busy,work}){
     else if(error.status===409){showConflict(null);await readLatest(valid)}
   }
   mediaInput.onchange=()=>{
-    if(busy()||!writable()||selected||kind.value!=='media')return;
+    if(busy()||!writable()||selected||!['media','event'].includes(kind.value))return;
     confirmDeactivate=false;mediaFiles=Array.from(mediaInput.files||[]);photoContext=mediaContext();mediaFailed=false;mediaMessage.textContent=t('claims.media_loading');
+    if(kind.value==='event'&&!mediaFiles.length){media.clear();mediaMessage.textContent='';render();return}
     media.preview(mediaFiles).then(()=>{if(photoContext?.()&&mediaReady)mediaMessage.textContent=''});render();
   };
-  mediaReload.onclick=()=>{if(!busy()&&eligible()&&selected?.claim_type==='media'&&dialog.open&&!conflict)loadPhotos(selected)};
+  mediaReload.onclick=()=>{if(!busy()&&eligible()&&photoClaim(selected)&&dialog.open&&!conflict)loadPhotos(selected)};
+  eventKind.onchange=()=>{confirmDeactivate=false;render()};
   date.oninput=date.onchange=()=>{dateChanged=true;confirmDeactivate=false};body.oninput=()=>{confirmDeactivate=false;render()};
   addItem.onclick=()=>{if(!busy()&&writable()&&selected?.status!=='inactive'){addField();render()}};
   start.onclick=()=>{if(!busy()&&writable()&&!dialog.open)show()};
@@ -194,9 +203,9 @@ export function createClaims({auth,state,busy,work}){
         if(err.code==='service_restricted'&&[403,503].includes(err.status)){
           // PR52: do not turn a read-only write denial into a sign-out, but
           // revalidate read access before retaining any private submissions.
-          canWrite=false;if(selected?.claim_type==='media')media.clear();const restored=await refresh(currentAfter);if(!current(version,actor,selection,id))return;
+          canWrite=false;if(photoClaim(selected))media.clear();const restored=await refresh(currentAfter);if(!current(version,actor,selection,id))return;
           if(!restored){purgePrivate();status.textContent=errorText(err);render();return}
-          if(editor===dialogEpoch&&selected?.claim_type==='media'&&!conflict)loadPhotos(selected);
+          if(editor===dialogEpoch&&photoClaim(selected)&&!conflict)loadPhotos(selected);
         }else if([401,403,404].includes(err.status)){failed(err);return}
         if(editor===dialogEpoch){message.textContent=errorText(err);if(err.status===409){if(selected){showConflict(null);await readLatest(()=>current(version,actor,selection,id)&&editor===dialogEpoch)}else message.textContent=t('claims.retry_conflict')}}
         status.textContent=errorText(err);
@@ -231,11 +240,12 @@ export function createClaims({auth,state,busy,work}){
     uncertainCreate=false;submissionChecked=false;message.textContent=t('claims.retry_acknowledged');render();
   };
   function payload(){
-    const isMedia=selected?.claim_type==='media'||kind.value==='media',spec=!isMedia&&['specification','repair'].includes(kind.value),occurred_at=selected&&!dateChanged?draftDate:date.value||null;
-    const result={claim_type:isMedia?'media':spec?'specification':'incident',body:body.value.trim()||null,occurred_at};
+    const type=selected?.claim_type,isMedia=type?type==='media':kind.value==='media',isEvent=type?type==='event':kind.value==='event',spec=type?type==='specification':['specification','repair'].includes(kind.value),occurred_at=selected&&!dateChanged?draftDate:date.value||null;
+    const result={claim_type:isEvent?'event':isMedia?'media':spec?'specification':'incident',body:body.value.trim()||null,occurred_at};
     if(spec){result.specification_kind=kind.value;result.items=itemInputs.map(item=>({field_name:item.field.value.trim(),value_text:item.value.value.trim()}));if(!result.items.length||result.items.some(item=>!item.field_name||!item.value_text)||new Set(result.items.map(item=>item.field_name.toLowerCase())).size!==result.items.length)throw {status:400}}
+    else if(isEvent){result.event_kind=selected?.event_kind||eventKind.value;if(!eventKinds.includes(result.event_kind)||!result.body||!result.occurred_at)throw {status:400}}
     else if(!isMedia){result.incident_kind=selected?.incident_kind||kind.value;if(!result.body||!['damage','lost','theft'].includes(result.incident_kind))throw {status:400}}
-    if(isMedia&&!selected&&(!mediaReady||!validMediaFiles(mediaFiles)))throw {status:400};
+    if(!selected&&(isMedia||isEvent&&mediaFiles.length>0)&&(!mediaReady||!validMediaFiles(mediaFiles)))throw {status:400};
     if(selected)result.revision=selected.revision;
     return result;
   }
@@ -246,9 +256,9 @@ export function createClaims({auth,state,busy,work}){
       let row;
       try{
         let result;
-        if(!target&&body.claim_type==='media'){
+        if(!target&&(body.claim_type==='media'||body.claim_type==='event'&&files.length>0)){
           const data=new FormData();data.append('metadata',JSON.stringify(body));for(const file of files)data.append('images',file);
-          result=await json(await auth().authorizedFetch('/api/auth/guitars/'+id+'/media-claims',{method:'POST',body:data,cache:'no-store',credentials:'omit',redirect:'error',headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}},true));
+          result=await json(await auth().authorizedFetch('/api/auth/guitars/'+id+'/'+body.claim_type+'-claims',{method:'POST',body:data,cache:'no-store',credentials:'omit',redirect:'error',headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}},true));
         }else result=await ownRequest(id,target?'/'+target.id:'',{method:target?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         if(!valid())return;row=validateClaim(result.claim,id);
       }catch(err){
@@ -264,7 +274,7 @@ export function createClaims({auth,state,busy,work}){
   };
   deactivate.onclick=()=>{
     if(busy()||!dialog.open||!writable()||!selected||selected.status!=='active'||conflict)return;
-    if(!confirmDeactivate){confirmDeactivate=true;message.textContent=t(selected.claim_type==='media'?'claims.media_deactivate_help':'claims.deactivate_help',{id:selected.id});render();return}
+    if(!confirmDeactivate){confirmDeactivate=true;message.textContent=t(selected.claim_type==='event'?'claims.event_deactivate_help':selected.claim_type==='media'?'claims.media_deactivate_help':'claims.deactivate_help',{id:selected.id});render();return}
     action(async valid=>{
       const id=guitarId,target=selected;if(!await preflight(valid)||!valid())return;
       const result=await ownRequest(id,'/'+target.id+'/deactivate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:target.revision})});
