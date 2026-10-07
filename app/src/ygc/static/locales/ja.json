@@ -1670,5 +1670,19 @@
   "identity.review_again": "現在値を確認し、必要な場合は新しい訂正を準備してください。",
   "identity.saved": "Positiveの個体情報訂正を作成しました。元のListingは保持され、現在の個体情報と訂正履歴をここに表示しています。",
   "identity.storage_unavailable": "再送防止の記録をブラウザーに保存できませんでした。何も送信していません。セッションストレージを有効にするか空き容量を確保し、再度確認してください。",
-  "identity.write_unavailable": "現在のサービスまたは個体の制限により、訂正を作成できません。表示可能な履歴は引き続き確認できます。"
+  "identity.write_unavailable": "現在のサービスまたは個体の制限により、訂正を作成できません。表示可能な履歴は引き続き確認できます。",
+  "notifications.heading": "あなたへの通知",
+  "notifications.history_help": "通知は過去の出来事の記録です。開く・既読にする操作では、Transferの受領、所有権の辞退への同意、Claimの承認、係争の解決は行いません。対応する画面を開く際に現在の閲覧権限を再確認します。",
+  "notifications.unread_count": "未読：{count}件",
+  "notifications.mark_all": "すべて既読にする",
+  "notifications.mark_one": "既読にする",
+  "notifications.read": "既読",
+  "notifications.unread": "未読",
+  "notifications.open_transfer": "Transferを開く",
+  "notifications.open_owner": "Ownerの判定画面を開く",
+  "notifications.no_destination": "過去の通知です。この画面から開ける移動先はありません。",
+  "notifications.empty": "通知はありません。",
+  "notifications.unavailable": "現在この移動先は利用できません。再読込して最新の情報を確認してください。",
+  "notifications.failed": "通知の読込・更新ができませんでした。再読込してからやり直してください。",
+  "notifications.uncertain": "既読更新の結果を確認できません。通知を再読込して現在の状態を確認してから、再度操作してください。"
 }

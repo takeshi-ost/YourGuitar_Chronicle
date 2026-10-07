@@ -132,6 +132,10 @@ def main():
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
+    @app.get('/api/auth/notifications')
+    def notifications():
+        return {'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True}
+
     @app.get('/api/auth/identity-corrections')
     def identity_corrections():
         return {'items': [], 'next_after': None, 'can_write': True}

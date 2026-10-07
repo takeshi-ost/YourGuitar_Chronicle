@@ -199,5 +199,5 @@ export function createOwnership({auth,state,busy,work,updated=async()=>{}}){
   acknowledge.onclick=()=>{if(busy()||!eligible()||!checked||!uncertainty()||!dialog.open)return;uncertain.delete(selected);checked=false;pending=null;message.textContent=t('ownership.review_again');render()};
   start.onclick=open;refreshButton.onclick=()=>action(()=>refreshInbox());inboxMore.onclick=()=>action(()=>inboxAfter?refreshInbox(inboxAfter):undefined);intentRefresh.onclick=()=>action(()=>refreshView());historyMore.onclick=()=>action(()=>historyAfter?refreshView(historyAfter):undefined);
   globalThis.addEventListener('popstate',()=>{navigationEpoch++;globalThis.YGCOverlays.close(dialog);resetDialog()});globalThis.addEventListener('pagehide',clear);
-  render();return {render,clear,refresh:refreshInbox,setCatalogIntent,openGuitar};
+  render();return {render,clear,refresh:refreshInbox,setCatalogIntent,openGuitar,openTransfer};
 }

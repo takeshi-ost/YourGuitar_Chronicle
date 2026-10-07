@@ -189,3 +189,14 @@ test('Current Owner loss during Event photo read removes every private card and 
 test('Existing Event value_text subtype is localized once in the Owner review description',async()=>{
  const e=environment(),{description}=await open(e,{...eventClaim,event_kind:undefined,value_text:'recording'});assert.match(description.textContent,/claims.event_recording/);assert.equal(description.textContent.split('recording').length,2);
 });
+
+
+test('A historical notification cannot render an Owner review when its Claim is absent from a fresh canonical read',async()=>{
+ const e=environment();e.replies.push({items:[{...acquire,id:'24'}],can_write:true});await e.ui.openOwner('12','23');
+ const dialog=e.ids.get('ownerResponseDialog');assert.equal(e.calls.length,1);assert.equal(e.calls[0].url,'/api/auth/guitars/12/owner-responses');assert.equal(e.calls[0].verified,true);assert.equal(dialog.children[2].children.length,0);assert.match(dialog.children[3].textContent,/notifications.unavailable/);assert.equal(e.photoCalls.length,0);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+});
+
+test('An authorized notification target rechecks its Claim and presents the normal explicit review controls only',async()=>{
+ const e=environment();e.replies.push({items:[acquire],can_write:false});await e.ui.openOwner('12','23');
+ const dialog=e.ids.get('ownerResponseDialog'),card=dialog.children[2].children[0];assert.match(card.children[0].textContent,/#23/);assert.equal(card.children[2].disabled,true);assert.equal(card.children[3].hidden,true);assert.equal(e.calls.length,1);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+});

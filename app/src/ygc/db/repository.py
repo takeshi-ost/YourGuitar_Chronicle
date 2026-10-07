@@ -2796,7 +2796,7 @@ class Repository:
             snapshot = self._rebuild_individual_snapshot_in_connection(con,row['individual_id'])
             if str(snapshot['current_owner_user_id']) != str(actor_id):
                 raise ValueError("Transfer conflicts with Claim chronology; create a new Transfer")
-        con.execute("UPDATE notifications SET is_read=1,read_at=? WHERE claim_id=? AND notification_type='transfer_request'",
+        con.execute("UPDATE notifications SET is_read=1,read_at=COALESCE(read_at,?) WHERE claim_id=? AND notification_type='transfer_request'",
                     (now,claim_id))
         other = row['to_user_id'] if action=='cancel' else row['from_user_id']
         con.execute("""INSERT INTO notifications (recipient_user_id,actor_user_id,notification_type,
@@ -3055,71 +3055,78 @@ class Repository:
         verifier_user_id: int,
         stance: str,
     ) -> int | None:
-        now = utcnow()
         with self.connect() as con:
-            claim = con.execute(
-                """
-                SELECT
-                    c.id,
-                    c.individual_id,
-                    c.author_user_id,
-                    c.claim_type,
-                    c.ownership_source,
-                    i.manufacturer,
-                    i.model,
-                    v.display_name AS verifier_name
-                FROM claims c
-                INNER JOIN individuals i
-                  ON i.id = c.individual_id
-                INNER JOIN users v
-                  ON v.id = ?
-                WHERE c.id = ?
-                """,
-                (
-                    verifier_user_id,
-                    claim_id,
-                ),
-            ).fetchone()
-            if not claim:
-                return None
-            if int(claim["author_user_id"]) == int(verifier_user_id):
-                return None
+            return self.create_verification_notification_in_connection(
+                con, claim_id, verifier_user_id, stance)
 
-            guitar = " ".join(
-                part
-                for part in (
-                    str(claim["manufacturer"] or "").strip(),
-                    str(claim["model"] or "").strip(),
-                )
-                if part
-            ) or f"Individual #{claim['individual_id']}"
+    def create_verification_notification_in_connection(
+        self, con, claim_id: int, verifier_user_id: int, stance: str,
+    ) -> int | None:
+        """Persist the existing author notice in the caller's decision transaction."""
+        now = utcnow()
+        claim = con.execute(
+            """
+            SELECT
+                c.id,
+                c.individual_id,
+                c.author_user_id,
+                c.claim_type,
+                c.ownership_source,
+                i.manufacturer,
+                i.model,
+                v.display_name AS verifier_name
+            FROM claims c
+            INNER JOIN individuals i
+              ON i.id = c.individual_id
+            INNER JOIN users v
+              ON v.id = ?
+            WHERE c.id = ?
+            """,
+            (
+                verifier_user_id,
+                claim_id,
+            ),
+        ).fetchone()
+        if not claim:
+            return None
+        if int(claim["author_user_id"]) == int(verifier_user_id):
+            return None
 
-            cur = con.execute(
-                """
-                INSERT INTO notifications (
-                    recipient_user_id,
-                    actor_user_id,
-                    notification_type,
-                    individual_id,
-                    claim_id,
-                    title,
-                    body,
-                    is_read,
-                    created_at
-                )
-                VALUES (?, ?, 'claim_verified', ?, ?, ?, ?, 0, ?)
-                """,
-                (
-                    int(claim["author_user_id"]),
-                    int(verifier_user_id),
-                    int(claim["individual_id"]),
-                    int(claim["id"]),
-                    f"Claim Verification: {stance.title()}",
-                    f"{claim['verifier_name']} set your Claim on {guitar} to {stance.title()}.",
-                    now,
-                ),
+        guitar = " ".join(
+            part
+            for part in (
+                str(claim["manufacturer"] or "").strip(),
+                str(claim["model"] or "").strip(),
             )
-            return int(cur.lastrowid)
+            if part
+        ) or f"Individual #{claim['individual_id']}"
+
+        cur = con.execute(
+            """
+            INSERT INTO notifications (
+                recipient_user_id,
+                actor_user_id,
+                notification_type,
+                individual_id,
+                claim_id,
+                title,
+                body,
+                is_read,
+                created_at
+            )
+            VALUES (?, ?, 'claim_verified', ?, ?, ?, ?, 0, ?) RETURNING id
+            """,
+            (
+                int(claim["author_user_id"]),
+                int(verifier_user_id),
+                int(claim["individual_id"]),
+                int(claim["id"]),
+                f"Claim Verification: {stance.title()}",
+                f"{claim['verifier_name']} set your Claim on {guitar} to {stance.title()}.",
+                now,
+            ),
+        )
+        return int(cur.fetchone()["id"])
 
     def list_notifications(
         self,

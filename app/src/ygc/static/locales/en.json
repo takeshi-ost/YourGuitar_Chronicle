@@ -1670,5 +1670,19 @@
   "identity.review_again": "Review the current values and prepare a new correction if needed.",
   "identity.saved": "Positive Identity Correction created. The original Listing is preserved; the current identity and correction history are shown here.",
   "identity.storage_unavailable": "The browser could not keep the retry-safety marker. Nothing was submitted. Allow session storage or free space, then review again.",
-  "identity.write_unavailable": "A correction cannot be created under the current service or guitar restrictions. You can still review the available history."
+  "identity.write_unavailable": "A correction cannot be created under the current service or guitar restrictions. You can still review the available history.",
+  "notifications.heading": "Your notifications",
+  "notifications.history_help": "Notifications describe past events. Opening or marking one as read does not accept a Transfer, acknowledge an ownership decline, approve a Claim, or resolve a dispute. Current access is checked again when you open a supported destination.",
+  "notifications.unread_count": "Unread: {count}",
+  "notifications.mark_all": "Mark all as read",
+  "notifications.mark_one": "Mark as read",
+  "notifications.read": "Read",
+  "notifications.unread": "Unread",
+  "notifications.open_transfer": "Open Transfer",
+  "notifications.open_owner": "Open Owner review",
+  "notifications.no_destination": "Historical notice. No supported destination is available here.",
+  "notifications.empty": "No notifications.",
+  "notifications.unavailable": "This destination is no longer available to you. Refresh to check the latest information.",
+  "notifications.failed": "Notifications could not be loaded or updated. Refresh before trying again.",
+  "notifications.uncertain": "The read update result is unknown. Refresh the inbox to check its current state before marking anything again."
 }

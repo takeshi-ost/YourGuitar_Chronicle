@@ -42,12 +42,13 @@ export function createGuitars({auth,state,busy,work,openOwnership}){
       }finally{render()}
     });
   }
-  function openOwner(id){
+  function openOwner(id,claimId=null){
     if(busy()||!eligible())return;
     dialogEpoch++;rowsEpoch++;clearPhotos();pending=null;canWrite=null;ownerId=id;reload.hidden=true;claims.replaceChildren();message.textContent=t('cloud.working');globalThis.YGCOverlays.open(dialog);
     const editor=dialogEpoch,actor=identity();
     return ownerAction(async version=>{
       const result=await ownerRequest(id+'/owner-responses');if(version!==epoch||editor!==dialogEpoch||actor!==identity()||ownerId!==id||!eligible()||!dialog.open)return;
+      if(claimId!==null&&!result.items.some(row=>row.id===claimId)){claims.replaceChildren();canWrite=null;message.textContent=t('notifications.unavailable');return}
       renderOwnerRows(id,result);
     });
   }
@@ -172,5 +173,5 @@ export function createGuitars({auth,state,busy,work,openOwnership}){
     await Promise.all(['owned','formerly_owned'].map(page));
   }
   globalThis.addEventListener('pagehide',clear);globalThis.addEventListener('popstate',()=>{navigationEpoch++;if(dialog.open)globalThis.YGCOverlays.close(dialog)});
-  return {render,refresh,refreshHistory,clear};
+  return {render,refresh,refreshHistory,clear,openOwner};
 }

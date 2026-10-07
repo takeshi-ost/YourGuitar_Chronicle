@@ -48,7 +48,7 @@ function environment({initial=account(),fullPage=false,search=''}={}){
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-ownership.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createOwnership;context.createOwnership=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
- Object.assign(context,{createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null});
+ Object.assign(context,{createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null});
  let ready;if(fullPage)ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);else{component=context.createOwnership({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,authCalls,ready,get updates(){return updates},get dialog(){return control('ownershipDialog')},get inbox(){return control('ownershipInbox')},get history(){return control('ownershipHistory')},
