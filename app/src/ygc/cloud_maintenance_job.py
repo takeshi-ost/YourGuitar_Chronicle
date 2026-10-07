@@ -10,6 +10,7 @@ from ygc.db.postgres_accounts import PostgresAccounts
 from ygc.cloud_storage import CloudStorage,StorageSettings,ObjectReference
 from ygc.cloud_backup_job import save,KIND
 from ygc.cloud_db_restore import load,replace_content,restore_accounts
+from ygc.cloud_backup_preflight import failure_status
 
 REQUEST_KIND='db_maintenance_request_v1'
 
@@ -57,6 +58,9 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                     for user in rows['account_records']:
                         if user['avatar_storage_path']:storage.get(decode_reference(user['avatar_storage_path']))
                 if target=='chronicle':
+                    from ygc.cloud_db_restore import verify_restored_dispute_originals
+                    progress('evidence_reference_verification')
+                    verify_restored_dispute_originals(storage,rows)
                     from ygc.cloud_content_media import verify_restored_media
                     verify_restored_media(storage,rows['media_assets'])
                     from ygc.cloud_applications import verify_restored_applications
@@ -122,7 +126,7 @@ def perform(settings,storage,token,execution,progress=lambda stage:None):
                             if target=='chronicle':
                                 accounts=PostgresAccounts(settings)
                                 for account in current:accounts._apply_projection(dest,account,force_rebuild=True)
-                        else:replace_content(dest,header,rows,sequences,current)
+                        else:replace_content(dest,header,rows,sequences,current,storage=storage)
                 if target=='chronicle':catalog.execute('DELETE FROM paused_review_answers')
                 source.commit()
             if target=='accounts':
@@ -157,8 +161,8 @@ def main(argv=None):
             result={'status':'ok','checked_targets':4,'data_changed':False}
         else:result=perform(settings,storage,args.request_id,os.environ.get('CLOUD_RUN_EXECUTION',''),progress)
         print(json.dumps(result));return 0
-    except Exception:
-        print(json.dumps({'status':'failed','stage':stage}),file=sys.stderr);return 1
+    except Exception as exc:
+        print(json.dumps(failure_status(exc,stage)),file=sys.stderr);return 1
     finally:
         if storage is not None:storage.close()
 

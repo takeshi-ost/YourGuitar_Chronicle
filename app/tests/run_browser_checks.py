@@ -60,6 +60,8 @@ def main():
                 cloud_identity_correction()
                 from browser_cloud_notifications import main as cloud_notifications
                 cloud_notifications()
+                from browser_cloud_ownership_disputes import main as cloud_ownership_disputes
+                cloud_ownership_disputes()
                 from browser_cloud_ownership import main as cloud_ownership
                 cloud_ownership()
             finally:

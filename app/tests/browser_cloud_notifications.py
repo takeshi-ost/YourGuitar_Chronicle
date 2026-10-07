@@ -146,6 +146,8 @@ def main():
                 route.fulfill(json={'items': [], 'total': '0', 'next_after': None})
             elif path == '/api/auth/ownership-transfers':
                 route.fulfill(json={'viewer_user_id': users[actor]['id'], 'items': [], 'can_write': store['can_write'], 'next_after': None})
+            elif path in ('/api/auth/ownership-disputes', '/api/auth/ownership-disputes/options'):
+                route.fulfill(json={'items': [], 'next_after': None, 'can_write': store['can_write'], 'viewer_user_id': users[actor]['id']})
             elif path == '/api/auth/identity-corrections':
                 route.fulfill(json={'items': [], 'next_after': None, 'can_write': store['can_write']})
             elif path == '/api/auth/transfers/' + TRANSFER:

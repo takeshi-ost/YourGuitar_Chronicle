@@ -164,3 +164,16 @@ Accountsは登録を巻き戻す完全置換ではない。Google側アカウン
 管理画面で追加した画像の`gcs-content-v1:`参照を保存・復元する。復元前に全media_assetsの形式・contentスコープ・固定generation・サイズ・MIMEとStorageの存在を検証し、不明なローカル参照や画像欠損があればDB変更前に中断する。DBバックアップは画像バイト列を複製せず、保持された不変オブジェクトを参照する。アーカイブの保持期間と画像回収は同時に設計する必要があるため、現段階では画像実体の自動削除を行わない。
 
 アプリと`ygc-staging-db-maintenance` Jobの両方へ対応イメージを配置する。隔離PostgreSQLでは画像追加→保存→追加画像→復元、初期化→画像付き復元、欠損時の変更拒否、最新ユーザー・Admin維持を検証する。実クラウドのデータ入り確認は利用者の受入後に記録する。
+
+
+## Private dispute originalsとChronicle 003（2026-10-07、実装checkpoint）
+
+実環境への適用は未実施。新規係争原本はprivate GCS固定generationへ保存し、DB archiveには`ownership_dispute_originals`のreferenceとhashを含める。既存BYTEAはそのまま保持し、新規保存先変更だけでlegacy容量超過を修復したとは扱わない。
+
+`cloud_backup_job --target=chronicle --preflight-only`はknown v1／v2／v3に対するread-onlyの容量／dispute original確認。archiveをuploadせず、DBや台帳を変更しない。旧BYTEAはlength集計を先に行い、line／restore予算超過を安全な専用codeで拒否する。
+
+既存snapshot定数8 MiB／128 MiB／25 MiBとrestore32 MiBは維持する。新規Chronicle保存だけは復元可能性を明示確認し、展開後32 MiBを超える場合`chronicle_restore_capacity`として成功保存を拒否する。他DBの保存境界は変更しない。古いarchiveの検証は従来の128 MiBまで継続するが、検証成功だけをrestore容量適合とは扱わない。
+
+Chronicleの保存／read-back／verify-onlyはEvidence原本の正確なgeneration、size、MIME、SHA256も確認する。restoreでは対応関係と全originalを破壊的DB操作前に検証する。known v1／v2 archiveは専用のadditive bridgeでv3へ戻せる。既存checksum不一致、未来版、v3から旧版へのdowngradeは拒否する。
+
+original objectには新しい自動削除／期限を設けない。DBのreset／restoreや古いarchiveのpruningでもEvidence原本は削除しない。不明upload／commitの原本も保持する。適用・全consumerのimage更新・preflight失敗時の保全は[CLOUD_DISPUTE_STORAGE_ROLLOUT.md](CLOUD_DISPUTE_STORAGE_ROLLOUT.md)を参照。

@@ -34,10 +34,10 @@ def run(port):
                 admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
                 created.append(name)
                 bootstrap(owner, target, role)
-                assert migrate(owner, target, role) == [2]
+                assert migrate(owner, target, role) == ([2, 3] if target == 'chronicle' else [2])
                 assert migrate(owner, target, role) == []
                 assert not bootstrap(owner, target, role)
-                assert status(app, target)['version'] == 2
+                assert status(app, target)['version'] == (3 if target == 'chronicle' else 2)
                 raises(ValueError, lambda: migrate(app, target, role))
             name=owner.database('operations')
             admin.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))

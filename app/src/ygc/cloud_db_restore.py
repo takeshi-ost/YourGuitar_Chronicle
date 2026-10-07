@@ -8,18 +8,18 @@ from psycopg import sql
 from ygc.cloud_db_snapshot import verify_snapshot,decode_cell,TYPED_COLUMNS
 from ygc.db.postgres import recorded_schema,validate_schema
 from ygc.db.postgres_accounts import PostgresAccounts,PROFILE_FIELDS
-
-MAX_RESTORE_RAW=32*1024*1024
+from ygc.cloud_backup_preflight import MAX_RESTORE_RAW,BackupCapacityError
 
 
 def load(data,target,sha):
     verify_snapshot(data,target,sha)
     rows=defaultdict(list);sequences=[];total=0
     with gzip.GzipFile(fileobj=BytesIO(data)) as source:
-        header=json.loads(source.readline())
+        first=source.readline();total=len(first);header=json.loads(first)
+        if total>MAX_RESTORE_RAW:raise BackupCapacityError('restore_staging_limit','restore_capacity')
         for raw in source:
             total+=len(raw)
-            if total>MAX_RESTORE_RAW:raise ValueError('Restore exceeds staging limit.')
+            if total>MAX_RESTORE_RAW:raise BackupCapacityError('restore_staging_limit','restore_capacity')
             row=json.loads(raw)
             if 'table' in row:
                 table=row['table']
@@ -27,6 +27,71 @@ def load(data,target,sha):
             elif 'sequences' in row:sequences=row['sequences']
     for table in header['tables']:rows.setdefault(table,[])
     return header,rows,sequences
+
+
+def verify_restored_dispute_originals(storage,rows):
+    """Require every attached original, including exact immutable generations.
+
+    Text-only evidence has no MIME or original. Legacy BYTEA remains readable;
+    a v3 cloud attachment has MIME plus one reference and no inline content.
+    Errors never include object names, filenames, evidence text or identifiers.
+    """
+    evidence=[]
+    for row in rows.get('ownership_dispute_evidence',[]):
+        content=row['content']
+        if content is not None and not isinstance(content,(bytes,memoryview)):
+            raise ValueError('Invalid legacy dispute original.')
+        evidence.append({'id':row['id'],'content_type':row['content_type'],
+            'content_size':None if content is None else len(content)})
+    verify_dispute_originals(storage,rows.get('ownership_dispute_originals',[]),evidence)
+
+
+def verify_dispute_originals(storage,original_rows,evidence_rows):
+    """Shared bounded-metadata validation for restore and streaming verification."""
+    from ygc.cloud_dispute_storage import verify_original
+    originals={}
+    objects=set()
+    for row in original_rows:
+        if row['evidence_id'] in originals:raise ValueError('Duplicate dispute original reference.')
+        identity=(row['object_scope'],row['object_name'],row['object_generation'])
+        if identity in objects:raise ValueError('Duplicate dispute original object.')
+        objects.add(identity)
+        originals[row['evidence_id']]=row
+    identities=set()
+    for evidence in evidence_rows:
+        identity=evidence['id']
+        if identity in identities:raise ValueError('Duplicate dispute evidence identity.')
+        identities.add(identity)
+        original=originals.pop(identity,None)
+        size=evidence['content_size'];mime=evidence['content_type']
+        if original is not None:
+            if size is not None or mime!=original['content_type']:
+                raise ValueError('Dispute original metadata differs.')
+            if storage is None:raise ValueError('Dispute original storage verification required.')
+            verify_original(storage,original)
+        elif size is not None:
+            if type(size) is not int or not 0<size<=12*1024*1024 or mime not in ('application/pdf','image/jpeg'):
+                raise ValueError('Invalid legacy dispute original.')
+        elif mime is not None:
+            raise ValueError('Dispute original reference missing.')
+    if originals:raise ValueError('Dispute original evidence missing.')
+
+
+def content_restore_schema(header,revision):
+    """One explicit additive compatibility bridge, never a generic relaxation."""
+    target=header['target']
+    saved=recorded_schema(target,{'version':header['schema_version'],'checksum':header['schema_checksum']})
+    current=recorded_schema(target,revision)
+    if header['tables']!=saved['tables']:raise ValueError('Wrong schema columns.')
+    if (revision['version'],revision['checksum'])==(header['schema_version'],header['schema_checksum']):
+        return current
+    if target!='chronicle' or (header['schema_version'],revision['version']) not in ((1,3),(2,3)):
+        raise ValueError('Restore schema differs.')
+    additions={'ownership_dispute_originals'}
+    if header['schema_version']==1:additions.add('account_projection_receipts')
+    if set(current['tables'])-set(saved['tables'])!=additions or any(current['tables'].get(table)!=columns for table,columns in saved['tables'].items()):
+        raise ValueError('Restore schema differs.')
+    return current
 
 
 def order(con,tables):
@@ -93,16 +158,21 @@ def check_users(rows,current):
     if any(registry.get(row['id'])!=row['app_user_id'] for row in rows):raise ValueError('Content identities do not match the current registry.')
 
 
-def replace_content(con,header,rows,sequences,current):
+def replace_content(con,header,rows,sequences,current,*,storage=None):
     revision=con.execute('SELECT version,checksum FROM ygc_schema_version WHERE id=1').fetchone()
-    if revision['version']!=header['schema_version'] or revision['checksum']!=header['schema_checksum']:raise ValueError('Restore schema differs.')
-    validate_schema(con,recorded_schema(header['target'],revision))
-    tables=list(header['tables']);ordered,self_refs=order(con,tables)
+    expected=content_restore_schema(header,revision)
+    validate_schema(con,expected)
+    # Only recognized old archives receive empty additive tables. The header and
+    # its checksum stay unchanged, and saved column lists remain authoritative.
+    if set(rows)!=set(header['tables']):raise ValueError('Restore table data differs.')
+    rows={**rows,**{table:[] for table in set(expected['tables'])-set(header['tables'])}}
+    if header['target']=='chronicle':verify_restored_dispute_originals(storage,rows)
+    tables=list(expected['tables']);ordered,self_refs=order(con,tables)
     con.execute(sql.SQL('LOCK TABLE {} IN ACCESS EXCLUSIVE MODE').format(sql.SQL(',').join(map(sql.Identifier,tables))))
     before=sequence_state(con)
     if header['target']=='chronicle':check_users(rows['users'],current)
     for table in reversed(ordered):con.execute(sql.SQL('DELETE FROM {}').format(sql.Identifier(table)))
-    for table in ordered:insert(con,table,header['tables'][table],self_order(rows[table],self_refs[table]))
+    for table in ordered:insert(con,table,expected['tables'][table],self_order(rows[table],self_refs[table]))
     if header['target']=='chronicle':
         # A saved lease never authorizes a callback against restored state.
         con.execute("UPDATE acquire_applications SET status=CASE WHEN status='processing' THEN 'pending' ELSE status END,lease_token=NULL,lease_until=NULL")

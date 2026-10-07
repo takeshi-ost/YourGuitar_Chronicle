@@ -132,6 +132,11 @@ def main():
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
+    @app.get('/api/auth/ownership-disputes')
+    @app.get('/api/auth/ownership-disputes/options')
+    def empty_disputes():
+        return {'items': [], 'next_after': None, 'can_write': True, 'viewer_user_id': '1'}
+
     @app.get('/api/auth/notifications')
     def notifications():
         return {'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True}

@@ -143,13 +143,17 @@ class Workflow:
                 assert decimal(row['actor']['id']) > 2**53
             destination = row['destination']
             if destination is not None:
-                assert destination['kind'] in ('owner', 'transfer')
-                assert decimal(destination['claim_id']) > 2**53
-                if destination['kind'] == 'owner':
-                    assert set(destination) == {'kind', 'individual_id', 'claim_id'}
-                    assert decimal(destination['individual_id']) > 2**53
+                assert destination['kind'] in ('owner', 'transfer', 'dispute', 'dispute_option')
+                if destination['kind'] == 'dispute':
+                    assert set(destination) == {'kind', 'case_id'}
+                    decimal(destination['case_id'])
                 else:
-                    assert set(destination) == {'kind', 'claim_id'}
+                    assert decimal(destination['claim_id']) > 2**53
+                    if destination['kind'] == 'owner':
+                        assert set(destination) == {'kind', 'individual_id', 'claim_id'}
+                        assert decimal(destination['individual_id']) > 2**53
+                    else:
+                        assert set(destination) == {'kind', 'claim_id'}
         payload = json.dumps(result)
         for secret in ('recipient_user_id', 'app_user_id', 'identity_subject', 'storage_path',
                        'claim_responses', 'acknowledged_at', 'projection_version'):
@@ -454,6 +458,11 @@ def decline_and_side_effect_checks(w):
     notices = w.notices(claim=acquire)
     assert {row['notification_type'] for row in notices} == {'claim_verified', 'ownership_decline'}
     assert len(notices) == 2 and all(row['recipient_user_id'] == w.user('b') for row in notices)
+    decline_notice = next(row for row in notices if row['notification_type'] == 'ownership_decline')
+    before = w.snapshot()
+    decline_item = next(row for row in w.list('b', limit=50)['items'] if row['id'] == str(decline_notice['id']))
+    assert decline_item['destination'] == {'kind': 'dispute_option', 'claim_id': str(acquire)}
+    assert w.snapshot() == before, 'Resolving the dispute option destination changed business state'
     w.unchanged(ClaimConflict, lambda: w.respond(review, 'negative', reason='Synthetic decline reason'))
     view = w.ownership.view(w.actor('a'), guitar)
     transfer = w.ownership.create(w.actor('a'), guitar,

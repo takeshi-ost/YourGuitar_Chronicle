@@ -8,6 +8,7 @@ import json
 from io import BytesIO
 from ygc.db.postgres import connect,recorded_schema,validate_schema,TARGETS
 from ygc.cloud_storage import MAX_BYTES
+from ygc.cloud_backup_preflight import BackupCapacityError,MAX_RESTORE_RAW,preflight_legacy_evidence
 
 MAX_RAW=128*1024*1024
 MAX_LINE=8*1024*1024
@@ -55,22 +56,29 @@ def decode_cell(value,kind=None):
 def snapshot(settings,target):
     if target not in TARGETS:raise ValueError('Unknown target.')
     from psycopg import sql
-    output=BytesIO();raw=0;digest=hashlib.sha256();counts={}
+    output=BytesIO();raw=0;digest=hashlib.sha256();counts={};legacy={}
     with connect(settings,target) as con:
         con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         con.execute("SET LOCAL statement_timeout='30s'")
         con.execute("SET LOCAL lock_timeout='2s'")
         revision=con.execute('SELECT version,checksum FROM ygc_schema_version WHERE id=1').fetchone()
         expected=recorded_schema(target,revision);validate_schema(con,expected)
+        if target=='chronicle':legacy=preflight_legacy_evidence(con)
         header={'format':FORMAT,'target':target,'schema_version':revision['version'],'schema_checksum':revision['checksum'],
                 'created_at':datetime.now(timezone.utc).isoformat(),'tables':expected['tables']}
         with gzip.GzipFile(fileobj=output,mode='wb',mtime=0) as archive:
-            def write(value):
+            def write(value,hashed=True):
                 nonlocal raw
                 data=line(value);raw+=len(data)
-                if len(data)>MAX_LINE or raw>MAX_RAW:raise ValueError('Snapshot exceeds raw limit.')
-                digest.update(data);archive.write(data)
-                if output.tell()>MAX_BYTES:raise ValueError('Snapshot exceeds compressed limit.')
+                if len(data)>MAX_LINE:raise BackupCapacityError('snapshot_line_limit','snapshot_capacity')
+                if raw>MAX_RAW:raise BackupCapacityError('snapshot_raw_limit','snapshot_capacity')
+                # Chronicle saves must fit the existing restore staging reader.
+                # Verification of old archives retains the original MAX_RAW bound.
+                if target=='chronicle' and raw>MAX_RESTORE_RAW:
+                    raise BackupCapacityError('chronicle_restore_capacity','snapshot_capacity')
+                if hashed:digest.update(data)
+                archive.write(data)
+                if output.tell()>MAX_BYTES:raise BackupCapacityError('snapshot_compressed_limit','snapshot_capacity')
             write(header)
             for table,columns in sorted(expected['tables'].items()):
                 counts[table]=0
@@ -85,11 +93,12 @@ def snapshot(settings,target):
                 value=con.execute(sql.SQL('SELECT last_value,is_called FROM {}').format(sql.Identifier(name))).fetchone()
                 sequences.append({'name':name,**dict(value)})
             write({'sequences':sequences})
-            archive.write(line({'counts':counts,'sha256':digest.hexdigest()}))
+            write({'counts':counts,'sha256':digest.hexdigest()},hashed=False)
     data=output.getvalue()
-    if len(data)>MAX_BYTES:raise ValueError('Snapshot exceeds compressed limit.')
+    if len(data)>MAX_BYTES:raise BackupCapacityError('snapshot_compressed_limit','snapshot_capacity')
     return data,{'target':target,'schema_version':header['schema_version'],'created_at':header['created_at'],
-                 'tables':len(counts),'rows':sum(counts.values()),'sha256':hashlib.sha256(data).hexdigest()}
+                 'tables':len(counts),'rows':sum(counts.values()),'sha256':hashlib.sha256(data).hexdigest(),
+                 'raw_bytes':raw,'compressed_bytes':len(data),**legacy}
 
 
 def verify_snapshot(data,target,sha256):

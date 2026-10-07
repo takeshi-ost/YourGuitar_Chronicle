@@ -66,7 +66,7 @@ def guard(con, individual, claim=None):
 
 def candidate(con, claim_id):
     return con.execute("""SELECT c.*,c.created_at AS requested_at FROM claims c
-        JOIN acquire_applications a ON a.claim_id=c.id AND a.status='accepted'
+        JOIN acquire_applications a ON a.claim_id=c.id AND a.status='accepted' AND a.request_kind='acquire'
         WHERE c.id=? AND c.status='active' AND c.claim_type='ownership'
         AND c.ownership_kind='acquire' AND COALESCE(c.ownership_source,'') NOT IN
         ('former_owner','automation','merged_listing')""", (claim_id,)).fetchone()
@@ -141,7 +141,14 @@ def validate_submission(explanation,summary,content,filename):
     return b'',None,None
 
 
-def add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filename,expected_round=None):
+def add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filename,expected_round=None,*,evidence_storage=None):
+    """Append one submission using optional, explicit external original storage.
+
+    Local callers retain the existing BYTEA/SQLite behavior. An external adapter
+    supplies additional_bytes(con, case_id) and store(con, evidence_id, content,
+    mime). It must persist its reference in this same transaction and must not
+    delete originals on transaction failure: the commit outcome can be unknown.
+    """
     if case['status']!='open': raise ValueError('Reopen the dispute before adding evidence')
     link=con.execute('SELECT * FROM ownership_dispute_claims WHERE dispute_id=? AND claim_id=?',(case['id'],claim_id)).fetchone()
     if not link or user not in (case['owner_id'],link['applicant_id']):
@@ -155,10 +162,18 @@ def add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filenam
     if con.execute('SELECT COUNT(*) FROM ownership_dispute_evidence WHERE dispute_id=?',(case['id'],)).fetchone()[0]>=100:
         raise ValueError('This case has reached its 100-submission limit')
     total=con.execute('SELECT COALESCE(SUM(length(content)),0) FROM ownership_dispute_evidence WHERE dispute_id=?',(case['id'],)).fetchone()[0]
+    if evidence_storage is not None:
+        extra=evidence_storage.additional_bytes(con,case['id'])
+        if type(extra) is not int or extra<0: raise RuntimeError('Invalid original storage accounting')
+        total+=extra
+    if len(content)>MAX_BYTES: raise ValueError('The attachment must be at most 12 MiB')
     if total+len(content)>256*1024*1024: raise ValueError('This case has reached its 256 MB attachment limit')
     evidence_id=con.execute('''INSERT INTO ownership_dispute_evidence(dispute_id,claim_id,author_id,explanation,summary,
         content,content_type,filename,created_at) VALUES (?,?,?,?,?,?,?,?,?)''',
-        (case['id'],claim_id,user,explanation.strip(),summary.strip(),content or None,mime,filename,utcnow())).lastrowid
+        (case['id'],claim_id,user,explanation.strip(),summary.strip(),
+         (content or None) if evidence_storage is None else None,mime,filename,utcnow())).lastrowid
+    if content and evidence_storage is not None:
+        evidence_storage.store(con,evidence_id,content,mime)
     con.execute('INSERT INTO ownership_dispute_round_evidence VALUES (?,?)',(evidence_id,rnd['id']))
     con.execute('UPDATE ownership_dispute_round_parties SET submitted_at=? WHERE round_id=? AND claim_id=? AND user_id=?',(utcnow(),rnd['id'],claim_id,user))
     advance_round(con,rnd['id'])
@@ -166,7 +181,7 @@ def add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filenam
     if current_round(con,case['id'])['phase']=='reviewing':event(con,case,'under_review',f"Round {rnd['number']}: both parties submitted; under review")
 
 
-def open_case(con,claim_id,user,explanation,summary,content,mime,filename):
+def open_case(con,claim_id,user,explanation,summary,content,mime,filename,*,evidence_storage=None):
     available(con,user)
     claim=candidate(con,claim_id)
     if not claim or claim['author_user_id']!=user: raise PermissionError('Only the applicant can appeal this Acquire')
@@ -198,7 +213,7 @@ def open_case(con,claim_id,user,explanation,summary,content,mime,filename):
         for participant in {case['owner_id'],user}:
             con.execute('INSERT INTO ownership_dispute_round_parties(round_id,claim_id,user_id) VALUES (?,?,?)',(rnd['id'],claim_id,participant))
     event(con,case,'opened','Under dispute: ownership changes are paused',user)
-    add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filename)
+    add_evidence(con,case,claim_id,user,explanation,summary,content,mime,filename,evidence_storage=evidence_storage)
     return case['id']
 
 
@@ -258,7 +273,7 @@ def listing(con,user=None,admin=False):
     return result
 
 
-def decide(repo,con,case_id,version,action,reason,winner_claim=None):
+def decide(repo,con,case_id,version,action,reason,winner_claim=None,*,actor=None,audit_actor=None):
     case=get_case(con,case_id,admin=True)
     if case['version']!=version: raise ValueError('The dispute has changed. Refresh before deciding')
     if not reason.strip() or len(reason)>4000: raise ValueError('A reason (1–4,000 characters) is required')
@@ -270,14 +285,14 @@ def decide(repo,con,case_id,version,action,reason,winner_claim=None):
         if active(con,case['individual_id']): raise ValueError('Another dispute is already open')
         con.execute("UPDATE ownership_disputes SET status='open',locked_owner_id=? WHERE id=?",(owner,case_id))
         new_round(con,case,reason)
-        event(con,case,'reopened',reason)
+        event(con,case,'reopened',reason,actor)
         return
     if case['status']!='open': raise ValueError('The dispute is already resolved')
     rnd=current_round(con,case_id)
     if action=='request_evidence':
         if not rnd or rnd['phase']!='reviewing':raise ValueError('Both parties must submit evidence before requesting the next round')
         new_round(con,case,reason)
-        event(con,case,'request_evidence',reason);return
+        event(con,case,'request_evidence',reason,actor);return
     if action not in ('owner','applicant'): raise ValueError('Invalid decision')
     links=con.execute('SELECT * FROM ownership_dispute_claims WHERE dispute_id=?',(case_id,)).fetchall()
     if action=='applicant' and winner_claim not in {r['claim_id'] for r in links}: raise ValueError('Select an applicant Claim')
@@ -287,10 +302,11 @@ def decide(repo,con,case_id,version,action,reason,winner_claim=None):
     winner=case['owner_id']
     for link in links:
         positive=action=='applicant' and link['claim_id']==winner_claim
-        repo.admin_moderate_claim_in_connection(con,link['claim_id'],'positive' if positive else 'negative')
+        repo.admin_moderate_claim_in_connection(con,link['claim_id'],'positive' if positive else 'negative',
+            **({'actor':audit_actor} if audit_actor is not None else {}))
         if positive:winner=link['applicant_id']
     snapshot=repo._rebuild_individual_snapshot_in_connection(con,case['individual_id'])
     if str(snapshot['current_owner_user_id'])!=str(winner):
         raise ValueError('The decision conflicts with Claim chronology; no changes were saved')
     con.execute("UPDATE ownership_disputes SET status='resolved',decision=?,reason=?,winner_id=? WHERE id=?",(action,reason,winner,case_id))
-    event(con,case,'resolved',('Original owner supported' if action=='owner' else f'Applicant supported (Acquire #{winner_claim})')+' — '+reason)
+    event(con,case,'resolved',('Original owner supported' if action=='owner' else f'Applicant supported (Acquire #{winner_claim})')+' — '+reason,actor)
