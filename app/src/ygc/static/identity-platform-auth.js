@@ -76,15 +76,20 @@
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
         return account;
       })},
-      requestEmailVerification({language='en'}={}){return serial(async()=>{
+      requestEmailVerification({language='en',acquire}={}){return serial(async()=>{
         const user=auth.currentUser;
         if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
         const current=await me(true);
         if(!current?.user||auth.currentUser!==user)throw Error('Complete registration before verifying email.');
         if(current.identity.email_verified===true)return {account:current,sent:false};
         if(typeof language!=='string'||language.length>63||!/^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$/.test(language))throw Error('Invalid language.');
+        const returnUrl=new URL('/account',origin);
+        if(acquire!==undefined){
+          if(typeof acquire!=='string'||!/^[1-9][0-9]{0,18}$/.test(acquire)||(acquire.length===19&&acquire>'9223372036854775807'))throw Error('Invalid guitar selection.');
+          returnUrl.searchParams.set('acquire',acquire);
+        }
         auth.languageCode=language;
-        await sdk.sendEmailVerification(user,{url:new URL('/account',origin).href});
+        await sdk.sendEmailVerification(user,{url:returnUrl.href});
         return {account:current,sent:true};
       })},
       refreshVerification(){return serial(async()=>{

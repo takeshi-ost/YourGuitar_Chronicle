@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse
 from ygc.db.postgres import connect
 
 from ygc.cloud_account_routes import account_router
@@ -60,6 +60,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_crawl_routes import crawl_router
     app.include_router(crawl_router(verifier,CrawlControl(operations,crawl_client)))
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
+    from ygc.cloud_public_catalog import CloudPublicCatalog
+    from ygc.cloud_public_catalog_routes import public_catalog_router
+    app.include_router(public_catalog_router(verifier, CloudPublicCatalog(settings, operations)))
     from ygc.cloud_content_media import CloudContentMedia
     from ygc.cloud_content_media_routes import content_media_router
     app.include_router(content_media_router(verifier,CloudContentMedia(settings,operations,storage)))
@@ -94,7 +97,4 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
 
     if config is not None:
         install(app, config)
-        @app.get('/')
-        def index():
-            return RedirectResponse('/account')
     return app

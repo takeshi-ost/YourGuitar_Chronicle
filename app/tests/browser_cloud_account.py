@@ -100,6 +100,12 @@ def main():
             return dict(items=page,total=len(rows),next_after=page[-1]['id'] if more else None)
     app.include_router(self_guitars_router(TestVerifier(),Guitars()))
     from ygc.cloud_application_routes import application_router
+    @app.get('/api/public/guitars/{individual_id}')
+    def public_guitar(individual_id: str):
+        assert individual_id == '12'
+        return dict(id='12', manufacturer='Maker', model='Model', serial_number='S12',
+                    finish=None, year='1965', photo=None)
+
     applications={}
     class Applications:
         def list(self,actor):return dict(items=[row.copy() for who,row in applications.values() if who==actor],can_write=True)
@@ -237,7 +243,14 @@ def main():
                 page.locator('#selfApplications').get_by_role('button',name='Detail',exact=True).click()
                 page.locator('#applicationCancel').click();expect(page.locator('#applicationDialog')).to_contain_text('Cancelled')
                 page.keyboard.press('Escape');expect(page.locator('#applicationDialog')).not_to_be_visible()
-                page.locator('#applicationAcquire').click();page.locator('#application_individual_id').fill('12')
+                expect(page.locator('#applicationAcquire')).to_have_attribute('href','/')
+                page.goto(url+'?acquire=12');page.wait_for_function('window.YGCCloudAccountReady')
+                expect(page.locator('#catalogAcquireStart')).to_be_enabled()
+                assert len(applications)==1
+                page.locator('#catalogAcquireStart').click()
+                expect(page.locator('#application_individual_id')).to_have_value('12')
+                expect(page.locator('#application_individual_id')).to_have_js_property('readOnly',True)
+                assert len(applications)==1
                 page.locator('#applicationCreate').click()
                 expect(page.locator('#application_occurred_at')).to_be_enabled()
                 page.locator('#application_occurred_at').fill('2020-01-02')

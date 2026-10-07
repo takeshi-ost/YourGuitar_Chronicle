@@ -227,3 +227,6 @@ if __name__ == '__main__':
 
         from postgres_admin_application_checks import run as admin_application_checks
         admin_application_checks(port)
+
+        from postgres_public_catalog_checks import run as public_catalog_checks
+        public_catalog_checks(port)

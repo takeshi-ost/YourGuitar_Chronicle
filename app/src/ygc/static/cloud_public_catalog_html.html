@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — Public catalog</title>
+<link rel="stylesheet" href="/assets/cloud-public-catalog.css">
+<script src="/assets/identity-platform-auth.js" defer></script>
+<script src="/assets/cloud-public-catalog.js" type="module"></script>
+</head>
+<body>
+<header class="site-header">
+<a class="brand" href="/">Your Guitar Chronicle</a>
+<nav class="page-nav" aria-label="Account and language">
+<a id="accountLink" href="/account">Sign in / Create account</a>
+<label class="language-picker"><span id="languageLabel">Language</span><select id="catalogLanguage" aria-label="Language"><option value="en">English</option><option value="ja">日本語</option></select></label>
+</nav>
+</header>
+<main id="publicCatalog">
+<div class="intro"><p class="eyebrow" id="catalogEyebrow">The stories behind the instruments</p><h1 id="catalogTitle">All Discovered Guitars</h1><p id="catalogDescription">Explore guitar specifications and their public Chronicle.</p></div>
+<p id="serviceNotice" class="notice" role="status" hidden></p>
+<p id="authNotice" class="notice" role="status" hidden></p>
+<div id="catalogLayout" class="catalog-layout" data-detail-open="false">
+<section id="catalogList" class="panel" aria-labelledby="listHeading">
+<div class="panel-heading"><h2 id="listHeading">Guitar catalog</h2><button type="button" id="catalogRefresh">Refresh</button></div>
+<form id="catalogSearchForm" class="catalog-toolbar" role="search">
+<label class="search-field"><span id="searchLabel">Search guitars</span><input id="catalogSearch" type="search" maxlength="120" placeholder="Maker, model or serial" autocomplete="off"></label>
+<label><span id="sortLabel">Sort</span><select id="catalogSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="maker">Maker</option><option value="model">Model</option></select></label>
+<button id="catalogSearchSubmit" type="submit">Search</button>
+</form>
+<p id="catalogStatus" class="status" role="status" aria-live="polite"></p>
+<ol id="catalogRows" class="guitar-list"></ol>
+<nav id="catalogPagination" class="pagination" aria-label="Catalog pages"><button type="button" id="catalogPrevious" disabled>Previous</button><span id="catalogPage"></span><button type="button" id="catalogNext" disabled>Next</button></nav>
+</section>
+<section id="catalogDetail" class="panel product-detail" aria-labelledby="detailHeading">
+<div class="panel-heading"><h2 id="detailHeading" tabindex="-1">Product Detail</h2><a id="catalogBack" href="/" hidden>Back to catalog</a></div>
+<p id="detailStatus" class="status" role="status" aria-live="polite">Choose a guitar to explore its story.</p>
+<article id="detailContent" hidden>
+<div id="detailPhoto" class="detail-image-placeholder" role="img" aria-label="Photo unavailable"><span id="photoPlaceholder">Photo unavailable</span></div>
+<div class="detail-header"><h3 id="detailTitle"></h3><p id="detailIdentifier" class="muted"></p><a id="acquireLink" class="button-link" href="/account">Acquire</a><p id="acquireDescription" class="muted">Continue to your account to make an ownership application.</p></div>
+<details class="accordion-section" id="specificationAccordion" open><summary id="specificationHeading">Specification</summary><dl id="detailSpecifications" class="catalog-spec"></dl></details>
+<details class="accordion-section" id="chronicleAccordion" open><summary id="chronicleHeading">Chronicle</summary><p id="chronicleOrder" class="muted">Latest recorded first</p><p id="chronicleStatus" class="status" role="status"></p><div id="chronicleEntries"></div><button type="button" id="chronicleMore" hidden>Load more</button></details>
+</article>
+</section>
+</div>
+<noscript>This catalog requires JavaScript to load public guitar records. / 公開ギター情報の表示にはJavaScriptが必要です。</noscript>
+</main>
+<footer id="catalogFooter">Your Guitar Chronicle · Public catalog</footer>
+</body>
+</html>

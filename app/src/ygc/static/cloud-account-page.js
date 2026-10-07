@@ -2,7 +2,7 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 import {createGuitars} from './cloud-account-guitars.js';
 import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
-import {createApplications} from './cloud-account-applications.js';
+import {createApplications,readCatalogIntent} from './cloud-account-applications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
@@ -11,6 +11,9 @@ const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
 const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+let acquireIntent=readCatalogIntent(location.search);
+applications.setCatalogIntent(acquireIntent);
+globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);applications.setCatalogIntent(acquireIntent)});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -42,9 +45,11 @@ async function documents(){
   policies=await auth.documents();
   $('terms').checked=$('privacy').checked=false;
 }
-function update(result){
+function update(result,refreshCatalog=false){
+  const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
   if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear()}
   state=result;
+  if(changed||refreshCatalog)applications.setCatalogIntent(acquireIntent);
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
   render();
@@ -79,7 +84,7 @@ $('cloudAccountForm').onsubmit=async event=>{
       terms_accepted:$('terms').checked,privacy_accepted:$('privacy').checked,
       terms_version:policies.terms.version,privacy_version:policies.privacy.version,
     },state?.registration_required?undefined:credentials);
-    $('email').value='';update(result);await loadAvatar();
+    $('email').value='';update(result,true);await loadAvatar();
   }catch(error){
     if(error.code==='policy_changed'){
       try{await documents()}catch{error={code:'auth/network-request-failed'}}
@@ -98,8 +103,8 @@ $('sendVerification').onclick=async()=>{
   if(busy||!state?.user)return;
   busy=true;render();
   try{
-    const result=await auth.requestEmailVerification({language:document.documentElement.lang||'en'});
-    update(result.account);
+    const result=await auth.requestEmailVerification({language:document.documentElement.lang||'en',acquire:acquireIntent||undefined});
+    update(result.account,true);
     $('status').textContent=t(result.sent?'cloud.verification_sent':'cloud.email_verified');
   }catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
@@ -108,7 +113,7 @@ $('refreshVerification').onclick=async()=>{
   if(busy||!state?.user)return;
   busy=true;render();
   try{
-    const result=await auth.refreshVerification();update(result);await loadAvatar();
+    const result=await auth.refreshVerification();update(result,true);await loadAvatar();
     if(result?.user)$('status').textContent=t(result.identity?.email_verified===true?'cloud.email_verified':'cloud.verification_pending');
   }catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}

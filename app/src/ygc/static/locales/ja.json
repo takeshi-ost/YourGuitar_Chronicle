@@ -1503,5 +1503,16 @@
   "applications.reference": "比較元の写真",
   "applications.ai_reasons": "元のAI審議の理由",
   "applications.admin_review": "管理者による審議と理由",
-  "admin_applications.photos_unavailable": "保存された写真の参照が一部利用できません。診断情報と許可された管理者操作は引き続き利用できます。"
+  "admin_applications.photos_unavailable": "保存された写真の参照が一部利用できません。診断情報と許可された管理者操作は引き続き利用できます。",
+  "catalog.browse": "ギターを見る",
+  "catalog.select_guitar": "カタログからギターを選択",
+  "catalog.acquire_title": "選択したギターの所有申請",
+  "catalog.acquire_loading": "選択したギターを確認中…",
+  "catalog.acquire_sign_in": "このギターの申請を続けるには、サインインまたはアカウント登録をしてください。",
+  "catalog.acquire_verify": "このギターの申請を続けるには、メールアドレスを確認してください。",
+  "catalog.acquire_ready": "選択したギターを確認して申請の下書きを開始してください。この操作で所有権は変わりません。",
+  "catalog.acquire_invalid": "ギターの指定が無効です。カタログから選択してください。",
+  "catalog.acquire_unavailable": "このギターを確認できません。カタログに戻ってやり直してください。",
+  "catalog.acquire_start": "所有申請の下書きを開始",
+  "catalog.view_guitar": "選択したギターを見る"
 }
