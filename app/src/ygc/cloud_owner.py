@@ -8,7 +8,7 @@ from ygc.cloud_guitars import positive_id
 from ygc.db.postgres import connect
 from ygc.db.postgres_ownership import PostgresOwnership
 from ygc.platform_boundaries import ActorContext
-from ygc.cloud_claim_media import media_rows, media_projection
+from ygc.cloud_claim_media import PHOTO_CLAIM_TYPES, media_rows, media_projection, image_reference
 
 
 def specification_items(connection, row):
@@ -35,7 +35,7 @@ def content_revision(connection, row):
         'value_text', 'body', 'occurred_at', 'author_user_id')}
     content['revision'] = revision(row)
     content['spec_items'] = specification_items(connection, row)
-    if row['claim_type'] == 'media':
+    if row['claim_type'] in PHOTO_CLAIM_TYPES:
         content['media_items'] = media_rows(connection, row)
     return hashlib.sha256(json.dumps(content, ensure_ascii=True, sort_keys=True,
                                     separators=(',', ':')).encode()).hexdigest()
@@ -65,6 +65,7 @@ class CloudOwner:
                 author_name=row['author_name'], claim_type=row['claim_type'],
                 ownership_kind=row['ownership_kind'], occurred_at=row['occurred_at'], body=row['body'],
                 field_name=row['field_name'], value_text=row['value_text'],
+                event_kind=row['value_text'] if row['claim_type'] == 'event' else None,
                 specification_kind=row['specification_kind'], spec_items=specification_items(repo.connection, row),
                 decline_reason_required=disputes.eligible(repo.connection, disputes.candidate(repo.connection, row['id'])),
                 verification_status=row['verification_status'], created_at=row['created_at'],
@@ -73,7 +74,7 @@ class CloudOwner:
                 for claim in sorted(ids,reverse=True)
                 if (row := repo.connection.execute('''SELECT c.*,u.display_name AS author_name
                     FROM claims c JOIN users u ON u.id=c.author_user_id WHERE c.id=?
-                    AND (c.claim_type<>'media' OR u.ban_status='normal')''', (claim,)).fetchone())]}
+                    AND (c.claim_type NOT IN ('media','event') OR u.ban_status='normal')''', (claim,)).fetchone())]}
 
     def respond(self, actor, individual, claim, data):
         positive_id(str(claim))
@@ -88,13 +89,17 @@ class CloudOwner:
             row = repo.connection.execute('SELECT * FROM claims WHERE id=? FOR UPDATE', (claim,)).fetchone()
             if not row or row['individual_id'] != individual:
                 raise ClaimConflict('Claim changed; reload before responding.')
-            if row['claim_type'] == 'media':
+            if row['claim_type'] in PHOTO_CLAIM_TYPES:
                 if (claim not in repo.owner_verifiable_claim_ids(individual, user)
                         or not repo.connection.execute("SELECT 1 FROM users WHERE id=? AND ban_status='normal'",
                                                        (row['author_user_id'],)).fetchone()):
                     # A handoff/BAN revokes the photo review even if the Claim
                     # itself did not change. Signal the UI to discard old blobs.
-                    raise ClaimConflict('Media Claim is no longer available for review.')
+                    raise ClaimConflict('Photo Claim is no longer available for review.')
+                # Legacy local paths remain manageable by their author, but
+                # cannot support a cloud review of the attached photos.
+                for attachment in media_rows(repo.connection, row):
+                    image_reference(attachment)
             if content_revision(repo.connection, row) != data['revision']:
                 raise ClaimConflict('Claim changed; reload before responding.')
             if not repo.set_claim_response_in_connection(repo.connection, claim, user, data['stance'], reason):

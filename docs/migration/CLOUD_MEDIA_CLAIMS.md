@@ -49,3 +49,6 @@ Normalは認証済み本人の読取・書込、Read Onlyは写真を含む認�
 
 
 Transfer / Releaseの認証済みWeb移植は[Cloud Transfer / Release](CLOUD_TRANSFER_RELEASE.md)に追加。公開・配置は別承認。
+
+
+Eventの投稿・作者編集と任意写真・Owner確認は[Cloud Event](CLOUD_EVENT_CLAIMS.md)に追加。添付付きEvent / Mediaの通常Owner応答は、クラウドで有効な画像参照を持たない旧ローカル写真では行えない。作者による本文編集・無効化は維持する。

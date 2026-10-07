@@ -13,7 +13,7 @@ from ygc.claim_dates import validate_claim_date, viewer_timezone
 from ygc.claim_revision import ClaimConflict
 from ygc.cloud_guitars import GuitarMissing, MAX_ID
 from ygc.cloud_owner import specification_items, content_revision as claim_revision
-from ygc.cloud_claim_media import MAX_IMAGES, MAX_TOTAL_UPLOAD, media_rows, media_projection, image_reference
+from ygc.cloud_claim_media import MAX_IMAGES, MAX_TOTAL_UPLOAD, PHOTO_CLAIM_TYPES, media_rows, media_projection, image_reference
 from ygc.cloud_avatar import normalize_image, ImageUploadInvalid
 from ygc.cloud_content_media import encode_reference
 from ygc.cloud_public_catalog import CLAIM_TYPES, GUITAR_FIELDS, STATES, identifier
@@ -22,7 +22,8 @@ from ygc.db.postgres_ownership import BoundRepository, PostgresOwnership
 from ygc.db.postgres_queries import ObservationConnection, SharedCursor, qmark_parameters
 from ygc.platform_boundaries import ActorContext
 
-TYPES = ('specification', 'incident', 'media')
+TYPES = ('specification', 'incident', 'media', 'event')
+EVENT_KINDS = ('exhibition', 'performance', 'recording', 'auction', 'other')
 MEDIA_UPLOADS = threading.BoundedSemaphore(2)
 
 
@@ -57,6 +58,8 @@ def payload(data, *, editing=False, media_upload=False):
         allowed |= {'specification_kind', 'items'}
     elif kind == 'incident':
         allowed.add('incident_kind')
+    elif kind == 'event':
+        allowed.add('event_kind')
     elif kind == 'media' and (editing or media_upload):
         pass
     else:
@@ -74,6 +77,9 @@ def payload(data, *, editing=False, media_upload=False):
     if date is not None and (not isinstance(date, str) or len(date) > 40):
         raise ValueError('Invalid Claim date.')
     result['occurred_at'] = validate_claim_date(date)
+    if kind == 'event' and (not result['occurred_at'] or not result['body']
+                            or result['event_kind'] not in EVENT_KINDS):
+        raise ValueError('Event kind, date and detail are required.')
     if not editing and not result['occurred_at']:
         result['occurred_at'] = datetime.now(timezone.utc).astimezone(viewer_timezone.get()).date().isoformat()
     if kind == 'specification':
@@ -108,6 +114,7 @@ def own_projection(connection, row):
             'body', 'occurred_at', 'status', 'verification_status', 'created_at', 'updated_at')},
         'specification_kind': (row['specification_kind'] or 'specification') if row['claim_type'] == 'specification' else None,
         'incident_kind': row['value_text'] if row['claim_type'] == 'incident' else None,
+        'event_kind': row['value_text'] if row['claim_type'] == 'event' else None,
         'spec_items': specification_items(connection, row), 'revision': claim_revision(connection, row),
         **media_projection(connection, row)}
 
@@ -152,7 +159,7 @@ class CloudClaims:
               WHERE c.individual_id=i.id AND c.status='active' AND u.ban_status='normal'
                 AND c.claim_type IN ({marks}) AND c.verification_status IN ({states}))
               OR EXISTS (SELECT 1 FROM claims c WHERE c.individual_id=i.id
-                AND c.author_user_id=? AND c.claim_type IN ('specification','incident','media')))''',
+                AND c.author_user_id=? AND c.claim_type IN ('specification','incident','media','event')))''',
             (individual, *CLAIM_TYPES, *STATES, user)).fetchone()
         if not row:
             raise GuitarMissing()
@@ -164,7 +171,7 @@ class CloudClaims:
         with self.transaction(actor, individual) as (repo, user, can_write):
             guitar = self._individual(repo, individual, user)
             rows = repo.connection.execute('''SELECT * FROM claims WHERE individual_id=? AND author_user_id=?
-                AND claim_type IN ('specification','incident','media') AND (?=0 OR id<?)
+                AND claim_type IN ('specification','incident','media','event') AND (?=0 OR id<?)
                 ORDER BY id DESC LIMIT ?''', (individual, user, after, after, limit + 1)).fetchall()
             return {'individual': guitar, 'can_write': can_write,
                 'items': [own_projection(repo.connection, row) for row in rows[:limit]],
@@ -178,6 +185,9 @@ class CloudClaims:
                 claim = repo.create_specification_claim_group(user, individual,
                     specification_kind=data['specification_kind'], items=data['items'],
                     occurred_at=data['occurred_at'], body=data['body'])
+            elif data['claim_type'] == 'event':
+                claim = repo.create_event_claim(user, individual, event_kind=data['event_kind'],
+                    occurred_at=data['occurred_at'], detail=data['body'])
             else:
                 claim = repo.create_incident_claim(user, individual, incident_kind=data['incident_kind'],
                     occurred_at=data['occurred_at'], detail=data['body'])
@@ -195,32 +205,49 @@ class CloudClaims:
         finally:
             MEDIA_UPLOADS.release()
 
+    def create_event(self, actor, individual, data, images=()):
+        if not MEDIA_UPLOADS.acquire(blocking=False):
+            raise ClaimConflict('Claim photo uploads are busy; retry later.')
+        try:
+            return self._create_photo_claim(actor, individual, data, images, kind='event')
+        finally:
+            MEDIA_UPLOADS.release()
+
     def _create_media(self, actor, individual, data, images):
+        return self._create_photo_claim(actor, individual, data, images, kind='media')
+
+    def _create_photo_claim(self, actor, individual, data, images, *, kind):
         data = payload(data, media_upload=True)
-        if data['claim_type'] != 'media' or self.storage is None:
-            raise ValueError('Private Media storage is required.')
+        if data['claim_type'] != kind:
+            raise ValueError('Invalid photo Claim type.')
         normalized, total = [], 0
         # Normalize each bounded upload before holding the write locks. Input
         # may be a lazy iterable over spooled files; retain only normalized JPEGs.
         for raw, mime in images:
             if len(normalized) >= MAX_IMAGES:
-                raise ValueError('A Media Claim can contain up to 10 images.')
+                raise ValueError('A Claim can contain up to 10 images.')
             if isinstance(raw, bytes):
                 total += len(raw)
             if total > MAX_TOTAL_UPLOAD:
                 raise ImageUploadInvalid('image_size_limit')
             normalized.append(normalize_image(raw, mime, max_side=2048))
-        if not normalized:
+        if not normalized and kind == 'media':
             raise ValueError('At least one image is required.')
+        if normalized and self.storage is None:
+            raise ValueError('Private Claim photo storage is required.')
         candidates, committing = [], False
         try:
             with self.transaction(actor, individual, write=True) as (repo, user, _):
                 for image in normalized:
                     candidates.append(self.storage.put('content', image, content_type='image/jpeg'))
-                claim, _ = repo.create_media_claim_group(user, individual,
-                    media_items=[dict(storage_path=encode_reference(ref), mime_type='image/jpeg')
-                                 for ref in candidates],
-                    occurred_at=data['occurred_at'], caption=data['body'])
+                attachments = [dict(storage_path=encode_reference(ref), mime_type='image/jpeg')
+                               for ref in candidates]
+                if kind == 'event':
+                    claim = repo.create_event_claim(user, individual, event_kind=data['event_kind'],
+                        occurred_at=data['occurred_at'], detail=data['body'], media_items=attachments)
+                else:
+                    claim, _ = repo.create_media_claim_group(user, individual, media_items=attachments,
+                        occurred_at=data['occurred_at'], caption=data['body'])
                 repo.create_claim_notification(claim)
                 result = {'claim': own_projection(repo.connection, repo.connection.execute(
                     'SELECT * FROM claims WHERE id=?', (claim,)).fetchone())}
@@ -243,7 +270,7 @@ class CloudClaims:
         expected_revision({'revision': expected})
         with self.transaction(actor, individual) as (repo, user, _):
             row = repo.connection.execute('SELECT * FROM claims WHERE id=?', (claim,)).fetchone()
-            if not row or row['individual_id'] != individual or row['claim_type'] != 'media':
+            if not row or row['individual_id'] != individual or row['claim_type'] not in PHOTO_CLAIM_TYPES:
                 raise GuitarMissing()
             if row['author_user_id'] != user:
                 author = repo.connection.execute("SELECT 1 FROM users WHERE id=? AND ban_status='normal'",
@@ -281,8 +308,8 @@ class CloudClaims:
                     specification_kind=data['specification_kind'], items=data['items'],
                     occurred_at=data['occurred_at'], body=data['body'])
             else:
-                if row['claim_type'] == 'incident' and data['incident_kind'] != row['value_text']:
-                    raise ValueError('Incident kind cannot change.')
+                if row['claim_type'] in ('incident', 'event') and data[row['claim_type'] + '_kind'] != row['value_text']:
+                    raise ValueError('Claim subtype cannot change.')
                 updated = repo.update_claim(claim, user, occurred_at=data['occurred_at'], body=data['body'])
             if not updated:
                 raise ClaimConflict('Claim is no longer active.')
