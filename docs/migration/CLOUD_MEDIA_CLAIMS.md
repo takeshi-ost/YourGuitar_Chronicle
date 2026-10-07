@@ -46,3 +46,6 @@ Normalは認証済み本人の読取・書込、Read Onlyは写真を含む認�
 使い捨てSQLite／モックStorageのサービス・HTTP試験、NodeのUI試験、使い捨てPostgreSQL／Chromiumスイートを統一runnerへ登録。実写真・実認証・実ステージングのデータには触れない。クラウド作業環境で禁止されたPostgreSQL／Chromium起動は試さず、Macまたは通常CIの同一checkpointで後続確認する。詳細と実行結果は[今回の引き継ぎ](../history/CLOUD_MEDIA_CLAIMS_HANDOFF_2026-10-07.md)。
 
 公開写真の同意・公開範囲・公開ギャラリーへの接続は未決定のまま。Event、Transfer／Release、Listing訂正は別の移植単位。
+
+
+Transfer / Releaseの認証済みWeb移植は[Cloud Transfer / Release](CLOUD_TRANSFER_RELEASE.md)に追加。公開・配置は別承認。

@@ -10,7 +10,7 @@ const messages={
     maker:'Maker',manufacturer:'Maker',model:'Model',finish:'Finish',year:'Year',serial_number:'Serial',previous:'Previous',next:'Next',
     back:'Back to catalog',view:'View details',loading:'Loading guitars…',loading_detail:'Loading guitar details…',choose:'Choose a guitar to explore its story.',
     count:'{count} guitars',page:'Page {page} of {pages}',empty:'No guitars found. Try a different search.',photo:'Photo unavailable',
-    add_claim:'Add Claim',add_claim_help:'Record a specification, repair or incident from your account.',
+    ownership_action:'Transfer / Release',ownership_help:'Current owners can propose a Transfer or record a Release from their account.',add_claim:'Add Claim',add_claim_help:'Record a specification, repair or incident from your account.',
     specification:'Specification',chronicle:'Chronicle',acquire:'Acquire',acquire_help:'Continue to your account to make an ownership application.',
     identifier:'Guitar #{id}',source:'Source',more:'Load more',loading_more:'Loading…',chronicle_empty:'No public Chronicle entries yet.',
     chronicle_order:'Latest recorded first',chronicle_count:'{count} public entries shown',unavailable:'The catalog is temporarily unavailable. Please try Refresh.',
@@ -33,7 +33,7 @@ const messages={
     maker:'メーカー',manufacturer:'メーカー',model:'モデル',finish:'仕上げ',year:'年式',serial_number:'シリアル',previous:'前へ',next:'次へ',
     back:'カタログに戻る',view:'詳細を見る',loading:'ギターを読み込み中…',loading_detail:'個体詳細を読み込み中…',choose:'ギターを選ぶと詳細を表示します。',
     count:'{count}本のギター',page:'{pages}ページ中 {page}ページ',empty:'ギターが見つかりません。検索条件を変えてお試しください。',photo:'写真は公開されていません',
-    add_claim:'Claimを追加',add_claim_help:'アカウント画面から仕様・修理・事故や被害を記録できます。',
+    ownership_action:'譲渡 / 手放し',ownership_help:'現在の所有者はアカウント画面から譲渡の申請や手放しの記録ができます。',add_claim:'Claimを追加',add_claim_help:'アカウント画面から仕様・修理・事故や被害を記録できます。',
     specification:'仕様',chronicle:'クロニクル',acquire:'所有申請',acquire_help:'所有申請を行うにはアカウント画面へ進んでください。',
     identifier:'ギター #{id}',source:'出典',more:'さらに読み込む',loading_more:'読み込み中…',chronicle_empty:'公開クロニクルはまだありません。',
     chronicle_order:'記録が新しい順',chronicle_count:'公開記録を{count}件表示',unavailable:'現在カタログを利用できません。「更新」で再度お試しください。',
@@ -142,10 +142,10 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     detail=null;claims=[];nextAfter=null;moreLoading=false;
     $('detailContent').hidden=true;$('detailTitle').textContent='';$('detailIdentifier').textContent='';
     $('detailSpecifications').replaceChildren();$('chronicleEntries').replaceChildren();$('chronicleStatus').textContent='';
-    $('acquireLink').href=$('addClaimLink').href='/account';$('chronicleMore').hidden=true;
+    $('acquireLink').href=$('addClaimLink').href=$('ownershipLink').href='/account';$('chronicleMore').hidden=true;
   }
   function renderStatic(){
-    const labels={catalogTitle:'title',catalogEyebrow:'eyebrow',catalogDescription:'description',listHeading:'list',detailHeading:'detail',accountLink:'account',languageLabel:'language',searchLabel:'search',sortLabel:'sort',catalogSearchSubmit:'submit',catalogRefresh:'refresh',catalogPrevious:'previous',catalogNext:'next',catalogBack:'back',photoPlaceholder:'photo',specificationHeading:'specification',chronicleHeading:'chronicle',chronicleOrder:'chronicle_order',acquireLink:'acquire',acquireDescription:'acquire_help',addClaimLink:'add_claim',addClaimDescription:'add_claim_help',catalogFooter:'footer'};
+    const labels={catalogTitle:'title',catalogEyebrow:'eyebrow',catalogDescription:'description',listHeading:'list',detailHeading:'detail',accountLink:'account',languageLabel:'language',searchLabel:'search',sortLabel:'sort',catalogSearchSubmit:'submit',catalogRefresh:'refresh',catalogPrevious:'previous',catalogNext:'next',catalogBack:'back',photoPlaceholder:'photo',specificationHeading:'specification',chronicleHeading:'chronicle',chronicleOrder:'chronicle_order',acquireLink:'acquire',acquireDescription:'acquire_help',addClaimLink:'add_claim',addClaimDescription:'add_claim_help',ownershipLink:'ownership_action',ownershipDescription:'ownership_help',catalogFooter:'footer'};
     for(const [id,key] of Object.entries(labels))$(id).textContent=t(key);
     document.documentElement.lang=locale;document.title='Your Guitar Chronicle — '+t('list');
     $('catalogSearch').placeholder=t('placeholder');$('catalogLanguage').value=locale;$('catalogLanguage').setAttribute('aria-label',t('language'));
@@ -203,7 +203,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   function renderDetail(){
     if(!detail)return;
     $('detailContent').hidden=false;$('detailTitle').textContent=[detail.manufacturer,detail.model].filter(Boolean).join(' ')||t('identifier',{id:detail.id});
-    $('detailIdentifier').textContent=t('identifier',{id:detail.id});$('acquireLink').href='/account?acquire='+encodeURIComponent(detail.id);$('addClaimLink').href='/account?claim='+encodeURIComponent(detail.id);
+    $('detailIdentifier').textContent=t('identifier',{id:detail.id});$('acquireLink').href='/account?acquire='+encodeURIComponent(detail.id);$('addClaimLink').href='/account?claim='+encodeURIComponent(detail.id);$('ownershipLink').href='/account?ownership='+encodeURIComponent(detail.id);
     $('detailSpecifications').replaceChildren();
     const add=(field,value)=>{const row=node('div',undefined,'catalog-spec-row');row.append(node('dt',fieldLabel(field),'catalog-spec-label'),node('dd',valueText(value),'catalog-spec-value'));$('detailSpecifications').append(row)};
     const finish=detail.specifications.find(item=>item.field_name.toLowerCase()==='finish');

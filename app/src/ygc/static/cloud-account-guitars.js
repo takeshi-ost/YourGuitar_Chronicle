@@ -1,5 +1,5 @@
 import {createPrivateMedia} from './cloud-account-media.js';
-export function createGuitars({auth,state,busy,work}){
+export function createGuitars({auth,state,busy,work,openOwnership}){
   const root=document.getElementById('selfGuitars'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   let epoch=0,pending=null,canWrite=null,ownerId=null,dialogEpoch=0,rowsEpoch=0,mediaEpoch=0,navigationEpoch=0;
   const identity=()=>JSON.stringify([state()?.user?.app_user_id??null,state()?.identity?.email_verified===true,state()?.user?.status??null]);
@@ -120,7 +120,7 @@ export function createGuitars({auth,state,busy,work}){
     const refresh=document.createElement('button'),previous=document.createElement('button'),next=document.createElement('button');
     for(const [button,key] of [[refresh,'action.refresh'],[previous,'users.previous'],[next,'users.next']]){button.type='button';button.textContent=t(key)}
     section.append(title,status,list,refresh,previous,next);root.append(section);
-    panels[kind]={status,list,refresh,previous,next,history:[0],nextAfter:null};
+    panels[kind]={status,list,refresh,previous,next,history:[0],nextAfter:null,read:0};
     refresh.onclick=()=>{if(busy())return;panels[kind].history=[0];work(()=>page(kind))};
     previous.onclick=()=>{const panel=panels[kind];if(busy()||panel.history.length<2)return;panel.history.pop();work(()=>page(kind))};
     next.onclick=()=>{const panel=panels[kind];if(busy()||panel.nextAfter===null)return;panel.history.push(panel.nextAfter);work(()=>page(kind))};
@@ -138,18 +138,18 @@ export function createGuitars({auth,state,busy,work}){
   }
   function clear(){renderedIdentity=identity();epoch++;dialogEpoch++;rowsEpoch++;clearPhotos();globalThis.YGCOverlays.close(dialog);pending=null;canWrite=null;claims.replaceChildren();for(const panel of Object.values(panels)){panel.history=[0];panel.nextAfter=null;panel.list.replaceChildren();panel.status.textContent=''}}
   async function page(kind){
-    const current=epoch,panel=panels[kind],owner=state()?.user?.app_user_id;
+    const current=epoch,panel=panels[kind],owner=state()?.user?.app_user_id,read=++panel.read;
     panel.list.replaceChildren();panel.nextAfter=null;panel.status.textContent=t('cloud.working');
     try{
       const params=new URLSearchParams({kind,limit:'25'}),after=panel.history.at(-1);if(after)params.set('after',after);
       const response=await auth().authorizedFetch('/api/auth/guitars?'+params,{},true);
       if(!response.ok)throw Object.assign(Error('Ownership unavailable'),{status:response.status});
-      const data=await response.json();if(current!==epoch||owner!==state()?.user?.app_user_id||!eligible())return;
+      const data=await response.json();if(current!==epoch||read!==panel.read||owner!==state()?.user?.app_user_id||!eligible())return;
       if(typeof data.total!=='string'||!/^(0|[1-9][0-9]*)$/.test(data.total)||!Array.isArray(data.items)||data.items.length>25||!(data.next_after===null||typeof data.next_after==='string'&&/^[1-9][0-9]*$/.test(data.next_after))||data.items.some(row=>!row||typeof row.id!=='string'||!/^[1-9][0-9]*$/.test(row.id)))throw Error('Invalid ownership page');
-      for(const row of data.items){const item=document.createElement('li');item.textContent='#'+row.id+' · '+[row.manufacturer,row.model,row.year,row.serial_number].map(value=>value??'—').join(' · ');if(kind==='owned'){const approve=document.createElement('button');approve.type='button';approve.textContent=t('owner.heading');approve.onclick=()=>openOwner(row.id);item.append(approve)}panel.list.append(item)}
+      for(const row of data.items){const item=document.createElement('li');item.textContent='#'+row.id+' · '+[row.manufacturer,row.model,row.year,row.serial_number].map(value=>value??'—').join(' · ');if(kind==='owned'){const approve=document.createElement('button');approve.type='button';approve.textContent=t('owner.heading');approve.onclick=()=>openOwner(row.id);item.append(approve)}if(openOwnership){const ownership=document.createElement('button');ownership.type='button';ownership.textContent=t('ownership.manage');ownership.onclick=()=>openOwnership(row.id);item.append(ownership)}panel.list.append(item)}
       panel.nextAfter=data.next_after;panel.status.textContent=t(data.total==='0'?'users.ownership_empty':'guitars.total_count',{count:data.total});
     }catch(error){
-      if(current!==epoch||owner!==state()?.user?.app_user_id||!eligible())return;
+      if(current!==epoch||read!==panel.read||owner!==state()?.user?.app_user_id||!eligible())return;
       if([401,403].includes(error.status)){
         clear();for(const item of Object.values(panels))item.status.textContent=t('self_profile.restricted');
       }else{
@@ -158,10 +158,14 @@ export function createGuitars({auth,state,busy,work}){
     }
     render();
   }
+  async function refreshHistory(){
+    for(const panel of Object.values(panels))panel.history=[0];
+    await Promise.all(['owned','formerly_owned'].map(page));
+  }
   async function refresh(){
     if(dialog.open)globalThis.YGCOverlays.close(dialog);epoch++;for(const panel of Object.values(panels))panel.history=[0];
     await Promise.all(['owned','formerly_owned'].map(page));
   }
   globalThis.addEventListener('pagehide',clear);globalThis.addEventListener('popstate',()=>{navigationEpoch++;if(dialog.open)globalThis.YGCOverlays.close(dialog)});
-  return {render,refresh,clear};
+  return {render,refresh,refreshHistory,clear};
 }

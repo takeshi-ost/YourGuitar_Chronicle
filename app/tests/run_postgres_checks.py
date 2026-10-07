@@ -236,3 +236,6 @@ if __name__ == '__main__':
 
         from postgres_media_claim_checks import run as media_claim_checks
         media_claim_checks(port)
+
+        from postgres_ownership_workflow_checks import run as ownership_workflow_checks
+        ownership_workflow_checks(port)

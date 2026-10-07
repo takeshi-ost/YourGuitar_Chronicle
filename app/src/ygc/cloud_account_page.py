@@ -52,6 +52,6 @@ def install(app, config):
     def asset(filename: str):
         if filename not in ('identity-platform-auth.js', 'cloud-auth-loader.js',
                             'cloud-public-catalog.js', 'cloud-public-catalog.css',
-                            'cloud-account-page.js', 'cloud-account-profile.js', 'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-applications.js', 'cloud-console-guitars.js', 'cloud-console-media.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
+                            'cloud-account-page.js', 'cloud-account-profile.js', 'cloud-account-guitars.js', 'cloud-account-ownership.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-applications.js', 'cloud-console-guitars.js', 'cloud-console-media.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')
         return FileResponse(STATIC / filename, headers={'Cache-Control': 'no-store'})
