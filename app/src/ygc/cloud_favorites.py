@@ -5,7 +5,7 @@ only mutable table is user_favorites. Hidden/stale targets do not contribute to
 pages or totals. Removing an ID is deliberately an idempotent self-only delete:
 it reveals nothing about whether that target exists or remains public.
 """
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 
 from ygc.claim_revision import ClaimConflict
 from ygc.cloud_guitars import GuitarMissing, MAX_ID
@@ -109,16 +109,19 @@ class CloudFavorites:
 
     @contextmanager
     def _content(self, actor, scope, *, target_read=False):
-        try:
-            with PostgresAccounts(self.settings).content_transaction(actor, scope) as result:
-                yield result
-        except ValueError:
-            # Self was checked separately under the retained account lock.
-            # A stale, missing or mismapped target-author projection must not
-            # distinguish a hidden target from an unknown target.
-            if target_read:
-                raise GuitarMissing() from None
-            raise
+        with ExitStack() as stack:
+            try:
+                result = stack.enter_context(PostgresAccounts(self.settings).content_transaction(actor, scope))
+            except ValueError:
+                # Self was checked separately under the retained account lock.
+                # Only entry failures from the target-author registry/projection
+                # are indistinguishable from an unknown target.
+                if target_read:
+                    raise GuitarMissing() from None
+                raise
+            # Body and commit/rollback failures retain their original types,
+            # including ClaimConflict, so callers can distinguish retryable races.
+            yield result
 
     @staticmethod
     def _visible(connection, individual):

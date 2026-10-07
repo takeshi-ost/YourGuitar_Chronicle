@@ -67,3 +67,14 @@
 4. 公開プロフィール、写真公開同意・配信・撤回、Follow公開機能は今回の成果に含めず、別設計・承認で扱う。
 
 詳細仕様は [CLOUD_PRIVATE_FAVORITES.md](../migration/CLOUD_PRIVATE_FAVORITES.md)。既存のOwnership、Claim、Evidence、Notification、schema、runtime grants、Scheduler、Review／Crawl設定を変更する移植ではない。
+
+## PR62 初回CI後の修正
+
+初回head `b377ed7f968baf2715d58b6c6f1f384a17442cca` のCIではPython2,331件・Node845件が成功したが、実ChromiumとPostgreSQLで次の不具合を検出した。失敗した受入条件を弱めず、実装と回帰テストを修正した。
+
+- Favoriteの対象作成者投影エラーを隠す処理が、transaction本体の`ClaimConflict`まで404に変換していた。非公開対象を隠す変換はcontext entryだけに限定し、本体・commit・rollbackの競合は409として保持する。
+- アカウント画面のpagehideがSign Outと同じ解除処理を呼び、Identity Correctionの送信結果不明markerを消していた。navigation suspensionは私的表示と非同期処理を破棄しつつ、既存の本人・対象IDだけのretry markerを維持する。BFCacheは正規認証の再確認後に復元する。
+- 関連する非同期処理の確認で、古いAvatar応答が本人切替後に再表示される経路を閉じた。本人・operation世代・正規adapter accountを確認し、古いimage blob、エラー、保存／削除の後続処理を適用しない。
+- SDK本人切替がobserver通知より先に起きた場合も、adapterは以前の正規account cacheと異なる本人で古い操作を送らない。明示的な正規account再取得・登録の経路は維持する。
+
+これらは既存の本人限定保護とretry safetyの修正であり、公開範囲、schema、grant、運用モードを拡張しない。修正後のローカルaggregateと同一headの実Chromium・PostgreSQL CI結果はPRの最新commit／publication記録で確認する。

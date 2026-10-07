@@ -81,7 +81,13 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
   function errorText(error){return t(error.code==='service_restricted'?'applications.service_restricted':[401,403].includes(error.status)?'self_profile.restricted':error.status===404?'identity.unavailable':error.status===409?'identity.conflict':[400,422].includes(error.status)?'identity.invalid':'identity.failed')}
   function resetDialog(){dialogEpoch++;detailEpoch++;inputEpoch++;selected=null;detail=null;historyRows=[];historyAfter=null;editing=false;pending=null;checked=false;for(const input of Object.values(inputs))input.value='';reason.value='';guitar.textContent=listingDate.textContent=message.textContent='';preview.replaceChildren();history.replaceChildren()}
   function purge(){listEpoch++;rows=[];nextAfter=null;listWrite=null;list.replaceChildren();globalThis.YGCOverlays.close(dialog);resetDialog()}
-  function clear(){accountEpoch++;if(activeAccount!==null){uncertain.clear();persist()}activeAccount=null;purge();notice='';renderedIdentity=identity()}
+  function clear({preserveRetryMarkers=false}={}){
+    accountEpoch++;
+    // The account shell suspends with no visible actor. Keep only the existing
+    // account/Listing IDs in sessionStorage, never drafts or private responses.
+    if(activeAccount!==null&&!preserveRetryMarkers){uncertain.clear();persist()}
+    activeAccount=null;uncertain.clear();renderedIdentity=identity();purge();notice='';renderedIdentity=identity();
+  }
   dialog.addEventListener('ygc:closed',()=>{resetDialog();render()});close.onclick=()=>globalThis.YGCOverlays.close(dialog);
   function renderList(){
     list.replaceChildren();const c=context();

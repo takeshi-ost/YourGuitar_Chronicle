@@ -29,6 +29,9 @@
       // Preserve the principal at the synchronous call boundary, before SDK
       // readiness can yield. A delayed A action must never use B's token.
       const user=auth.currentUser;
+      // An SDK switch can precede its observer. Never dispatch an old shell's
+      // action with the new principal while a different canonical cache remains.
+      if(account!==null&&accountUser!==user){identityChanged();throw changedIdentity()}
       await ready();
       identityChanged();
       if(auth.currentUser!==user)throw changedIdentity();

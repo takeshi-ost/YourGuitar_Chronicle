@@ -194,3 +194,13 @@ test('SDK account change synchronously invalidates canonical cache and notifies 
 test('Without an SDK observer, the canonical account getter still refuses another current SDK principal',async()=>{
  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});assert.deepEqual(s.adapter.account,account);s.auth.currentUser={email:'other@example.invalid',getIdToken:async()=> 'new'};assert.equal(s.adapter.account,null);
 });
+
+test('A stale canonical cache rejects writes after the SDK switched before observer delivery',async()=>{
+ const s=principalHarness();await s.adapter.restore();const count=s.calls.length;let cleared=0;s.adapter.onIdentityChanged(()=>cleared++);
+ // Deliberately do not notify the observer: an old shell can still show A.
+ s.auth.currentUser=s.second;
+ await assert.rejects(s.adapter.authorizedFetch('/api/auth/profile',{method:'PUT',body:'A-private-profile'},true),error=>error.code==='sign_in_required');
+ assert.equal(s.calls.length,count);assert.equal(cleared,1);assert.equal(s.adapter.account,null);
+ // Canonical restore is an explicit new read and is still available for B.
+ await s.adapter.restore();assert.equal(s.calls.at(-1).options.headers.get('Authorization'),'Bearer B-token');
+});

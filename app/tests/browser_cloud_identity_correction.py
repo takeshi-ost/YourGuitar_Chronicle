@@ -352,7 +352,10 @@ def main():
             close()
             page.reload()
             page.wait_for_function('globalThis.YGCCloudAccountReady===true')
+            assert page.evaluate("sessionStorage.getItem('ygc.identity-correction.uncertain.v1')") == marker
             settle(); open_listing()
+            expect(page.locator('#identityCreate')).to_be_disabled()
+            expect(page.locator('#identityCheckSubmission')).to_be_visible()
             expect(page.locator('#identityConfirm')).to_be_hidden()
             recover()
             assert len(store['writes']) == count + 1

@@ -464,8 +464,9 @@ def test_production_maintenance_rejects_before_account_or_content(fenced_service
     assert not any(row[0] in ('access', 'canonical', 'participants') for row in events)
 
 
+@pytest.mark.parametrize('individual', [None, 55])
 @pytest.mark.parametrize('failure', ['projection', 'scope', 'mapping'])
-def test_production_projection_mapping_and_participant_change_fail_closed(fenced_service, failure):
+def test_production_projection_mapping_and_participant_change_fail_closed(fenced_service, failure, individual):
     service, state, canonical, _ = fenced_service
     expected = {'projection': ValueError, 'scope': ClaimConflict, 'mapping': PermissionError}[failure]
     if failure == 'projection':
@@ -475,8 +476,68 @@ def test_production_projection_mapping_and_participant_change_fail_closed(fenced
     if failure == 'mapping':
         canonical['id'] = 17
     with pytest.raises(expected):
-        with service.transaction('canonical'):
+        with service.transaction('canonical', individual=individual):
             pytest.fail('Failed fence exposed content')
+
+
+@pytest.mark.parametrize('method', ['get', 'put'])
+def test_selected_target_participant_change_remains_http_conflict(fenced_service, method):
+    service, state, _, _ = fenced_service
+    state['after'] = {7, 11, 22}
+    verifier = Mock()
+    verifier.verify.return_value = VerifiedIdentity('issuer', 'subject', '', True)
+    verifier.accounts.resolve_identity.return_value = {'app_user_id': 'canonical', 'id': 999}
+    app = FastAPI()
+    app.include_router(favorite_router(verifier, service))
+    with TestClient(app) as client:
+        response = client.request(method, BASE + '/55', headers=AUTH,
+                                  json={'favorite': True} if method == 'put' else None)
+    assert response.status_code == 409
+    assert response.json() == {'detail': 'Favorites changed or maintenance is running. Reload before retrying.'}
+    private(response)
+
+
+@pytest.mark.parametrize('target_read', [False, True])
+@pytest.mark.parametrize('stage', ['body', 'commit', 'rollback'])
+@pytest.mark.parametrize('exception', [ValueError, ClaimConflict])
+def test_content_body_and_exit_errors_propagate_unchanged(monkeypatch, target_read, stage, exception):
+    failure = exception('Content transaction failed')
+    result, events = object(), []
+
+    class Accounts:
+        @contextmanager
+        def content_transaction(self, actor, participants):
+            try:
+                yield result
+            except Exception as exc:
+                events.append(('rollback', exc))
+                if stage == 'rollback':
+                    raise failure from exc
+                raise
+            else:
+                events.append(('commit',))
+                if stage == 'commit':
+                    raise failure
+            finally:
+                events.append(('closed',))
+
+    monkeypatch.setattr('ygc.cloud_favorites.PostgresAccounts', lambda _: Accounts())
+    service = CloudFavorites(None, None)
+    with pytest.raises(exception) as raised:
+        with service._content('canonical', {7, 11}, target_read=target_read) as content:
+            assert content is result
+            if stage == 'body':
+                raise failure
+            if stage == 'rollback':
+                raise RuntimeError('Trigger rollback')
+    assert raised.value is failure
+    assert events[-1] == ('closed',)
+    if stage == 'body':
+        assert events[0] == ('rollback', failure)
+    elif stage == 'rollback':
+        assert events[0][0] == 'rollback' and isinstance(events[0][1], RuntimeError)
+    else:
+        assert events[0] == ('commit',)
 
 
 @pytest.mark.parametrize('write', [False, True])

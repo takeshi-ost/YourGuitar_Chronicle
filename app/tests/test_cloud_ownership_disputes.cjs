@@ -13,7 +13,7 @@ const detail=({admin=false,viewer=admin?'9':'2',submitted=false,...extra}={})=>{
 };
 const denied=(status=403,code='account_inactive',raw='SECRET backend stack')=>({httpStatus:status,code,raw});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
-function environment({admin=false,initial=account(admin?'9':'2',true,'active',admin?'admin':'member'),storage=new Map(),storageDenied=false}={}){
+function environment({admin=false,fullPage=false,initial=account(admin?'9':'2',true,'active',admin?'admin':'member'),storage=new Map(),storageDenied=false}={}){
  const ids=new Map(),listeners={};
  class Element{
   constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this._text='';this.classList={add(){},remove(){}};this.isConnected=true;this.tabIndex=0}
@@ -32,7 +32,7 @@ function environment({admin=false,initial=account(admin?'9':'2',true,'active',ad
  for(const match of fs.readFileSync(path.join(assets,'cloud_account_html.html'),'utf8').matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)){const n=new Element(match[1]);n.id=match[2];document.body.append(n)}
  let state=initial,busy=false,component,args,updates=0,defaultDetail=detail({admin}),defaultOption=option(),defaultCases=[],defaultOptions=[option()];const calls=[],replies=[],denials=[],created=[],revoked=[];
  async function response(value){const data=await value;if(data instanceof Error)throw data;if(data instanceof Blob)return {ok:true,headers:{get:()=>data.type},blob:async()=>data};return data?.httpStatus?{ok:false,status:data.httpStatus,json:async()=>({detail:{code:data.code,message:data.raw,individual_id:'987654321'}})}:{ok:true,json:async()=>data}}
- const client={signedIn:Boolean(initial),account:initial,documents:async()=>({terms:{version:'t'},privacy:{version:'p'}}),restore:async()=>initial,
+ const client={signedIn:Boolean(initial),account:initial,documents:async()=>({terms:{version:'t'},privacy:{version:'p'}}),restore:async()=>client.account,
   async signIn(){this.signedIn=true;return this.account=account('1',false)},async logout(){this.signedIn=false;this.account=null},async refreshVerification(){return this.account=account()},
   async authorizedFetch(url,options={},verified){
    calls.push({url,options,verified,account:args.state()?.user?.app_user_id});
@@ -52,14 +52,19 @@ function environment({admin=false,initial=account(admin?'9':'2',true,'active',ad
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-disputes.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createDisputes;context.createDisputes=value=>{args=value;component=create(value);return component};
  const root=new Element('section');root.id='disputeBrowser';document.body.append(root);
- component=context.createDisputes({auth:()=>client,state:()=>state,busy:()=>busy,admin,onUnauthorized:error=>denials.push(error),work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});
- const ready=Promise.resolve();
+ let ready;
+ if(fullPage){
+  const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
+  Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createIdentityCorrections:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
+  ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);
+ }else{component=context.createDisputes({auth:()=>client,state:()=>state,busy:()=>busy,admin,onUnauthorized:error=>denials.push(error),work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
+
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,denials,created,revoked,storage,ready,get updates(){return updates},get dialog(){return control('disputeDialog')},get list(){return control('disputeList')},get history(){return control('disputeRounds')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setDetail(value){defaultDetail=value},setOption(value){defaultOption=value},setCases(value){defaultCases=value},setOptions(value){defaultOptions=value},
   open(id='31'){return component.openDispute(id)},openOption(id='41'){return component.openDisputeOption(id)},dismiss(){control('disputeClose').onclick()},review(){return control('disputeForm').onsubmit({preventDefault(){}})},confirm(){return control('disputeConfirm').onclick()},
 
-  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},event(type){for(const fn of listeners[type]||[])fn({})},
+  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
   async flush(){for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve))}
  };
 }
@@ -111,3 +116,11 @@ for(const blob of [new Blob(['html'],{type:'text/html'}),new Blob([],{type:'appl
 
 
 test('Legacy storage preflight is a distinct operator blocker and never triggers retry automatically',async()=>{const e=environment();await compose(e);e.queue(denied(409,'dispute_storage_preflight_required'),'/evidence','POST');await e.confirm();assert.match(e.control('disputeMessage').textContent,/storage_preflight/);assert.equal(e.control('disputeReview').disabled,true);assert.equal(e.storage.size,0);assert.equal(writes(e).length,1)});
+
+for(const resume of ['reload','BFCache'])test('Full account Dispute unknown-result marker survives pagehide and '+resume,async()=>{
+ const e=environment({fullPage:true});await e.ready;await compose(e);e.queue(Error('Lost response'),'/evidence','POST');await e.confirm();const marker=e.storage.get('ygc.disputes.uncertain.v1.participant');assert.deepEqual(JSON.parse(marker),{account:'uuid-2',ids:['c:31']});
+ await e.event('pagehide');assert.equal(e.storage.get('ygc.disputes.uncertain.v1.participant'),marker);assert.equal(e.dialog.open,false);assert.equal(e.history.children.length,0);assert.equal(e.control('disputeExplanation').value,'');assert.equal(e.control('disputeSummary').value,'');const calls=e.calls.length;await e.open();assert.equal(e.calls.length,calls);
+ let restored=e;
+ if(resume==='reload'){restored=environment({fullPage:true,storage:e.storage});await restored.ready}else{const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});await e.flush();assert.equal(e.calls.length,calls);held.resolve(e.client.account);await show}
+ await restored.open();assert.equal(restored.control('disputeReview').disabled,true);assert.equal(restored.control('disputeCheck').hidden,false);assert.equal(restored.control('disputeAcknowledge').hidden,true);await restored.review();await restored.confirm();assert.equal(writes(restored).length,resume==='reload'?0:1);assert.equal(e.storage.get('ygc.disputes.uncertain.v1.participant'),marker);
+});

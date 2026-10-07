@@ -59,10 +59,18 @@ async function documents(){
   policies=await auth.documents();
   $('terms').checked=$('privacy').checked=false;
 }
+function clearPrivateAccount({preserveRetryMarkers=false}={}){
+  favorites.clear();visibility.clear();avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear({preserveRetryMarkers});notifications.clear();disputes.clear();
+}
+function suspendAccount(){
+  // Navigation is not sign-out. Purge private views and invalidate async work,
+  // but retain account-bound unknown-result markers for the next canonical read.
+  pageSuspended=true;sessionEpoch++;state=null;clearPrivateAccount({preserveRetryMarkers:true});$('status').textContent='';render();
+}
 function update(result,refreshCatalog=false){
   if(pageSuspended&&result!==null)return;
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){favorites.clear();visibility.clear();avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear();notifications.clear();disputes.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id)clearPrivateAccount();
   state=result;
   if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
@@ -151,10 +159,10 @@ async function avatarAction(work){
   if(busy)return;busy=true;render();
   try{await work()}catch(error){avatar.failed(error)}finally{busy=false;render()}
 }
-globalThis.addEventListener('pagehide',()=>{pageSuspended=true;sessionEpoch++;update(null);favorites.clear();visibility.clear()});
+globalThis.addEventListener('pagehide',suspendAccount);
 globalThis.addEventListener('pageshow',async event=>{
   if(!event.persisted||!auth)return;
-  pageSuspended=true;const current=++sessionEpoch;busy=true;update(null);render();
+  busy=true;suspendAccount();const current=sessionEpoch;
   try{const restored=await auth.restore();if(current!==sessionEpoch)return;pageSuspended=false;update(restored,true);await loadAvatar()}
   catch(error){if(current!==sessionEpoch)return;pageSuspended=false;update(null);$('status').textContent=errorMessage(error)}
   finally{if(current===sessionEpoch&&!pageSuspended){busy=false;render()}}
