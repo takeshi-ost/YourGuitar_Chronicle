@@ -11,8 +11,50 @@ import time
 from ygc.cloud_db_snapshot import snapshot,verify_snapshot
 from ygc.cloud_storage import CloudStorage,StorageSettings,ObjectReference
 from ygc.db.postgres import PostgresSettings,TARGETS,connect
+from ygc.cloud_backup_preflight import failure_status
 
 KIND='db_backup_v1'
+
+
+def verify_chronicle_archive(storage,data,sha,*,restore_ready=True):
+    """Bound staging and verify each private original, without deleting anything."""
+    from ygc.cloud_db_restore import load,verify_restored_dispute_originals,verify_dispute_originals
+    if not restore_ready:
+        # Old archives retain the 128 MiB verification contract. Collect only
+        # attachment metadata, discarding legacy BYTEA before the next row.
+        import gzip
+        from io import BytesIO
+        from ygc.cloud_db_snapshot import decode_cell
+        verify_snapshot(data,'chronicle',sha)
+        evidence=[];originals=[]
+        with gzip.GzipFile(fileobj=BytesIO(data)) as source:
+            header=json.loads(source.readline())
+            for raw in source:
+                row=json.loads(raw);table=row.get('table')
+                if table not in ('ownership_dispute_evidence','ownership_dispute_originals'):continue
+                item=dict(zip(header['tables'][table],row['values']))
+                if table=='ownership_dispute_originals':originals.append(item)
+                else:
+                    content=decode_cell(item['content'],'bytea')
+                    evidence.append({'id':item['id'],'content_type':item['content_type'],
+                        'content_size':None if content is None else len(content)})
+        verify_dispute_originals(storage,originals,evidence)
+        return header
+    header,rows,sequences=load(data,'chronicle',sha)
+    verify_restored_dispute_originals(storage,rows)
+    return header
+
+
+def preflight(settings,storage,target,progress=lambda stage:None):
+    if target!='chronicle':raise ValueError('Chronicle preflight required.')
+    progress('legacy_evidence_preflight')
+    data,meta=snapshot(settings,target)
+    progress('evidence_reference_verification')
+    verify_chronicle_archive(storage,data,meta['sha256'])
+    return {'status':'ok','target':target,'data_changed':False,
+        'snapshot_within_restore_capacity':True,'dispute_originals_verified':True,
+        **{key:meta[key] for key in ('schema_version','tables','rows','raw_bytes','compressed_bytes',
+            'legacy_rows','legacy_bytes','largest_legacy_bytes','largest_legacy_line_bound','legacy_raw_bound')}}
 
 
 def save(settings,storage,target,execution,progress=lambda stage:None,request_id=None,scheduled=False,source=None):
@@ -31,10 +73,15 @@ def save(settings,storage,target,execution,progress=lambda stage:None,request_id
             data,meta=snapshot(settings,target)
             progress('archive_verification')
             verify_snapshot(data,target,meta['sha256'])
+            if target=='chronicle':
+                progress('evidence_reference_verification')
+                verify_chronicle_archive(storage,data,meta['sha256'])
             progress('upload')
             candidate=storage.put('content' if target=='chronicle' else 'accounts',data,content_type='application/gzip')
             progress('read_back')
-            if hashlib.sha256(storage.get(candidate)).hexdigest()!=meta['sha256']:raise ValueError('Read-back mismatch.')
+            read_back=storage.get(candidate)
+            if hashlib.sha256(read_back).hexdigest()!=meta['sha256']:raise ValueError('Read-back mismatch.')
+            if target=='chronicle':verify_chronicle_archive(storage,read_back,meta['sha256'])
             record={'kind':KIND,'backup_id':str(uuid.uuid4()),**meta,'object':asdict(candidate),'execution':execution}
             if request_id is not None:record['request_id']=request_id
             record['source']=source or ('scheduled' if scheduled else 'manual')
@@ -63,15 +110,21 @@ def verify_latest(settings,storage,target):
         record=json.loads(row['reason'])
     ref=ObjectReference(**record['object'])
     if ref.scope!=('content' if target=='chronicle' else 'accounts') or ref.content_type!='application/gzip':raise ValueError('Wrong backup scope.')
-    result=verify_snapshot(storage.get(ref),target,record['sha256'])
+    data=storage.get(ref)
+    result=verify_snapshot(data,target,record['sha256'])
+    if target=='chronicle':verify_chronicle_archive(storage,data,record['sha256'],restore_ready=False)
     return {'status':'ok','target':target,'verified':True,'tables':result['tables']}
 
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--confirm-project',required=True);parser.add_argument('--target',choices=TARGETS)
-    parser.add_argument('--verify-only',action='store_true');parser.add_argument('--scheduled',action='store_true');args=parser.parse_args(argv)
+    inspection=parser.add_mutually_exclusive_group()
+    inspection.add_argument('--verify-only',action='store_true')
+    inspection.add_argument('--preflight-only',action='store_true',help='Read-only Chronicle legacy capacity and original-reference check; no archive upload')
+    parser.add_argument('--scheduled',action='store_true');args=parser.parse_args(argv)
     if (args.target is None)!=args.scheduled or (args.scheduled and args.verify_only):parser.error('Select one target or the scheduled worker.')
+    if args.preflight_only and (args.scheduled or args.target!='chronicle'):parser.error('Preflight requires --target=chronicle.')
     storage=None;stage='configuration'
     def progress(value):
         nonlocal stage
@@ -86,6 +139,8 @@ def main(argv=None):
         execution=os.environ.get('CLOUD_RUN_EXECUTION','')
         token=os.environ.get('YGC_BACKUP_REQUEST_ID')
         if token is not None and str(uuid.UUID(token))!=token:raise ValueError('Invalid request UUID.')
+        if args.preflight_only:
+            print(json.dumps(preflight(settings,storage,args.target,progress)));return 0
         if args.scheduled:
             from ygc.cloud_backup_policy import prune
             failed=False;saved=0
@@ -93,10 +148,12 @@ def main(argv=None):
                 try:
                     result=save(settings,storage,target,execution,progress,scheduled=True)
                     if result.get('saved'):saved+=1;prune(settings,storage,target)
-                except Exception:
+                except Exception as exc:
                     failed=True
                     with connect(settings,'operations') as con:
-                        con.execute("UPDATE backup_schedules SET last_status='failed',last_error='Backup worker failed.' WHERE target=%s",(target,))
+                        safe=failure_status(exc,stage)
+                        con.execute("UPDATE backup_schedules SET last_status='failed',last_error=%s WHERE target=%s",(safe.get('code','Backup worker failed.'),target))
+                    print(json.dumps({'target':target,**safe}),file=sys.stderr)
             print(json.dumps({'status':'failed' if failed else 'ok','saved_targets':saved}));return int(failed)
         if args.verify_only:progress('read_back_verification')
         result=verify_latest(settings,storage,args.target) if args.verify_only else save(settings,storage,args.target,execution,progress,token)
@@ -105,8 +162,8 @@ def main(argv=None):
             try:result['pruned']=prune(settings,storage,args.target)
             except Exception:result['retention_pending']=True
         print(json.dumps(result));return 0
-    except Exception:
-        print(json.dumps({'status':'failed','stage':stage}),file=sys.stderr);return 1
+    except Exception as exc:
+        print(json.dumps(failure_status(exc,stage)),file=sys.stderr);return 1
     finally:
         if storage is not None:storage.close()
 

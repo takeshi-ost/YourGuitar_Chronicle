@@ -77,7 +77,7 @@ def initialization_checks(port):
             assert bootstrap(owner, 'chronicle', runtime)
             initialized = command('initialize', '--runtime-user', runtime)['databases']
             assert [row['target'] for row in initialized] == list(TARGETS)
-            assert [row['version'] for row in initialized] == [2, 2, 1, 1]
+            assert [row['version'] for row in initialized] == [3, 2, 1, 1]
             assert [row['initialized'] for row in initialized] == [False, True, True, True]
             with connect(app, 'accounts') as con:
                 con.execute("INSERT INTO account_records(app_user_id,display_name,created_at,updated_at) VALUES('fixture-kept','Keep profile','now','now')")
@@ -157,7 +157,7 @@ def run(port):
                 con.execute("INSERT INTO claims(individual_id,author_user_id,claim_type,created_at,updated_at) VALUES(%s,2,'event','now','now')", (individual,))
             with connect(app,'chronicle') as con:
                 dispute=con.execute('SELECT id FROM ownership_disputes WHERE individual_id=%s',(individual,)).fetchone()['id']
-                con.execute("INSERT INTO ownership_dispute_evidence(dispute_id,claim_id,author_id,explanation,summary,content,created_at) VALUES(%s,%s,1,'Private explanation','',%s,'now')",(dispute,claim,bytes(range(256))))
+                con.execute("INSERT INTO ownership_dispute_evidence(dispute_id,claim_id,author_id,explanation,summary,filename,content_type,content,created_at) VALUES(%s,%s,1,'Private explanation','','document.pdf','application/pdf',%s,'now')",(dispute,claim,bytes(range(256))))
             from ygc.cloud_db_snapshot import snapshot,verify_snapshot
             from ygc.cloud_backup_job import save,verify_latest
             from test_cloud_avatar import Storage
@@ -219,6 +219,8 @@ if __name__ == '__main__':
     with server(args.postgres_bin, args.port) as port:
         initialization_checks(port)
         run(port)
+        from postgres_dispute_storage_checks import run as dispute_storage_checks
+        dispute_storage_checks(port)
         from postgres_account_checks import run as account_checks
         account_checks(port)
 
@@ -247,3 +249,6 @@ if __name__ == '__main__':
 
         from postgres_ownership_workflow_checks import run as ownership_workflow_checks
         ownership_workflow_checks(port)
+
+        from postgres_dispute_checks import run as dispute_checks
+        dispute_checks(port)

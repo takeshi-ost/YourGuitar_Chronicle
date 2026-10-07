@@ -1,5 +1,6 @@
 """Disposable PostgreSQL restore/reset, identity fencing and protective copies."""
 import json
+import hashlib
 import uuid
 from datetime import datetime,timezone
 from ygc.db.postgres import connect
@@ -88,6 +89,16 @@ def run(app,accounts,operations,store,aid,bid):
     try:media.get(aid,guitar+1,image_row['id'])
     except LookupError:pass
     else:raise AssertionError('Image returned for a different guitar.')
+    # Resolved synthetic history contains both legacy inline proof and a new
+    # immutable original. Dispute originals never become public Media Claims.
+    from postgres_dispute_checks import PDF, insert_original
+    from ygc.cloud_dispute_storage import OriginalUnavailable
+    dispute_ref=store.put('content',PDF,content_type='application/pdf')
+    with connect(app,'chronicle') as con:
+        case=con.execute("INSERT INTO ownership_disputes(individual_id,owner_id,locked_owner_id,status,created_at,updated_at) VALUES(%s,%s,%s,'resolved','now','now') RETURNING id",(guitar,actor_id,actor_id)).fetchone()['id']
+        for content in (PDF,None):
+            proof_id=con.execute("INSERT INTO ownership_dispute_evidence(dispute_id,claim_id,author_id,explanation,summary,filename,content_type,content,created_at) VALUES(%s,%s,%s,'Synthetic private restore proof','Synthetic private summary','document.pdf','application/pdf',%s,'now') RETURNING id",(case,listing,actor_id,content)).fetchone()['id']
+            if content is None:insert_original(con,proof_id,dispute_ref,PDF)
     old=archive('chronicle')
     media.upload(aid,guitar,png(),'image/png')
     assert media.listing(aid,guitar)['total']==str(len(MODES)+1)
@@ -102,6 +113,26 @@ def run(app,accounts,operations,store,aid,bid):
     with connect(app,'chronicle') as con:
         assert con.execute('SELECT 1 FROM individuals WHERE id=%s',(added,)).fetchone()
     store.objects[reference]=image_bytes
+    # All failures occur before the protective save and any Chronicle delete.
+    original=store.objects.pop(dispute_ref)
+    replacement=replace(dispute_ref,generation=dispute_ref.generation+1)
+    store.objects[replacement]=original
+    attempts=((None,'missing-dispute-generation'),
+              (b'x'*len(original),'dispute-hash-mismatch'),
+              (original+b'x','dispute-size-mismatch'))
+    for corrupt,label in attempts:
+        if corrupt is not None:store.objects[dispute_ref]=corrupt
+        stages=[]
+        before_objects=set(store.objects)
+        try:perform(app,store,queue('chronicle','restore',old),label,stages.append)
+        except OriginalUnavailable:pass
+        else:raise AssertionError('Invalid private original accepted for restore.')
+        assert 'safety_backup' not in stages and 'apply_data' not in stages
+        assert set(store.objects)==before_objects and dispute_ref not in store.deleted
+        with connect(app,'chronicle') as con:
+            assert con.execute('SELECT 1 FROM individuals WHERE id=%s',(added,)).fetchone()
+            assert con.execute('SELECT sha256 FROM ownership_dispute_originals WHERE evidence_id=%s',(proof_id,)).fetchone()['sha256']==hashlib.sha256(PDF).hexdigest()
+    store.objects[dispute_ref]=original
     from ygc.cloud_applications import references
     with connect(app,'chronicle') as con:
         application=con.execute("SELECT * FROM acquire_applications WHERE request_kind='listing' AND status='pending' LIMIT 1").fetchone()
@@ -122,6 +153,10 @@ def run(app,accounts,operations,store,aid,bid):
         assert following>added
     assert media.listing(aid,guitar)['total']==str(len(MODES))
     assert media.get(aid,guitar,image_row['id'])==image_bytes
+    with connect(app,'chronicle') as con:
+        assert con.execute('SELECT COUNT(*) AS n FROM ownership_dispute_originals').fetchone()['n']==1
+        assert con.execute('SELECT content FROM ownership_dispute_evidence WHERE dispute_id=%s AND content IS NOT NULL',(case,)).fetchone()['content']==PDF
+    assert store.get(dispute_ref)==PDF and dispute_ref not in store.deleted
     # Additional fixture rows exercise media keyset boundaries independently
     # from the upload/Claim atomicity checks above.
     with connect(app,'chronicle') as con:
@@ -147,8 +182,13 @@ def run(app,accounts,operations,store,aid,bid):
     with connect(app,'chronicle') as con:
         assert con.execute('SELECT COUNT(*) AS n FROM individuals').fetchone()['n']==0
         assert con.execute('SELECT COUNT(*) AS n FROM users').fetchone()['n']==4
+        assert not con.execute('SELECT 1 FROM ownership_dispute_originals').fetchone()
+    assert store.get(dispute_ref)==PDF and dispute_ref not in store.deleted
     perform(app,store,queue('chronicle','restore',old),'image-after-reset-fixture')
     assert media.get(aid,guitar,image_row['id'])==image_bytes
+    with connect(app,'chronicle') as con:
+        assert con.execute('SELECT object_generation FROM ownership_dispute_originals WHERE evidence_id=%s',(proof_id,)).fetchone()['object_generation']==dispute_ref.generation
+    assert store.get(dispute_ref)==PDF and dispute_ref not in store.deleted
     with connect(app,'accounts') as con:
         assert con.execute('SELECT COUNT(*) AS n FROM identity_links').fetchone()['n']==4
         assert con.execute('SELECT role FROM account_records WHERE app_user_id=%s',(aid,)).fetchone()['role']=='admin'
@@ -180,4 +220,4 @@ def run(app,accounts,operations,store,aid,bid):
     else:raise AssertionError('Normal mode accepted reset.')
     version=operations.details(aid)['version']
     operations.set_mode(aid,mode=mode,message='Test',version=version)
-    print('PostgreSQL maintenance: independent restore/reset, protective copy, repeat UUID, latest registrations/Admin/BAN, monotonic IDs, retained audit/mode and automation OFF passed.')
+    print('PostgreSQL maintenance: independent restore/reset, protective copy, repeat UUID, latest registrations/Admin/BAN, monotonic IDs, legacy/private-generation proof retention and pre-delete verification, retained audit/mode and automation OFF passed.')

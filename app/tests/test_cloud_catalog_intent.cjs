@@ -44,7 +44,7 @@ function environment({initial=account(),search='',fullPage=false,catalogReplies=
   const create=context.createApplications;
   context.createApplications=args=>{componentArgs=args;component=create(args);return component};
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){}});
-  Object.assign(context,{createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
+  Object.assign(context,{createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
   let ready;
   if(fullPage){const source=fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'');ready=vm.runInContext('(async()=>{'+source+'})()',context)}
   else{component=context.createApplications({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}

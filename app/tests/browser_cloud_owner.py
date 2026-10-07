@@ -130,6 +130,11 @@ def main():
     app.include_router(self_profile_router(verifier, store))
     app.include_router(owner_router(verifier, store))
 
+    @app.get('/api/auth/ownership-disputes')
+    @app.get('/api/auth/ownership-disputes/options')
+    def empty_disputes():
+        return {'items': [], 'next_after': None, 'can_write': True, 'viewer_user_id': '1'}
+
     @app.get('/api/auth/notifications')
     def notifications():
         return {'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True}

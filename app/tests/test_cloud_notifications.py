@@ -195,6 +195,49 @@ def test_participants_include_hidden_history_but_never_other_recipients(workflow
         assert service._participants(con, owner) == {owner, author}
 
 
+def test_dispute_destinations_require_current_participation_and_unambiguous_case(workflow):
+    repo, service, owner, author, outsider, individual, claim, _ = workflow
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET claim_type='ownership',ownership_kind='acquire',verification_status='negative' WHERE id=?", (claim,))
+        con.execute('''INSERT INTO acquire_applications(revision,applicant_id,individual_id,original_individual_id,
+            serial,challenge,expires_at,created_at,prompt_version,status,claim_id)
+            VALUES ('synthetic',?,?,?,'SERIAL','challenge',0,'2026-01-01','synthetic','accepted',?)''',
+            (author, individual, individual, claim))
+    decline = add(workflow, recipient_user_id=author, actor_user_id=owner, notification_type='ownership_decline')
+    assert service.list(author)['items'][0]['destination'] == {'kind': 'dispute_option', 'claim_id': str(claim)}
+    forged = add(workflow, recipient_user_id=outsider, actor_user_id=owner, notification_type='ownership_decline')
+    assert next(row for row in service.list(outsider)['items'] if row['id'] == str(forged))['destination'] is None
+    with repo.connect() as con:
+        case = con.execute('''INSERT INTO ownership_disputes(individual_id,owner_id,locked_owner_id,status,
+            created_at,updated_at) VALUES (?,?,?,'resolved','2026-01-01','2026-01-01')''',
+            (individual, owner, owner)).lastrowid
+        con.execute('INSERT INTO ownership_dispute_claims VALUES (?,?,?)', (case, claim, author))
+    generic = add(workflow, recipient_user_id=author, actor_user_id=owner, claim_id=None, notification_type='ownership_dispute')
+    rows = service.list(author)['items']
+    assert all(row['destination'] == {'kind': 'dispute', 'case_id': str(case)} for row in rows if row['id'] in {str(decline), str(generic)})
+    with repo.connect() as con:
+        con.execute('''INSERT INTO ownership_disputes(individual_id,owner_id,locked_owner_id,status,
+            created_at,updated_at) VALUES (?,?,?,'resolved','2026-02-01','2026-02-01')''',
+            (individual, author, author))
+    rows = service.list(author)['items']
+    assert next(row for row in rows if row['id'] == str(generic))['destination'] is None
+    assert next(row for row in rows if row['id'] == str(decline))['destination'] == {'kind': 'dispute', 'case_id': str(case)}
+    with repo.connect() as con:
+        con.execute("UPDATE users SET ban_status='silent_ban' WHERE id=?", (author,))
+    assert all(row['destination'] is None for row in service.list(author)['items'])
+
+
+def test_dispute_notification_fence_includes_retained_original_parties(workflow):
+    repo, service, owner, author, outsider, individual, claim, _ = workflow
+    add(workflow, recipient_user_id=owner, actor_user_id=None, claim_id=None, notification_type='ownership_dispute')
+    with repo.connect() as con:
+        case = con.execute('''INSERT INTO ownership_disputes(individual_id,owner_id,locked_owner_id,winner_id,status,
+            created_at,updated_at) VALUES (?,?,?,?,'resolved','2026-01-01','2026-01-01')''',
+            (individual, outsider, owner, author)).lastrowid
+        con.execute('INSERT INTO ownership_dispute_claims VALUES (?,?,?)', (case, claim, author))
+        assert service._participants(con, owner) == {owner, author, outsider}
+
+
 @pytest.mark.parametrize('kwargs', [{'after': -1}, {'after': 2**63}, {'after': False}, {'after': '1'},
                                    {'limit': 0}, {'limit': 51}, {'limit': True}, {'limit': '1'}])
 def test_service_page_input_bounds(workflow, kwargs):

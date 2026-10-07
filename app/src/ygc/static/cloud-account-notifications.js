@@ -9,7 +9,7 @@ const date=value=>text(value,40)&&value.length>0;
 // A notice describes a past event. Its destination is only a hint: existing
 // destination components fetch their canonical API again before showing data.
 // Opening a notice never marks it read or performs a workflow decision.
-export function createNotifications({auth,state,busy,work,openTransfer,openOwner}){
+export function createNotifications({auth,state,busy,work,openTransfer,openOwner,openDispute,openDisputeOption}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   const node=(tag,value='',id='')=>{const n=document.createElement(tag);n.textContent=value;if(id)n.id=id;return n};
   const button=(key,id='')=>{const n=node('button',t(key),id);n.type='button';return n};
@@ -25,6 +25,8 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
   const writable=()=>eligible()&&canWrite===true&&!uncertain;
   function destination(value){
     if(value===null)return null;
+    if(exact(value,['kind','case_id'])&&value.kind==='dispute'&&catalogIndividualId(value.case_id))return Object.freeze({kind:'dispute',case_id:value.case_id});
+    if(exact(value,['kind','claim_id'])&&value.kind==='dispute_option'&&catalogIndividualId(value.claim_id))return Object.freeze({kind:'dispute_option',claim_id:value.claim_id});
     if(exact(value,['kind','claim_id'])&&value.kind==='transfer'&&catalogIndividualId(value.claim_id))return Object.freeze({kind:'transfer',claim_id:value.claim_id});
     if(exact(value,['kind','individual_id','claim_id'])&&value.kind==='owner'&&catalogIndividualId(value.individual_id)&&catalogIndividualId(value.claim_id))return Object.freeze({kind:'owner',individual_id:value.individual_id,claim_id:value.claim_id});
     throw Error('Invalid notification destination');
@@ -58,8 +60,8 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
       mark.onclick=()=>{if(valid())return markRead(row.id)};
       item.append(title,body,meta,readState,mark);
       if(row.destination){
-        const target=row.destination,open=button(target.kind==='transfer'?'notifications.open_transfer':'notifications.open_owner');open.dataset.notificationOpen=row.id;
-        open.onclick=()=>{if(busy()||!valid())return;return target.kind==='transfer'?openTransfer(target.claim_id):openOwner(target.individual_id,target.claim_id)};item.append(open);
+        const target=row.destination,open=button('notifications.open_'+target.kind);open.dataset.notificationOpen=row.id;
+        open.onclick=()=>{if(busy()||!valid())return;return target.kind==='transfer'?openTransfer(target.claim_id):target.kind==='owner'?openOwner(target.individual_id,target.claim_id):target.kind==='dispute'?openDispute(target.case_id):openDisputeOption(target.claim_id)};item.append(open);
       }else item.append(node('p',t('notifications.no_destination')));
       list.append(item);
     }

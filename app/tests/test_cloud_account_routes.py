@@ -17,6 +17,14 @@ def profile(**changes):
             'privacy_version': DOCUMENTS['privacy']['version'], **changes}
 
 
+@pytest.fixture(autouse=True)
+def dispute_schema_boundary(monkeypatch):
+    from ygc.cloud_disputes import CloudDisputes
+    check = Mock()
+    monkeypatch.setattr(CloudDisputes, "check_schema", check)
+    return check
+
+
 @pytest.fixture
 def api():
     identity = VerifiedIdentity('verified-issuer', 'verified-subject', '', False)

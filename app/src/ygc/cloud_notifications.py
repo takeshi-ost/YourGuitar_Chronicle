@@ -68,6 +68,10 @@ def destination_projection(value):
     if value.get('kind') == 'owner':
         return {'kind': 'owner', 'individual_id': decimal(value.get('individual_id')),
                 'claim_id': decimal(value.get('claim_id'))}
+    if value.get('kind') == 'dispute':
+        return {'kind': 'dispute', 'case_id': decimal(value.get('case_id'))}
+    if value.get('kind') == 'dispute_option':
+        return {'kind': 'dispute_option', 'claim_id': decimal(value.get('claim_id'))}
     raise RuntimeError('Invalid notification destination.')
 
 
@@ -129,8 +133,13 @@ class CloudNotifications:
             UNION SELECT i.current_owner_user_id FROM notifications n JOIN individuals i ON i.id=n.individual_id WHERE n.recipient_user_id=?
             UNION SELECT t.from_user_id FROM notifications n JOIN claim_transfers t ON t.claim_id=n.claim_id WHERE n.recipient_user_id=?
             UNION SELECT t.to_user_id FROM notifications n JOIN claim_transfers t ON t.claim_id=n.claim_id WHERE n.recipient_user_id=?
+            UNION SELECT d.owner_id FROM notifications n JOIN ownership_disputes d ON d.individual_id=n.individual_id WHERE n.recipient_user_id=?
+            UNION SELECT d.locked_owner_id FROM notifications n JOIN ownership_disputes d ON d.individual_id=n.individual_id WHERE n.recipient_user_id=?
+            UNION SELECT d.winner_id FROM notifications n JOIN ownership_disputes d ON d.individual_id=n.individual_id WHERE n.recipient_user_id=?
+            UNION SELECT dc.applicant_id FROM notifications n JOIN ownership_disputes d ON d.individual_id=n.individual_id
+                JOIN ownership_dispute_claims dc ON dc.dispute_id=d.id WHERE n.recipient_user_id=?
             ) participants WHERE participant IS NOT NULL ORDER BY participant''',
-            (user, user, user, user, user)).fetchall()
+            (user,) * 9).fetchall()
         return {user} | {row['participant'] for row in rows}
 
     @contextmanager
@@ -163,6 +172,33 @@ class CloudNotifications:
     @staticmethod
     def _destination(repo, row, user, eligible):
         claim, individual = row['claim_id'], row['individual_id']
+        if row['notification_type'] in ('ownership_decline', 'ownership_dispute') and individual is not None:
+            connection = repo.connection
+            if not connection.execute("SELECT 1 FROM users WHERE id=? AND account_type<>'source' AND ban_status='normal'", (user,)).fetchone():
+                return None
+            # Historical notifications have no dispute ID. Link a case only
+            # when its identity is unambiguous for this current participant;
+            # never infer that an old notice refers to the newest case.
+            sql = '''SELECT d.id FROM ownership_disputes d WHERE d.individual_id=?
+                AND (d.owner_id=? OR EXISTS (SELECT 1 FROM ownership_dispute_claims dc
+                    WHERE dc.dispute_id=d.id AND dc.applicant_id=?))'''
+            params = (individual, user, user)
+            if row['notification_type'] == 'ownership_decline':
+                if claim is None:
+                    return None
+                sql += ' AND EXISTS (SELECT 1 FROM ownership_dispute_claims dc WHERE dc.dispute_id=d.id AND dc.claim_id=?)'
+                params += (claim,)
+            cases = connection.execute(sql + ' ORDER BY d.id DESC LIMIT 2', params).fetchall()
+            if len(cases) == 1:
+                return {'kind': 'dispute', 'case_id': str(cases[0]['id'])}
+            if row['notification_type'] == 'ownership_dispute':
+                return None
+            candidate = connection.execute('''SELECT 1 FROM claims c JOIN acquire_applications a ON a.claim_id=c.id
+                WHERE c.id=? AND c.individual_id=? AND c.author_user_id=? AND c.status='active'
+                    AND c.claim_type='ownership' AND c.ownership_kind='acquire'
+                    AND COALESCE(c.ownership_source,'') NOT IN ('former_owner','automation','merged_listing')
+                    AND a.status='accepted' AND a.request_kind='acquire' ''', (claim, individual, user)).fetchone()
+            return {'kind': 'dispute_option', 'claim_id': str(claim)} if candidate else None
         if claim is None or individual is None:
             return None
         if row['notification_type'] in ('transfer_request', 'transfer_result'):

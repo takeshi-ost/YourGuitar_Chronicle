@@ -70,3 +70,8 @@ Reopen for reconsiderationは理由付きで管理者が実行する。現在の
 提出者と管理者には提出サマリーを直ちに記録内へ表示する。他方への公開は引き続き管理者が確認した要旨のみ。説明・添付操作は展開式とし、提出可能な当事者だけに最新ラウンド直下のフォームを表示する。提出成功時は記録を更新してフォームを取り除く。
 
 Round内では開始・追加要求の重複する履歴行を省略し、提出者は役割ラベルではなくユーザー名で表示する。証拠待ちの間はReview result行を表示せず、提出先Acquireが1件ならフォームの選択欄を省く。追加要求の理由は前ラウンドのReview resultに残す。
+
+
+### Cloud移植の実装checkpoint（2026-10-07）
+
+本人確認済みparticipant／既存Admin roleのprivate API・UIと、固定generationの非公開GCS原本、additive Chronicle 003、legacy BYTEA読取、backup／restoreの原本検証を実装した。実環境のschema適用・配置・裁定は未実施。既存の所有権／Evidence／ラウンド規則はこの文書を基準とし、Cloud境界・未実行の検証・運用上の制限は[Cloud Ownership Disputes](../migration/CLOUD_OWNERSHIP_DISPUTES.md)、移行前確認と復旧条件は[storage rollout](../migration/CLOUD_DISPUTE_STORAGE_ROLLOUT.md)を参照。

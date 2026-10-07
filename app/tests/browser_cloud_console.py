@@ -248,6 +248,10 @@ def main():
                 return {'state':'running'}
     app.include_router(crawl_router(verifier,Crawl()))
 
+    @app.get('/api/auth/admin/ownership-disputes')
+    def empty_disputes():
+        return {'items': [], 'next_after': None, 'can_write': True, 'viewer_user_id': '1'}
+
     install(app,public_config({'apiKey':'fixture-key','authDomain':'fixture-project.firebaseapp.com'},project_id='fixture-project',tenant=''))
     @app.get('/ready')
     def ready():return {'status':'ok'}

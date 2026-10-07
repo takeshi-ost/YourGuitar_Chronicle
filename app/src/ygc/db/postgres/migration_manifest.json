@@ -35,6 +35,24 @@
         ]
       },
       "append_columns": {}
+    },
+    {
+      "version": 3,
+      "file": "chronicle_003.sql",
+      "sha256": "9f66de2b3b41d33341173891c11c8c7c3da87ef8657d60666b8e6d58f6fabf17",
+      "tables": {
+        "ownership_dispute_originals": [
+          "evidence_id",
+          "object_scope",
+          "object_name",
+          "object_generation",
+          "byte_size",
+          "content_type",
+          "sha256",
+          "created_at"
+        ]
+      },
+      "append_columns": {}
     }
   ]
 }

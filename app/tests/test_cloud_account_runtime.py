@@ -6,6 +6,14 @@ from ygc import cloud_account_runtime as runtime
 from ygc import cloud_account_api as api
 
 
+@pytest.fixture(autouse=True)
+def dispute_schema_boundary(monkeypatch):
+    from ygc.cloud_disputes import CloudDisputes
+    check = Mock()
+    monkeypatch.setattr(CloudDisputes, "check_schema", check)
+    return check
+
+
 @pytest.fixture
 def environment(monkeypatch):
     values = {'YGC_PLATFORM_TARGET': 'gcp', 'YGC_DATABASE_BACKEND': 'postgres',
@@ -92,3 +100,28 @@ def test_public_catalog_shell_does_not_mount_prototype_or_private_assets(environ
             assert client.get(path).status_code == 404
         verifier.verify.assert_not_called()
         accounts.resolve_identity.assert_not_called()
+
+
+def test_missing_dispute_migration_prevents_new_runtime_startup(environment, monkeypatch, dispute_schema_boundary):
+    accounts, verifier = Mock(), Mock()
+    monkeypatch.setattr(api, 'PostgresAccounts', Mock(return_value=accounts))
+    monkeypatch.setattr(api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
+    dispute_schema_boundary.side_effect = ValueError('private database detail: migration missing')
+    with pytest.raises(RuntimeError, match='database initialization check failed') as error:
+        with TestClient(runtime.application()):
+            pytest.fail('The migration must be verified before serving')
+    assert 'private database detail' not in str(error.value)
+    verifier.close.assert_called_once()
+    runtime.CloudStorage.return_value.close.assert_called_once()
+
+
+def test_dispute_schema_regression_fails_readiness_without_leaking_details(environment, monkeypatch, dispute_schema_boundary):
+    accounts, verifier = Mock(), Mock()
+    monkeypatch.setattr(api, 'PostgresAccounts', Mock(return_value=accounts))
+    monkeypatch.setattr(api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
+    dispute_schema_boundary.side_effect = [None, ValueError('private checksum mismatch')]
+    with TestClient(runtime.application()) as client:
+        assert client.get('/health').status_code == 200
+        response = client.get('/ready')
+        assert response.status_code == 503 and response.json() == {'status': 'unavailable'}
+        assert 'private' not in response.text

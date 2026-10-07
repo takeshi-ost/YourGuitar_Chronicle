@@ -244,8 +244,8 @@ def run(port):
             from ygc.cloud_db_snapshot import snapshot,verify_snapshot
             for target in ('accounts','chronicle'):
                 data,meta=snapshot(app,target)
-                assert verify_snapshot(data,target,meta['sha256'])['schema_version']==2
-            print('PostgreSQL snapshots v2: populated outbox/receipts with timestamp precision passed.')
+                assert verify_snapshot(data,target,meta['sha256'])['schema_version']==(3 if target=='chronicle' else 2)
+            print('PostgreSQL snapshots: current revisions and populated outbox/receipts with timestamp precision passed.')
             # Intent persists before dispatch; retries and target conflicts do not invoke twice.
             from ygc.cloud_backup_control import BackupControl,BackupBusy
             from ygc.cloud_backup_job import save

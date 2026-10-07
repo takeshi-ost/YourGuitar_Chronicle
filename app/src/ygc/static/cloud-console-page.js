@@ -1,3 +1,4 @@
+import {createDisputes} from './cloud-account-disputes.js';
 import {createApplicationBrowser} from './cloud-console-applications.js';
 import {createUserBrowser} from './cloud-console-users.js';
 import {createCrawlBrowser} from './cloud-console-crawl.js';
@@ -8,6 +9,7 @@ const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const modes={normal:'ui.normal_a7248eeb',read_only:'ui.read_only_8ac76735',offline:'ui.offline_a1794783',admin_only:'console.admin_only'};
 const defaultMessage=mode=>mode==='normal'?'':t('console.default_'+mode);
 let auth,settings=null,reviewState=null,reviewPending=null,authorized=false,busy=false;
+const disputes=createDisputes({auth:()=>auth,state:()=>authorized?auth?.account:null,busy:()=>busy,work:action,admin:true,onUnauthorized:error,updated:()=>guitars.refresh()});
 const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error,maintenanceMode:()=>!!settings&&settings.mode!=='normal'});
 const crawl=createCrawlBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
@@ -15,7 +17,7 @@ const applications=createApplicationBrowser({request,authorized:()=>authorized,o
 $('consoleStatus').removeAttribute('data-i18n');
 const users=createUserBrowser({request,authorized:()=>authorized,onUnauthorized:error,onGuitar:id=>guitars.detail(id)});
 function controls(){
-  applications.render();users.render();guitars.render();backups.render();crawl.render();
+  disputes.render();applications.render();users.render();guitars.render();backups.render();crawl.render();
   $('consoleControls').hidden=!authorized;
   $('consoleRefresh').disabled=busy||!authorized;
   $('reviewToggle').disabled=busy||!authorized||reviewState===null;
@@ -25,7 +27,7 @@ function controls(){
   $('consoleSignOut').hidden=!auth?.signedIn;
   $('consoleSignOut').disabled=busy;
 }
-function clear(){reviewState=null;reviewPending=null;globalThis.YGCOverlays.close($('reviewDialog'));$('reviewStatus').textContent='—';authorized=false;applications.clear();users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
+function clear(){reviewState=null;reviewPending=null;globalThis.YGCOverlays.close($('reviewDialog'));$('reviewStatus').textContent='—';authorized=false;disputes.clear();applications.clear();users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
 function error(error){
   settings=null;reviewState=null;
   if([401,403].includes(error.status)||error.code==='sign_in_required')clear();
@@ -112,7 +114,7 @@ await action(async()=>{
   if(!state?.user){$('consoleStatus').textContent=t('console.sign_in_required');return}
   if(state.user.role!=='admin'||state.identity?.email_verified!==true){$('consoleStatus').textContent=t('console.admin_required');return}
   // UI eligibility never replaces the server's canonical Admin check.
-  authorized=true;await refresh();await applications.refresh();if(!authorized)return;await guitars.refresh();if(!authorized)return;await users.refresh();if(!authorized)return;await backups.refresh();if(!authorized)return;await crawl.refresh();if(!authorized)return;
+  authorized=true;await refresh();await disputes.refresh();if(!authorized)return;await applications.refresh();if(!authorized)return;await guitars.refresh();if(!authorized)return;await users.refresh();if(!authorized)return;await backups.refresh();if(!authorized)return;await crawl.refresh();if(!authorized)return;
   $('consoleIdentity').textContent=state.user.display_name;
   $('consoleStatus').textContent=t('console.ready');
 });

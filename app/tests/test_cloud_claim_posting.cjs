@@ -54,7 +54,7 @@ function environment({initial=account(),search='',fullPage=false}={}){
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-claims.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createClaims;context.createClaims=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){},setCatalogIntent(){}});
- Object.assign(context,{createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createApplications:noOp});
+ Object.assign(context,{createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createApplications:noOp});
  let ready;
  if(fullPage){ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context)}
  else{component=context.createClaims({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}

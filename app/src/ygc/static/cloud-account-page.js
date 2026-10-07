@@ -6,6 +6,7 @@ import {createApplications,readCatalogIntent} from './cloud-account-applications
 import {createClaims,readClaimIntent} from './cloud-account-claims.js';
 import {createOwnership,readOwnershipIntent} from './cloud-account-ownership.js';
 import {createIdentityCorrections} from './cloud-account-identity.js';
+import {createDisputes} from './cloud-account-disputes.js';
 import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
@@ -18,7 +19,8 @@ const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,wor
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
-const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
+const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
+const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
 let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search),ownershipIntent=readOwnershipIntent(location.search);
 applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);
 globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
@@ -46,7 +48,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();
+  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();disputes.render();
 }
 async function documents(){
   policies=null;
@@ -55,7 +57,7 @@ async function documents(){
 }
 function update(result,refreshCatalog=false){
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear();notifications.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear();notifications.clear();disputes.clear()}
   state=result;
   if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
@@ -102,7 +104,7 @@ $('cloudAccountForm').onsubmit=async event=>{
   }finally{$('password').value='';busy=false;render()}
 };
 $('signOut').onclick=async()=>{
-  if(busy)return;notifications.clear();busy=true;render();
+  if(busy)return;notifications.clear();disputes.clear();busy=true;render();
   try{await auth.logout();mode='signin';$('cloudAccountForm').reset();update(null)}
   catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
@@ -127,6 +129,7 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await disputes.refresh();
   if(state?.user&&state.identity?.email_verified===true)await notifications.refresh();
   if(state?.user&&state.identity?.email_verified===true)await identityCorrections.refresh();
   if(state?.user&&state.identity?.email_verified===true)await ownership.refresh();

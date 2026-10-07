@@ -30,6 +30,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
         try:
             try:
                 await run_in_threadpool(accounts.check_schema)
+                await run_in_threadpool(disputes.check_schema)
             except Exception:
                 raise RuntimeError('Cloud account database initialization check failed.') from None
             yield
@@ -95,6 +96,10 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_notifications import CloudNotifications
     from ygc.cloud_notification_routes import notification_router
     app.include_router(notification_router(verifier, CloudNotifications(settings, operations)))
+    from ygc.cloud_disputes import CloudDisputes
+    from ygc.cloud_dispute_routes import dispute_router
+    disputes = CloudDisputes(settings, operations, storage)
+    app.include_router(dispute_router(verifier, disputes))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})
@@ -102,6 +107,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     @app.get('/ready')
     def ready():
         try:
+            disputes.check_schema()
             for target in ('accounts', 'chronicle', 'operations'):
                 with connect(settings, target) as con:
                     con.execute('SELECT 1').fetchone()

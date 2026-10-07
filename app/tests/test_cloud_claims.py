@@ -304,6 +304,8 @@ def test_author_can_manage_inactive_submission_after_guitar_is_no_longer_public(
 
 def test_claim_api_is_mounted_but_does_not_expose_local_generic_edit_route(monkeypatch):
     from ygc import cloud_account_api
+    from ygc.cloud_disputes import CloudDisputes
+    monkeypatch.setattr(CloudDisputes, 'check_schema', Mock())
     accounts, verifier = Mock(), Mock()
     verifier.verify.return_value = VerifiedIdentity('issuer', 'subject', '', False)
     monkeypatch.setattr(cloud_account_api, 'PostgresAccounts', Mock(return_value=accounts))
