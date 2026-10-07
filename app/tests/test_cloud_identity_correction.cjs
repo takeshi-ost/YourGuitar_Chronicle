@@ -25,9 +25,9 @@ function environment({initial=account(),fullPage=false,storage=new Map(),storage
  }
  const document={body:new Element('body'),documentElement:{lang:'en'},createElement:tag=>new Element(tag),getElementById:id=>ids.get(id),addEventListener(key,fn){(listeners[key]??=[]).push(fn)}};
  for(const match of fs.readFileSync(path.join(assets,'cloud_account_html.html'),'utf8').matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)){const n=new Element(match[1]);n.id=match[2];document.body.append(n)}
- let state=initial,busy=false,component,args,updates=0,defaultDetail=detail(),defaultListings=[listing()];const calls=[],replies=[];
+ let state=initial,busy=false,component,args,updates=0,defaultDetail=detail(),defaultListings=[listing()];const calls=[],replies=[],identityListeners=[];
  async function response(value){const data=await value;if(data instanceof Error)throw data;return data?.httpStatus?{ok:false,status:data.httpStatus,json:async()=>({detail:{code:data.code,message:data.raw,individual_id:'987654321'}})}:{ok:true,json:async()=>data}}
- const client={signedIn:Boolean(initial),account:initial,documents:async()=>({terms:{version:'t'},privacy:{version:'p'}}),restore:async()=>initial,
+ const client={onIdentityChanged(listener){identityListeners.push(listener)},signedIn:Boolean(initial),account:initial,documents:async()=>({terms:{version:'t'},privacy:{version:'p'}}),restore:async()=>client.account,
   async signIn(){this.signedIn=true;return this.account=account('1',false)},async logout(){this.signedIn=false;this.account=null},async refreshVerification(){return this.account=account()},
   async authorizedFetch(url,options={},verified){
    calls.push({url,options,verified,account:args.state()?.user?.app_user_id});assert.match(url,/^\/api\/auth\/identity-corrections(?:\/[1-9][0-9]*)?(?:\?after=[1-9][0-9]*&limit=25)?$/);
@@ -46,13 +46,13 @@ function environment({initial=account(),fullPage=false,storage=new Map(),storage
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-identity.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createIdentityCorrections;context.createIdentityCorrections=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
- Object.assign(context,{createDisputes:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
+ Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
  let ready;if(fullPage)ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);else{component=context.createIdentityCorrections({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,storage,ready,get updates(){return updates},get dialog(){return control('identityDialog')},get list(){return control('identityListings')},get history(){return control('identityHistory')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setDetail(value){defaultDetail=value},setListings(value){defaultListings=value},
   open(id='31'){return component.openListing(id)},create(){return control('identityCreate').onclick()},dismiss(){control('identityClose').onclick()},review(){return control('identityForm').onsubmit({preventDefault(){}})},confirm(){return control('identityConfirm').onclick()},
-  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},event(type){for(const fn of listeners[type]||[])fn({})},
+  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},sdkSwitch(next){client.account=next;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
   async flush(){for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve))}
  };
 }
@@ -135,3 +135,22 @@ test('Year-only edit preserves an existing maximum-valid Unicode model through p
 test('Maximum-valid Unicode reason is preserved without clipping and can be submitted',async()=>{const e=environment(),reason='🎸'.repeat(2000);await compose(e);assert.equal(e.control('identityReason').maxLength,4000);field(e,'identityReason',reason);await e.review();assert.equal(e.control('identityConfirm').hidden,false);const row=correction({body:reason});e.queue(success({correction:row,detail:detail({individual:guitar('12',{model:'Corrected'}),revision:'b'.repeat(64),items:[row]})}),'/31','POST');await e.confirm();assert.equal(writes(e).length,1);assert.equal(JSON.parse(writes(e)[0].options.body).reason,reason);assert.equal(e.storage.size,0)});
 
 for(const [id,value] of [['identity_model','🎸'.repeat(201)],['identity_year','🎸'.repeat(41)],['identityReason','🎸'.repeat(2001)],['identity_model','\ud800'],['identityReason','\udfff']])test('Over-bound or malformed Unicode draft is rejected using the server code-point limits',async()=>{const e=environment();await compose(e);field(e,id,value);await e.review();await e.confirm();assert.equal(writes(e).length,0);assert.equal(e.control('identityConfirm').hidden,true);assert.match(e.control('identityMessage').textContent,/identity.invalid/)});
+
+for(const outcome of ['unknown','pending'])test('Full account pagehide preserves '+outcome+' Identity Correction retry marker through reload',async()=>{
+ const e=environment({fullPage:true});await e.ready;await compose(e);const held=deferred();e.queue(outcome==='pending'?held.promise:Error('Lost result'),'/31','POST');const job=e.confirm();await e.flush();if(outcome==='unknown')await job;
+ const marker=e.storage.get('ygc.identity-correction.uncertain.v1');assert.deepEqual(JSON.parse(marker),{account:'uuid-1',ids:['31']});
+ await e.event('pagehide');assert.equal(e.storage.get('ygc.identity-correction.uncertain.v1'),marker);assert.equal(e.list.children.length,0);assert.equal(e.dialog.open,false);assert.equal(e.control('identityReason').value,'');assert.equal(e.control('selfIdentityCorrections').hidden,true);
+ const calls=e.calls.length;e.component.render();await e.open();await e.confirm();assert.equal(e.calls.length,calls);
+ const reload=environment({fullPage:true,storage:e.storage});await reload.ready;await reload.open();assert.equal(reload.control('identityCreate').disabled,true);assert.equal(reload.control('identityCheckSubmission').hidden,false);assert.equal(reload.control('identityAcknowledge').hidden,true);await reload.confirm();assert.equal(writes(reload).length,0);
+ if(outcome==='pending'){held.resolve(success());await job;assert.equal(e.calls.length,calls);assert.equal(e.storage.get('ygc.identity-correction.uncertain.v1'),marker);assert.equal(e.list.children.length,0)}
+ assert.equal(writes(e).length,1);
+});
+for(const next of [account(),account('2'),null])test('Full account BFCache rechecks identity before restoring retry marker for '+(next?.user?.app_user_id||'signed out'),async()=>{
+ const e=environment({fullPage:true});await e.ready;await compose(e);e.queue(Error('Lost result'),'/31','POST');await e.confirm();await e.event('pagehide');const held=deferred();e.client.restore=()=>held.promise;const calls=e.calls.length,show=e.event('pageshow',{persisted:true});await e.flush();assert.equal(e.calls.length,calls);assert.equal(e.list.children.length,0);assert.equal(e.control('selfIdentityCorrections').hidden,true);
+ e.client.account=next;held.resolve(next);await show;assert.equal(writes(e).length,1);
+ if(next){await e.open();assert.equal(e.control('identityCreate').disabled,next.user.app_user_id==='uuid-1');assert.equal(e.control('identityCheckSubmission').hidden,next.user.app_user_id!=='uuid-1')}else{assert.equal(e.list.children.length,0);assert.equal(e.control('selfIdentityCorrections').hidden,true)}
+});
+for(const exit of ['signout','SDK change'])test('Full account '+exit+' still erases active Identity Correction retry state',async()=>{
+ const e=environment({fullPage:true});await e.ready;await compose(e);e.queue(Error('Lost result'),'/31','POST');await e.confirm();if(exit==='signout')await e.control('signOut').onclick();else e.sdkSwitch(account('2'));
+ assert.equal(e.storage.size,0);assert.equal(e.list.children.length,0);assert.equal(e.dialog.open,false);assert.equal(e.control('identityReason').value,'');assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(writes(e).length,1);
+});

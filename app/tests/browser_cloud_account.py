@@ -137,6 +137,15 @@ def main():
     def empty_disputes():
         return {'items': [], 'next_after': None, 'can_write': True, 'viewer_user_id': '1'}
 
+    @app.get('/api/auth/favorites')
+    def favorites():
+        return {'items': [], 'total': '0', 'next_after': None}
+
+    @app.get('/api/auth/profile/visibility')
+    def profile_visibility():
+        return {'profile_revision': '1', 'fields': dict.fromkeys(
+            ('birth_visibility', 'residence_visibility', 'bio_visibility', 'avatar_visibility'), 'Private')}
+
     @app.get('/api/auth/notifications')
     def notifications():
         return {'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True}

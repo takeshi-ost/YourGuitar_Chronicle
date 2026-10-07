@@ -5,6 +5,8 @@
 Cloud Run向けの読み取り専用Top／Product Detailは別の安全な投影として実装した。ローカルAPIやプロフィールの公開制約をそのまま移植せず、[公開カタログの範囲・固定項目・未公開条件](../migration/CLOUD_PUBLIC_CATALOG.md)を適用する。写真・自由記述・Owner個人情報は今回の公開対象外。実装checkpointは本番公開済みを意味しない。
 
 
+Cloud の本人専用 Favorite と公開範囲設定の保存は、[専用の認証・非公開境界](../migration/CLOUD_PRIVATE_FAVORITES.md)に従う。Favorite は本人だけに表示し、既存の Public 設定を公開への同意と解釈しない。この段階では公開プロフィールや私的写真の公開を追加しない。実装checkpointと本番反映を区別する。
+
 - `/user-view` はGuestも閲覧できるTop Page。All Discovered Guitars（旧Product List）の検索・ソート、Product Detail、Specification、Claim Chronicle、新着順のNew Discovery（最大200個体）、統計と地図を表示する。GuestはClaimや投票など参加操作を利用できない。
 - 画面の操作ラベルは英語が既定で、日本語へ切り替えられる。Product DetailはTop Page / User Profile / Browser Consoleで共通の描画部品を使う。Top Page / User Profileでは幅900px以下で一覧から開閉可能なオーバーレイとして表示する。
 - Top Page、User Profile、Browser Consoleのクリック可能な一覧では、行をクリックした後に上下キーで同じ一覧の前後項目を選べる。入力欄やモーダルのキー操作は優先し、一覧以外をクリックすると解除する。

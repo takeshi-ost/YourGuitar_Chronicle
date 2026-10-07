@@ -125,3 +125,21 @@ def test_dispute_schema_regression_fails_readiness_without_leaking_details(envir
         response = client.get('/ready')
         assert response.status_code == 503 and response.json() == {'status': 'unavailable'}
         assert 'private' not in response.text
+
+
+def test_private_favorites_and_visibility_wiring(environment, monkeypatch):
+    accounts, verifier = Mock(), Mock()
+    monkeypatch.setattr(api, 'PostgresAccounts', Mock(return_value=accounts))
+    monkeypatch.setattr(api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
+    app = runtime.application()
+    with TestClient(app) as client:
+        for path in ('/api/auth/favorites', '/api/auth/favorites/1', '/api/auth/profile/visibility'):
+            assert client.get(path).status_code == 401
+        for path in ('/api/auth/favorites/1', '/api/auth/profile/visibility'):
+            assert client.put(path, json={}).status_code == 401
+        for asset in ('cloud-account-favorites.js', 'cloud-account-visibility.js'):
+            result = client.get('/assets/' + asset)
+            assert result.status_code == 200 and result.headers['cache-control'] == 'no-store'
+        for path in ('/api/public/favorites', '/api/users/1/favorites', '/api/public/profiles/1', '/users/1'):
+            assert client.get(path).status_code == 404
+    verifier.verify.assert_not_called()

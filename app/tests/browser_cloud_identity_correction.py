@@ -50,7 +50,7 @@ AUDIT = r'''
 
 
 def main():
-    names = ('cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-identity.js', 'cloud-account-ownership.js',
+    names = ('cloud-account-favorites.js', 'cloud-account-visibility.js', 'cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-identity.js', 'cloud-account-ownership.js',
         'cloud-account-profile.js', 'cloud-account-avatar.js', 'cloud-account-guitars.js',
         'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js',
         'cloud-account.css', 'cloud-auth-loader.js', 'identity-platform-auth.js',
@@ -121,6 +121,16 @@ def main():
                 route.fulfill(json={'user': users[actor], 'identity': {'email_verified': 'fixture-verified-' in token}})
             elif actor not in users or 'fixture-verified-' not in token:
                 route.fulfill(status=403, json={'detail': 'Synthetic verified identity required'})
+            elif path == '/api/auth/favorites':
+                assert request.method == 'GET'
+                route.fulfill(json={'items': [], 'total': '0', 'next_after': None})
+            elif path.startswith('/api/auth/favorites/'):
+                assert request.method == 'GET'
+                route.fulfill(json={'individual_id': path.rsplit('/', 1)[-1], 'favorite': False})
+            elif path == '/api/auth/profile/visibility':
+                assert request.method == 'GET'
+                route.fulfill(json={'profile_revision': '1', 'fields': dict.fromkeys(
+                    ('birth_visibility', 'residence_visibility', 'bio_visibility', 'avatar_visibility'), 'Private')})
             elif path == '/api/auth/profile':
                 route.fulfill(json={'profile_revision': '1', 'fields': {'display_name': users[actor]['display_name'], 'location_country': '', 'location_region': '', 'bio': ''}})
             elif path == '/api/auth/avatar':
@@ -342,7 +352,10 @@ def main():
             close()
             page.reload()
             page.wait_for_function('globalThis.YGCCloudAccountReady===true')
+            assert page.evaluate("sessionStorage.getItem('ygc.identity-correction.uncertain.v1')") == marker
             settle(); open_listing()
+            expect(page.locator('#identityCreate')).to_be_disabled()
+            expect(page.locator('#identityCheckSubmission')).to_be_visible()
             expect(page.locator('#identityConfirm')).to_be_hidden()
             recover()
             assert len(store['writes']) == count + 1

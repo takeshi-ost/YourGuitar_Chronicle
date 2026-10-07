@@ -252,3 +252,9 @@ if __name__ == '__main__':
 
         from postgres_dispute_checks import run as dispute_checks
         dispute_checks(port)
+
+        from postgres_favorite_checks import run as favorite_checks
+        favorite_checks(port)
+
+        from postgres_profile_visibility_checks import run as profile_visibility_checks
+        profile_visibility_checks(port)
