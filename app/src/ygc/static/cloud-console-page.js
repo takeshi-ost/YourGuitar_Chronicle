@@ -1,3 +1,4 @@
+import {createApplicationBrowser} from './cloud-console-applications.js';
 import {createUserBrowser} from './cloud-console-users.js';
 import {createCrawlBrowser} from './cloud-console-crawl.js';
 import {createBackupBrowser} from './cloud-console-backups.js';
@@ -10,10 +11,11 @@ let auth,settings=null,reviewState=null,reviewPending=null,authorized=false,busy
 const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error,maintenanceMode:()=>!!settings&&settings.mode!=='normal'});
 const crawl=createCrawlBrowser({request,authorized:()=>authorized,onUnauthorized:error});
 const guitars=createGuitarBrowser({request,authorized:()=>authorized,onUnauthorized:error});
+const applications=createApplicationBrowser({request,authorized:()=>authorized,onUnauthorized:error,onGuitar:id=>guitars.detail(id)});
 $('consoleStatus').removeAttribute('data-i18n');
 const users=createUserBrowser({request,authorized:()=>authorized,onUnauthorized:error,onGuitar:id=>guitars.detail(id)});
 function controls(){
-  users.render();guitars.render();backups.render();crawl.render();
+  applications.render();users.render();guitars.render();backups.render();crawl.render();
   $('consoleControls').hidden=!authorized;
   $('consoleRefresh').disabled=busy||!authorized;
   $('reviewToggle').disabled=busy||!authorized||reviewState===null;
@@ -23,7 +25,7 @@ function controls(){
   $('consoleSignOut').hidden=!auth?.signedIn;
   $('consoleSignOut').disabled=busy;
 }
-function clear(){reviewState=null;reviewPending=null;globalThis.YGCOverlays.close($('reviewDialog'));$('reviewStatus').textContent='—';authorized=false;users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
+function clear(){reviewState=null;reviewPending=null;globalThis.YGCOverlays.close($('reviewDialog'));$('reviewStatus').textContent='—';authorized=false;applications.clear();users.clear();guitars.clear();backups.clear();crawl.clear();settings=null;$('operationsStatus').textContent='—';$('operationsMessage').value='';$('consoleIdentity').textContent='';controls()}
 function error(error){
   settings=null;reviewState=null;
   if([401,403].includes(error.status)||error.code==='sign_in_required')clear();
@@ -31,7 +33,7 @@ function error(error){
   controls();
 }
 async function request(path,options,binary=false){
-  const response=await auth.authorizedFetch(path,options,true);
+  const response=await auth.authorizedFetch(path,{...options,cache:'no-store'},true);
   if(!response.ok){let code;try{const body=await response.json();code=body.detail?.code}catch{}throw Object.assign(Error('Operation unavailable'),{status:response.status,code})}
   if(binary){if(!response.headers.get('Content-Type')?.startsWith('image/jpeg'))throw Error('Unexpected image');const blob=await response.blob();if(blob.size>25*1024*1024)throw Error('Image too large');return blob}
   return response.json();
@@ -77,7 +79,7 @@ $('reviewCancel').onclick=()=>globalThis.YGCOverlays.close($('reviewDialog'));
 $('reviewDialog').addEventListener('ygc:closed',()=>{reviewPending=null;controls()});
 $('reviewConfirm').onclick=()=>{
   if(busy||!authorized||!reviewPending)return;const payload={...reviewPending};globalThis.YGCOverlays.close($('reviewDialog'));
-  action(async()=>{displayReview(await request('/api/admin/operations/review',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));$('consoleStatus').textContent=t('ui.settings_saved_ae493e21')});
+  action(async()=>{displayReview(await request('/api/admin/operations/review',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}));$('consoleStatus').textContent=t('ui.settings_saved_ae493e21');await applications.refresh()});
 };
 $('consoleRefresh').onclick=()=>action(async()=>{await refresh();$('consoleStatus').textContent=t('console.ready')});
 $('operationsMode').onchange=()=>{$('operationsMessage').value=defaultMessage($('operationsMode').value)};
@@ -89,7 +91,7 @@ $('maintenanceForm').onsubmit=event=>{
     $('consoleStatus').textContent=t('ui.settings_saved_ae493e21');
   });
 };
-$('consoleSignOut').onclick=()=>action(async()=>{await auth.logout();clear();$('consoleStatus').textContent=t('console.sign_in_required')});
+$('consoleSignOut').onclick=()=>action(async()=>{clear();await auth.logout();$('consoleStatus').textContent=t('console.sign_in_required')});
 document.querySelector('.console-main-layer a[href="#cloudCrawl"]').onclick=()=>{if(authorized)$('operations').scrollIntoView({block:'start'})};
 document.querySelector('.console-main-layer a[href="#guitarBrowser"]').onclick=()=>{if(authorized)$('cloudProductDetail').scrollIntoView({block:'start'})};
 document.querySelector('.console-main-layer a[href="#userBrowser"]').onclick=()=>{if(authorized)$('cloudUserDetail').scrollIntoView({block:'start'})};
@@ -110,7 +112,7 @@ await action(async()=>{
   if(!state?.user){$('consoleStatus').textContent=t('console.sign_in_required');return}
   if(state.user.role!=='admin'||state.identity?.email_verified!==true){$('consoleStatus').textContent=t('console.admin_required');return}
   // UI eligibility never replaces the server's canonical Admin check.
-  authorized=true;await refresh();await guitars.refresh();if(!authorized)return;await users.refresh();if(!authorized)return;await backups.refresh();if(!authorized)return;await crawl.refresh();if(!authorized)return;
+  authorized=true;await refresh();await applications.refresh();if(!authorized)return;await guitars.refresh();if(!authorized)return;await users.refresh();if(!authorized)return;await backups.refresh();if(!authorized)return;await crawl.refresh();if(!authorized)return;
   $('consoleIdentity').textContent=state.user.display_name;
   $('consoleStatus').textContent=t('console.ready');
 });

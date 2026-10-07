@@ -102,9 +102,9 @@ def invalidated(con,r):
     return None
 
 
-def create_claim(repo,con,r):
+def create_claim(repo,con,r,*,actor='local-console-admin'):
     if r['claim_id']:
-        repo.admin_moderate_claim_in_connection(con,r['claim_id'],'positive')
+        repo.admin_moderate_claim_in_connection(con,r['claim_id'],'positive',actor=actor)
         return r['claim_id']
     payload=json.loads(r['listing_payload'])
     ids=duplicates(con,payload)

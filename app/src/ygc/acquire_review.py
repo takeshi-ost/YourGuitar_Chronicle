@@ -289,63 +289,77 @@ def management_actions(r):
 
 
 def administer(repo,revision,operation,reason,expected_version):
+    with transaction(repo) as con:
+        expire(con)
+        return administer_in_connection(repo,con,revision,operation,reason,expected_version)
+
+
+def administer_in_connection(repo,con,revision,operation,reason,expected_version,*,
+                             actor='local-console-admin',invalidation_check=None,return_detail=True,review_context=None):
+    """Shared human decisions; the caller owns authorization and transaction.
+
+    AI observations are preserved. Acceptance remains independent of the
+    current Owner's verification, and an existing Claim is reused on appeal.
+    """
+    if not isinstance(reason,str):raise ValueError('変更理由を1〜2000文字で入力してください。')
     reason=reason.strip()
     if not reason or len(reason)>2000:raise ValueError('変更理由を1〜2000文字で入力してください。')
-    with transaction(repo) as con:
-        expire(con);r=find(con,revision)
-        if management_version(con,r)!=expected_version:raise ValueError('申請またはClaimが更新されています。一覧を更新して確認してください。')
-        if operation not in management_actions(r):raise ValueError('この状態では操作できません。')
-        note=dict(actor='local-console-admin',reason=reason,previous_status=r['status'],operation=operation)
-        if operation in ('accept','retry'):
-            other=con.execute("SELECT 1 FROM acquire_applications WHERE applicant_id=? AND individual_id=? AND revision<>? AND status IN ('draft','pending','processing','error')",(r['applicant_id'],r['individual_id'],revision)).fetchone() if r['request_kind']=='acquire' else None
-            if r['request_kind']=='listing':
-                from ygc.extractors.normalization import normalize_manufacturer, normalize_serial
-                target=json.loads(r['listing_payload'])
-                for candidate in con.execute("SELECT listing_payload FROM acquire_applications WHERE applicant_id=? AND request_kind='listing' AND revision<>? AND status IN ('draft','pending','processing','error')",(r['applicant_id'],revision)):
-                    candidate=json.loads(candidate[0])
-                    if normalize_manufacturer(candidate['manufacturer'])==normalize_manufacturer(target['manufacturer']) and normalize_serial(candidate['serial_number'])==normalize_serial(target['serial_number']):other=True
-            if other:raise ValueError('同じ個体の別申請が進行中です。')
-        if operation in ('positive','negative','unverified'):
-            if not repo.admin_moderate_claim_in_connection(con,r['claim_id'],operation):raise ValueError('Claimがありません。')
-        elif operation=='cancel':
-            con.execute("UPDATE acquire_applications SET status='cancelled',completed_at=?,lease_token=NULL,lease_until=NULL WHERE revision=?",(utcnow(),revision))
-        elif operation=='retry':
-            failure=invalidated(con,r)
+    r=find(con,revision)
+    if management_version(con,r)!=expected_version:raise ValueError('申請またはClaimが更新されています。一覧を更新して確認してください。')
+    if operation not in management_actions(r):raise ValueError('この状態では操作できません。')
+    note=dict(actor=actor,reason=reason,previous_status=r['status'],operation=operation)
+    if review_context:note['review_context']=review_context
+    if operation in ('accept','retry'):
+        other=con.execute("SELECT 1 FROM acquire_applications WHERE applicant_id=? AND individual_id=? AND revision<>? AND status IN ('draft','pending','processing','error') AND (status<>'draft' OR expires_at>?)",(r['applicant_id'],r['individual_id'],revision,time.time())).fetchone() if r['request_kind']=='acquire' else None
+        if r['request_kind']=='listing':
+            from ygc.extractors.normalization import normalize_manufacturer, normalize_serial
+            target=json.loads(r['listing_payload'])
+            for candidate in con.execute("SELECT listing_payload FROM acquire_applications WHERE applicant_id=? AND request_kind='listing' AND revision<>? AND status IN ('draft','pending','processing','error') AND (status<>'draft' OR expires_at>?)",(r['applicant_id'],revision,time.time())):
+                candidate=json.loads(candidate[0])
+                if normalize_manufacturer(candidate['manufacturer'])==normalize_manufacturer(target['manufacturer']) and normalize_serial(candidate['serial_number'])==normalize_serial(target['serial_number']):other=True
+        if other:raise ValueError('同じ個体の別申請が進行中です。')
+    if operation in ('positive','negative','unverified'):
+        if not repo.admin_moderate_claim_in_connection(con,r['claim_id'],operation,actor=actor):raise ValueError('Claimがありません。')
+    elif operation=='cancel':
+        con.execute("UPDATE acquire_applications SET status='cancelled',completed_at=?,lease_token=NULL,lease_until=NULL WHERE revision=?",(utcnow(),revision))
+    elif operation=='retry':
+        failure=(invalidation_check or invalidated)(con,r)
+        if failure:raise ValueError(failure)
+        note['previous_review']={k:json.loads(r[k]) if r[k] else None for k in ('received','result','product_observations')}
+        note['previous_review'].update({k:r[k] for k in ('report','error','prompt_version','started_at','completed_at')})
+        con.execute("UPDATE acquire_applications SET status='pending',completed_at=NULL,received=NULL,result=NULL,report=NULL,error=NULL,attempts=0,lease_token=NULL,lease_until=NULL,product_observations=NULL WHERE revision=?",(revision,))
+    else:
+        claim_id=r['claim_id']
+        if operation=='accept':
+            failure=(invalidation_check or invalidated)(con,r)
             if failure:raise ValueError(failure)
-            note['previous_review']={k:json.loads(r[k]) if r[k] else None for k in ('received','result')}
-            con.execute("UPDATE acquire_applications SET status='pending',completed_at=NULL,received=NULL,result=NULL,report=NULL,error=NULL,attempts=0,lease_token=NULL,lease_until=NULL,product_observations=NULL WHERE revision=?",(revision,))
-        else:
-            claim_id=r['claim_id']
-            if operation=='accept':
-                failure=invalidated(con,r)
-                if failure:raise ValueError(failure)
-                if r['request_kind']=='listing':
-                    from ygc.listing_review import create_claim
-                    claim_id=create_claim(repo,con,r)
-                    r=find(con,revision)
-                elif claim_id:
-                    existing=con.execute('SELECT * FROM claims WHERE id=?',(claim_id,)).fetchone()
-                    if not existing or existing['status']!='active' or existing['individual_id']!=r['individual_id']:raise ValueError('Claimの状態または対象個体が変更されています。')
-                    owner=con.execute("SELECT u.id FROM individuals i JOIN users u ON u.id=i.current_owner_user_id WHERE i.id=? AND u.account_type<>'source'",(r['individual_id'],)).fetchone()
-                    repo.admin_moderate_claim_in_connection(con,claim_id,'unverified' if owner else 'positive')
-                else:
-                    _,claim_id=repo._create_ownership_claim_in_connection(con,r['applicant_id'],r['individual_id'],'acquire',r['acquisition_date'],r['body'],None,utcnow())
+            if r['request_kind']=='listing':
+                from ygc.listing_review import create_claim
+                claim_id=create_claim(repo,con,r,actor=actor)
+                r=find(con,revision)
             elif claim_id:
-                repo.admin_moderate_claim_in_connection(con,claim_id,'negative')
-            note['accepted']=operation=='accept'
-            con.execute('UPDATE acquire_applications SET status=?,claim_id=?,completed_at=?,error=NULL,lease_token=NULL,lease_until=NULL WHERE revision=?',
-                ('accepted' if operation=='accept' else 'rejected',claim_id,utcnow(),revision))
-            if operation=='accept':
-                state=con.execute('SELECT verification_status FROM claims WHERE id=?',(claim_id,)).fetchone()[0]
-                owner=con.execute('SELECT current_owner_user_id FROM individuals WHERE id=?',(r['individual_id'],)).fetchone()[0]
-                if state=='unverified' and owner:
-                    con.execute("INSERT INTO notifications(recipient_user_id,actor_user_id,notification_type,individual_id,claim_id,title,body,created_at) VALUES (?,?,'claim_review',?,?,'Acquire承認待ち','管理者の画像審議を通過した申請です。内容を確認してください。',?)",
-                        (owner,r['applicant_id'],r['individual_id'],claim_id,utcnow()))
-        event(con,revision,'admin_'+operation,json.dumps(note,ensure_ascii=False))
-        if available_user(con,r['applicant_id']):
-            con.execute("INSERT INTO notifications(recipient_user_id,notification_type,individual_id,claim_id,title,body,created_at) VALUES (?,'acquire_review',?,?,?, ?,?)",
-                (r['applicant_id'],r['individual_id'],find(con,revision)['claim_id'],'Ownership Request updated by administrator',operation+': '+reason,utcnow()))
-        return detail(con,revision,None,admin=True)
+                existing=con.execute('SELECT * FROM claims WHERE id=?',(claim_id,)).fetchone()
+                if not existing or existing['status']!='active' or existing['individual_id']!=r['individual_id']:raise ValueError('Claimの状態または対象個体が変更されています。')
+                owner=con.execute("SELECT u.id FROM individuals i JOIN users u ON u.id=i.current_owner_user_id WHERE i.id=? AND u.account_type<>'source'",(r['individual_id'],)).fetchone()
+                repo.admin_moderate_claim_in_connection(con,claim_id,'unverified' if owner else 'positive',actor=actor)
+            else:
+                _,claim_id=repo._create_ownership_claim_in_connection(con,r['applicant_id'],r['individual_id'],'acquire',r['acquisition_date'],r['body'],None,utcnow())
+        elif claim_id:
+            repo.admin_moderate_claim_in_connection(con,claim_id,'negative',actor=actor)
+        note['accepted']=operation=='accept'
+        con.execute('UPDATE acquire_applications SET status=?,claim_id=?,completed_at=?,error=NULL,lease_token=NULL,lease_until=NULL WHERE revision=?',
+            ('accepted' if operation=='accept' else 'rejected',claim_id,utcnow(),revision))
+        if operation=='accept':
+            state=con.execute('SELECT verification_status FROM claims WHERE id=?',(claim_id,)).fetchone()[0]
+            owner=con.execute('SELECT current_owner_user_id FROM individuals WHERE id=?',(r['individual_id'],)).fetchone()[0]
+            if state=='unverified' and owner:
+                con.execute("INSERT INTO notifications(recipient_user_id,actor_user_id,notification_type,individual_id,claim_id,title,body,created_at) VALUES (?,?,'claim_review',?,?,'Acquire承認待ち','管理者の画像審議を通過した申請です。内容を確認してください。',?)",
+                    (owner,r['applicant_id'],r['individual_id'],claim_id,utcnow()))
+    event(con,revision,'admin_'+operation,json.dumps(note,ensure_ascii=False))
+    if available_user(con,r['applicant_id']):
+        con.execute("INSERT INTO notifications(recipient_user_id,notification_type,individual_id,claim_id,title,body,created_at) VALUES (?,'acquire_review',?,?,?, ?,?)",
+            (r['applicant_id'],r['individual_id'],find(con,revision)['claim_id'],'Ownership Request updated by administrator',operation+': '+reason,utcnow()))
+    return detail(con,revision,None,admin=True) if return_detail else None
 
 
 def list_for(repo,user,admin=False):

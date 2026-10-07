@@ -46,6 +46,8 @@ def main():
                 cloud_owner()
                 from browser_cloud_console import main as cloud_console
                 cloud_console()
+                from browser_cloud_admin_applications import main as cloud_admin_applications
+                cloud_admin_applications()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

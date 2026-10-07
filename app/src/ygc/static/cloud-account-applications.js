@@ -7,6 +7,7 @@ export function createApplications({auth,state,busy,work}){
   const add=button('applications.listing','applicationListing'),acquire=button('applications.acquire','applicationAcquire'),refreshButton=button('action.refresh');
   root.append(heading,notice,accessNotice,add,acquire,refreshButton,status,list);
   const dialog=node('dialog'),title=node('h2'),detail=node('p'),form=node('form'),fields=node('fieldset'),photos=node('fieldset'),message=node('p');
+  const adminReview=node('p');adminReview.id='applicationAdminReview';adminReview.hidden=true;adminReview.style.whiteSpace='pre-wrap';
   dialog.id='applicationDialog';title.id='applicationTitle';dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
   const inputs={},files={},previews={},urls=new Set();let selected=null,kind=null,epoch=0,accountEpoch=0,refreshEpoch=0,canWrite=null,renderedAccount=state()?.user?.app_user_id;
   const keys=['manufacturer','serial_number','model','finish','year','individual_id','occurred_at','body'];
@@ -27,13 +28,13 @@ export function createApplications({auth,state,busy,work}){
   }
   const limits=node('p',t('avatar.limits')),save=node('button',t('applications.create')),submit=button('applications.submit','applicationSubmit'),cancel=button('applications.cancel','applicationCancel'),close=button('action.close');
   const retry=button('applications.retry','applicationRetry'),dialogRefresh=button('action.refresh','applicationRefresh');let retryReady=false;
-  save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);dialog.append(title,detail,accessDetail,form,photos,submit,cancel,retry,dialogRefresh,message,close);document.body.append(dialog);
+  save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);dialog.append(title,detail,adminReview,accessDetail,form,photos,submit,cancel,retry,dialogRefresh,message,close);document.body.append(dialog);
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true);
   const account=()=>state()?.user?.app_user_id;
   const writable=()=>eligible()&&canWrite;
   const sameAccount=(version,id)=>version===accountEpoch&&eligible()&&id===account();
   function clearImages(){for(const url of urls)URL.revokeObjectURL(url);urls.clear();for(const role of ['closeup','overview']){files[role].value='';previews[role].image.removeAttribute('src');previews[role].image.hidden=true}}
-  function closeDialog(){epoch++;selected=null;clearImages();form.reset();detail.textContent=message.textContent='';retryReady=false}
+  function closeDialog(){epoch++;selected=null;clearImages();form.reset();detail.textContent=message.textContent=adminReview.textContent='';adminReview.hidden=true;retryReady=false}
   dialog.addEventListener('ygc:closed',closeDialog);close.onclick=()=>globalThis.YGCOverlays.close(dialog);
   function clear(){accountEpoch++;refreshEpoch++;epoch++;canWrite=null;list.replaceChildren();status.textContent='';accessNotice.textContent=accessDetail.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
   function render(){
@@ -92,7 +93,7 @@ export function createApplications({auth,state,busy,work}){
     });
   }
   function show(){
-    clearImages();title.textContent=t('applications.'+kind);message.textContent='';retryReady=false;retry.textContent=t('applications.retry');
+    clearImages();adminReview.textContent='';adminReview.hidden=true;title.textContent=t('applications.'+kind);message.textContent='';retryReady=false;retry.textContent=t('applications.retry');
     for(const key of keys){const visible=selected?kind==='acquire'&&['occurred_at','body'].includes(key):key==='occurred_at'||key==='body'||(kind==='acquire'?key==='individual_id':key!=='individual_id');inputs[key].label.hidden=inputs[key].input.hidden=!visible;inputs[key].input.disabled=!visible;inputs[key].input.required=visible&&['manufacturer','serial_number','individual_id','occurred_at'].includes(key)}
     if(selected){
       inputs.occurred_at.input.value=selected.acquisition_date||today();inputs.body.input.value=selected.body||'';
@@ -103,7 +104,11 @@ export function createApplications({auth,state,busy,work}){
         (selected.body?'\n'+t('applications.body')+': '+selected.body:'')+
         (selected.claim_id?'\n'+t('applications.claim_result',{id:selected.claim_id,state:t('chronicle.'+(selected.verification_status||'unverified'))}):'')+
         (selected.status==='accepted'&&selected.verification_status==='unverified'?'\n'+t('applications.owner_waiting'):'')+
-        (selected.reasons?.length?'\n'+selected.reasons.join('\n'):'');
+        (selected.reasons?.length?'\n'+t('applications.ai_reasons')+'\n'+selected.reasons.join('\n'):'');
+      if(selected.admin_review&&typeof selected.admin_review.reason==='string'){
+        const review=selected.admin_review,operation=String(review.operation||'').replace(/^admin_/,'');
+        adminReview.textContent=t('applications.admin_review')+'\n'+(['accept','reject','retry'].includes(operation)?t('admin_applications.operation_'+operation)+'\n':'')+(review.at?String(review.at)+'\n':'')+review.reason;adminReview.hidden=false;
+      }
     }else{form.reset();inputs.occurred_at.input.value=today();detail.textContent=t('applications.instructions')}
     inputs.occurred_at.input.max=today();render();globalThis.YGCOverlays.open(dialog);
   }

@@ -224,3 +224,6 @@ if __name__ == '__main__':
 
         from postgres_operations_checks import run as operations_checks
         operations_checks(port)
+
+        from postgres_admin_application_checks import run as admin_application_checks
+        admin_application_checks(port)
