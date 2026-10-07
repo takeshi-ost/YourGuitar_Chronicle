@@ -164,3 +164,33 @@ test('Verification return preserves Claim intent alongside Acquire without accep
 for(const claim of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','https://evil.invalid','12&next=https://evil.invalid'])test(`Verification rejects invalid Claim intent ${String(claim)}`,async()=>{
  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});await assert.rejects(s.adapter.requestEmailVerification({claim}));assert.equal(s.sdkCalls.some(call=>call[0]==='verifyEmail'),false);
 });
+
+function delayed(){let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}}
+function principalHarness({readiness=Promise.resolve(),token=Promise.resolve('A-token'),fetch}={}){
+ const first={email:'a@example.invalid',getIdToken:()=>token},second={email:'b@example.invalid',getIdToken:async()=> 'B-token'};
+ const auth={currentUser:first,authStateReady:()=>readiness},calls=[],listeners=[];
+ const sdk={browserSessionPersistence:'session',setPersistence:async()=>{},onAuthStateChanged(_auth,listener){listeners.push(listener)}};
+ const request=async(url,options)=>{calls.push({url,options});return fetch?fetch(url,options):new Response(JSON.stringify(account))};
+ const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
+ const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request});
+ return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener()}};
+}
+test('Pending SDK readiness cannot send an initiating A mutation using B credentials',async()=>{
+ const hold=delayed(),s=principalHarness({readiness:hold.promise});
+ const write=s.adapter.authorizedFetch('/api/auth/favorites/1',{method:'PUT',body:'{"favorite":true}'},true);
+ s.switchUser();hold.resolve();await assert.rejects(write,error=>error.code==='sign_in_required');assert.equal(s.calls.length,0);assert.equal(s.adapter.account,null);
+});
+test('An SDK switch during token retrieval rejects the mutation before network dispatch',async()=>{
+ const hold=delayed(),s=principalHarness({token:hold.promise});const write=s.adapter.authorizedFetch('/api/auth/profile/visibility',{method:'PUT',body:'PRIVATE'},true);
+ await new Promise(resolve=>setImmediate(resolve));s.switchUser();hold.resolve('A-token');await assert.rejects(write,error=>error.code==='sign_in_required');assert.equal(s.calls.length,0);
+});
+for(const status of [200,409])test('Late canonical '+status+' response body cannot restore an old principal',async()=>{
+ const body=delayed(),s=principalHarness({fetch:async()=>({ok:status===200,status,json:()=>body.promise})});const restoring=s.adapter.restore();await new Promise(resolve=>setImmediate(resolve));s.switchUser();body.resolve(status===200?account:{code:'registration_required'});
+ await assert.rejects(restoring,error=>error.code==='sign_in_required');assert.equal(s.adapter.account,null);
+});
+test('SDK account change synchronously invalidates canonical cache and notifies all private views',async()=>{
+ const s=principalHarness();await s.adapter.restore();assert.deepEqual(s.adapter.account,account);let cleared=0;s.adapter.onIdentityChanged(()=>{throw Error('Broken unrelated view')});const unsubscribe=s.adapter.onIdentityChanged(()=>cleared++);s.switchUser();assert.equal(s.adapter.account,null);assert.equal(cleared,1);unsubscribe();s.switchUser(null);assert.equal(cleared,1);
+});
+test('Without an SDK observer, the canonical account getter still refuses another current SDK principal',async()=>{
+ const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});assert.deepEqual(s.adapter.account,account);s.auth.currentUser={email:'other@example.invalid',getIdToken:async()=> 'new'};assert.equal(s.adapter.account,null);
+});

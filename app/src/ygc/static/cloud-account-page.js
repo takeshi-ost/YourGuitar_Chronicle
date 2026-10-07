@@ -1,3 +1,5 @@
+import {createFavorites} from './cloud-account-favorites.js';
+import {createVisibility} from './cloud-account-visibility.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 import {createGuitars} from './cloud-account-guitars.js';
 import {createProfile} from './cloud-account-profile.js';
@@ -11,7 +13,9 @@ import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
-let auth,policies,mode='signin',busy=false,state=null;
+let auth,policies,mode='signin',busy=false,state=null,pageSuspended=false,sessionEpoch=0;
+const favorites=createFavorites({auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
+const visibility=createVisibility({auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
 const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
@@ -48,7 +52,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();disputes.render();
+  favorites.render();visibility.render();avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();disputes.render();
 }
 async function documents(){
   policies=null;
@@ -56,8 +60,9 @@ async function documents(){
   $('terms').checked=$('privacy').checked=false;
 }
 function update(result,refreshCatalog=false){
+  if(pageSuspended&&result!==null)return;
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear();notifications.clear();disputes.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){favorites.clear();visibility.clear();avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear();notifications.clear();disputes.clear()}
   state=result;
   if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
@@ -104,7 +109,7 @@ $('cloudAccountForm').onsubmit=async event=>{
   }finally{$('password').value='';busy=false;render()}
 };
 $('signOut').onclick=async()=>{
-  if(busy)return;notifications.clear();disputes.clear();busy=true;render();
+  if(busy)return;busy=true;update(null);favorites.clear();visibility.clear();notifications.clear();disputes.clear();render();
   try{await auth.logout();mode='signin';$('cloudAccountForm').reset();update(null)}
   catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
@@ -129,6 +134,8 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await favorites.refresh();
+  if(state?.user&&state.identity?.email_verified===true)await visibility.refresh();
   if(state?.user&&state.identity?.email_verified===true)await disputes.refresh();
   if(state?.user&&state.identity?.email_verified===true)await notifications.refresh();
   if(state?.user&&state.identity?.email_verified===true)await identityCorrections.refresh();
@@ -144,10 +151,18 @@ async function avatarAction(work){
   if(busy)return;busy=true;render();
   try{await work()}catch(error){avatar.failed(error)}finally{busy=false;render()}
 }
+globalThis.addEventListener('pagehide',()=>{pageSuspended=true;sessionEpoch++;update(null);favorites.clear();visibility.clear()});
+globalThis.addEventListener('pageshow',async event=>{
+  if(!event.persisted||!auth)return;
+  pageSuspended=true;const current=++sessionEpoch;busy=true;update(null);render();
+  try{const restored=await auth.restore();if(current!==sessionEpoch)return;pageSuspended=false;update(restored,true);await loadAvatar()}
+  catch(error){if(current!==sessionEpoch)return;pageSuspended=false;update(null);$('status').textContent=errorMessage(error)}
+  finally{if(current===sessionEpoch&&!pageSuspended){busy=false;render()}}
+});
 $('avatarForm').onsubmit=event=>{event.preventDefault();avatarAction(()=>avatar.save($('avatarFile').files[0]))};
 $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
-try{auth=await loadCloudAuth();await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(loadAvatar)}
+try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{update(null);$('status').textContent=t('cloud.session_changed')});await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(loadAvatar)}
 catch(error){$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');
 globalThis.YGCCloudAccountReady=true;

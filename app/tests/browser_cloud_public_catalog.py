@@ -76,7 +76,7 @@ def fixtures():
 
 def main():
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in (
-        'cloud-public-catalog.js', 'cloud-public-catalog.css', 'identity-platform-auth.js',
+        'cloud-account-favorites.js', 'cloud-public-catalog.js', 'cloud-public-catalog.css', 'identity-platform-auth.js',
         'cloud-auth-loader.js')}
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
@@ -135,6 +135,10 @@ def main():
                 route.fulfill(json={'user': {'id': '1', 'app_user_id': 'public-fixture-user',
                     'display_name': 'Fixture User', 'account_type': 'user', 'role': state['role']},
                     'identity': {'email_verified': True}})
+                return
+            if path.startswith('/api/auth/favorites/'):
+                assert entry['authorization']
+                route.fulfill(json={'individual_id': path.rsplit('/', 1)[-1], 'favorite': False})
                 return
             if (path == API or path.startswith(API + '/')) and (state['mode'] == 'offline' or
                     state['mode'] == 'admin_only' and (not entry['authorization'] or state['role'] != 'admin')):

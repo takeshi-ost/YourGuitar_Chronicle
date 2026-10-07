@@ -8,7 +8,7 @@ MAX_ID = 2**63-1
 
 
 def positive_id(value):
-    if not isinstance(value,str) or not value.isascii() or not value.isdecimal():
+    if not isinstance(value,str) or len(value)>19 or not value.isascii() or not value.isdecimal():
         raise ValueError('Invalid identifier.')
     number=int(value)
     if not 0 < number <= MAX_ID:raise ValueError('Invalid identifier.')
@@ -108,6 +108,46 @@ class CloudUsers:
 
     def edit_own_profile(self,actor,body):
         return self._edit_profile(actor,None,body,own=True)
+
+    def own_visibility(self, actor):
+        from ygc.cloud_profile import visibility_fields
+        with self.operations.account_access('user_read', actor) as (con, mode, account):
+            return {'profile_revision': str(account['projection_version']),
+                    'fields': visibility_fields(account)}
+
+    def edit_own_visibility(self, actor, body):
+        """Save preferences for the locked self only; this publishes nothing."""
+        import json, uuid
+        from ygc.cloud_profile import validate_visibility, visibility_fields, ProfileConflict
+        from ygc.db.postgres_accounts import now
+        version, fields = validate_visibility(body)
+        with connect(self.settings, 'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ProfileConflict('Database maintenance or Crawl is running.')
+            with self.operations.account_access('user_write', actor) as (con, mode, account):
+                con.execute("SET LOCAL lock_timeout='2s'")
+                con.execute("SET LOCAL statement_timeout='5s'")
+                if account['projection_version'] != version:
+                    raise ProfileConflict('Profile changed; reload before editing.')
+                timestamp = now()
+                row = con.execute('''UPDATE account_records SET birth_visibility=%s,
+                    residence_visibility=%s,bio_visibility=%s,avatar_visibility=%s,updated_at=%s
+                    WHERE id=%s AND app_user_id=%s AND projection_version=%s
+                    RETURNING projection_version,birth_visibility,residence_visibility,bio_visibility,avatar_visibility''',
+                    (*fields.values(), timestamp, account['id'], account['app_user_id'], version)).fetchone()
+                if row is None:
+                    raise ProfileConflict('Profile changed; reload before editing.')
+                con.execute('INSERT INTO account_metadata(key,value) VALUES(%s,%s)',
+                    ('self_visibility:' + str(uuid.uuid4()), json.dumps({
+                        'action': 'self_visibility_edit', 'actor_app_user_id': account['app_user_id'],
+                        'target_app_user_id': account['app_user_id'],
+                        'changed_fields': [key for key, value in fields.items() if account[key] != value],
+                        'previous_revision': version, 'revision': row['projection_version'],
+                        'occurred_at': timestamp})))
+                result = {'profile_revision': str(row['projection_version']), 'fields': visibility_fields(row)}
+            # Account revision, preferences, audit and trigger-managed outbox commit
+            # before either the canonical service-mode or maintenance fence releases.
+            return result
 
     def edit_profile(self,actor,user_id,body):
         return self._edit_profile(actor,user_id,body,own=False)

@@ -39,6 +39,7 @@ function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2
       });
       return response({items:filtered.slice((page-1)*limit,page*limit),total:String(filtered.length),page,page_size:limit,total_pages:Math.ceil(filtered.length/limit)});
     }
+    if(call.path.startsWith('/api/auth/favorites/'))return response({individual_id:call.path.split('/').at(-1),favorite:false});
     const match=/^\/api\/public\/guitars\/([1-9][0-9]*)(\/chronicle)?$/.exec(call.path);
     if(match){
       const row=e.guitars.find(row=>row.id===match[1]);if(!row)return response({detail:'Missing'},404);
@@ -48,8 +49,9 @@ function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2
     }
     throw Error('Unexpected request '+call.url);
   }
-  e.auth={signedIn,restore:async()=>{e.restores++;if(e.restoreError)throw e.restoreError;return e.auth.signedIn?{user:{role:'user'}}:null},authorizedFetch:(url,options)=>dispatch('authorized',url,options)};
+  e.auth={signedIn,account:signedIn?{user:{app_user_id:'uuid-1',role:'user'},identity:{email_verified:true}}:null,restore:async()=>{e.restores++;if(e.restoreError)throw e.restoreError;return e.auth.account},authorizedFetch:(url,options)=>dispatch('authorized',url,options)};
   const context=vm.createContext({document,window,URL,URLSearchParams,AbortController,loadCloudAuth:async()=>{},console});
+  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-favorites.js'),'utf8').replaceAll('export function','function'),context);
   vm.runInContext(source.replace(/^import .*;\n/gm,'').replace('export function','function').split('// Readiness is')[0]+';globalThis.createCatalog=createPublicCatalog;',context);
   e.ui=context.createCatalog({document,window,request:(url,options)=>dispatch('anonymous',url,options),loadAuth:async()=>{e.loads++;if(e.loadError)throw e.loadError;return e.auth}});
   e.publicCalls=()=>e.calls.filter(call=>call.path.startsWith('/api/public/'));
@@ -226,4 +228,18 @@ test('Public shell owns only safe cloud assets and bilingual keys match',()=>{
   const context=vm.createContext({URL});vm.runInContext(source.slice(source.indexOf('const messages='),source.indexOf('const sorts='))+';globalThis.keys=[Object.keys(messages.en),Object.keys(messages.ja)];',context);
   assert.deepEqual(Array.from(context.keys[0]).sort(),Array.from(context.keys[1]).sort());
   const css=fs.readFileSync(path.join(assets,'cloud-public-catalog.css'),'utf8');assert.match(css,/@media\(max-width:900px\)/);assert.match(css,/data-detail-open="true"/);assert.match(css,/overflow-wrap:anywhere/);
+});
+
+test('Delayed private favorite GET cannot block catalog Refresh, navigation or Chronicle pagination',async()=>{
+ const e=environment({url:'https://catalog.example/guitars/1',signedIn:true}),held=deferred();e.chronicles['1']=Array.from({length:27},(_,i)=>claim(i+1));
+ e.handler=call=>call.path==='/api/auth/favorites/1'?held.promise:undefined;await e.ui.start();
+ assert.equal(e.ids.get('catalogRefresh').disabled,false);assert.equal(e.ids.get('chronicleMore').disabled,false);assert.equal(e.ids.get('detailContent').hidden,false);assert.equal(e.ids.get('favoriteToggle').disabled,true);
+ await e.ids.get('chronicleMore').onclick();assert.equal(e.ids.get('chronicleEntries').children.length,27);await e.ui.refresh();assert.equal(e.ids.get('catalogRefresh').disabled,false);
+ await e.ui.navigate('/guitars/2');await tick();assert.match(e.text('detailTitle'),/Model 2/);assert.equal(e.ids.get('favoriteToggle')['attributes']['aria-pressed'],'false');held.resolve(response({individual_id:'1',favorite:true}));await tick();assert.equal(e.ids.get('favoriteToggle')['attributes']['aria-pressed'],'false');assert.match(e.text('detailTitle'),/Model 2/);
+});
+
+test('Public favorite action preserves authorized context and exposes no public collection/count',async()=>{
+ const e=environment({url:'https://catalog.example/guitars/1',signedIn:true});await e.ui.start();await tick();const writes=[];
+ e.handler=call=>{if(call.options.method==='PUT'){writes.push(call);return response({individual_id:'1',favorite:true})}};
+ await e.ids.get('favoriteToggle').onclick();assert.equal(writes.length,1);assert.equal(writes[0].kind,'authorized');assert.equal(writes[0].path,'/api/auth/favorites/1');assert.equal(writes[0].options.body,'{"favorite":true}');assert.equal(e.ids.get('favoriteToggle').attributes['aria-pressed'],'true');assert.equal(e.ids.get('detailFavorite').all().filter(n=>n.id==='favoritesCount'||n.id==='favoritesList').length,0);
 });

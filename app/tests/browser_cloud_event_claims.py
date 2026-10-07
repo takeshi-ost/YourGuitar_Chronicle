@@ -109,7 +109,7 @@ def multipart(request):
 
 
 def main():
-    names = ['cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-identity.js', 'cloud-account-ownership.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
+    names = ['cloud-account-favorites.js', 'cloud-account-visibility.js', 'cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-identity.js', 'cloud-account-ownership.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
              'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js',
              'cloud-account-media.js', 'cloud-account.css', 'cloud-public-catalog.js',
              'cloud-public-catalog.css', 'cloud-auth-loader.js', 'identity-platform-auth.js',
@@ -195,6 +195,16 @@ def main():
                 route.fulfill(json={'user': {'id': '1', 'app_user_id': 'fixture-event-owner',
                     'display_name': 'Event Fixture', 'account_type': 'user', 'role': 'member', 'status': 'active'},
                     'identity': {'email_verified': 'fixture-verified-' in call['authorization']}})
+            elif path == '/api/auth/favorites':
+                assert request.method == 'GET'
+                route.fulfill(json={'items': [], 'total': '0', 'next_after': None})
+            elif path.startswith('/api/auth/favorites/'):
+                assert request.method == 'GET'
+                route.fulfill(json={'individual_id': path.rsplit('/', 1)[-1], 'favorite': False})
+            elif path == '/api/auth/profile/visibility':
+                assert request.method == 'GET'
+                route.fulfill(json={'profile_revision': '1', 'fields': dict.fromkeys(
+                    ('birth_visibility', 'residence_visibility', 'bio_visibility', 'avatar_visibility'), 'Private')})
             elif path == '/api/auth/profile':
                 private()
                 route.fulfill(json={'profile_revision': '1', 'fields': {'display_name': 'Event Fixture',

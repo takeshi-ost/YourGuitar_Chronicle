@@ -1,11 +1,22 @@
 // Google credentials go only to the official SDK. API calls carry an ID token.
 (() => {
   function create({sdk, auth, fetch: request=globalThis.fetch.bind(globalThis), origin=location.origin}){
-    let initialization, account=null, pending=Promise.resolve();
+    let initialization, account=null, accountUser=null, pending=Promise.resolve();
+    let observedUser=auth.currentUser;
+    const identityListeners=new Set();
+    function identityChanged(){
+      if(observedUser===auth.currentUser)return;
+      observedUser=auth.currentUser;account=null;accountUser=null;
+      for(const listener of identityListeners){try{listener()}catch{/* One view cannot retain another view's private data. */}}
+    }
+    const changedIdentity=()=>Object.assign(Error('The signed-in account changed.'),{code:'sign_in_required'});
     function ready(){
       return initialization??=(async()=>{
         await sdk.setPersistence(auth,sdk.browserSessionPersistence);
         await auth.authStateReady();
+        identityChanged();
+        // The canonical server account cannot survive an SDK principal change.
+        if(typeof sdk.onAuthStateChanged==='function')sdk.onAuthStateChanged(auth,identityChanged);
       })();
     }
     function serial(action){
@@ -15,11 +26,17 @@
     async function api(path,options={},forceRefresh=false){
       const url=new URL(path,origin);
       if(url.origin!==origin||!url.pathname.startsWith('/api/'))throw Error('Only same-origin API requests are allowed.');
-      await ready();
+      // Preserve the principal at the synchronous call boundary, before SDK
+      // readiness can yield. A delayed A action must never use B's token.
       const user=auth.currentUser;
+      await ready();
+      identityChanged();
+      if(auth.currentUser!==user)throw changedIdentity();
       if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
       const headers=new Headers(options.headers||{});
-      headers.set('Authorization','Bearer '+await user.getIdToken(forceRefresh));
+      const token=await user.getIdToken(forceRefresh);
+      if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
+      headers.set('Authorization','Bearer '+token);
       return request(url.href,{...options,headers,credentials:'omit',redirect:'error',cache:'no-store'});
     }
     async function result(response){
@@ -32,15 +49,20 @@
       return data;
     }
     async function me(forceRefresh=false){
-      account=null;
-      if(!auth.currentUser)return null;
+      identityChanged();account=null;accountUser=null;
+      const user=auth.currentUser;
+      if(!user)return null;
       const response=await api('/api/auth/me',{},forceRefresh);
+      if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
       if(response.status===409){
         const data=await response.json();
+        if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
         if(data.code==='registration_required')return {registration_required:true};
         throw Error('Account request failed.');
       }
-      return account=await result(response);
+      const data=await result(response);
+      if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
+      accountUser=user;return account=data;
     }
     async function documents(){
       const response=await request(new URL('/api/auth/registration',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
@@ -72,9 +94,11 @@
           throw Error('SignOut before creating an account for another email address.');
         }
         // On failure keep Google's account/session so enrollment can be retried.
-        account=await result(await api('/api/auth/register',{method:'POST',
+        const user=auth.currentUser;
+        const registered=await result(await api('/api/auth/register',{method:'POST',
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
-        return account;
+        if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
+        accountUser=user;return account=registered;
       })},
       requestEmailVerification({language='en',acquire,claim}={}){return serial(async()=>{
         const user=auth.currentUser;
@@ -104,7 +128,8 @@
       })},
       logout(){return serial(async()=>{await sdk.signOut(auth);account=null})},
       authorizedFetch:api,
-      get account(){return account},
+      onIdentityChanged(listener){identityListeners.add(listener);return ()=>identityListeners.delete(listener)},
+      get account(){return accountUser===auth.currentUser?account:null},
       get signedIn(){return Boolean(auth.currentUser)},
     };
   }

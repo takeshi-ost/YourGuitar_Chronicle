@@ -9,7 +9,7 @@
 - Chronicle は記録IDの降順。発生日を表示するが、発生日順の再配列ではない。Positive は公開項目のカード、Unverified はタグ、Negative は点。後二者から本文・構造化内容・リンクを開くことはできない。
 - 写真は常にプレースホルダー。既存の提出写真、審議根拠、代表画像、Cloud Storage参照から公開画像を生成しない。
 - Acquire は `/account?acquire={id}` へ進む。サインイン／登録／メール確認を経ても対象を保持し、個体IDの手入力は廃止する。選択したギターを再確認してから利用者が明示的に下書きを作成する。ページを開く・ログインする・写真を選ぶだけでは申請を作成／提出しない。
-- 元の `/account` と `/console` は継続する。ローカル試作の `/user-view`、公開プロフィール、Favorite、Follow、DM、統計・地図、New Discovery はこの移植の対象外。
+- 元の `/account` と `/console` は継続する。ローカル試作の `/user-view`、公開プロフィール、Follow、DM、統計・地図、New Discovery はこの移植の対象外。後続の [本人専用 Favorite](CLOUD_PRIVATE_FAVORITES.md) は別の認証APIで扱い、公開一覧や他人の登録情報を公開APIに追加しない。
 
 ## 公開データ境界
 

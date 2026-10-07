@@ -1,9 +1,26 @@
+import {createFavoriteControl} from './cloud-account-favorites.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 
 // This public projection deliberately does not load the local Product Detail's
 // owner, profile, image or mutation extensions. It shares its layout concepts.
 const messages={
   en:{
+    "favorites.heading":"Your favorite guitars",
+    "favorites.private_notice":"Only you can see your favorites. Profile visibility preferences do not make them public.",
+    "favorites.count":"{count} favorites visible to you",
+    "favorites.empty":"No visible favorites yet. Add one from a public guitar detail.",
+    "favorites.guitar":"Guitar #{id}",
+    "favorites.account":"Sign in to manage your private favorites",
+    "favorites.add":"♡ Add to favorites",
+    "favorites.remove":"♥ Remove from favorites",
+    "favorites.added":"Added to your private favorites.",
+    "favorites.removed":"Removed from your favorites.",
+    "favorites.uncertain":"The result could not be confirmed. Refresh to check your current favorite before making another change.",
+    "favorites.failed":"Favorites could not be loaded. Try Refresh.",
+    "favorites.restricted":"Changes are temporarily restricted. Refresh to check current access.",
+    "favorites.session":"Your verified account could not be confirmed. Open your account and sign in again.",
+    "favorites.missing":"This guitar is unavailable. Refresh the catalog before trying again.",
+    'action.refresh':'Refresh','cloud.working':'Working…',
     title:'All Discovered Guitars',eyebrow:'The stories behind the instruments',description:'Explore guitar specifications and their public Chronicle.',
     list:'Guitar catalog',detail:'Product Detail',account:'Sign in / Create account',language:'Language',search:'Search guitars',
     placeholder:'Maker, model or serial',sort:'Sort',submit:'Search',refresh:'Refresh',newest:'Newest first',oldest:'Oldest first',
@@ -27,6 +44,22 @@ const messages={
     potentiometers:'Potentiometers',tuners:'Tuners',wiring:'Wiring',weight:'Weight',pages_label:'Catalog pages',nav_label:'Account and language',
   },
   ja:{
+    "favorites.heading":"お気に入りのギター",
+    "favorites.private_notice":"お気に入りを閲覧できるのは本人だけです。プロフィールの公開範囲設定で公開されることはありません。",
+    "favorites.count":"本人が閲覧できるお気に入り：{count}本",
+    "favorites.empty":"閲覧できるお気に入りはありません。公開ギターの詳細画面から追加できます。",
+    "favorites.guitar":"ギター #{id}",
+    "favorites.account":"サインインして自分のお気に入りを管理",
+    "favorites.add":"♡ お気に入りに追加",
+    "favorites.remove":"♥ お気に入りを解除",
+    "favorites.added":"自分のお気に入りに追加しました。",
+    "favorites.removed":"お気に入りを解除しました。",
+    "favorites.uncertain":"更新結果を確認できませんでした。次の変更前に「更新」で現在の状態を確認してください。",
+    "favorites.failed":"お気に入りを取得できませんでした。「更新」をお試しください。",
+    "favorites.restricted":"現在、変更が制限されています。「更新」で現在の状態を確認してください。",
+    "favorites.session":"確認済みのアカウントを確認できませんでした。アカウント画面でサインインし直してください。",
+    "favorites.missing":"このギターは現在利用できません。カタログを更新してからお試しください。",
+    'action.refresh':'更新','cloud.working':'処理中…',
     title:'発見されたすべてのギター',eyebrow:'楽器の背景にある物語',description:'ギターの仕様と公開クロニクルを閲覧できます。',
     list:'ギターカタログ',detail:'個体詳細',account:'サインイン / アカウント作成',language:'言語',search:'ギターを検索',
     placeholder:'メーカー、モデル、シリアル',sort:'並び順',submit:'検索',refresh:'更新',newest:'新しい順',oldest:'古い順',
@@ -66,6 +99,8 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   let listMessage='loading',detailMessage='choose',authNotice='',auth=null,authReady=null,authBlocked=null;
   let epoch=0,controller=null,moreController=null,loading=false,moreLoading=false,pending=null,stopped=false;
 
+  const favorite=createFavoriteControl({auth:()=>auth,state:()=>auth?.account,root:$('detailFavorite'),document,t,canWrite:()=>service?.mode!=='read_only'&&service?.mode!=='offline'});
+  let unsubscribeIdentity=null;
   function readRoute(url=new URL(window.location.href)){
     const q=[...String(url.searchParams.get('q')||'').trim()].slice(0,120).join('');
     const sort=sorts.includes(url.searchParams.get('sort'))?url.searchParams.get('sort'):'newest';
@@ -93,8 +128,8 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   async function initializeAuth(retry=false){
     if(authReady&&!retry)return authReady;
     authReady=(async()=>{
-      authBlocked=null;authNotice='';
-      try{auth=auth||await loadAuth();await auth.restore()}
+      authBlocked=null;authNotice='';favorite.clear();
+      try{auth=auth||await loadAuth();if(!unsubscribeIdentity)unsubscribeIdentity=auth.onIdentityChanged?.(()=>favorite.clear())||null;await auth.restore()}
       catch(error){
         // A known identity or rejected token must never become an anonymous retry.
         if(auth?.signedIn||[401,403].includes(error.status)||['auth/invalid-user-token','auth/user-token-expired','auth/id-token-expired','auth/id-token-revoked','auth/user-disabled','auth/user-not-found'].includes(error.code)){
@@ -139,6 +174,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     return page;
   }
   function clearDetail(){
+    favorite.clear();
     detail=null;claims=[];nextAfter=null;moreLoading=false;
     $('detailContent').hidden=true;$('detailTitle').textContent='';$('detailIdentifier').textContent='';
     $('detailSpecifications').replaceChildren();$('chronicleEntries').replaceChildren();$('chronicleStatus').textContent='';
@@ -155,6 +191,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     if(route)$('catalogSort').value=route.sort;
   }
   function controls(){
+    favorite.render();
     $('catalogLayout').dataset.detailOpen=String(Boolean(route?.id||route?.invalid));
     $('catalogRows').setAttribute('aria-busy',String(loading));$('catalogDetail').setAttribute('aria-busy',String(loading||moreLoading));
     $('catalogRefresh').disabled=loading;$('catalogPrevious').disabled=loading||!list||route.page<=1;
@@ -248,7 +285,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
         if(results[0].status==='fulfilled'){list=results[0].value;listMessage=''}else{list=null;listMessage=errorKey(results[0].reason)}
         if(route.id){
           if(results[1].status==='fulfilled'){
-            [detail,{items:claims,next_after:nextAfter}]=results[1].value;detailMessage='';renderDetail();
+            [detail,{items:claims,next_after:nextAfter}]=results[1].value;detailMessage='';renderDetail();void favorite.select(detail.id);
           }else{clearDetail();detailMessage=errorKey(results[1].reason)}
         }
       }
@@ -282,11 +319,13 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
       if([401,403,503].includes(error.status)){list=null;listMessage=detailMessage;renderList()}
     }finally{if(current===epoch&&!stopped){moreLoading=false;controls()}}
   }
-  function onPopstate(){return loadRoute(readRoute())}
+  function onPopstate(){return loadRoute(readRoute(),{retryAuth:true})}
   function setLanguage(){
     locale=$('catalogLanguage').value==='ja'?'ja':'en';try{window.localStorage.setItem('ygc_ui_language',locale)}catch{/* Keep the change for this page. */}
     renderStatic();renderList();renderDetail();controls();
   }
+  function onPageHide(){++epoch;controller?.abort();moreController?.abort();favorite.clear()}
+  function onPageShow(event){if(event.persisted){loading=false;return refresh()}}
   function start(){
     renderStatic();
     $('catalogSearchForm').onsubmit=event=>{event.preventDefault();return navigate(routeURL({q:[...$('catalogSearch').value.trim()].slice(0,120).join(''),sort:$('catalogSort').value,page:1,id:null}))};
@@ -294,10 +333,10 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     $('catalogRefresh').onclick=refresh;
     $('catalogPrevious').onclick=()=>{if(!loading&&list&&route.page>1)return navigate(routeURL({...route,page:route.page-1,id:null}))};
     $('catalogNext').onclick=()=>{if(!loading&&list&&route.page<list.total_pages&&route.page<1000000)return navigate(routeURL({...route,page:route.page+1,id:null}))};
-    $('chronicleMore').onclick=more;$('catalogLanguage').onchange=setLanguage;window.addEventListener('popstate',onPopstate);
+    $('chronicleMore').onclick=more;$('catalogLanguage').onchange=setLanguage;window.addEventListener('popstate',onPopstate);window.addEventListener('pagehide',onPageHide);window.addEventListener('pageshow',onPageShow);
     return loadRoute(readRoute());
   }
-  function destroy(){stopped=true;++epoch;controller?.abort();moreController?.abort();window.removeEventListener('popstate',onPopstate)}
+  function destroy(){stopped=true;++epoch;controller?.abort();moreController?.abort();window.removeEventListener('popstate',onPopstate);window.removeEventListener('pagehide',onPageHide);window.removeEventListener('pageshow',onPageShow);unsubscribeIdentity?.();favorite.clear()}
   return {start,refresh,navigate,destroy};
 }
 
