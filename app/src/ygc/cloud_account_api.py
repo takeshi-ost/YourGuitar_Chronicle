@@ -80,6 +80,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_owner_routes import owner_router
     from ygc.cloud_owner import CloudOwner
     app.include_router(owner_router(verifier,CloudOwner(settings,operations)))
+    from ygc.cloud_claims import CloudClaims
+    from ygc.cloud_claim_routes import claim_router
+    app.include_router(claim_router(verifier, CloudClaims(settings, operations)))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

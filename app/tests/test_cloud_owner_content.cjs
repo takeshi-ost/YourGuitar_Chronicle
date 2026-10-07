@@ -22,7 +22,7 @@ function environment(){
 const page=items=>({items,total:String(items.length),next_after:null});
 async function open(e,claim){
   e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();
-  e.replies.push({items:[claim]});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();
+  e.replies.push({items:[claim],can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();
   const dialog=e.ids.get('ownerResponseDialog'),card=dialog.children[2].children[0];
   return {dialog,card,description:card.children[0],select:card.children[1],review:card.children[2],confirm:card.children[3],reason:card.children[5]};
 }
@@ -62,4 +62,10 @@ for(const kind of ['specification','repair'])test(`Owner sees every ${kind} fiel
   assert.ok(description.textContent.includes(kind));for(const item of items){assert.ok(description.textContent.includes(item.field_name));assert.ok(description.textContent.includes(item.value_text))}
   assert.equal(description.children.length,0);assert.equal(reason.hidden,true);assert.equal(confirm.hidden,true);assert.equal(e.calls.length,3);
   review.onclick();assert.equal(confirm.hidden,false);assert.equal(e.calls.length,3);
+});
+
+for(const can_write of [false,null,undefined,'true'])test(`Owner review remains readable but cannot decide when can_write=${String(can_write)}`,async()=>{
+ const e=environment();e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:[acquire],can_write});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();
+ const dialog=e.ids.get('ownerResponseDialog'),card=dialog.children[2].children[0];assert.equal(dialog.open,true);assert.match(card.children[0].textContent,/#23/);
+ for(const index of [1,2,3,5])assert.equal(card.children[index].disabled,true);card.children[2].onclick();card.children[3].onclick();await e.flush();assert.equal(e.calls.length,3);assert.equal(card.children[3].hidden,true);
 });

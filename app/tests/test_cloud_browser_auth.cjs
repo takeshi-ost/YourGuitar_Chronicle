@@ -155,3 +155,12 @@ for(const acquire of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808',
   const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
   await assert.rejects(s.adapter.requestEmailVerification({acquire}));assert.equal(s.sdkCalls.some(call=>call[0]==='verifyEmail'),false);
 });
+
+test('Verification return preserves Claim intent alongside Acquire without accepting a return URL',async()=>{
+ const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
+ await s.adapter.requestEmailVerification({language:'ja',claim:'9223372036854775807',acquire:'12',returnUrl:'https://evil.invalid'});
+ assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/account?acquire=12&claim=9223372036854775807');
+});
+for(const claim of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','https://evil.invalid','12&next=https://evil.invalid'])test(`Verification rejects invalid Claim intent ${String(claim)}`,async()=>{
+ const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});await assert.rejects(s.adapter.requestEmailVerification({claim}));assert.equal(s.sdkCalls.some(call=>call[0]==='verifyEmail'),false);
+});

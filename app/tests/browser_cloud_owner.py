@@ -92,7 +92,7 @@ def main():
             if actor != self.current_owner or individual != 12:
                 raise PermissionError()
             user_id = next(row['id'] for row in accounts.values() if row['app_user_id'] == actor)
-            result = dict(items=[deepcopy(row) for row in self.claims.values()
+            result = dict(can_write=not getattr(self, 'read_only', False), items=[deepcopy(row) for row in self.claims.values()
                                 if row['author_user_id'] != user_id])
             self.pending_started.set()
             if not self.release_pending.wait(timeout=15):
@@ -187,6 +187,18 @@ def main():
                 sign_in_as('owner@example.invalid')
                 expect(owned.locator('li')).to_have_count(1)
                 expect(former.locator('li')).to_have_count(0)
+
+                # Read-only access keeps review content visible and all decision controls inert.
+                store.read_only = True
+                owned.get_by_role('button', name='Review owner responses', exact=True).click()
+                expect(dialog).to_be_visible()
+                expect(dialog.locator('section')).to_have_count(3)
+                expect(dialog.locator('select').first).to_be_disabled()
+                expect(dialog.get_by_role('button', name='Review decision').first).to_be_disabled()
+                expect(dialog.get_by_role('status')).to_contain_text('read-only')
+                assert not store.attempts
+                dialog.get_by_role('button', name='Close', exact=True).click()
+                store.read_only = False
 
                 # Every field must be visible as text before a decision is sent.
                 open_owner()

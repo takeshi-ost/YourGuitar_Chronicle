@@ -235,6 +235,7 @@ def main():
         expect(page.locator('#detailSpecifications')).to_contain_text('Maple ' + TEXT)
         expect(page.locator('#detailPhoto')).to_be_visible()
         assert page.locator('#acquireLink').get_attribute('href') == '/account?acquire=10'
+        assert page.locator('#addClaimLink').get_attribute('href') == '/account?claim=10'
         expect(page.locator('#chronicleEntries .chronicle-record')).to_have_count(25)
         source = page.locator('#chronicleEntries a[href="https://reverb.com/item/12345"]')
         expect(source).to_have_count(1)
@@ -356,6 +357,7 @@ def main():
         open_guitar(BIG_ID)
         assert urlsplit(page.url).path == '/guitars/' + BIG_ID
         assert page.locator('#acquireLink').get_attribute('href') == '/account?acquire=' + BIG_ID
+        assert page.locator('#addClaimLink').get_attribute('href') == '/account?claim=' + BIG_ID
         page.locator('#catalogBack').click(); idle()
         search('SERIAL-10')
         page.evaluate("catalogFixture.hold('/api/public/guitars/10', '', 'detail')")

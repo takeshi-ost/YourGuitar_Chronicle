@@ -48,3 +48,13 @@ def test_unverified_identity_does_not_reach_owner_service(api):
     verifier.verify.return_value = VerifiedIdentity('issuer', 'subject', '', False)
     assert client.get(PATH, headers=AUTH).status_code == 403
     service.pending.assert_not_called()
+
+
+def test_owner_mode_write_denial_is_distinct_from_revoked_identity(api):
+    from ygc.db.postgres_operations import ServiceRestricted
+    client, _, service = api
+    service.respond.side_effect = ServiceRestricted('private mode details')
+    response = client.post(PATH + '/23', headers=AUTH, json={})
+    assert response.status_code == 403
+    assert response.json()['detail'] == {'code': 'service_restricted'}
+    assert 'private mode' not in response.text

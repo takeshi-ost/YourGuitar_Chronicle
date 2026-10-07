@@ -1,6 +1,8 @@
 """Current Owner responses through canonical identity and shared Claim rules."""
 from contextlib import contextmanager
 import re
+import hashlib
+import json
 from ygc.claim_revision import revision, ClaimConflict
 from ygc.cloud_guitars import positive_id
 from ygc.db.postgres import connect
@@ -26,6 +28,16 @@ def specification_items(connection, row):
     return items
 
 
+def content_revision(connection, row):
+    """Bind confirmation to complete typed content, not just its timestamp."""
+    content = {key: row[key] for key in ('claim_type', 'specification_kind', 'field_name',
+        'value_text', 'body', 'occurred_at', 'author_user_id')}
+    content['revision'] = revision(row)
+    content['spec_items'] = specification_items(connection, row)
+    return hashlib.sha256(json.dumps(content, ensure_ascii=True, sort_keys=True,
+                                    separators=(',', ':')).encode()).hexdigest()
+
+
 class CloudOwner:
     def __init__(self, settings, operations):
         self.settings, self.operations = settings, operations
@@ -39,19 +51,21 @@ class CloudOwner:
             with self.operations.access('user_write' if write else 'user_read', actor) as (_, mode, account):
                 principal = ActorContext(account['id'], 'identity-platform', None, True, account['app_user_id'])
                 with PostgresOwnership(self.settings)._transaction(principal, individual) as (repo, canonical):
+                    repo.can_write = mode['mode'] != 'read_only'
                     yield repo, canonical['id']
 
     def pending(self, actor, individual):
         from ygc import disputes
         with self.transaction(actor, individual) as (repo, user):
             ids = repo.owner_verifiable_claim_ids(individual, user)
-            return {'items': [dict(id=str(row['id']), individual_id=str(individual),
+            return {'can_write': getattr(repo, 'can_write', False), 'items': [dict(id=str(row['id']), individual_id=str(individual),
                 author_name=row['author_name'], claim_type=row['claim_type'],
                 ownership_kind=row['ownership_kind'], occurred_at=row['occurred_at'], body=row['body'],
                 field_name=row['field_name'], value_text=row['value_text'],
                 specification_kind=row['specification_kind'], spec_items=specification_items(repo.connection, row),
                 decline_reason_required=disputes.eligible(repo.connection, disputes.candidate(repo.connection, row['id'])),
-                verification_status=row['verification_status'], revision=revision(row))
+                verification_status=row['verification_status'], created_at=row['created_at'],
+                updated_at=row['updated_at'], revision=content_revision(repo.connection, row))
                 for claim in sorted(ids,reverse=True)
                 if (row := repo.connection.execute('SELECT c.*,u.display_name AS author_name FROM claims c JOIN users u ON u.id=c.author_user_id WHERE c.id=?', (claim,)).fetchone())]}
 
@@ -66,7 +80,7 @@ class CloudOwner:
             reason = reason.strip()
         with self.transaction(actor, individual, write=True) as (repo, user):
             row = repo.connection.execute('SELECT * FROM claims WHERE id=? FOR UPDATE', (claim,)).fetchone()
-            if not row or row['individual_id'] != individual or revision(row) != data['revision']:
+            if not row or row['individual_id'] != individual or content_revision(repo.connection, row) != data['revision']:
                 raise ClaimConflict('Claim changed; reload before responding.')
             if not repo.set_claim_response_in_connection(repo.connection, claim, user, data['stance'], reason):
                 raise ClaimConflict('Claim is no longer active.')

@@ -13,3 +13,7 @@
 - 所有権や個体照合に争いがある場合、現在値が履歴そのものを消すことはない。詳しい規則は [CLAIM_CENTERED_ARCHITECTURE.md](../architecture/CLAIM_CENTERED_ARCHITECTURE.md)。
 
 Ownerの決定経路は[Ownership Decision](OWNERSHIP_DECISION.md)のフローチャートを参照。
+
+## Cloud移植
+
+Specification / Repair / Incidentの本人投稿・編集・無効化とOwner判定への接続は[Cloud Claim投稿・編集](../migration/CLOUD_CLAIMS.md)を参照。ローカル全機能のクラウド移植ではなく、公開データ境界を拡張しない単位。

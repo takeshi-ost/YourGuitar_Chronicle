@@ -50,6 +50,8 @@ def main():
                 cloud_admin_applications()
                 from browser_cloud_public_catalog import main as cloud_public_catalog
                 cloud_public_catalog()
+                from browser_cloud_claim_posting import main as cloud_claim_posting
+                cloud_claim_posting()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

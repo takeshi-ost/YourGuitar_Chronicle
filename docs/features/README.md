@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | 閲覧・ユーザー・交流 | [閲覧・プロフィール・交流](BROWSING_AND_SOCIAL.md) | Top Page、検索、統計、Profile、公開範囲、お気に入り、Follow、DM、通知 |
 | クラウド公開カタログ | [移植範囲と公開境界](../migration/CLOUD_PUBLIC_CATALOG.md) | 固定公開項目、Guest閲覧、検索・詳細・Chronicle、Acquire引き継ぎ。未配置checkpoint |
+| クラウドClaim投稿・編集 | [移植範囲と競合・公開境界](../migration/CLOUD_CLAIMS.md) | Specification / Repair / Incident、自分の一覧、Owner判定、無効化。未配置checkpoint |
 | 個体・履歴 | [Claim](CLAIMS.md) | 種別、判定・有効性、画像、反応、Snapshot |
 | 登録・所有申請 | [Listing / Acquire](OWNERSHIP_REQUESTS.md) | Challenge、正式画像審議、申請状態、Owner承認 |
 | Owner決定 | [Ownership Decision](OWNERSHIP_DECISION.md) | 記録評価、申請・譲渡・係争、判定権限の連動フロー |

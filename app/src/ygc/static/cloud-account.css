@@ -14,3 +14,5 @@ dialog{width:min(560px,calc(100vw - 64px));max-height:calc(100dvh - 64px);overfl
 
 #selfGuitars h2{font-size:18px}#selfGuitars ul{padding-left:20px}#selfGuitars li{overflow-wrap:anywhere;margin:8px 0}.self-guitar-status{overflow-wrap:anywhere}
 #selfApplications{overflow-wrap:anywhere}#selfApplications h2{font-size:18px}#selfApplications li{margin:8px 0}#selfApplications li button{margin-left:8px}#applicationDialog p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+#selfClaims,#catalogClaimIntent,#claimDialog{overflow-wrap:anywhere}#selfClaims h2{font-size:18px}#selfClaims li{margin:12px 0}#selfClaims li p{margin:4px 0}#selfClaims a,#catalogClaimIntent a{margin-right:12px}#claimDialog p{white-space:pre-wrap}#claimLatest{padding:12px;background:#f1f3f5;border:1px solid #a2adb7;border-radius:6px}.claim-spec-row{padding:8px 0 12px;border-bottom:1px solid #a2adb7}.claim-spec-row button{margin-top:8px}#claimAddField{margin-top:12px}
