@@ -230,3 +230,6 @@ if __name__ == '__main__':
 
         from postgres_public_catalog_checks import run as public_catalog_checks
         public_catalog_checks(port)
+
+        from postgres_claim_checks import run as claim_checks
+        claim_checks(port)

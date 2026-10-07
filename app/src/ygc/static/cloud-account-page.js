@@ -3,6 +3,7 @@ import {createGuitars} from './cloud-account-guitars.js';
 import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
 import {createApplications,readCatalogIntent} from './cloud-account-applications.js';
+import {createClaims,readClaimIntent} from './cloud-account-claims.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
@@ -11,9 +12,10 @@ const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
 const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-let acquireIntent=readCatalogIntent(location.search);
-applications.setCatalogIntent(acquireIntent);
-globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);applications.setCatalogIntent(acquireIntent)});
+const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search);
+applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);
+globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent)});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -38,7 +40,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();applications.render();
+  avatar.render();profile.render();guitars.render();applications.render();claims.render();
 }
 async function documents(){
   policies=null;
@@ -47,9 +49,9 @@ async function documents(){
 }
 function update(result,refreshCatalog=false){
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear()}
   state=result;
-  if(changed||refreshCatalog)applications.setCatalogIntent(acquireIntent);
+  if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
   render();
@@ -103,7 +105,7 @@ $('sendVerification').onclick=async()=>{
   if(busy||!state?.user)return;
   busy=true;render();
   try{
-    const result=await auth.requestEmailVerification({language:document.documentElement.lang||'en',acquire:acquireIntent||undefined});
+    const result=await auth.requestEmailVerification({language:document.documentElement.lang||'en',acquire:acquireIntent||undefined,...(claimIntent?{claim:claimIntent}:{})});
     update(result.account,true);
     $('status').textContent=t(result.sent?'cloud.verification_sent':'cloud.email_verified');
   }catch(error){$('status').textContent=errorMessage(error)}

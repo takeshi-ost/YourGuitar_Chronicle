@@ -1,37 +1,66 @@
 export function createGuitars({auth,state,busy,work}){
   const root=document.getElementById('selfGuitars'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
-  let epoch=0,pending=null;
+  let epoch=0,pending=null,canWrite=null,ownerId=null;
   const dialog=document.createElement('dialog'),title=document.createElement('h2'),warning=document.createElement('p'),claims=document.createElement('div'),message=document.createElement('p'),close=document.createElement('button');
   dialog.id='ownerResponseDialog';title.id='ownerResponseTitle';dialog.setAttribute('aria-labelledby',title.id);title.textContent=t('owner.heading');warning.textContent=t('owner.warning');message.setAttribute('role','status');close.type='button';close.textContent=t('action.close');
   dialog.append(title,warning,claims,message,close);document.body.append(dialog);
   close.onclick=()=>globalThis.YGCOverlays.close(dialog);
-  dialog.addEventListener('ygc:closed',()=>{pending=null;claims.replaceChildren();message.textContent=''});
+  dialog.addEventListener('ygc:closed',()=>{pending=null;canWrite=null;ownerId=null;claims.replaceChildren();message.textContent=''});
   async function ownerRequest(path,options={}){
     const response=await auth().authorizedFetch('/api/auth/guitars/'+path,options,true);
-    if(!response.ok)throw Object.assign(Error('Owner response unavailable'),{status:response.status});return response.json();
+    if(!response.ok){const detail=await response.json().catch(()=>({}));throw Object.assign(Error('Owner response unavailable'),{status:response.status,code:detail.detail?.code})}return response.json();
   }
-  function ownerAction(fn){if(busy()||!eligible())return;const version=epoch;return work(async()=>{try{await fn(version)}catch(error){if(version!==epoch)return;message.textContent=t(error.status===409?'chronicle.decision_conflict':error.status===403?'self_profile.restricted':'chronicle.decision_unavailable');if([401,403].includes(error.status)){claims.replaceChildren();pending=null}}finally{render()}})}
+  function ownerAction(fn){
+    if(busy()||!eligible())return;const version=epoch;
+    return work(async()=>{
+      try{await fn(version)}catch(error){
+        if(version!==epoch)return;
+        if(error.code==='service_restricted'&&[403,503].includes(error.status)&&ownerId&&dialog.open){
+          // Service mode may change after the review list was opened. Retain
+          // its private contents only after a fresh successful authorized read.
+          canWrite=false;pending=null;
+          for(const button of claims.querySelectorAll('[data-owner-confirm]'))button.hidden=true;
+          try{
+            const currentId=ownerId,result=await ownerRequest(currentId+'/owner-responses');
+            if(version!==epoch||!eligible()||currentId!==ownerId||!dialog.open)return;
+            renderOwnerRows(currentId,result,true);message.textContent=t('applications.service_restricted');
+          }catch{if(version===epoch){claims.replaceChildren();canWrite=null;message.textContent=t('self_profile.restricted')}}
+        }else{
+          message.textContent=t(error.status===409?'chronicle.decision_conflict':error.status===403?'self_profile.restricted':'chronicle.decision_unavailable');
+          if([401,403].includes(error.status)){claims.replaceChildren();pending=null;canWrite=null}
+        }
+      }finally{render()}
+    });
+  }
   function openOwner(id){return ownerAction(async version=>{
-    pending=null;claims.replaceChildren();message.textContent=t('cloud.working');globalThis.YGCOverlays.open(dialog);
+    pending=null;canWrite=null;ownerId=id;claims.replaceChildren();message.textContent=t('cloud.working');globalThis.YGCOverlays.open(dialog);
     const result=await ownerRequest(id+'/owner-responses');if(version!==epoch||!eligible()||!dialog.open)return;
-    message.textContent=result.items.length?'':t('owner.empty');
+    renderOwnerRows(id,result);
+  })}
+  function renderOwnerRows(id,result,preserve=false){
+    pending=null;
+    canWrite=result.can_write===true;message.textContent=!canWrite?t('applications.read_only'):result.items.length?'':t('owner.empty');
+    const previous=new Map(preserve?Array.from(claims.children).map(card=>[card._claimId+':'+card._revision,card]):[]);
+    claims.replaceChildren();
     for(const row of result.items){
+      const existing=previous.get(row.id+':'+row.revision);if(existing){for(const button of existing.querySelectorAll('[data-owner-confirm]'))button.hidden=true;claims.append(existing);continue}
       const card=document.createElement('section'),description=document.createElement('p'),select=document.createElement('select'),review=document.createElement('button'),confirm=document.createElement('button'),reasonLabel=document.createElement('label'),reason=document.createElement('textarea'),reasonHelp=document.createElement('p');
-      description.textContent=['#'+row.id,row.author_name,row.claim_type,row.specification_kind,row.ownership_kind,row.occurred_at,...(row.spec_items?.length?row.spec_items.map(item=>item.field_name+': '+item.value_text):[row.field_name,row.value_text]),row.body].filter(Boolean).join(' · ');
+      card._claimId=row.id;card._revision=row.revision;
+      description.textContent=['#'+row.id,row.author_name,row.claim_type,row.specification_kind,row.ownership_kind,row.occurred_at,row.created_at?t('claims.created')+': '+row.created_at:null,row.updated_at?t('claims.updated')+': '+row.updated_at:null,...(row.spec_items?.length?row.spec_items.map(item=>item.field_name+': '+item.value_text):[row.field_name,row.value_text]),row.body].filter(Boolean).join(' · ');
       select.setAttribute('aria-label',t('owner.decision'));for(const stance of ['positive','negative','unverified']){const option=document.createElement('option');option.value=stance;option.textContent=t('chronicle.'+stance);select.append(option)}select.value=row.verification_status;
       review.type=confirm.type='button';review.textContent=t('owner.review');confirm.textContent=t('chronicle.apply_decision');confirm.hidden=true;
       reason.id='ownerDeclineReason_'+row.id;reason.maxLength=4000;reasonLabel.setAttribute('for',reason.id);reasonLabel.textContent=t('owner.decline_reason');reasonHelp.id=reason.id+'_help';reasonHelp.textContent=t('owner.decline_reason_help');reason.setAttribute('aria-describedby',reasonHelp.id);
       const needsReason=()=>row.decline_reason_required===true&&select.value==='negative';
       const reasonVisibility=()=>{reasonLabel.hidden=reason.hidden=reasonHelp.hidden=!needsReason();reason.required=needsReason()};reasonVisibility();
       const invalidate=()=>{pending=null;for(const button of claims.querySelectorAll('[data-owner-confirm]'))button.hidden=true;message.textContent=''};
-      review.onclick=()=>{if(busy()||!eligible())return;invalidate();if(needsReason()&&(!reason.value.trim()||reason.value.trim().length>4000)){message.textContent=t('owner.decline_reason_required');reason.focus();return}pending={id,claim:row.id,revision:row.revision,stance:select.value,...(needsReason()?{reason:reason.value.trim()}:{})};confirm.hidden=false;message.textContent=t('owner.confirm',{id:row.id,state:t('chronicle.'+select.value)})+(pending.reason?' '+t('owner.decline_reason_confirm',{reason:pending.reason}):'')};
+      review.onclick=()=>{if(busy()||!eligible()||!canWrite)return;invalidate();if(needsReason()&&(!reason.value.trim()||reason.value.trim().length>4000)){message.textContent=t('owner.decline_reason_required');reason.focus();return}pending={id,claim:row.id,revision:row.revision,stance:select.value,...(needsReason()?{reason:reason.value.trim()}:{})};confirm.hidden=false;message.textContent=t('owner.confirm',{id:row.id,state:t('chronicle.'+select.value)})+(pending.reason?' '+t('owner.decline_reason_confirm',{reason:pending.reason}):'')};
       select.onchange=()=>{invalidate();reasonVisibility()};reason.oninput=invalidate;confirm.dataset.ownerConfirm='true';
-      confirm.onclick=()=>{if(!pending||pending.claim!==row.id)return;const saved={...pending};pending=null;ownerAction(async current=>{
+      confirm.onclick=()=>{if(busy()||!canWrite||!eligible()||!pending||pending.claim!==row.id)return;const saved={...pending};pending=null;ownerAction(async current=>{
         await ownerRequest(saved.id+'/owner-responses/'+saved.claim,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stance:saved.stance,revision:saved.revision,...(saved.reason?{reason:saved.reason}:{})})});
         if(current!==epoch||!eligible())return;globalThis.YGCOverlays.close(dialog);await refresh();
       })};card.append(description,select,review,confirm,reasonLabel,reason,reasonHelp);claims.append(card);
     }
-  })}
+  }
 
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true);
   const panels={};
@@ -52,10 +81,10 @@ export function createGuitars({auth,state,busy,work}){
       panel.refresh.disabled=busy()||!eligible();panel.previous.disabled=busy()||!eligible()||panel.history.length<2;panel.next.disabled=busy()||!eligible()||panel.nextAfter===null;
     }
     for(const button of root.querySelectorAll("li button"))button.disabled=busy()||!eligible();
-    for(const control of claims.querySelectorAll("button,select,textarea"))control.disabled=busy()||!eligible();
+    for(const control of claims.querySelectorAll("button,select,textarea"))control.disabled=busy()||!eligible()||!canWrite;
     if(!eligible())clear();
   }
-  function clear(){epoch++;globalThis.YGCOverlays.close(dialog);pending=null;claims.replaceChildren();for(const panel of Object.values(panels)){panel.history=[0];panel.nextAfter=null;panel.list.replaceChildren();panel.status.textContent=''}}
+  function clear(){epoch++;globalThis.YGCOverlays.close(dialog);pending=null;canWrite=null;claims.replaceChildren();for(const panel of Object.values(panels)){panel.history=[0];panel.nextAfter=null;panel.list.replaceChildren();panel.status.textContent=''}}
   async function page(kind){
     const current=epoch,panel=panels[kind],owner=state()?.user?.app_user_id;
     panel.list.replaceChildren();panel.nextAfter=null;panel.status.textContent=t('cloud.working');

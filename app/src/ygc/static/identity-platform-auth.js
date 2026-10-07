@@ -76,7 +76,7 @@
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
         return account;
       })},
-      requestEmailVerification({language='en',acquire}={}){return serial(async()=>{
+      requestEmailVerification({language='en',acquire,claim}={}){return serial(async()=>{
         const user=auth.currentUser;
         if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
         const current=await me(true);
@@ -84,9 +84,10 @@
         if(current.identity.email_verified===true)return {account:current,sent:false};
         if(typeof language!=='string'||language.length>63||!/^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$/.test(language))throw Error('Invalid language.');
         const returnUrl=new URL('/account',origin);
-        if(acquire!==undefined){
-          if(typeof acquire!=='string'||!/^[1-9][0-9]{0,18}$/.test(acquire)||(acquire.length===19&&acquire>'9223372036854775807'))throw Error('Invalid guitar selection.');
-          returnUrl.searchParams.set('acquire',acquire);
+        for(const [key,value] of [['acquire',acquire],['claim',claim]]){
+          if(value===undefined)continue;
+          if(typeof value!=='string'||!/^[1-9][0-9]{0,18}$/.test(value)||(value.length===19&&value>'9223372036854775807'))throw Error('Invalid guitar selection.');
+          returnUrl.searchParams.set(key,value);
         }
         auth.languageCode=language;
         await sdk.sendEmailVerification(user,{url:returnUrl.href});

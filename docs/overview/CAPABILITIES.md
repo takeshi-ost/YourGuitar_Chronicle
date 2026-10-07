@@ -23,3 +23,5 @@
 ## クラウド移植の追加checkpoint（2026-10-07）
 
 一般向けの検索・ソート・ページ送り・固定Specification・公開Chronicle・ログインを跨ぐAcquire導線を実装。公開専用のサーバー項目制限とService Mode制御を適用する。写真は未公開のプレースホルダー。公開プロフィール・SNS・統計／地図は未移植。実PG／Chromiumの最終確認と公開許諾・配置承認は別途必要。詳細は[クラウド公開カタログ](../migration/CLOUD_PUBLIC_CATALOG.md)。
+
+クラウドの Specification / Repair / Incident 投稿・編集・無効化と本人の提出一覧を追加。公開詳細から対象を保持して認証し、既存Owner判定へ接続する。承認済みClaimの編集は従来どおりVerificationを維持し、改訂競合は拒否する。写真・Event・Transfer / Release・Listing訂正は後続単位。詳細は[Cloud Claim投稿・編集](../migration/CLOUD_CLAIMS.md)。

@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_guitars import positive_id
 from ygc.claim_revision import ClaimConflict
+from ygc.db.postgres_operations import ServiceRestricted
 
 
 def owner_router(verifier, service):
@@ -45,6 +46,8 @@ def owner_router(verifier, service):
             return JSONResponse(result, headers=headers)
         except ClaimConflict:
             raise HTTPException(409, 'Claim changed or maintenance is running.', headers=headers) from None
+        except ServiceRestricted:
+            raise HTTPException(403, {'code': 'service_restricted'}, headers=headers) from None
         except PermissionError:
             raise HTTPException(403, 'Active owner and service access required.', headers=headers) from None
         except (ValueError, TypeError, UnicodeError):
