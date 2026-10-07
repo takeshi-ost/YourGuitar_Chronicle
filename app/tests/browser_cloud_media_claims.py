@@ -336,6 +336,34 @@ def main():
                 ready_images(photos, len(files))
                 expect(page.locator('#claimSave')).to_be_enabled()
 
+        def mutate(method, path, *, button='#claimSave', status=200, message='Claim saved.'):
+            # Existing saved text and photos can still be visible during the
+            # next preflight. Bind completion to this exact network mutation,
+            # then wait for its production work (including list refresh) to end.
+            before = len(store['writes'])
+            with page.expect_response(lambda response: response.request.method == method
+                    and urlsplit(response.url).path == path) as response:
+                page.locator(button).click()
+            result = response.value
+            result.finished()
+            assert result.status == status
+            expect(page.locator('#signOut')).to_be_enabled()
+            if message is not None:
+                expect(page.locator('#claimMessage')).to_have_text(message)
+            assert len(store['writes']) == before + 1
+            assert store['writes'][-1]['method'] == method and store['writes'][-1]['path'] == path
+            return result.json()
+
+        def refresh_claims():
+            # Disabled Add/Save also means merely busy, so it cannot establish
+            # that a mode change was read before opening another Claim.
+            with page.expect_response(lambda response: response.request.method == 'GET'
+                    and urlsplit(response.url).path == API) as response:
+                page.locator('#claimsRefresh').click()
+            response.value.finished()
+            assert response.value.status == 200
+            expect(page.locator('#signOut')).to_be_enabled()
+
         def own(identifier, visible=True):
             page.locator('#claimsList li').filter(has_text=re.compile(r'^#' + identifier + r' ·')).get_by_role('button').click()
             if visible:
@@ -386,8 +414,7 @@ def main():
         assert not any('/media/' in call['path'] for call in store['calls'])
         page.locator('#claimBody').fill(PRIVATE)
         page.locator('#claimDate').fill('2026-01-03')
-        page.locator('#claimSave').click()
-        expect(page.locator('#claimMessage')).to_have_text('Claim saved.')
+        mutate('POST', UPLOAD)
         ready_images(photos, 3)
         assert len(store['writes']) == 1 and store['writes'][0]['path'] == UPLOAD
         assert store['writes'][0]['body'] == dict(claim_type='media', body=PRIVATE, occurred_at='2026-01-03')
@@ -403,8 +430,8 @@ def main():
         # Edits preserve photo identity and clear optional body/date with null.
         page.locator('#claimBody').fill('')
         page.locator('#claimDate').fill('')
-        page.locator('#claimSave').click()
-        expect(page.locator('#claimMessage')).to_have_text('Claim saved.')
+        edited = mutate('PATCH', API + '/' + first_id)
+        assert edited['claim']['revision'] != store['writes'][-1]['body']['revision']
         ready_images(photos, 3)
         assert store['writes'][-1]['method'] == 'PATCH'
         assert store['writes'][-1]['body']['body'] is None
@@ -415,8 +442,7 @@ def main():
         # Photos alone are valid: creation also sends optional text/date as null.
         start([files[0]])
         page.locator('#claimDate').fill('')
-        page.locator('#claimSave').click()
-        expect(page.locator('#claimMessage')).to_have_text('Claim saved.')
+        mutate('POST', UPLOAD)
         assert store['writes'][-1]['body'] == dict(claim_type='media', body=None, occurred_at=None)
         ready_images(photos, 1)
         close()
@@ -447,8 +473,7 @@ def main():
                 page.locator('#claimRetryCreate').click()
                 expect(page.locator('#claimSave')).to_be_enabled()
                 assert len(store['writes']) == before + 1
-                page.locator('#claimSave').click()
-                expect(page.locator('#claimMessage')).to_have_text('Claim saved.')
+                mutate('POST', UPLOAD)
                 assert len(store['writes']) == before + 2
             assert len(store['rows']) == rows_before + 1
             close()
@@ -456,7 +481,7 @@ def main():
         # Read-only still permits authorized image viewing. A write-only
         # maintenance denial revalidates read access and preserves private rows.
         store['can_write'] = False
-        page.locator('#claimsRefresh').click()
+        refresh_claims()
         expect(page.locator('#catalogClaimStart')).to_be_disabled()
         own(first_id)
         ready_images(photos, 3)
@@ -464,20 +489,21 @@ def main():
         expect(page.locator('#claimDeactivate')).to_be_disabled()
         close()
         store['can_write'] = True
-        page.locator('#claimsRefresh').click()
+        refresh_claims()
         expect(page.locator('#catalogClaimStart')).to_be_enabled()
         own(first_id)
         ready_images(photos, 3)
         page.locator('#claimBody').fill('READ-ONLY RECOVERY')
         store['write_restricted_once'] = True
-        page.locator('#claimSave').click()
+        mutate('PATCH', API + '/' + first_id, status=403, message=None)
+        expect(page.locator('#claimMessage')).to_contain_text('The service mode changed.')
         expect(page.locator('#claimSave')).to_be_disabled()
         expect(page.locator('#claimBody')).to_have_value('READ-ONLY RECOVERY')
         expect(page.locator('#claimsList li')).to_have_count(len(store['rows']))
         expect(page.locator('#accountSummary')).to_be_visible()
         close()
         store['can_write'] = True
-        page.locator('#claimsRefresh').click()
+        refresh_claims()
         expect(page.locator('#catalogClaimStart')).to_be_enabled()
 
         # Mobile dismissal, navigation, Back and Forward invalidate preflight
@@ -672,8 +698,8 @@ def main():
         before = len(store['writes'])
         page.locator('#claimDeactivate').click()
         assert len(store['writes']) == before
-        page.locator('#claimDeactivate').click()
-        expect(page.locator('#claimMessage')).to_contain_text('Claim deactivated')
+        mutate('POST', API + '/' + first_id + '/deactivate', button='#claimDeactivate',
+               message='Claim deactivated. Its history is retained.')
         expect(page.locator('#claimSave')).to_be_disabled()
         assert store['writes'][-1]['path'] == API + '/' + first_id + '/deactivate'
         assert next(row for row in store['rows'] if row['id'] == first_id)['media_items'] == first_media

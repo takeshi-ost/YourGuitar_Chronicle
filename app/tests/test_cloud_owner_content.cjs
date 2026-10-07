@@ -20,7 +20,7 @@ function environment(){
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.ui.render()}}};
   const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-guitars.js'),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');
   vm.runInContext(source+';globalThis.ui=createGuitars(args);',Object.assign(context,{args}));
-  return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
+  return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},setBusy:value=>{busy=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
 }
 const page=items=>({items,total:String(items.length),next_after:null});
 async function open(e,claim){
@@ -117,4 +117,22 @@ test('Switching the selected Owner Media Claim cancels the old image request and
  const e=environment(),waiting=held(),rows=[media,{...media,id:'24',media_items:[{id:'32',mime_type:'image/jpeg'}]}];e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:rows,can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const cards=e.ids.get('ownerResponseDialog').children[2].children;
  e.photoReplies.push(waiting.promise);cards[0].children[10].onclick();cards[0].children[10].onclick();assert.equal(e.photoCalls.length,1);assert.equal(e.photoCalls[0].options.signal.aborted,false);cards[1].children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,2);assert.equal(e.photoCalls[0].options.signal.aborted,true);assert.equal(e.createdUrls.length,1);const currentUrl=e.createdUrls[0];
  waiting.resolve(new Blob(['OLD PRIVATE'],{type:'image/jpeg'}));await e.flush();assert.equal(cards[0].children[9].children.length,0);assert.equal(cards[0].children[2].disabled,true);assert.equal(cards[1].children[9].children.length,1);assert.equal(cards[1].children[2].disabled,false);assert.equal(e.createdUrls.length,1);assert.ok(!e.revokedUrls.includes(currentUrl));
+});
+
+test('Successful Owner decision after Close refreshes ownership lists without restoring its private dialog',async()=>{
+ const e=environment(),waiting=held(),{dialog,review,confirm}=await open(e,acquire);review.onclick();e.replies.push(waiting.promise);confirm.onclick();dialog.children[4].onclick();assert.equal(dialog.open,false);
+ e.replies.push(page([]),page([{id:'12'}]));waiting.resolve({verification_status:'positive'});await e.flush();assert.equal(e.calls.length,6);assert.equal(e.calls.filter(call=>call.options.method==='POST').length,1);assert.equal(dialog.open,false);assert.equal(dialog.children[2].children.length,0);assert.equal(e.ids.get('selfGuitars_owned').querySelectorAll('li button').length,0);assert.equal(e.ids.get('selfGuitars_formerly_owned').children[2].children.length,1);
+});
+
+for(const interruption of ['account','signout','navigation'])test(`Successful old Owner mutation after ${interruption} cannot refresh another account or route`,async()=>{
+ const e=environment(),waiting=held(),{dialog,review,confirm}=await open(e,acquire);review.onclick();e.replies.push(waiting.promise);confirm.onclick();
+ if(interruption==='navigation')e.dispatch('popstate');else{e.setState(interruption==='signout'?null:{user:{app_user_id:'another'},identity:{email_verified:true}});e.ui.render()}
+ waiting.resolve({verification_status:'positive'});await e.flush();assert.equal(e.calls.length,4);assert.equal(dialog.open,false);assert.equal(dialog.children[2].children.length,0);
+});
+
+test('A completed older Owner decision refreshes lists while leaving a newer review dialog intact',async()=>{
+ const e=environment(),waiting=held(),{dialog,review,confirm}=await open(e,acquire);review.onclick();e.replies.push(waiting.promise);confirm.onclick();dialog.children[4].onclick();
+ // Exercise the late-result fence independently of the global busy lock.
+ e.setBusy(false);e.replies.push({items:[{...acquire,id:'24',body:'NEW PRIVATE REVIEW',revision:'b'.repeat(64)}],can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const freshCard=dialog.children[2].children[0];
+ e.replies.push(page([{id:'12'}]),page([]));waiting.resolve({verification_status:'positive'});await e.flush();assert.equal(e.calls.length,7);assert.equal(dialog.open,true);assert.equal(dialog.children[2].children[0],freshCard);assert.match(freshCard.children[0].textContent,/NEW PRIVATE REVIEW/);freshCard.children[2].onclick();assert.equal(freshCard.children[3].hidden,false);
 });

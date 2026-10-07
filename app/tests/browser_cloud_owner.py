@@ -240,14 +240,34 @@ def main():
                 expect(dialog).to_be_hidden();expect(dialog.locator('section')).to_have_count(0)
                 assert not store.attempts
 
-                # A stale decision is rejected, and clicking Apply again cannot resend it.
+                # A stale decision now hides/disables Apply and all decisions.
+                # Keeping the old confirmation enabled would allow stale photos
+                # or content to be reviewed without a fresh authorized list.
                 open_owner();confirm = review(23, 'positive')
                 store.claims[23]['revision'] = 'd' * 64
                 confirm.click()
                 expect(dialog.get_by_role('status')).to_contain_text('Refresh before reviewing again')
-                expect(confirm).to_be_enabled();confirm.click()
+                expect(confirm).to_be_hidden();expect(confirm).to_be_disabled()
+                expect(card(23).get_by_role('button', name='Review decision')).to_be_disabled()
                 assert len(store.attempts) == 1 and not store.decisions
-                dialog.get_by_role('button', name='Close', exact=True).click()
+                previous_pending_reads = len(store.pending_reads)
+                page.locator('#ownerMediaReload').click()
+                expect(dialog.locator('section')).to_have_count(3)
+                expect(card(23).get_by_role('combobox')).to_be_enabled()
+                expect(card(23).locator('[data-owner-confirm]')).to_be_hidden()
+                assert len(store.pending_reads) == previous_pending_reads + 1
+                assert len(store.attempts) == 1 and not store.decisions
+                confirm = review(23, 'positive')
+                expect(confirm).to_be_visible();expect(confirm).to_be_enabled()
+                assert len(store.attempts) == 1 and not store.decisions
+                with page.expect_response(lambda response: response.request.method == 'POST'
+                        and response.url.endswith('/api/auth/guitars/12/owner-responses/23')) as accepted:
+                    confirm.click()
+                assert accepted.value.status == 200
+                expect(dialog).to_be_hidden()
+                expect(owned.get_by_role('button', name='Review owner responses')).to_be_enabled()
+                successful_spec = ('owner-uuid', 12, 23, dict(stance='positive', revision='d' * 64))
+                assert len(store.attempts) == 2 and store.decisions == [successful_spec]
 
                 # Accepted image review still needs an explicit Owner decline reason.
                 open_owner();confirm = review(24, 'negative')
@@ -255,7 +275,7 @@ def main():
                 expect(reason).to_be_visible();expect(reason).to_be_focused()
                 expect(confirm).to_be_hidden()
                 reason.fill('   ');card(24).get_by_role('button', name='Review decision').click()
-                expect(confirm).to_be_hidden();assert len(store.attempts) == 1
+                expect(confirm).to_be_hidden();assert len(store.attempts) == 2
                 reason.fill('Wrong acquisition date')
                 card(24).get_by_role('button', name='Review decision').click()
                 expect(confirm).to_be_visible()
@@ -263,19 +283,19 @@ def main():
                 expect(confirm).to_be_hidden()
                 card(24).get_by_role('button', name='Review decision').click()
                 expect(dialog.get_by_role('status')).to_contain_text('The photographed serial differs from my guitar.')
-                assert len(store.attempts) == 1
+                assert len(store.attempts) == 2
                 previous_reads = len(store.reads)
                 confirm.click();expect(dialog).to_be_hidden()
                 expect(owned.locator('li')).to_have_count(1);expect(former.locator('li')).to_have_count(0)
                 expect(owned.get_by_role('button', name='Review owner responses')).to_be_enabled()
-                assert store.decisions == [('owner-uuid', 12, 24, dict(stance='negative',
+                assert store.decisions == [successful_spec, ('owner-uuid', 12, 24, dict(stance='negative',
                     revision='b' * 64, reason='The photographed serial differs from my guitar.'))]
                 assert sorted(store.reads[previous_reads:]) == [('owner-uuid', 'formerly_owned'), ('owner-uuid', 'owned')]
 
                 # Closing while an approved transfer is in flight must not skip list refresh.
                 open_owner();confirm = review(25, 'positive')
                 expect(page.locator('#ownerDeclineReason_25')).to_be_hidden()
-                assert len(store.attempts) == 2
+                assert len(store.attempts) == 3
                 previous_reads = len(store.reads)
                 store.release_transfer.clear()
                 confirm.click()
@@ -291,7 +311,7 @@ def main():
                 expect(dialog).to_be_hidden();expect(dialog.locator('section')).to_have_count(0)
                 assert sorted(store.reads[previous_reads:]) == [('owner-uuid', 'formerly_owned'), ('owner-uuid', 'owned')]
                 assert store.decisions[-1] == ('owner-uuid', 12, 25, dict(stance='positive', revision='c' * 64))
-                assert len(store.attempts) == 3 and len(store.decisions) == 2
+                assert len(store.attempts) == 4 and len(store.decisions) == 3
                 assert page.evaluate('document.body.style.overflow') == original_overflow
 
                 page.locator('#signOut').click()
@@ -306,7 +326,7 @@ def main():
                 expect(dialog.locator('[data-owner-confirm]:visible')).to_have_count(0)
                 page.keyboard.press('Escape');page.locator('#signOut').click()
                 expect(page.locator('#selfGuitars li')).to_have_count(0)
-                assert len(store.attempts) == 3 and not errors, errors
+                assert len(store.attempts) == 4 and not errors, errors
         finally:
             store.release_pending.set()
             store.release_transfer.set()
