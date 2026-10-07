@@ -71,6 +71,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_applications import CloudApplications
     from ygc.cloud_application_routes import application_router
     app.include_router(application_router(verifier,CloudApplications(settings,operations,storage)))
+    from ygc.cloud_admin_applications import CloudAdminApplications
+    from ygc.cloud_admin_application_routes import admin_application_router
+    app.include_router(admin_application_router(verifier,CloudAdminApplications(settings,operations,storage)))
     from ygc.cloud_owner_routes import owner_router
     from ygc.cloud_owner import CloudOwner
     app.include_router(owner_router(verifier,CloudOwner(settings,operations)))

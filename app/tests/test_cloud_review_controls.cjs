@@ -15,7 +15,7 @@ function environment(){
   const calls=[],replies=[];
   const client={signedIn:true,restore:async()=>state,logout:async()=>{state=null},authorizedFetch:async(url,options={},verified)=>{calls.push({url,options,verified});const value=replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
   const context=vm.createContext({addEventListener(){},document,URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
-  const noOp=()=>({render(){},clear(){},refresh:async()=>{},detail(){}});for(const key of ['createUserBrowser','createCrawlBrowser','createBackupBrowser','createGuitarBrowser'])context[key]=noOp;
+  const noOp=()=>({render(){},clear(){},refresh:async()=>{},detail(){}});for(const key of ['createUserBrowser','createCrawlBrowser','createBackupBrowser','createGuitarBrowser','createApplicationBrowser'])context[key]=noOp;
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.component?.render()}}};
   function load(file,name){let source=fs.readFileSync(path.join(__dirname,'../src/ygc/static',file),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');vm.runInContext(source+`;globalThis.component=${name}(args);`,Object.assign(context,{args}));return context.component}
   return {context,document,calls,replies,args,load,ids,setState:value=>{state=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};

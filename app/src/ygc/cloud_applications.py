@@ -38,7 +38,7 @@ def listing_input(data):
 def references(row):
     if not row['images']:return {}
     meta=json.loads(row['image_meta'] or '{}')
-    if meta.get('storage')!=IMAGE_VERSION:raise ValueError('Unsupported application image storage.')
+    if not isinstance(meta,dict) or meta.get('storage')!=IMAGE_VERSION:raise ValueError('Unsupported application image storage.')
     images=json.loads(row['images'])
     if not isinstance(images,dict) or set(images)-{'closeup','overview','reference'}:raise ValueError('Invalid application images.')
     for value in images.values():decode_reference(value)
@@ -100,18 +100,27 @@ class CloudApplications:
     def detail(row):
         status='expired' if row['status']=='draft' and row['expires_at']<=time.time() else row['status']
         result=json.loads(row['result']) if row.get('result') else {}
+        admin_review=None
+        if row.get('admin_decision_note'):
+            decision=json.loads(row['admin_decision_note'])
+            if decision.get('operation') in ('accept','reject'):
+                admin_review={key:decision.get(key) for key in ('operation','reason')}
+                admin_review['at']=row.get('admin_decision_at')
         return dict(revision=row['revision'],kind=row['request_kind'],individual_id=str(row['individual_id']) if row['individual_id'] else None,
             serial=row['serial'],challenge=row['challenge'],expires_at=row['expires_at'],status=status,
             payload=json.loads(row['listing_payload']) if row['listing_payload'] else None,
             acquisition_date=row['acquisition_date'],body=row['body'] or '',photos=[role for role in references(row) if role!='reference'],
             claim_id=str(row['claim_id']) if row.get('claim_id') else None,
             verification_status=row.get('claim_verification'),
-            reasons=result.get('adjudication',{}).get('reasons',[]))
+            reasons=result.get('adjudication',{}).get('reasons',[]),admin_review=admin_review)
 
     @staticmethod
     def find(con,user,revision):
         revision_id(revision)
-        row=con.execute('SELECT * FROM acquire_applications WHERE revision=%s AND applicant_id=%s FOR UPDATE',(revision,user)).fetchone()
+        row=con.execute('''SELECT *,
+            (SELECT note FROM acquire_application_events e WHERE e.revision=acquire_applications.revision AND e.kind IN ('admin_accept','admin_reject','admin_retry') ORDER BY e.id DESC LIMIT 1) AS admin_decision_note,
+            (SELECT at FROM acquire_application_events e WHERE e.revision=acquire_applications.revision AND e.kind IN ('admin_accept','admin_reject','admin_retry') ORDER BY e.id DESC LIMIT 1) AS admin_decision_at
+            FROM acquire_applications WHERE revision=%s AND applicant_id=%s FOR UPDATE''',(revision,user)).fetchone()
         if not row:raise GuitarMissing()
         return row
 
@@ -121,7 +130,10 @@ class CloudApplications:
 
     def list(self,actor):
         with self.transaction(actor) as (con,user,mode):
-            rows=con.execute('''SELECT *, (SELECT verification_status FROM claims WHERE id=acquire_applications.claim_id) AS claim_verification FROM acquire_applications WHERE applicant_id=%s
+            rows=con.execute('''SELECT *, (SELECT verification_status FROM claims WHERE id=acquire_applications.claim_id) AS claim_verification,
+                (SELECT note FROM acquire_application_events e WHERE e.revision=acquire_applications.revision AND e.kind IN ('admin_accept','admin_reject','admin_retry') ORDER BY e.id DESC LIMIT 1) AS admin_decision_note,
+                (SELECT at FROM acquire_application_events e WHERE e.revision=acquire_applications.revision AND e.kind IN ('admin_accept','admin_reject','admin_retry') ORDER BY e.id DESC LIMIT 1) AS admin_decision_at
+                FROM acquire_applications WHERE applicant_id=%s
                 ORDER BY CASE WHEN status IN ('pending','processing','error') OR (status='draft' AND expires_at>%s) THEN 0 ELSE 1 END,
                 created_at DESC,revision DESC LIMIT 50''',(user,time.time())).fetchall()
             # user_read already fences admin_only to a canonical Admin; even
@@ -150,7 +162,12 @@ class CloudApplications:
                     AND c.status='active' AND c.verification_status='unverified' LIMIT 1''',(user,individual)).fetchone()
                 if waiting:return self.detail(waiting)
             for row in con.execute('SELECT * FROM acquire_applications WHERE applicant_id=%s AND request_kind=%s AND status=ANY(%s)',(user,kind,list(LIVE))):
-                if row['status']=='draft' and row['expires_at']<=time.time():continue
+                if row['status']=='draft' and row['expires_at']<=time.time():
+                    # Expiry is a write-time transition. Releasing the active
+                    # unique slot lets a new Acquire get a fresh Challenge.
+                    con.execute("UPDATE acquire_applications SET status='expired' WHERE revision=%s",(row['revision'],))
+                    self.event(con,row['revision'],'expired')
+                    continue
                 matches=row['individual_id']==individual if kind=='acquire' else normalize_manufacturer(json.loads(row['listing_payload'])['manufacturer'])==normalize_manufacturer(payload['manufacturer']) and normalize_serial(row['serial'])==normalize_serial(serial)
                 if matches:return self.detail(row)
             count=con.execute('SELECT COUNT(*) AS n FROM acquire_applications WHERE applicant_id=%s AND status=ANY(%s) AND (status<>%s OR expires_at>%s)',(user,list(LIVE),'draft',time.time())).fetchone()['n']

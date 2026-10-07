@@ -242,3 +242,11 @@ for(const transition of ['read-only','sign-out']){
 test('Delayed private photo data is discarded and never displayed in a different account',async()=>{
   const e=environment(),photo=deferred();await open(e);const photos=e.dialog.querySelectorAll('fieldset')[1];e.replies.push(photo.promise);photos.children[2].onclick();e.changeAccount(account('second'),{clear:false});photo.resolve({});await e.flush();assert.equal(photos.children[3].hidden,true);assert.equal(photos.children[3].src,undefined);assert.equal(e.list.children.length,0);assert.equal(e.dialog.children[1].textContent,'');
 });
+
+test('Applicant sees manual Admin reason separately from retained AI reasons, with text escaping and teardown',async()=>{
+  const e=environment(),data={...application('rejected'),reasons:['Original AI reason <img src=x>'],admin_review:{at:'2026-10-07',operation:'reject',reason:'Manual rejection <script>alert(1)</script>',actor:'admin'}};
+  e.replies.push(page(data));await e.component.refresh();e.list.children[0].children[1].onclick();
+  const review=control(e,'applicationAdminReview');assert.equal(review.hidden,false);assert.match(review.textContent,/applications.admin_review/);assert.match(review.textContent,/Manual rejection <script>/);assert.equal(review.children.length,0);
+  assert.match(e.dialog.children[1].textContent,/applications.ai_reasons.*\nOriginal AI reason/);assert.doesNotMatch(e.dialog.children[1].textContent,/Manual rejection/);
+  e.dismiss('escape');assert.equal(review.hidden,true);assert.equal(review.textContent,'');
+});
