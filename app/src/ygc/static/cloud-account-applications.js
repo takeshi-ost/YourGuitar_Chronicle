@@ -1,19 +1,36 @@
+// IDs stay decimal strings throughout the public-to-private handoff.
+export function catalogIndividualId(value){
+  return typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&
+    (value.length<19||value<='9223372036854775807')?value:null;
+}
+export function readCatalogIntent(search){
+  const values=new URLSearchParams(search).getAll('acquire');
+  return values.length===0?null:values.length===1?(catalogIndividualId(values[0])||''):'';
+}
 export function createApplications({auth,state,busy,work}){
   const root=document.getElementById('selfApplications'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   const node=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n};
   const button=(key,id)=>{const n=node('button',t(key));n.type='button';if(id)n.id=id;return n};
   const heading=node('h2',t('applications.heading')),notice=node('p',t('applications.staging')),status=node('p'),list=node('ul');status.setAttribute('role','status');
   const accessNotice=node('p'),accessDetail=node('p');accessNotice.setAttribute('role','status');accessDetail.setAttribute('role','status');
-  const add=button('applications.listing','applicationListing'),acquire=button('applications.acquire','applicationAcquire'),refreshButton=button('action.refresh');
+  const add=button('applications.listing','applicationListing'),acquire=node('a',t('catalog.select_guitar')),refreshButton=button('action.refresh');
+  acquire.id='applicationAcquire';acquire.href='/';
+  const intentRoot=document.getElementById('catalogAcquireIntent')||node('section'),intentHeading=node('h2',t('catalog.acquire_title')),
+    intentDetail=node('p'),intentStatus=node('p'),intentLink=node('a',t('catalog.view_guitar')),intentStart=button('catalog.acquire_start','catalogAcquireStart');
+  intentDetail.id='catalogAcquireDetail';intentStatus.id='catalogAcquireStatus';intentStatus.setAttribute('role','status');
+  intentHeading.id='catalogAcquireTitle';intentRoot.style.overflowWrap='anywhere';intentRoot.setAttribute('aria-labelledby',intentHeading.id);
+  intentLink.id='catalogAcquireLink';intentRoot.append(intentHeading,intentDetail,intentStatus,intentLink,intentStart);intentRoot.hidden=true;
   root.append(heading,notice,accessNotice,add,acquire,refreshButton,status,list);
   const dialog=node('dialog'),title=node('h2'),detail=node('p'),form=node('form'),fields=node('fieldset'),photos=node('fieldset'),message=node('p');
   const adminReview=node('p');adminReview.id='applicationAdminReview';adminReview.hidden=true;adminReview.style.whiteSpace='pre-wrap';
   dialog.id='applicationDialog';title.id='applicationTitle';dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
   const inputs={},files={},previews={},urls=new Set();let selected=null,kind=null,epoch=0,accountEpoch=0,refreshEpoch=0,canWrite=null,renderedAccount=state()?.user?.app_user_id;
+  let catalogId=null,catalogGuitar=null,catalogState='',catalogEpoch=0,draftGuitar=null;
   const keys=['manufacturer','serial_number','model','finish','year','individual_id','occurred_at','body'];
   for(const key of keys){
     const label=node('label',t('applications.'+key)),input=node(key==='body'?'textarea':'input');input.id='application_'+key;label.htmlFor=input.id;
     if(key!=='body')input.type=key==='occurred_at'?'date':'text';input.maxLength=key==='body'?4000:key==='individual_id'?19:key==='manufacturer'?120:key==='year'?40:160;
+    if(key==='individual_id')input.readOnly=true;
     fields.append(label,input);inputs[key]={label,input};
   }
   for(const role of ['closeup','overview']){
@@ -34,19 +51,59 @@ export function createApplications({auth,state,busy,work}){
   const writable=()=>eligible()&&canWrite;
   const sameAccount=(version,id)=>version===accountEpoch&&eligible()&&id===account();
   function clearImages(){for(const url of urls)URL.revokeObjectURL(url);urls.clear();for(const role of ['closeup','overview']){files[role].value='';previews[role].image.removeAttribute('src');previews[role].image.hidden=true}}
-  function closeDialog(){epoch++;selected=null;clearImages();form.reset();detail.textContent=message.textContent=adminReview.textContent='';adminReview.hidden=true;retryReady=false}
+  function closeDialog(){epoch++;selected=null;kind=null;draftGuitar=null;clearImages();form.reset();detail.textContent=message.textContent=adminReview.textContent='';adminReview.hidden=true;retryReady=false}
   dialog.addEventListener('ygc:closed',closeDialog);close.onclick=()=>globalThis.YGCOverlays.close(dialog);
   function clear(){accountEpoch++;refreshEpoch++;epoch++;canWrite=null;list.replaceChildren();status.textContent='';accessNotice.textContent=accessDetail.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
   function render(){
     if(renderedAccount!==account()){clear();renderedAccount=account()}
-    root.hidden=!eligible();add.disabled=acquire.disabled=busy()||!writable();refreshButton.disabled=dialogRefresh.disabled=busy()||!eligible();
-    const draft=selected?.status==='draft';fields.disabled=busy()||!writable();photos.disabled=busy();save.disabled=busy()||!writable()||Boolean(selected);save.hidden=Boolean(selected);submit.disabled=busy()||!writable()||!draft;
+    root.hidden=!eligible();add.disabled=busy()||!writable();refreshButton.disabled=dialogRefresh.disabled=busy()||!eligible();
+    const draft=selected?.status==='draft';fields.disabled=busy()||!writable();photos.disabled=busy();save.disabled=busy()||!writable()||Boolean(selected)||(kind==='acquire'&&!readySelection());save.hidden=Boolean(selected);submit.disabled=busy()||!writable()||!draft;
     form.hidden=Boolean(selected)&&!(kind==='acquire'&&draft);photos.hidden=!selected;submit.hidden=!draft;cancel.hidden=!selected||!['draft','pending','processing','error'].includes(selected.status);cancel.disabled=busy()||!writable();
     for(const role of ['closeup','overview']){files[role].disabled=busy()||!writable()||!draft;previews[role].view.disabled=busy()||!eligible()||!selected?.photos.includes(role)}
     retry.hidden=selected?.status!=='error';retry.disabled=busy()||!writable();
     accessNotice.textContent=accessDetail.textContent=eligible()&&!canWrite?t(canWrite===false?'applications.read_only':'applications.access_unavailable'):'';
     if(!writable()){retryReady=false;retry.textContent=t('applications.retry')}
     if(!eligible())clear();
+    intentRoot.hidden=catalogId===null;
+    intentDetail.textContent=catalogGuitar?[catalogGuitar.manufacturer,catalogGuitar.model,catalogGuitar.serial_number,catalogGuitar.finish,catalogGuitar.year,catalogGuitar.id].filter(v=>v!==null&&v!=='').join(' · '):'';
+    intentLink.href=catalogIndividualId(catalogId)?'/guitars/'+catalogId:'/';
+    intentLink.textContent=t(catalogIndividualId(catalogId)?'catalog.view_guitar':'catalog.browse');
+    const hint=catalogState==='loading'?'catalog.acquire_loading':catalogState==='invalid'?'catalog.acquire_invalid':!catalogGuitar?'catalog.acquire_unavailable':
+      !state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite!==true?(canWrite===false?'applications.read_only':'applications.access_unavailable'):'catalog.acquire_ready';
+    intentStatus.textContent=t(hint);intentStart.disabled=busy()||!writable()||!catalogGuitar;
+  }
+  function readySelection(){return Boolean(draftGuitar&&catalogGuitar&&draftGuitar.id===catalogId&&catalogGuitar.id===catalogId)}
+  async function lookupCatalog(id){
+    const path='/api/public/guitars/'+id,options={cache:'no-store',credentials:'omit',redirect:'error'};
+    const response=auth()?.signedIn&&state()?.user?await auth().authorizedFetch(path,options,true):await globalThis.fetch(path,options);
+    // A rejected bearer request is never retried anonymously.
+    if(!response.ok)throw Object.assign(Error('Catalog unavailable'),{status:response.status});
+    const data=await response.json();
+    if(!data||typeof data!=='object'||Array.isArray(data)||data.id!==id||!catalogIndividualId(data.id)||
+      !['manufacturer','model','serial_number','finish','year'].every(key=>data[key]===null||typeof data[key]==='string'))throw Error('Invalid catalog guitar');
+    // Keep only public identity fields. Never retain extra response properties.
+    return Object.freeze(Object.fromEntries(['id','manufacturer','model','serial_number','finish','year'].map(key=>[key,data[key]])));
+  }
+  async function refreshCatalog(){
+    if(!catalogIndividualId(catalogId))return;
+    const id=catalogId,version=++catalogEpoch,accountVersion=accountEpoch,actor=account();
+    catalogGuitar=null;catalogState='loading';render();
+    try{
+      const guitar=await lookupCatalog(id);
+      if(version!==catalogEpoch||id!==catalogId)return;
+      catalogGuitar=guitar;catalogState='ready';render();return guitar;
+    }catch(err){
+      if(version!==catalogEpoch||id!==catalogId)return;
+      catalogGuitar=null;catalogState='unavailable';
+      if([401,403].includes(err.status)&&sameAccount(accountVersion,actor))clear();
+      render();return null;
+    }
+  }
+  function setCatalogIntent(id){
+    catalogEpoch++;catalogId=id===null?null:(catalogIndividualId(id)||'');catalogGuitar=null;catalogState=catalogId===''?'invalid':'';
+    // History navigation must invalidate pending creation, even for the same ID.
+    if(kind==='acquire'){globalThis.YGCOverlays.close(dialog);closeDialog()}
+    render();return refreshCatalog();
   }
   function error(error){return t(error.code==='service_restricted'?'applications.service_restricted':error.status===403||error.status===401?'self_profile.restricted':error.code&&['image_format','image_pixel_limit','image_size_limit','invalid_image'].includes(error.code)?'content_media.'+error.code:error.status===400?'applications.invalid':error.status===409?'applications.conflict':'applications.failed')}
   async function request(path='',options={},json=true){
@@ -109,18 +166,29 @@ export function createApplications({auth,state,busy,work}){
         const review=selected.admin_review,operation=String(review.operation||'').replace(/^admin_/,'');
         adminReview.textContent=t('applications.admin_review')+'\n'+(['accept','reject','retry'].includes(operation)?t('admin_applications.operation_'+operation)+'\n':'')+(review.at?String(review.at)+'\n':'')+review.reason;adminReview.hidden=false;
       }
-    }else{form.reset();inputs.occurred_at.input.value=today();detail.textContent=t('applications.instructions')}
+    }else{form.reset();inputs.occurred_at.input.value=today();inputs.individual_id.input.value=kind==='acquire'?draftGuitar?.id||'':'';detail.textContent=t('applications.instructions')+(kind==='acquire'?'\n'+[draftGuitar?.manufacturer,draftGuitar?.model,draftGuitar?.serial_number].filter(Boolean).join(' · '):'')}
     inputs.occurred_at.input.max=today();render();globalThis.YGCOverlays.open(dialog);
   }
   function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-  add.onclick=()=>{if(!busy()&&writable()){selected=null;kind='listing';show()}};acquire.onclick=()=>{if(!busy()&&writable()){selected=null;kind='acquire';show()}};refreshButton.onclick=dialogRefresh.onclick=()=>action(refresh);
-  globalThis.addEventListener('focus',()=>{if(eligible())action(refresh)});
+  add.onclick=()=>{if(!busy()&&writable()){selected=null;draftGuitar=null;kind='listing';show()}};
+  intentStart.onclick=()=>{if(!dialog.open&&!busy()&&writable()&&catalogGuitar){selected=null;draftGuitar=catalogGuitar;kind='acquire';show()}};
+  refreshButton.onclick=dialogRefresh.onclick=()=>action(refresh);
+  globalThis.addEventListener('focus',()=>{if(eligible())action(refresh);if(catalogId!==null)refreshCatalog()});
   form.onsubmit=event=>{
-    event.preventDefault();if(selected)return;action(async current=>{
-      const body=kind==='listing'?{kind,payload:Object.fromEntries(keys.filter(k=>k!=='individual_id').map(k=>[k,inputs[k].input.value]))}:{kind,individual_id:inputs.individual_id.input.value.trim()};
-      const version=epoch,row=await post('',body);if(!current()||version!==epoch)return;
-      if(row.status==='duplicate'){message.textContent=t('applications.duplicate',{ids:row.existing_individual_ids.join(', ')});return}
-      selected=row;show();await refresh();
+    event.preventDefault();if(selected||!dialog.open||!['listing','acquire'].includes(kind)||(kind==='acquire'&&!readySelection()))return;
+    action(async current=>{
+      const version=epoch,draftKind=kind,guitar=draftGuitar;
+      const body=draftKind==='listing'?{kind:draftKind,payload:Object.fromEntries(keys.filter(k=>k!=='individual_id').map(k=>[k,inputs[k].input.value]))}:{kind:draftKind,individual_id:guitar.id};
+      if(draftKind==='acquire'){
+        // Recheck public availability at the explicit creation boundary. A stale
+        // selection must not bypass offline/admin-only mode, including for admins.
+        const checked=await refreshCatalog();
+        if(!checked||!current()||version!==epoch||!writable()||guitar.id!==catalogId){if(!checked&&current()&&version===epoch)message.textContent=t('catalog.acquire_unavailable');return}
+      }
+      const row=await post('',body);if(!current())return;
+      if(row.status==='duplicate'){if(version===epoch)message.textContent=t('applications.duplicate',{ids:row.existing_individual_ids.join(', ')});return}
+      if(version===epoch){selected=row;show()}
+      await refresh();
     },true);
   };
   submit.onclick=()=>{if(selected?.status!=='draft')return;return action(async current=>{
@@ -147,5 +215,5 @@ export function createApplications({auth,state,busy,work}){
       await refresh();
     },true);
   };
-  return {render,refresh,clear,failed};
+  return {render,refresh,clear,failed,setCatalogIntent};
 }

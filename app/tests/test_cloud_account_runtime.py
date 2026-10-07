@@ -73,3 +73,22 @@ def test_console_serves_only_shell_and_whitelisted_assets(environment, monkeypat
         assert client.get('/assets/cloud_console_html.html').status_code == 404
         verifier.verify.assert_not_called()
         accounts.resolve_identity.assert_not_called()
+
+
+def test_public_catalog_shell_does_not_mount_prototype_or_private_assets(environment, monkeypatch):
+    accounts, verifier = Mock(), Mock()
+    monkeypatch.setattr(api, 'PostgresAccounts', Mock(return_value=accounts))
+    monkeypatch.setattr(api, 'IdentityPlatformIdentity', Mock(return_value=verifier))
+    with TestClient(runtime.application()) as client:
+        for path in ('/', '/guitars/1', '/guitars/9223372036854775807'):
+            response = client.get(path)
+            assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
+            assert '/assets/cloud-public-catalog.js' in response.text
+            assert 'cloud-account-page.js' not in response.text
+        for path in ('/assets/cloud-public-catalog.js', '/assets/cloud-public-catalog.css', '/account', '/console'):
+            assert client.get(path).status_code == 200
+        for path in ('/guitars/0', '/guitars/9223372036854775808', '/assets/product-detail.js',
+                     '/assets/cloud_public_catalog_html.html', '/user-view', '/users/1', '/api/individuals/1', '/images/1'):
+            assert client.get(path).status_code == 404
+        verifier.verify.assert_not_called()
+        accounts.resolve_identity.assert_not_called()

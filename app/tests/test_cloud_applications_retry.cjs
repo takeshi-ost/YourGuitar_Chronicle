@@ -37,7 +37,7 @@ function environment(){
   const context=vm.createContext({document,URL,Blob,Intl,Date,console,CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:key=>key}});context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/overlays.js'),'utf8'),context);
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}};
-  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-applications.js'),'utf8').replace('export function','function');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-applications.js'),'utf8').replaceAll('export function','function');
   vm.runInContext(source+';globalThis.create=createApplications;',context);component=context.create(args);
   const dialog=ids.get('applicationDialog'),list=root.children.at(-1),retry=ids.get('applicationRetry');
   return {component,calls,replies,root,dialog,list,retry,ids,
@@ -126,9 +126,9 @@ function message(e){return e.dialog.children.at(-2).textContent}
 for(const status of ['draft','pending','processing','error']){
   test(`Read-only ${status} applications keep details/photos while all mutations are blocked locally`,async()=>{
     const e=environment();await open(e,status,false);
-    for(const id of ['applicationListing','applicationAcquire','applicationCreate','applicationSubmit','applicationCancel','applicationRetry','application_closeup','application_overview'])assert.equal(control(e,id).disabled,true,id);
+    for(const id of ['applicationListing','catalogAcquireStart','applicationCreate','applicationSubmit','applicationCancel','applicationRetry','application_closeup','application_overview'])assert.equal(control(e,id).disabled,true,id);
     assert.equal(form(e).children[0].disabled,true);
-    for(const id of ['applicationListing','applicationAcquire','applicationSubmit','applicationCancel','applicationRetry'])control(e,id).onclick();
+    for(const id of ['applicationListing','catalogAcquireStart','applicationSubmit','applicationCancel','applicationRetry'])control(e,id).onclick();
     form(e).onsubmit({preventDefault(){}});await e.flush();assert.equal(e.calls.length,1,'No mutation handler may start a request');
     const photos=e.dialog.querySelectorAll('fieldset')[1],view=photos.children[2];assert.equal(photos.disabled,false);assert.equal(view.disabled,false);
     e.replies.push({});view.onclick();await e.flush();assert.equal(e.calls.length,2);assert.match(e.calls[1].url,/photos\/closeup$/);assert.equal(e.calls[1].options.method,undefined);
@@ -220,7 +220,7 @@ test('Successful cancellation after dismissal still refreshes the list without r
   const e=environment(),post=deferred(),row=await open(e);e.replies.push(post.promise,page({...row,status:'cancelled'}));control(e,'applicationCancel').onclick();e.dismiss('close');post.resolve({...row,status:'cancelled'});await e.flush();assert.match(e.listText(),/status_cancelled/);assert.equal(e.dialog.open,false);
 });
 
-for(const kind of ['Listing','Acquire']){
+for(const kind of ['Listing']){
   test(`An already-open new ${kind} form cannot submit after a read-only transition`,async()=>{
     const e=environment();e.replies.push(page());await e.component.refresh();control(e,'application'+kind).onclick();
     e.replies.push({items:[],can_write:false});await e.component.refresh();form(e).onsubmit({preventDefault(){}});await e.flush();

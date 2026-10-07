@@ -48,6 +48,8 @@ def main():
                 cloud_console()
                 from browser_cloud_admin_applications import main as cloud_admin_applications
                 cloud_admin_applications()
+                from browser_cloud_public_catalog import main as cloud_public_catalog
+                cloud_public_catalog()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

@@ -1503,5 +1503,16 @@
   "applications.reference": "Reference photo",
   "applications.ai_reasons": "Original AI review reasons",
   "applications.admin_review": "Administrator review and reason",
-  "admin_applications.photos_unavailable": "Some stored photo references are unavailable. Diagnostics and permitted Admin actions remain available."
+  "admin_applications.photos_unavailable": "Some stored photo references are unavailable. Diagnostics and permitted Admin actions remain available.",
+  "catalog.browse": "Browse guitars",
+  "catalog.select_guitar": "Choose a guitar from the catalog",
+  "catalog.acquire_title": "Acquire selected guitar",
+  "catalog.acquire_loading": "Checking the selected guitar…",
+  "catalog.acquire_sign_in": "Sign in or create an account to continue with this guitar.",
+  "catalog.acquire_verify": "Verify your email to continue with this guitar.",
+  "catalog.acquire_ready": "Review the selected guitar, then start a draft. This does not change ownership.",
+  "catalog.acquire_invalid": "This guitar selection is invalid. Choose a guitar from the catalog.",
+  "catalog.acquire_unavailable": "This guitar is unavailable. Return to the catalog and try again.",
+  "catalog.acquire_start": "Start Acquire draft",
+  "catalog.view_guitar": "View selected guitar"
 }

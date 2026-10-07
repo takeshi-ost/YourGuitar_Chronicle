@@ -144,3 +144,14 @@ test('Google throttling during verification remains an error and cannot mark ema
   await assert.rejects(s.adapter.requestEmailVerification(),error=>error.code==='auth/too-many-requests');
   assert.equal(s.adapter.account.identity.email_verified,false);
 });
+
+test('Verification return preserves exact canonical BIGINT Acquire intent on the fixed account path',async()=>{
+  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
+  await s.adapter.requestEmailVerification({language:'en',acquire:'9223372036854775807',returnUrl:'https://evil.invalid'});
+  assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/account?acquire=9223372036854775807');
+  assert.equal(s.calls.some(call=>call.url.includes('/applications')),false);
+});
+for(const acquire of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','https://evil.invalid','12&next=https://evil.invalid'])test(`Verification rejects invalid Acquire intent ${String(acquire)}`,async()=>{
+  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
+  await assert.rejects(s.adapter.requestEmailVerification({acquire}));assert.equal(s.sdkCalls.some(call=>call[0]==='verifyEmail'),false);
+});

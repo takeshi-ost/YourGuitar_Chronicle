@@ -19,3 +19,7 @@
 | PostgreSQL、Cloud Storage、クラウド定期ジョブ | 未実装 | [GCP移行境界](../migration/GCP_BOUNDARIES.md) |
 
 ローカルのセッション・公開範囲設定は公開環境の本人確認や全API認可を保証しない。旧Observation互換処理の撤去は[移行残作業](../migration/TEMP_OBSERVATION_MIGRATION_PLAN.md)で管理する。
+
+## クラウド移植の追加checkpoint（2026-10-07）
+
+一般向けの検索・ソート・ページ送り・固定Specification・公開Chronicle・ログインを跨ぐAcquire導線を実装。公開専用のサーバー項目制限とService Mode制御を適用する。写真は未公開のプレースホルダー。公開プロフィール・SNS・統計／地図は未移植。実PG／Chromiumの最終確認と公開許諾・配置承認は別途必要。詳細は[クラウド公開カタログ](../migration/CLOUD_PUBLIC_CATALOG.md)。

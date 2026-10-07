@@ -2,6 +2,8 @@
 
 対象：現行ローカル実装。操作手順は[ユーザーガイド](../user-guide/README.md)。以下は表示範囲・制限・更新規則を記す。
 
+Cloud Run向けの読み取り専用Top／Product Detailは別の安全な投影として実装した。ローカルAPIやプロフィールの公開制約をそのまま移植せず、[公開カタログの範囲・固定項目・未公開条件](../migration/CLOUD_PUBLIC_CATALOG.md)を適用する。写真・自由記述・Owner個人情報は今回の公開対象外。実装checkpointは本番公開済みを意味しない。
+
 
 - `/user-view` はGuestも閲覧できるTop Page。All Discovered Guitars（旧Product List）の検索・ソート、Product Detail、Specification、Claim Chronicle、新着順のNew Discovery（最大200個体）、統計と地図を表示する。GuestはClaimや投票など参加操作を利用できない。
 - 画面の操作ラベルは英語が既定で、日本語へ切り替えられる。Product DetailはTop Page / User Profile / Browser Consoleで共通の描画部品を使う。Top Page / User Profileでは幅900px以下で一覧から開閉可能なオーバーレイとして表示する。

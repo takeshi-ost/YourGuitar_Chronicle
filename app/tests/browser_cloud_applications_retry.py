@@ -224,15 +224,16 @@ def main():
             page.wait_for_function('!fixture.busy')
 
         def assert_mutations_blocked():
-            for identity in ('applicationListing', 'applicationAcquire', 'applicationCreate',
+            for identity in ('applicationListing', 'applicationCreate',
                              'applicationSubmit', 'applicationCancel', 'applicationRetry',
                              'application_closeup', 'application_overview'):
                 expect(page.locator('#' + identity)).to_be_disabled()
+            expect(page.locator('#applicationAcquire')).to_have_attribute('href', '/')
             previous = list(record['requests'])
             # Native disabled controls and direct/repeated handler calls must
             # both refuse mutations, including the hidden form submit handler.
             page.evaluate('''async () => {
-              for (const id of ['applicationListing','applicationAcquire',
+              for (const id of ['applicationListing',
                   'applicationSubmit','applicationCancel','applicationRetry']) {
                 await document.getElementById(id).onclick();
               }

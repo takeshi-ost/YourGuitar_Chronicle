@@ -17,7 +17,7 @@ function environment(){
   const context=vm.createContext({addEventListener(){},document,URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},detail(){}});for(const key of ['createUserBrowser','createCrawlBrowser','createBackupBrowser','createGuitarBrowser','createApplicationBrowser'])context[key]=noOp;
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.component?.render()}}};
-  function load(file,name){let source=fs.readFileSync(path.join(__dirname,'../src/ygc/static',file),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');vm.runInContext(source+`;globalThis.component=${name}(args);`,Object.assign(context,{args}));return context.component}
+  function load(file,name){let source=fs.readFileSync(path.join(__dirname,'../src/ygc/static',file),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function');vm.runInContext(source+`;globalThis.component=${name}(args);`,Object.assign(context,{args}));return context.component}
   return {context,document,calls,replies,args,load,ids,setState:value=>{state=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
 }
 const page=items=>({items,total:String(items.length),next_after:null});
