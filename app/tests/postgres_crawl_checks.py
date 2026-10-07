@@ -90,13 +90,17 @@ def run(app,accounts,operations,storage,aid):
     print('PostgreSQL Chronicle read: Listing/Specification/Ownership, fixed fields, source privacy, descending cursor and unchanged owner passed.')
     print('PostgreSQL Crawl: canonical non-login Automation ID, mixed-scope filtering, durable cursor/log, Listing/Evidence, duplicate/relisting Acquire and Lost passed.')
     # A registered Owner is not displaced by a new external listing.
+    # The initial crawl is dated at execution time. Keep these later events on
+    # that UTC day so increasing Claim IDs establish their intended order.
+    owner_date=utcnow()[:10]
     with repo.connect() as con:
         target=items[1]['id']
         cur=con.execute("""INSERT INTO claims(individual_id,author_user_id,claim_type,field_name,value_text,ownership_kind,ownership_source,
-         verification_status,occurred_at,created_at,updated_at) VALUES(?,?,'ownership','owner',?,'acquire','user','positive','2026-10-06','now','now')""",(target,registered['id'],str(registered['id'])))
-        con.execute("INSERT INTO claim_source_evidence(claim_id,evidence_type,effective_date,created_at) VALUES(?,'acquisition_date','2026-10-06','now')",(cur.lastrowid,))
-        repo._rebuild_individual_snapshot_in_connection(con,target)
-    claim=_claim_data(listing_id='owner-pending',serial='524432');provenance.update(source_listing_id='owner-pending',source_url='https://reverb.com/item/owner-pending',observed_at='2026-10-07')
+         verification_status,occurred_at,created_at,updated_at) VALUES(?,?,'ownership','owner',?,'acquire','user','positive',?,'now','now')""",(target,registered['id'],str(registered['id']),owner_date))
+        con.execute("INSERT INTO claim_source_evidence(claim_id,evidence_type,effective_date,created_at) VALUES(?,'acquisition_date',?,'now')",(cur.lastrowid,owner_date))
+        snapshot=repo._rebuild_individual_snapshot_in_connection(con,target)
+        assert str(snapshot['current_owner_user_id'])==str(registered['id'])
+    claim=_claim_data(listing_id='owner-pending',serial='524432');provenance.update(source_listing_id='owner-pending',source_url='https://reverb.com/item/owner-pending',observed_at=owner_date)
     pending=repo.persist_reverb_listing_claim(claim,provenance)
     assert pending['verification_status']=='unverified'
     with connect(app,'chronicle') as con:
