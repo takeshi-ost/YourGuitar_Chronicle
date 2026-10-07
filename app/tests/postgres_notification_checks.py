@@ -658,9 +658,30 @@ def run(port):
             storage = Storage()
             fixture = seed(owner, records, storage)
             with connect(owner, 'chronicle') as con:
+                # The Media suite intentionally leaves this individual with only
+                # an inactive Media Claim. Notification projection-drift checks
+                # rename its author, which correctly rebuilds every authored
+                # individual, including inactive Claims. Supply complete active
+                # identity evidence without activating its Media or adding any
+                # owner, photos or notices. The separate absent scaffold has no
+                # Claims or owner and is never selected by participant rebuilds.
+                hidden = fixture['hidden']
+                listing = con.execute('''INSERT INTO claims(individual_id,author_user_id,
+                    claim_type,verification_status,occurred_at,created_at,updated_at)
+                    VALUES(%s,%s,'listing','positive','2026-01-01','2026-01-01','2026-01-01')
+                    RETURNING id''', (hidden, records['admin']['id'])).fetchone()['id']
+                for field, value in (('manufacturer', 'Fender'), ('model', 'Telecaster'),
+                                     ('serial_number', 'MEDIA-' + str(hidden))):
+                    con.execute('''INSERT INTO claim_listing_items(claim_id,field_name,
+                        value_text,created_at) VALUES(%s,%s,%s,'2026-01-01')''',
+                        (listing, field, value))
                 repo = BoundRepository(ObservationConnection(con))
-                for individual in (fixture['individual'], fixture['other']):
+                for individual in (fixture['individual'], fixture['other'], hidden):
                     repo._rebuild_individual_snapshot_in_connection(repo.connection, individual)
+                assert con.execute('SELECT current_owner_user_id FROM individuals WHERE id=%s',
+                                   (hidden,)).fetchone()['current_owner_user_id'] is None
+                assert con.execute('SELECT status FROM claims WHERE id=%s',
+                                   (fixture['hidden_claim'],)).fetchone()['status'] == 'inactive'
             w = Workflow(settings, owner, accounts, operations, records, fixture, storage)
             notification = inbox_checks(w)
             fence_checks(w, notification)
