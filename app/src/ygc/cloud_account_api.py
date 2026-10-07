@@ -92,6 +92,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     from ygc.cloud_identity_corrections import CloudIdentityCorrections
     from ygc.cloud_identity_correction_routes import identity_correction_router
     app.include_router(identity_correction_router(verifier, CloudIdentityCorrections(settings, operations)))
+    from ygc.cloud_notifications import CloudNotifications
+    from ygc.cloud_notification_routes import notification_router
+    app.include_router(notification_router(verifier, CloudNotifications(settings, operations)))
     @app.get('/health')
     def health():
         return JSONResponse({'status': 'ok'}, headers={'Cache-Control': 'no-store'})

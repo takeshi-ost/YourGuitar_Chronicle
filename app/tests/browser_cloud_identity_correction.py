@@ -50,7 +50,7 @@ AUDIT = r'''
 
 
 def main():
-    names = ('cloud-account-page.js', 'cloud-account-identity.js', 'cloud-account-ownership.js',
+    names = ('cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-identity.js', 'cloud-account-ownership.js',
         'cloud-account-profile.js', 'cloud-account-avatar.js', 'cloud-account-guitars.js',
         'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js',
         'cloud-account.css', 'cloud-auth-loader.js', 'identity-platform-auth.js',
@@ -132,6 +132,8 @@ def main():
                 # Listing entrance must still be present; Owner has no Listing.
                 included = actor == 'owner' and query.get('kind') == ['owned']
                 route.fulfill(json={'items': [guitar] if included else [], 'total': '1' if included else '0', 'next_after': None})
+            elif path == '/api/auth/notifications':
+                route.fulfill(json={'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True})
             elif path == '/api/auth/ownership-transfers':
                 route.fulfill(json={'viewer_user_id': users[actor]['id'], 'items': [], 'can_write': store['can_write'], 'next_after': None})
             elif path == API and method == 'GET':

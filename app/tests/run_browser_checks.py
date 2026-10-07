@@ -58,6 +58,8 @@ def main():
                 cloud_event_claims()
                 from browser_cloud_identity_correction import main as cloud_identity_correction
                 cloud_identity_correction()
+                from browser_cloud_notifications import main as cloud_notifications
+                cloud_notifications()
                 from browser_cloud_ownership import main as cloud_ownership
                 cloud_ownership()
             finally:

@@ -130,6 +130,10 @@ def main():
     app.include_router(self_profile_router(verifier, store))
     app.include_router(owner_router(verifier, store))
 
+    @app.get('/api/auth/notifications')
+    def notifications():
+        return {'items': [], 'next_after': None, 'unread_count': '0', 'can_write': True}
+
     @app.get('/api/auth/identity-corrections')
     def identity_corrections():
         return {'items': [], 'next_after': None, 'can_write': True}

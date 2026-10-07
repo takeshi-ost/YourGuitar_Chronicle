@@ -34,6 +34,16 @@ def content_revision(connection, row):
     content = {key: row[key] for key in ('claim_type', 'specification_kind', 'field_name',
         'value_text', 'body', 'occurred_at', 'author_user_id')}
     content['revision'] = revision(row)
+    # A successful same-stance response consumes its confirmation even when
+    # timestamps coincide. Inbox read state is deliberately not part of this
+    # token. Shared former-owner pairs must invalidate each other's decisions.
+    content['verification_notice_id'] = connection.execute("""SELECT MAX(n.id)
+        FROM notifications n JOIN claims c ON c.id=n.claim_id
+        WHERE n.notification_type='claim_verified' AND n.recipient_user_id=? AND
+          (c.id=? OR (c.individual_id=? AND c.ownership_source='former_owner'
+            AND c.ownership_pair_id IS NOT NULL AND c.ownership_pair_id=
+              (SELECT ownership_pair_id FROM claims WHERE id=? AND ownership_source='former_owner')))""",
+        (row['author_user_id'], row['id'], row['individual_id'], row['id'])).fetchone()[0]
     content['spec_items'] = specification_items(connection, row)
     if row['claim_type'] in PHOTO_CLAIM_TYPES:
         content['media_items'] = media_rows(connection, row)
@@ -104,4 +114,6 @@ class CloudOwner:
                 raise ClaimConflict('Claim changed; reload before responding.')
             if not repo.set_claim_response_in_connection(repo.connection, claim, user, data['stance'], reason):
                 raise ClaimConflict('Claim is no longer active.')
+            repo.create_verification_notification_in_connection(
+                repo.connection, claim, user, data['stance'])
             return {'claim_id': str(claim), 'verification_status': data['stance']}
