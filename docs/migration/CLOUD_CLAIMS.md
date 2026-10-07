@@ -45,3 +45,6 @@ PR54の公開投影を変更しない。承認済みの固定 Specification 項�
 非公開Mediaの保存・配信は[後続単位](CLOUD_MEDIA_CLAIMS.md)に実装。公開写真の同意は未決定。残る後続単位は Event、Transfer / Release と受諾・係争の統合、Listing訂正の専用導線。所有権の移転・再取得・自己判定禁止・旧Ownerの権限喪失は別々に簡略化せず、既存の遷移例をまとめて移植する。
 
 使い捨てSQLiteのサービス／HTTP検証、Node UI検証、使い捨てPostgreSQL／Chromiumスイートを用意した。クラウド仮想環境で拒否されているPostgreSQLサーバー・Chromium実行を迂回しない。実PG・ブラウザはMacまたは通常CIの同一checkpointで確認する。実データ・実認証・写真審議・Owner承認・Service Mode・Review設定・IAM・bucketは触らない。
+
+
+Transfer / Releaseの認証済みWeb移植は[Cloud Transfer / Release](CLOUD_TRANSFER_RELEASE.md)に追加。受領・履歴・係争ロックを共有し、係争管理UIと公開・配置は別の作業範囲。

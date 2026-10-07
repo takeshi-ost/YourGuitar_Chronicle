@@ -31,7 +31,7 @@ def guitar(identifier=GUITAR_ID):
 
 
 def main():
-    names = ['cloud-account-page.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
+    names = ['cloud-account-page.js', 'cloud-account-ownership.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
              'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js',
              'cloud-account.css', 'cloud-public-catalog.js', 'cloud-public-catalog.css',
              'cloud-auth-loader.js', 'identity-platform-auth.js', 'overlays.js', 'ui-components.css']
@@ -95,6 +95,8 @@ def main():
                     'location_country': '', 'location_region': '', 'bio': ''}})
             elif path == '/api/auth/guitars':
                 route.fulfill(json={'items': [], 'total': '0', 'next_after': None})
+            elif path == '/api/auth/ownership-transfers':
+                route.fulfill(json={'viewer_user_id': '1', 'items': [], 'can_write': store['can_write'], 'next_after': None})
             elif path == '/api/auth/applications':
                 route.fulfill(json={'items': [], 'can_write': store['can_write']})
             elif path == '/api/auth/avatar':

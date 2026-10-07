@@ -9,7 +9,7 @@ import re
 import socket
 import threading
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from playwright.sync_api import expect, sync_playwright
 import uvicorn
 
@@ -129,6 +129,12 @@ def main():
     app.include_router(self_guitars_router(verifier, store))
     app.include_router(self_profile_router(verifier, store))
     app.include_router(owner_router(verifier, store))
+
+    @app.get('/api/auth/ownership-transfers')
+    def ownership_transfers(request: Request):
+        identity = Verifier().verify(bearer_token=request.headers['authorization'].removeprefix('Bearer '))
+        user = accounts[identity.subject]
+        return {'viewer_user_id': str(user['id']), 'items': [], 'can_write': True, 'next_after': None}
 
     @app.get('/api/auth/applications')
     def applications():
@@ -307,7 +313,7 @@ def main():
                 expect(owned.locator('li')).to_have_count(0)
                 expect(former.locator('li')).to_have_count(1)
                 expect(owned.get_by_role('button', name='Refresh', exact=True)).to_be_enabled()
-                expect(former.locator('li button')).to_have_count(0)
+                expect(former.get_by_role('button', name='Review owner responses')).to_have_count(0)
                 expect(dialog).to_be_hidden();expect(dialog.locator('section')).to_have_count(0)
                 assert sorted(store.reads[previous_reads:]) == [('owner-uuid', 'formerly_owned'), ('owner-uuid', 'owned')]
                 assert store.decisions[-1] == ('owner-uuid', 12, 25, dict(stance='positive', revision='c' * 64))

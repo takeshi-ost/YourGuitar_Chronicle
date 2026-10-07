@@ -64,3 +64,8 @@ WebUI全Repository・画像審議・Crawl・Follow / DM・運用設定・独立�
 ### 後続接続の更新（2026-10-05）
 
 上の未移植一覧はDB基盤実装時の記録。現時点ではCrawl、Operations、DB別バックアップ／復元／初期化、Admin用の個体・ユーザー・Chronicle閲覧を接続済み。今回Admin強制判定のPositive / Negative / UnverifiedをConsoleへ接続する。通常Owner判定とTransferのブラウザ操作、申請審議、Follow / DM等は未接続。現在の範囲と利用者受入は[クラウドBrowser Console](CLOUD_BROWSER_CONSOLE.md)を参照。
+
+
+## Cloud Transfer / Release（2026-10-07 checkpoint）
+
+認証済みのCurrent Owner申請・Release、本人のTransfer受領/辞退/取消、参加者履歴のWeb入口を[追加](CLOUD_TRANSFER_RELEASE.md)。既存のAccounts/Chronicleフェンスと共有Repositoryを使い、schema・runtime権限は変更しない。公開・配置は別承認。

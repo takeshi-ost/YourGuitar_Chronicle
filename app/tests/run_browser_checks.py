@@ -54,6 +54,8 @@ def main():
                 cloud_claim_posting()
                 from browser_cloud_media_claims import main as cloud_media_claims
                 cloud_media_claims()
+                from browser_cloud_ownership import main as cloud_ownership
+                cloud_ownership()
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

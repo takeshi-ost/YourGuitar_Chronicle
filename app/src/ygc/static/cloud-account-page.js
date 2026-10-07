@@ -4,18 +4,20 @@ import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
 import {createApplications,readCatalogIntent} from './cloud-account-applications.js';
 import {createClaims,readClaimIntent} from './cloud-account-claims.js';
+import {createOwnership,readOwnershipIntent} from './cloud-account-ownership.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
 let auth,policies,mode='signin',busy=false,state=null;
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
-const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
+const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search);
-applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);
-globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent)});
+let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search),ownershipIntent=readOwnershipIntent(location.search);
+applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);
+globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -40,7 +42,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  avatar.render();profile.render();guitars.render();applications.render();claims.render();
+  avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();
 }
 async function documents(){
   policies=null;
@@ -49,9 +51,9 @@ async function documents(){
 }
 function update(result,refreshCatalog=false){
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
-  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear()}
+  if(state?.user?.app_user_id!==result?.user?.app_user_id){avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear()}
   state=result;
-  if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent)}
+  if(changed||refreshCatalog){applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)}
   if(result?.registration_required){mode='register';$('status').textContent=t('cloud.registration_required')}
   else $('status').textContent=result?.user?t('cloud.account_ready'):'';
   render();
@@ -121,6 +123,7 @@ $('refreshVerification').onclick=async()=>{
   finally{busy=false;render()}
 };
 async function loadAvatar(){
+  if(state?.user&&state.identity?.email_verified===true)await ownership.refresh();
   if(state?.user&&state.identity?.email_verified===true)await applications.refresh().catch(applications.failed);
   if(state?.user&&state.identity?.email_verified===true)await guitars.refresh();
   if(state?.user&&state.identity?.email_verified===true)await profile.refresh().catch(profile.failed);

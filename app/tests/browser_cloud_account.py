@@ -5,7 +5,7 @@ import socket
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from playwright.sync_api import sync_playwright, expect
 import uvicorn
@@ -131,6 +131,12 @@ def main():
     app.include_router(application_router(TestVerifier(),Applications()))
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
+
+    @app.get('/api/auth/ownership-transfers')
+    def ownership_transfers(request: Request):
+        identity = TestVerifier().verify(bearer_token=request.headers['authorization'].removeprefix('Bearer '))
+        user = records[identity.subject]
+        return {'viewer_user_id': str(user['id']), 'items': [], 'can_write': True, 'next_after': None}
 
     @app.middleware('http')
     async def observe(request, call_next):
