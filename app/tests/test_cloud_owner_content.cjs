@@ -1,8 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 function environment(){
-  const ids=new Map();
+  const ids=new Map(),listeners={},createdUrls=[],revokedUrls=[],photoCalls=[],photoReplies=[];
+  class MediaURL extends URL{static createObjectURL(){const url='blob:owner-'+(createdUrls.length+1);createdUrls.push(url);return url}static revokeObjectURL(url){revokedUrls.push(url)}}
   class Element{
-    constructor(tag='div'){this.tag=tag;this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this.textContent='';}
+    constructor(tag='div'){this.tag=tag;this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this.textContent='';this.naturalWidth=640;this.naturalHeight=480}
+    async decode(){}removeAttribute(key){delete this[key]}
     set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
     append(...nodes){this.children.push(...nodes)}replaceChildren(...nodes){this.children=nodes}
     setAttribute(key,value){this[key]=value}addEventListener(key,fn){this.listeners[key]=fn}focus(){this.focused=true}
@@ -12,12 +14,13 @@ function environment(){
   const document={body:new Element('body'),createElement:tag=>new Element(tag),getElementById(id){if(!ids.has(id)){const e=new Element();e.id=id}return ids.get(id)}};
   let state={user:{app_user_id:'owner'},identity:{email_verified:true}},busy=false;
   const calls=[],replies=[];
-  const client={authorizedFetch:async(url,options={},verified)=>{calls.push({url,options,verified});return {ok:true,json:async()=>replies.shift()}}};
-  const context=vm.createContext({document,URLSearchParams,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}}});
+  const client={authorizedFetch:async(url,options={},verified)=>{if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private'],{type:'image/jpeg'}));return value?.status?{ok:false,status:value.status}:{ok:true,blob:async()=>value}}calls.push({url,options,verified});const value=await replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
+  const context=vm.createContext({AbortController,addEventListener:(key,fn)=>(listeners[key]??=[]).push(fn),document,URL:MediaURL,URLSearchParams,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}}});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-media.js'),'utf8').replaceAll('export function','function'),context);
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.ui.render()}}};
-  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-guitars.js'),'utf8').replace('export function','function');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-guitars.js'),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');
   vm.runInContext(source+';globalThis.ui=createGuitars(args);',Object.assign(context,{args}));
-  return {ui:context.ui,document,calls,replies,ids,setState:value=>{state=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
+  return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
 }
 const page=items=>({items,total:String(items.length),next_after:null});
 async function open(e,claim){
@@ -68,4 +71,50 @@ for(const can_write of [false,null,undefined,'true'])test(`Owner review remains 
  const e=environment();e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:[acquire],can_write});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();
  const dialog=e.ids.get('ownerResponseDialog'),card=dialog.children[2].children[0];assert.equal(dialog.open,true);assert.match(card.children[0].textContent,/#23/);
  for(const index of [1,2,3,5])assert.equal(card.children[index].disabled,true);card.children[2].onclick();card.children[3].onclick();await e.flush();assert.equal(e.calls.length,3);assert.equal(card.children[3].hidden,true);
+});
+
+const media={id:'23',claim_type:'media',spec_items:[],body:'PRIVATE CAPTION',media_items:[{id:'31',mime_type:'image/jpeg'}],verification_status:'unverified',decline_reason_required:false,revision:'a'.repeat(64)};
+const held=()=>{let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}};
+
+test('Owner Media review is gated until private image bytes decode, then confirms the content revision',async()=>{
+ const e=environment(),waiting=held();e.photoReplies.push(waiting.promise);const {card,select,review,confirm}=await open(e,media);assert.equal(e.photoCalls.length,0);card.children[10].onclick();assert.equal(card.children[8].textContent,'claims.media_loading{}');assert.match(card.children[7].textContent,/media_private/);assert.equal(review.disabled,true);assert.equal(select.disabled,true);review.onclick();assert.equal(confirm.hidden,true);assert.equal(e.calls.length,3);
+ waiting.resolve(new Blob(['PRIVATE'],{type:'image/jpeg'}));await e.flush();assert.equal(review.disabled,false);assert.equal(card.children[9].children.length,1);assert.ok(e.photoCalls[0].url.endsWith(media.revision));assert.equal(e.photoCalls[0].verified,true);
+ select.value='positive';review.onclick();assert.equal(confirm.hidden,false);e.replies.push({verification_status:'positive'},page([{id:'12'}]),page([]));confirm.onclick();await e.flush();assert.deepEqual(JSON.parse(e.calls.find(c=>c.options.method==='POST').options.body),{stance:'positive',revision:media.revision});assert.deepEqual(e.revokedUrls,e.createdUrls);
+});
+
+for(const status of [401,403,404,409])test(`Owner Media failure ${status} purges photos and requires a fresh review list plus explicit image reload`,async()=>{
+ const e=environment(),waiting=held(),changed={...media,revision:'b'.repeat(64),body:'NEW CAPTION'};e.photoReplies.push(waiting.promise);const old=await open(e,media);old.card.children[10].onclick();e.replies.push({items:[changed],can_write:true});waiting.resolve({status});await e.flush();const card=old.dialog.children[2].children[0];assert.equal(card.children[2].disabled,true);assert.equal(card.children[3].hidden,true);assert.match(card.children[0].textContent,/NEW CAPTION/);assert.equal(e.ids.get('ownerMediaReload').hidden,false);old.review.onclick();old.confirm.onclick();card.children[2].onclick();card.children[3].onclick();assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);assert.equal(e.photoCalls.length,1);
+ e.replies.push({items:[changed],can_write:true});await e.ids.get('ownerMediaReload').onclick();await e.flush();const fresh=old.dialog.children[2].children[0];assert.equal(fresh.children[2].disabled,true);assert.equal(e.photoCalls.length,1);fresh.children[10].onclick();await e.flush();assert.equal(fresh.children[2].disabled,false);assert.ok(e.photoCalls.at(-1).url.endsWith(changed.revision));fresh.children[2].onclick();assert.equal(fresh.children[3].hidden,false);
+});
+
+for(const interruption of ['close','signout','account','history','pagehide'])test(`Owner private image completion after ${interruption} never revives decisions or photos`,async()=>{
+ const e=environment(),waiting=held();e.photoReplies.push(waiting.promise);const {dialog,card,review,confirm}=await open(e,media);card.children[10].onclick();
+ if(interruption==='close')dialog.children[4].onclick();else if(interruption==='history')e.dispatch('popstate');else if(interruption==='pagehide')e.dispatch('pagehide');else{e.setState(interruption==='signout'?null:{user:{app_user_id:'other'},identity:{email_verified:true}});e.ui.render()}
+ waiting.resolve(new Blob(['PRIVATE'],{type:'image/jpeg'}));await e.flush();assert.equal(dialog.open,false);assert.equal(dialog.children[2].children.length,0);assert.equal(e.createdUrls.length,0);review.onclick();confirm.onclick();assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+});
+
+test('Read-only Owner Media photos remain readable without any enabled decisions',async()=>{
+ const e=environment();e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:[media],can_write:false});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();await e.flush();const card=e.ids.get('ownerResponseDialog').children[2].children[0];assert.equal(e.photoCalls.length,0);assert.equal(card.children[10].disabled,false);card.children[10].onclick();await e.flush();assert.equal(card.children[9].children.length,1);for(const i of [1,2,3,5])assert.equal(card.children[i].disabled,true);assert.equal(e.calls.length,3);
+});
+
+test('Unavailable legacy Media storage cannot be approved and offers explicit reload',async()=>{
+ const e=environment(),waiting=held();e.photoReplies.push(waiting.promise);const {dialog,card,review,confirm}=await open(e,media);card.children[10].onclick();waiting.resolve({status:400});await e.flush();assert.equal(dialog.children[2].children.length,0);assert.equal(e.ids.get('ownerMediaReload').hidden,false);review.onclick();confirm.onclick();assert.equal(e.calls.length,3);
+});
+
+test('An older Owner list request cannot populate a dismissed or reopened review dialog',async()=>{
+ const e=environment(),waiting=held();e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push(waiting.promise);const pending=e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const dialog=e.ids.get('ownerResponseDialog');dialog.children[4].onclick();waiting.resolve({items:[media],can_write:true});await pending;await e.flush();assert.equal(dialog.open,false);assert.equal(dialog.children[2].children.length,0);assert.equal(e.photoCalls.length,0);
+});
+
+test('Many Owner Media rows fetch nothing automatically and only one selected Claim retains decoded photos',async()=>{
+ const e=environment(),rows=Array.from({length:80},(_,i)=>({...media,id:String(100+i),media_items:Array.from({length:10},(_,j)=>({id:String(1000+i*10+j),mime_type:'image/jpeg'}))}));
+ e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:rows,can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();await e.flush();
+ const dialog=e.ids.get('ownerResponseDialog'),cards=dialog.children[2].children;assert.equal(cards.length,80);assert.equal(e.photoCalls.length,0);assert.equal(e.createdUrls.length,0);
+ cards[0].children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,10);assert.equal(cards[0].children[9].children.length,10);cards[0].children[2].onclick();assert.equal(cards[0].children[3].hidden,false);
+ cards[1].children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,20);assert.equal(cards[0].children[9].children.length,0);assert.equal(cards[0].children[2].disabled,true);assert.equal(cards[0].children[3].hidden,true);assert.equal(cards[1].children[9].children.length,10);assert.equal(e.createdUrls.length-e.revokedUrls.length,10);cards[0].children[3].onclick();assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);dialog.children[4].onclick();assert.deepEqual(e.revokedUrls.sort(),e.createdUrls.sort());
+});
+
+test('Switching the selected Owner Media Claim cancels the old image request and discards its late response',async()=>{
+ const e=environment(),waiting=held(),rows=[media,{...media,id:'24',media_items:[{id:'32',mime_type:'image/jpeg'}]}];e.replies.push(page([{id:'12'}]),page([]));await e.ui.refresh();e.replies.push({items:rows,can_write:true});await e.ids.get('selfGuitars_owned').querySelectorAll('li button')[0].onclick();const cards=e.ids.get('ownerResponseDialog').children[2].children;
+ e.photoReplies.push(waiting.promise);cards[0].children[10].onclick();cards[0].children[10].onclick();assert.equal(e.photoCalls.length,1);assert.equal(e.photoCalls[0].options.signal.aborted,false);cards[1].children[10].onclick();await e.flush();assert.equal(e.photoCalls.length,2);assert.equal(e.photoCalls[0].options.signal.aborted,true);assert.equal(e.createdUrls.length,1);const currentUrl=e.createdUrls[0];
+ waiting.resolve(new Blob(['OLD PRIVATE'],{type:'image/jpeg'}));await e.flush();assert.equal(cards[0].children[9].children.length,0);assert.equal(cards[0].children[2].disabled,true);assert.equal(cards[1].children[9].children.length,1);assert.equal(cards[1].children[2].disabled,false);assert.equal(e.createdUrls.length,1);assert.ok(!e.revokedUrls.includes(currentUrl));
 });

@@ -17,3 +17,5 @@ Ownerの決定経路は[Ownership Decision](OWNERSHIP_DECISION.md)のフロー�
 ## Cloud移植
 
 Specification / Repair / Incidentの本人投稿・編集・無効化とOwner判定への接続は[Cloud Claim投稿・編集](../migration/CLOUD_CLAIMS.md)を参照。ローカル全機能のクラウド移植ではなく、公開データ境界を拡張しない単位。
+
+非公開Media Claimの新規写真投稿・日付／キャプション編集・本人／Current Owner限定配信は[Cloud Media Claim](../migration/CLOUD_MEDIA_CLAIMS.md)を参照。クラウド写真の入力上限はローカル版と異なる。公開ギャラリーへの写真公開は導入していない。

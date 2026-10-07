@@ -32,7 +32,7 @@ def guitar(identifier=GUITAR_ID):
 
 def main():
     names = ['cloud-account-page.js', 'cloud-account-profile.js', 'cloud-account-avatar.js',
-             'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js',
+             'cloud-account-guitars.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js',
              'cloud-account.css', 'cloud-public-catalog.js', 'cloud-public-catalog.css',
              'cloud-auth-loader.js', 'identity-platform-auth.js', 'overlays.js', 'ui-components.css']
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in names}
