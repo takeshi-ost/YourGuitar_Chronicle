@@ -8,6 +8,7 @@
 | クラウド公開カタログ | [移植範囲と公開境界](../migration/CLOUD_PUBLIC_CATALOG.md) | 固定公開項目、Guest閲覧、検索・詳細・Chronicle、Acquire引き継ぎ。未配置checkpoint |
 | クラウドClaim投稿・編集 | [移植範囲と競合・公開境界](../migration/CLOUD_CLAIMS.md) | Specification / Repair / Incident、自分の一覧、Owner判定、無効化。未配置checkpoint |
 | クラウドMedia Claim | [非公開写真の投稿・編集](../migration/CLOUD_MEDIA_CLAIMS.md) | 本人管理、Current Owner判定、固定参照・写真非公開。未配置checkpoint |
+| クラウドIdentity Correction | [本人Listingの専用訂正](../migration/CLOUD_IDENTITY_CORRECTION.md) | 元Listing維持、旧値／新値確認、本人履歴、Maker / Serial重複・競合拒否。未配置checkpoint |
 | 個体・履歴 | [Claim](CLAIMS.md) | 種別、判定・有効性、画像、反応、Snapshot |
 | 登録・所有申請 | [Listing / Acquire](OWNERSHIP_REQUESTS.md) | Challenge、正式画像審議、申請状態、Owner承認 |
 | Owner決定 | [Ownership Decision](OWNERSHIP_DECISION.md) | 記録評価、申請・譲渡・係争、判定権限の連動フロー |

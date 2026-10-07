@@ -132,6 +132,10 @@ def main():
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
+    @app.get('/api/auth/identity-corrections')
+    def identity_corrections():
+        return {'items': [], 'next_after': None, 'can_write': True}
+
     @app.get('/api/auth/ownership-transfers')
     def ownership_transfers(request: Request):
         identity = TestVerifier().verify(bearer_token=request.headers['authorization'].removeprefix('Bearer '))
