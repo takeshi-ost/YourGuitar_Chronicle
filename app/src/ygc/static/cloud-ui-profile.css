@@ -1,0 +1,29 @@
+/* Keep the original User Profile stack and fixed Product Detail. */
+body[data-formal-profile] main{max-width:none;margin:0;padding:calc(var(--header-height,108px) + 14px) calc(clamp(290px,calc(28vw - 30px),400px) + 44px) 22px 22px;background:transparent;border:0;border-radius:0}
+body[data-formal-profile] .grid{display:block}
+#profileColumn{min-width:0;max-width:100%}
+#profileColumn .panel{margin-bottom:16px;overflow-wrap:anywhere}
+#profileColumn .profile-sections{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+#profileColumn a{color:var(--text)}
+#profileColumn :is(input,select,textarea){max-width:100%;min-width:0}
+#profileColumn button{max-width:100%;margin:3px}
+#selfGuitars table{min-width:620px}#selfGuitars :is(td,th){width:auto}
+#profileColumn #selfProfileValues{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:5px 16px}
+#profileColumn #selfProfileValues dd{margin:0;white-space:pre-wrap}
+#profileColumn #selfProfileValues dt{color:var(--muted)}
+#profileColumn :is(h2,#selfGuitars h2){font-size:13px}
+#profileColumn #selfProfile{font-size:12px}
+#profileColumn #selfProfile h2{font-size:18px}
+#profileColumn #cloudAccountForm{max-width:440px}
+#profileColumn .profile-stats{margin-top:14px}
+body[data-formal-profile] dialog{box-sizing:border-box;width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:18px;overflow:auto;overflow-wrap:anywhere}
+body[data-formal-profile] dialog :is(input,textarea,select,button){max-width:100%;min-width:0}
+body[data-formal-profile] dialog :is(input:not([type=checkbox]),select,textarea){width:100%}
+body[data-formal-profile] :is(#claimLatest,#ownershipEvidence,#ownershipSelected,#identityPreview,#disputePreview,.dispute-evidence){background:var(--surface);color:var(--text)}
+body[data-formal-profile] #notificationList li[data-read=false]{background:var(--surface)}
+body[data-formal-profile] #accountSummary{margin:0}
+@media(max-width:900px){body[data-formal-profile] main{margin:0;padding:14px 14px 22px}#profileColumn{width:100%}#profileColumn #selfProfileValues{grid-template-columns:1fr;gap:2px}#profileColumn #selfProfileValues dd{margin-bottom:8px}}
+
+#selfFavorites table{min-width:620px}#selfFavorites :is(td,th){width:auto}#selfFavorites #favoritesList{display:table-row-group}#profileColumn .profile-avatar{flex-shrink:0;width:96px;height:96px;object-fit:cover}#profileColumn .profile-identity{min-width:0;flex:1}
+
+#profileColumn .profile-sections{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11px}#formalProfileRefresh{align-self:flex-start}#selfProfile #avatarPreview{border-radius:50%}

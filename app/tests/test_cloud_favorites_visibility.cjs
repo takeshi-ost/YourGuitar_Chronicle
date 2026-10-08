@@ -7,7 +7,7 @@ const preferences=(extra={})=>({profile_revision:'9007199254740993',fields:{birt
 const success=(favorite=false,id=guitar().id)=>({individual_id:id,favorite});
 const denied=(httpStatus=403,code='account_inactive')=>({httpStatus,code});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
-function environment({kind='favorites',initial=account(),fullPage=false}={}){
+function environment({kind='favorites',initial=account(),fullPage=false,tableLayout=false}={}){
  const ids=new Map(),listeners={};
  class Element{
   constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this._text=''}
@@ -35,7 +35,7 @@ function environment({kind='favorites',initial=account(),fullPage=false}={}){
    if(value instanceof Error)throw value;return value?.httpStatus?{ok:false,status:value.httpStatus,json:async()=>({detail:{code:value.code,message:'SECRET SQL'}})}:{ok:true,json:async()=>value};
   }};
  for(const filename of ['cloud-account-favorites.js','cloud-account-visibility.js'])vm.runInContext(fs.readFileSync(path.join(assets,filename),'utf8').replaceAll('export function','function'),context);
- const args={auth:()=>client,state:()=>client.account,busy:()=>busy,work:async fn=>{busy=true;component?.render();try{return await fn()}finally{busy=false;component?.render()}}};
+ const args={tableLayout,auth:()=>client,state:()=>client.account,busy:()=>busy,work:async fn=>{busy=true;component?.render();try{return await fn()}finally{busy=false;component?.render()}}};
  let ready=Promise.resolve();
  if(fullPage){
   const noOp=()=>({render(){},clear(){cleared.push(true)},refresh:async()=>{},refreshHistory:async()=>{},failed(){},setCatalogIntent(){}});
@@ -89,4 +89,10 @@ test('BFCache account return rechecks canonical identity before refreshing priva
 });
 test('A late BFCache restore after a newer pagehide cannot reload private sections',async()=>{
  const e=environment({fullPage:true});await e.ready;await e.event('pagehide');const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});await e.event('pagehide');const calls=e.calls.length;held.resolve(e.client.account);await show;assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('visibilityValues').children.length,0);assert.equal(e.calls.length,calls);
+});
+
+
+test('Formal Favorite table retains exact private IDs and bounded text without changing ownership',async()=>{
+ const e=environment({tableLayout:true});await e.component.refresh();const list=e.control('favoritesList');assert.equal(list.tagName,'TBODY');assert.equal(list.children[0].tagName,'TR');assert.equal(list.children[0].children.length,5);assert.equal(list.children[0].children[0].children[0].href,'/guitars/9007199254741009');assert.equal(writes(e).length,0);
+ e.sdkSwitch(account('2'));e.component.render();assert.equal(list.children.length,0);
 });

@@ -1,0 +1,46 @@
+/* Adapters only: the existing user-view.css, themes.css and ui-components.css
+   own the wordmarks, two-row header, surfaces, spacing and compact panels. */
+[hidden]{display:none!important}
+.account-hub-actions a{text-decoration:none}
+#accountHub{grid-template-columns:minmax(200px,1fr) auto auto}
+.language-picker{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+.language-picker select{padding:4px;border-radius:6px;font:inherit}
+#catalogList{height:auto;min-height:200px;max-height:calc(100dvh - var(--header-height,108px) - 28px)}
+.catalog-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.catalog-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:11px}
+.catalog-toolbar .search-field{flex:1;min-width:160px}
+.catalog-toolbar select{padding:9px;border-radius:8px;font:inherit}
+#catalogList table{min-width:660px}
+#catalogList :is(th,td){width:auto}
+#catalogList :is(th,td):first-child{width:70px}
+#catalogList td a{color:var(--text);display:block}
+#catalogList .pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:11px}
+#catalogList .status,#catalogDetail .status{background:transparent!important;border-radius:0;padding:0;line-height:1.5}
+#catalogList .status{margin:0 0 10px}
+.detail-scroll{overflow:auto;min-height:0;flex:1;padding-right:4px}
+#catalogBack{font-size:11px;color:var(--text);margin-bottom:8px}
+.detail-image-placeholder{width:75%;aspect-ratio:1.2;background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;margin:0 0 14px}
+#detailTitle{font-size:16px;margin:0 0 6px}
+#detailIdentifier,.muted{font-size:11px;color:var(--muted)}
+.button-link{display:inline-block;border:3px double var(--line);border-radius:8px;padding:6px 9px;margin:2px;color:var(--text);text-decoration:none;font-size:11px}
+.accordion-section{margin:16px 0}.accordion-section>summary{cursor:pointer;font-size:13px;font-weight:700;border-bottom:1px solid var(--line);padding:8px 0}
+#detailSpecifications{margin:8px 0}.catalog-spec-row dt,.catalog-spec-row dd{display:inline;margin:0}.catalog-spec-row dt{font-weight:700;margin-right:5px}
+.chronicle-record{font-size:11px;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.chronicle-record summary{font-weight:700;cursor:pointer}.chronicle-record p{color:var(--muted)}.chronicle-record dl{margin:0}.chronicle-record dd{margin:0 0 6px;overflow-wrap:anywhere}.chronicle-record a{color:var(--text)}
+.chronicle-record.negative{border:0;background:none;padding:0}.chronicle-record.unverified{display:inline-block;padding:4px 8px}
+.notice{white-space:pre-line;background:var(--panel);border:1px solid var(--line);padding:10px;border-radius:8px}
+#catalogFooter{margin:10px 22px;color:var(--muted);font-size:11px}
+#shellSignInDialog{width:min(430px,calc(100vw - 28px));padding:20px;max-height:calc(100dvh - 28px);overflow:auto}
+#shellSignInForm>label{display:block;margin:12px 0 5px}#shellSignInForm>input{width:100%}.modal-actions{display:flex;gap:8px;align-items:center;margin-top:16px}
+@media(max-width:1050px){#accountHub{grid-template-columns:1fr auto}#accountHub>.account-hub-actions:last-child{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:900px){#catalogList{max-height:none;min-height:200px}#accountHub{grid-template-columns:1fr}.detail-shell{max-height:calc(100dvh - 28px)}.language-picker{margin-left:auto}.account-hub-actions{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+/* Members reuse the theme wordmark without the catalog's fixed detail layout. */
+body[data-formal-members] .sticky-header{position:static}
+body[data-formal-members] main{width:calc(100% - 28px);max-width:760px;margin:24px auto;padding:24px}
+@media(max-width:900px){
+  .sticky-header h1{flex-wrap:wrap;max-width:100%}
+  .sticky-header .page-nav{flex-wrap:wrap;overflow:visible}
+  .sticky-header .page-nav .language-picker{margin-left:0}
+}

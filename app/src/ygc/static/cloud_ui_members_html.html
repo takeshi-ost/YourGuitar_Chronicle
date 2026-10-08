@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en" data-theme="sunburst_3ply"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — Members</title>
+<link rel="stylesheet" href="/assets/cloud-members.css">
+<script src="/assets/i18n.js" defer></script><script src="/assets/identity-platform-auth.js" defer></script>
+<script src="/assets/cloud-members.js" type="module"></script><link rel="stylesheet" href="/assets/ui-components.css"><link rel="stylesheet" href="/assets/pages/user-view.css"><link rel="stylesheet" href="/assets/themes.css"><link rel="stylesheet" href="/assets/cloud-ui.css"></head>
+<body data-formal-members="true"><div class="sticky-header"><header><h1><a class="brand-link" href="/ui"><img class="brand-logo brand-logo-script" src="/assets/logos/script.png" alt="Your Guitar Chronicle"><img class="brand-logo brand-logo-block" src="/assets/logos/block.png" alt=""><img class="brand-logo brand-logo-badge" src="/assets/logos/badge.png" alt=""></a></h1><nav class="page-nav" aria-label="Language"></nav></header></div>
+<main><nav class="member-nav"><a href="/ui/profile" data-i18n="members.account">Your account</a><a href="/ui/members" data-member-nav data-i18n="members.title">Members</a><a id="memberSelf" hidden data-member-nav data-i18n="members.self">Your member page</a><button id="memberSignOut" hidden data-i18n="account.sign_out">SignOut</button></nav>
+<p id="memberStatus" role="status" aria-live="polite"></p><p id="memberGuest" hidden><span data-i18n="members.signin">Sign in with a verified account to browse members.</span> <a href="/ui/profile" data-i18n="account.sign_in">Sign In</a></p>
+<button id="memberRefresh" type="button" data-i18n="action.refresh">Refresh</button>
+<section id="memberSearch" hidden><h1 data-i18n="members.title">Members</h1>
+<form id="memberSearchForm"><label for="memberQuery" data-i18n="members.search_label">Display name</label><input id="memberQuery" name="q" maxlength="120" type="search"><button type="submit" data-i18n="members.search">Search</button></form>
+<p id="memberCount"></p><ul id="memberResults" class="people"></ul><nav class="pager"><a id="memberFirst" hidden data-member-nav data-i18n="members.first">First page</a><a id="memberNext" hidden data-member-nav data-i18n="members.next">Next page</a></nav></section>
+<section id="memberProfile" hidden aria-labelledby="memberName"><span id="memberAvatar" class="person-icon large" aria-hidden="true">♙</span><h1 id="memberName"></h1>
+<p data-i18n="members.profile_notice">Names, permitted icons and Follow connections are shown here. Other profile information is not shared on this page.</p>
+<button id="memberFollow" type="button" hidden></button><div class="connections"><button id="memberFollowers" type="button"></button><button id="memberFollowing" type="button"></button></div></section>
+</main><dialog id="memberConnections" aria-labelledby="memberConnectionsTitle"><h2 id="memberConnectionsTitle"></h2><p id="memberConnectionsStatus" role="status"></p><ul id="memberConnectionsList" class="people"></ul><button id="memberMore" type="button" hidden data-i18n="members.more">Load more</button><button id="memberClose" type="button" data-i18n="members.close">Close</button></dialog></body></html>

@@ -18,7 +18,7 @@ export function createClaims({auth,state,busy,work}){
   const root=$('selfClaims'),intentRoot=$('catalogClaimIntent');
   const heading=node('h2',t('claims.heading')),notice=node('p',t('claims.help')),status=node('p','','claimsStatus'),list=node('ul','','claimsList');
   status.setAttribute('role','status');
-  const browse=node('a',t('catalog.select_guitar'));browse.href='/';
+  const browse=node('a',t('catalog.select_guitar'));browse.href=document.body?.dataset?.formalProfile==='true'?'/ui':'/';
   const refreshButton=button('action.refresh','claimsRefresh'),more=button('claims.older','claimsMore');
   root.append(heading,notice,browse,refreshButton,status,list,more);
   const intentHeading=node('h2',t('claims.intent_title'),'catalogClaimTitle'),intentDetail=node('p','','catalogClaimDetail'),intentStatus=node('p','','catalogClaimStatus'),intentLink=node('a',t('catalog.view_guitar'),'catalogClaimLink'),start=button('claims.add','catalogClaimStart');
@@ -92,7 +92,7 @@ export function createClaims({auth,state,busy,work}){
   function render(){
     if(renderedIdentity!==identity()){clear();renderedIdentity=identity()}
     root.hidden=!eligible();intentRoot.hidden=guitarId===null;intentDetail.textContent=summary(guitar);
-    intentLink.href=catalogIndividualId(guitarId)?'/guitars/'+guitarId:'/';intentLink.textContent=t(catalogIndividualId(guitarId)?'catalog.view_guitar':'catalog.browse');
+    intentLink.href=catalogIndividualId(guitarId)?(document.body?.dataset?.formalProfile==='true'?'/ui/profile/guitars/':'/guitars/')+guitarId:(document.body?.dataset?.formalProfile==='true'?'/ui':'/');intentLink.textContent=t(catalogIndividualId(guitarId)?'catalog.view_guitar':'catalog.browse');
     const hint=lookupState==='loading'?'catalog.acquire_loading':guitarId===''?'catalog.acquire_invalid':!guitar?'catalog.acquire_unavailable':!state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite===true?'claims.ready':canWrite===false?'applications.read_only':'applications.access_unavailable';
     intentStatus.textContent=t(hint);start.disabled=busy()||!writable();refreshButton.disabled=busy()||!catalogIndividualId(guitarId);more.hidden=nextAfter===null;more.disabled=busy()||!eligible();
     const active=!selected||selected.status==='active',spec=['specification','repair'].includes(kind.value),isMedia=kind.value==='media',isEvent=kind.value==='event',hasMedia=isMedia||isEvent;
