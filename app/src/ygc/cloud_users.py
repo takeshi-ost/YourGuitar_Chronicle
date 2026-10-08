@@ -116,7 +116,7 @@ class CloudUsers:
                     'fields': visibility_fields(account)}
 
     def edit_own_visibility(self, actor, body):
-        """Save preferences for the locked self only; this publishes nothing."""
+        """Save preferences for the locked self; avatar reads enforce these settings."""
         import json, uuid
         from ygc.cloud_profile import validate_visibility, visibility_fields, ProfileConflict
         from ygc.db.postgres_accounts import now

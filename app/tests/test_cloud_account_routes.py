@@ -162,6 +162,18 @@ def test_cloud_page_is_explicit_and_config_matches_verifier(monkeypatch):
         config = client.get('/api/auth/config').json()
         assert config['firebase']['projectId'] == 'test-project' and config['tenant'] == 'test-tenant'
         assert client.get('/account').status_code == 200
+        for path in ('/members', '/members/2'):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.headers['cache-control'] == 'no-store'
+            assert 'id="memberSearch" hidden' in response.text
+        assert client.get('/members/01').status_code == 404
+        for path in ('/api/auth/members', '/api/auth/members/2',
+                     '/api/auth/members/2/connections/followers'):
+            assert client.get(path).status_code == 401
+        assert client.put('/api/auth/members/2/following', json={'following': True}).status_code == 401
+        assert client.get('/assets/cloud-members.js').status_code == 200
+        assert client.get('/assets/cloud-members.css').status_code == 200
         assert client.get('/assets/cloud-auth-loader.js').status_code == 200
         assert client.get('/assets/i18n.js').status_code == 200
         assert client.get('/assets/local-auth.js').status_code == 404

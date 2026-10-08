@@ -70,6 +70,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app.include_router(user_router(verifier,CloudUsers(settings,operations)))
     from ygc.cloud_self_profile_routes import self_profile_router
     app.include_router(self_profile_router(verifier,CloudUsers(settings,operations)))
+    from ygc.cloud_follows import CloudFollows
+    from ygc.cloud_follow_routes import follow_router
+    app.include_router(follow_router(verifier, CloudFollows(settings, operations, storage)))
     from ygc.cloud_favorites import CloudFavorites
     from ygc.cloud_favorite_routes import favorite_router
     app.include_router(favorite_router(verifier,CloudFavorites(settings,operations)))

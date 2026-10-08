@@ -258,3 +258,5 @@ if __name__ == '__main__':
 
         from postgres_profile_visibility_checks import run as profile_visibility_checks
         profile_visibility_checks(port)
+        from postgres_follow_checks import run as follow_checks
+        follow_checks(port)

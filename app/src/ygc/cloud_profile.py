@@ -44,8 +44,8 @@ def validate_visibility(body):
 def visibility_fields(account):
     """Unknown legacy values are unset in the DTO, never normalized in storage.
 
-    Schema defaults are saved preferences, not proof of consent to publish.
-    No public profile or image access decision may be derived from this DTO.
+    The member-avatar service checks the canonical stored avatar visibility.
+    Other fields remain preferences, not a grant to publish profile data.
     """
     return {key: account[key] if account[key] in VISIBILITY_VALUES else None
             for key in VISIBILITY_FIELDS}
