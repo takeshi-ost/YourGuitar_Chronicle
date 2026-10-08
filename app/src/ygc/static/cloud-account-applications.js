@@ -14,7 +14,7 @@ export function createApplications({auth,state,busy,work}){
   const heading=node('h2',t('applications.heading')),notice=node('p',t('applications.staging')),status=node('p'),list=node('ul');status.setAttribute('role','status');
   const accessNotice=node('p'),accessDetail=node('p');accessNotice.setAttribute('role','status');accessDetail.setAttribute('role','status');
   const add=button('applications.listing','applicationListing'),acquire=node('a',t('catalog.select_guitar')),refreshButton=button('action.refresh');
-  acquire.id='applicationAcquire';acquire.href='/';
+  acquire.id='applicationAcquire';acquire.href=document.body?.dataset?.formalProfile==='true'?'/ui':'/';
   const intentRoot=document.getElementById('catalogAcquireIntent')||node('section'),intentHeading=node('h2',t('catalog.acquire_title')),
     intentDetail=node('p'),intentStatus=node('p'),intentLink=node('a',t('catalog.view_guitar')),intentStart=button('catalog.acquire_start','catalogAcquireStart');
   intentDetail.id='catalogAcquireDetail';intentStatus.id='catalogAcquireStatus';intentStatus.setAttribute('role','status');
@@ -66,7 +66,7 @@ export function createApplications({auth,state,busy,work}){
     if(!eligible())clear();
     intentRoot.hidden=catalogId===null;
     intentDetail.textContent=catalogGuitar?[catalogGuitar.manufacturer,catalogGuitar.model,catalogGuitar.serial_number,catalogGuitar.finish,catalogGuitar.year,catalogGuitar.id].filter(v=>v!==null&&v!=='').join(' · '):'';
-    intentLink.href=catalogIndividualId(catalogId)?'/guitars/'+catalogId:'/';
+    intentLink.href=catalogIndividualId(catalogId)?(document.body?.dataset?.formalProfile==='true'?'/ui/profile/guitars/':'/guitars/')+catalogId:(document.body?.dataset?.formalProfile==='true'?'/ui':'/');
     intentLink.textContent=t(catalogIndividualId(catalogId)?'catalog.view_guitar':'catalog.browse');
     const hint=catalogState==='loading'?'catalog.acquire_loading':catalogState==='invalid'?'catalog.acquire_invalid':!catalogGuitar?'catalog.acquire_unavailable':
       !state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite!==true?(canWrite===false?'applications.read_only':'applications.access_unavailable'):'catalog.acquire_ready';

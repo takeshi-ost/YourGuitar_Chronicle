@@ -13,12 +13,13 @@ import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
-let auth,policies,mode='signin',busy=false,state=null,pageSuspended=false,sessionEpoch=0;
-const favorites=createFavorites({auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
+let auth,policies,mode='signin',busy=false,state=null,pageSuspended=false,sessionEpoch=0,formalView=null;
+const formalProfile=document.body?.dataset?.formalProfile==='true',formalTotals={};
+const favorites=createFavorites({tableLayout:formalProfile,guitarHref:formalProfile?id=>'/ui/profile/guitars/'+id:undefined,onNavigate:formalProfile?id=>formalView?.openGuitar(id):undefined,auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
 const visibility=createVisibility({auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
 const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
-const guitars=createGuitars({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
+const guitars=createGuitars({tableLayout:formalProfile,onSelect:formalProfile?id=>formalView?.openGuitar(id):undefined,onTotal:(kind,total)=>{formalTotals[kind]=total;formalView?.render()},auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
 const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
@@ -27,7 +28,7 @@ const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:
 const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
 let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search),ownershipIntent=readOwnershipIntent(location.search);
 applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);
-globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
+globalThis.addEventListener('popstate',()=>{if(formalProfile&&!busy)void avatarAction(loadAvatar);acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -52,7 +53,7 @@ function render(){
   $('submit').removeAttribute('data-i18n');
   for(const id of ['submit','showSignIn','showRegistration'])$(id).disabled=busy||!auth||!policies;
   $('signOut').disabled=busy||!auth;
-  favorites.render();visibility.render();avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();disputes.render();
+  favorites.render();visibility.render();avatar.render();profile.render();guitars.render();applications.render();claims.render();ownership.render();identityCorrections.render();notifications.render();disputes.render();formalView?.render();
 }
 async function documents(){
   policies=null;
@@ -60,7 +61,7 @@ async function documents(){
   $('terms').checked=$('privacy').checked=false;
 }
 function clearPrivateAccount({preserveRetryMarkers=false}={}){
-  favorites.clear();visibility.clear();avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear({preserveRetryMarkers});notifications.clear();disputes.clear();
+  formalView?.clear();favorites.clear();visibility.clear();avatar.clear();profile.clear();guitars.clear();applications.clear();claims.clear();ownership.clear();identityCorrections.clear({preserveRetryMarkers});notifications.clear();disputes.clear();
 }
 function suspendAccount(){
   // Navigation is not sign-out. Purge private views and invalidate async work,
@@ -154,6 +155,7 @@ async function loadAvatar(){
   if(state?.user&&state.identity?.email_verified===true){
     try{await avatar.refresh()}catch(error){avatar.failed(error)}
   }
+  if(state?.user&&state.identity?.email_verified===true)await formalView?.refresh();
 }
 async function avatarAction(work){
   if(busy)return;busy=true;render();
@@ -170,6 +172,10 @@ globalThis.addEventListener('pageshow',async event=>{
 $('avatarForm').onsubmit=event=>{event.preventDefault();avatarAction(()=>avatar.save($('avatarFile').files[0]))};
 $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
+if(formalProfile){
+  const {createFormalProfileView}=await import('./cloud-ui-profile.js');
+  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,refreshAccount:()=>avatarAction(async()=>{update(await auth.restore(),true);await loadAvatar()})});
+}
 try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{update(null);$('status').textContent=t('cloud.session_changed')});await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(loadAvatar)}
 catch(error){$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');

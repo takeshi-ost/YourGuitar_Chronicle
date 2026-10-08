@@ -21,12 +21,14 @@ export function createProfile({auth,state,busy,work,updated}){
   }
   async function refresh(){
     const current=++epoch;profile=null;$('selfProfileEdit').disabled=true;
+    try{
     const response=await auth().authorizedFetch('/api/auth/profile',{},true);
     if(!response.ok)throw Object.assign(Error('Profile unavailable'),{status:response.status});
     const data=await response.json();if(current!==epoch||!eligible())return;
     profile=data;$('selfProfileValues').replaceChildren();
     for(const key of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('users.field_'+key);dd.textContent=data.fields[key]||'—';$('selfProfileValues').append(dt,dd)}
     $('selfProfileStatus').textContent='';render();
+    }catch(error){if(current!==epoch||!eligible())return;throw error}
   }
   function failed(error){
     profile=null;globalThis.YGCOverlays.close(dialog);$('selfProfileValues').replaceChildren();
@@ -43,12 +45,13 @@ export function createProfile({auth,state,busy,work,updated}){
   form.onsubmit=event=>{
     event.preventDefault();if(busy()||!pending)return;
     const body={revision:pending.revision,fields:Object.fromEntries(fields.map(key=>[key,inputs[key].value]))};
-    const owner=state()?.user?.app_user_id;globalThis.YGCOverlays.close(dialog);
+    const owner=state()?.user?.app_user_id,current=epoch;globalThis.YGCOverlays.close(dialog);
     work(async()=>{
       try{
         const response=await auth().authorizedFetch('/api/auth/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},true);
         if(!response.ok)throw Object.assign(Error('Save failed'),{status:response.status});
-        await updated();await refresh();if(eligible())$('selfProfileStatus').textContent=t('users.profile_saved');
+        if(current!==epoch||owner!==state()?.user?.app_user_id||!eligible())return;
+        await updated();if(current!==epoch||owner!==state()?.user?.app_user_id||!eligible())return;await refresh();if(owner===state()?.user?.app_user_id&&eligible())$('selfProfileStatus').textContent=t('users.profile_saved');
       }catch(error){
         if(owner!==state()?.user?.app_user_id||!eligible())return;
         profile=null;render();$('selfProfileStatus').textContent=t(error.status===403?'self_profile.restricted':error.status===409?'users.profile_conflict':error.status===400?'users.profile_invalid':'users.profile_unavailable');

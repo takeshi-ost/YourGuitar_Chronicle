@@ -50,6 +50,8 @@ def main():
                 cloud_admin_applications()
                 from browser_cloud_public_catalog import main as cloud_public_catalog
                 cloud_public_catalog()
+                from browser_cloud_formal_ui import main as cloud_formal_ui
+                cloud_formal_ui()
                 from browser_cloud_claim_posting import main as cloud_claim_posting
                 cloud_claim_posting()
                 from browser_cloud_media_claims import main as cloud_media_claims

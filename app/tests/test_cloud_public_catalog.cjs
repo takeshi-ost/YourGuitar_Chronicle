@@ -8,7 +8,7 @@ const response=(body,status=200)=>({ok:status>=200&&status<300,status,json:async
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
 const tick=async()=>{for(let i=0;i<6;i++)await new Promise(resolve=>setImmediate(resolve))};
 
-function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2)],signedIn=false,loadError=null,restoreError=null,locale='en'}={}){
+function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2)],signedIn=false,loadError=null,restoreError=null,locale='en',presentation={}}={}){
   const ids=new Map();
   class Element{
     constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.attributes={};this.value='';this.hidden=false;this.disabled=false;this.open=false;this._text='';}
@@ -49,11 +49,12 @@ function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2
     }
     throw Error('Unexpected request '+call.url);
   }
-  e.auth={signedIn,account:signedIn?{user:{app_user_id:'uuid-1',role:'user'},identity:{email_verified:true}}:null,restore:async()=>{e.restores++;if(e.restoreError)throw e.restoreError;return e.auth.account},authorizedFetch:(url,options)=>dispatch('authorized',url,options)};
+  e.auth={onIdentityChanged:listener=>{e.identityChanged=listener;return ()=>{}},signedIn,account:signedIn?{user:{app_user_id:'uuid-1',role:'user'},identity:{email_verified:true}}:null,restore:async()=>{e.restores++;if(e.restoreError)throw e.restoreError;return e.auth.account},authorizedFetch:(url,options)=>dispatch('authorized',url,options)};
   const context=vm.createContext({document,window,URL,URLSearchParams,AbortController,loadCloudAuth:async()=>{},console});
   vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-favorites.js'),'utf8').replaceAll('export function','function'),context);
   vm.runInContext(source.replace(/^import .*;\n/gm,'').replace('export function','function').split('// Readiness is')[0]+';globalThis.createCatalog=createPublicCatalog;',context);
-  e.ui=context.createCatalog({document,window,request:(url,options)=>dispatch('anonymous',url,options),loadAuth:async()=>{e.loads++;if(e.loadError)throw e.loadError;return e.auth}});
+  e.ui=context.createCatalog({...presentation,document,window,request:(url,options)=>dispatch('anonymous',url,options),loadAuth:async()=>{e.loads++;if(e.loadError)throw e.loadError;return e.auth}});
+  e.emit=(name,event={})=>listeners.get(name)?.(event);
   e.publicCalls=()=>e.calls.filter(call=>call.path.startsWith('/api/public/'));
   e.links=()=>ids.get('catalogRows').all().filter(node=>node.tag==='a');
   e.click=(node,extra={})=>node.onclick({button:0,preventDefault(){},...extra});
@@ -242,4 +243,44 @@ test('Public favorite action preserves authorized context and exposes no public 
  const e=environment({url:'https://catalog.example/guitars/1',signedIn:true});await e.ui.start();await tick();const writes=[];
  e.handler=call=>{if(call.options.method==='PUT'){writes.push(call);return response({individual_id:'1',favorite:true})}};
  await e.ids.get('favoriteToggle').onclick();assert.equal(writes.length,1);assert.equal(writes[0].kind,'authorized');assert.equal(writes[0].path,'/api/auth/favorites/1');assert.equal(writes[0].options.body,'{"favorite":true}');assert.equal(e.ids.get('favoriteToggle').attributes['aria-pressed'],'true');assert.equal(e.ids.get('detailFavorite').all().filter(n=>n.id==='favoritesCount'||n.id==='favoritesList').length,0);
+});
+
+
+test('Formal entry preserves its route namespace, bounded public DTO and existing account intents',async()=>{
+  const e=environment({url:'https://catalog.example/ui?q=Fender',presentation:{basePath:'/ui',listStyle:'table'}});
+  await e.ui.start();assert.equal(e.ids.get('catalogRows').children[0].tag,'tr');
+  assert.ok(e.links().every(link=>link.href.startsWith('/ui/guitars/')));
+  await e.click(e.links()[0]);assert.match(e.window.location.pathname,/^\/ui\/guitars\//);
+  assert.match(e.ids.get('acquireLink').href,/^\/account\?acquire=/);
+  await e.window.history.back();assert.equal(e.window.location.pathname,'/ui');
+  assert.ok(e.publicCalls().every(call=>call.path.startsWith('/api/public/guitars')));
+});
+
+test('Identity switch immediately clears catalog and invalidates held responses until explicit refresh',async()=>{
+  const e=environment({url:'https://catalog.example/ui/guitars/1',signedIn:true,presentation:{basePath:'/ui'}});
+  await e.ui.start();const hold=deferred();e.handler=call=>call.path==='/api/public/guitars'?hold.promise:undefined;
+  const pending=e.ui.refresh();await tick();e.auth.account=null;e.identityChanged();
+  assert.equal(e.links().length,0);assert.equal(e.ids.get('detailContent').hidden,true);
+  hold.resolve(response({items:e.guitars,total:'2',page:1,page_size:24,total_pages:1}));await pending;
+  assert.equal(e.links().length,0);assert.equal(e.ids.get('detailContent').hidden,true);
+  e.handler=null;await e.ui.refresh();assert.equal(e.links().length,2);
+});
+
+
+test('Page suspension clears rendered content before BFCache restore rechecks the session',async()=>{
+  const e=environment({url:'https://catalog.example/ui/guitars/1',signedIn:true,presentation:{basePath:'/ui'}});
+  await e.ui.start();assert.equal(e.ids.get('detailContent').hidden,false);
+  e.emit('pagehide');assert.equal(e.links().length,0);assert.equal(e.ids.get('detailContent').hidden,true);
+  e.restoreError=Object.assign(Error('Revoked'),{status:401});await e.emit('pageshow',{persisted:true});
+  assert.equal(e.links().length,0);assert.equal(e.ids.get('detailContent').hidden,true);
+});
+
+
+test('Formal self profile detail keeps intents internal without fetching an unrelated public list',async()=>{
+ const e=environment({url:'https://catalog.example/ui/profile/guitars/1',signedIn:true,presentation:{basePath:'/ui/profile',accountPath:'/ui/profile',detailOnly:true}});
+ await e.ui.start();assert.equal(e.ids.get('detailContent').hidden,false);
+ assert.equal(e.ids.get('acquireLink').href,'/ui/profile?acquire=1');assert.equal(e.ids.get('addClaimLink').href,'/ui/profile?claim=1');assert.equal(e.ids.get('ownershipLink').href,'/ui/profile?ownership=1');
+ assert.equal(e.calls.filter(c=>c.path==='/api/public/guitars').length,0);
+ await e.ui.navigate('/ui/profile/guitars/2');await e.window.history.back();assert.match(e.ids.get('detailTitle').textContent,/Model 1/);
+ e.auth.account=null;e.identityChanged();assert.equal(e.ids.get('detailContent').hidden,true);assert.equal(e.ids.get('favoriteToggle').hidden,true);
 });

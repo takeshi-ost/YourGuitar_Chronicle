@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" data-theme="sunburst_3ply">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Guitar Chronicle — Public catalog</title>
+<link rel="stylesheet" href="/assets/cloud-account.css"><link rel="stylesheet" href="/assets/ui-components.css">
+<link rel="stylesheet" href="/assets/pages/user-view.css">
+<link rel="stylesheet" href="/assets/themes.css">
+<link rel="stylesheet" href="/assets/cloud-ui.css">
+<script src="/assets/overlays.js" defer></script>
+<script src="/assets/identity-platform-auth.js" defer></script>
+<script src="/assets/i18n.js" defer></script><script src="/assets/cloud-account-page.js" type="module"></script>
+<link rel="stylesheet" href="/assets/cloud-ui-profile.css"></head>
+<body class="profile-mode" data-formal-profile="true" data-catalog-autostart="false">
+<div class="sticky-header">
+<header><h1><a class="brand-link" href="/ui" aria-label="Your Guitar Chronicle — Top Page"><img class="brand-logo brand-logo-script" src="/assets/logos/script.png" alt="Your Guitar Chronicle"><img class="brand-logo brand-logo-block" src="/assets/logos/block.png" alt=""><img class="brand-logo brand-logo-badge" src="/assets/logos/badge.png" alt=""></a><span class="sub" id="shellTitle">Top Page</span></h1>
+<nav class="page-nav" aria-label="Top Page sections"><a href="#catalogList" id="shellProducts">Products</a><a href="/members" id="shellMembers">Members</a><label class="language-picker"><span id="languageLabel">Language</span><select data-language-picker id="catalogLanguage" aria-label="Language"><option value="en">English</option><option value="ja">日本語</option></select></label></nav></header>
+<div class="account-hub" id="accountHub"><div class="account-hub-user"><div class="account-hub-guest-mark" aria-hidden="true">YGC</div><span class="account-hub-name" id="shellIdentity" role="status"></span></div>
+<div id="shellAccountLinks" class="account-hub-actions" hidden><a class="account-hub-action" id="shellProfile" href="/ui/profile">Your profile</a><a class="account-hub-action" id="shellNotifications" href="/ui/profile#selfNotifications">Notifications</a></div>
+<div class="account-hub-actions"><a id="accountLink" class="account-hub-action" href="/account">Your account</a><button id="shellSignIn" class="account-hub-action" type="button" disabled>Sign In</button><button id="shellSignOut" class="account-hub-action" type="button" hidden>SignOut</button></div></div></div>
+<main id="publicCatalog">
+<div class="intro" hidden><p class="eyebrow" id="catalogEyebrow">The stories behind the instruments</p><h1 id="catalogTitle">All Discovered Guitars</h1><p id="catalogDescription">Explore guitar specifications and their public Chronicle.</p></div>
+<p id="shellStatus" class="notice" role="status" hidden></p>
+<p id="serviceNotice" class="notice" role="status" hidden></p>
+<p id="authNotice" class="notice" role="status" hidden></p>
+<div id="catalogLayout" class="grid" data-detail-open="false">
+<div id="profileColumn" class="left-column content-frame">
+
+
+<section id="catalogAcquireIntent" hidden></section>
+<section id="catalogClaimIntent" hidden></section>
+<section id="catalogOwnershipIntent" hidden></section>
+
+<p data-i18n="cloud.credentials_notice">Your email and password are sent to Google for authentication.</p>
+<div id="authActions"><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
+<p id="accountSummary" hidden></p>
+<p id="consoleLink" hidden><a href="/console" data-i18n="ui.browser_console_bc10c95d">Browser Console</a></p>
+<button id="signOut" type="button" hidden data-i18n="account.sign_out">SignOut</button>
+<section id="emailVerification" hidden aria-labelledby="verificationStatus">
+<p id="verificationStatus"></p>
+<button id="sendVerification" type="button" data-i18n="cloud.verify_email">Send verification email</button>
+<button id="refreshVerification" type="button" data-i18n="cloud.refresh_verification">Check verification status</button>
+</section>
+<section id="selfDisputes" hidden></section>
+<section id="selfNotifications" hidden></section>
+<section id="selfFavorites" hidden></section>
+<section id="selfVisibility" hidden></section>
+<section id="selfProfile" hidden>
+<h2 data-i18n="self_profile.heading">Your profile</h2><dl id="selfProfileValues"></dl>
+<button id="selfProfileEdit" type="button" disabled data-i18n="users.edit_profile">Edit profile</button>
+<button id="selfProfileRefresh" type="button" data-i18n="action.refresh">Refresh</button>
+<p id="selfProfileStatus" role="status"></p>
+</section>
+<section id="selfGuitars" hidden></section>
+<section id="selfOwnership" hidden></section>
+<section id="selfApplications" hidden></section>
+<section id="selfClaims" hidden></section>
+<section id="selfIdentityCorrections" hidden></section>
+<section id="accountAvatar" hidden>
+<h2 data-i18n="avatar.heading">Account image</h2><img id="avatarPreview" hidden alt="Account image" data-i18n-alt="avatar.heading" width="128" height="128">
+<form id="avatarForm"><label for="avatarFile" data-i18n="avatar.choose">Choose an image</label><input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp">
+<p data-i18n="avatar.limits">JPEG, PNG or WebP, up to 8 MiB and 8 million pixels.</p>
+<button id="avatarUpload" type="submit" data-i18n="avatar.save">Save image</button><button id="avatarRemove" type="button" disabled data-i18n="avatar.remove">Remove image</button><button id="avatarRefresh" type="button" data-i18n="action.refresh">Refresh</button></form><p id="avatarStatus" role="status"></p>
+</section>
+<form id="cloudAccountForm">
+  <fieldset id="credentialsFields">
+    <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>
+    <label for="password" data-i18n="ui.password_e7cf3ef4">Password</label><input id="password" type="password" autocomplete="current-password" required>
+  </fieldset>
+  <fieldset id="profileFields" hidden>
+    <label for="displayName" data-i18n="ui.display_name_required_88a65705">Display Name · Required</label><input id="displayName" maxlength="120">
+    <label for="accountType" data-i18n="ui.account_type_dce81c5b">Account Type</label>
+    <select id="accountType"><option value="user" data-i18n="ui.user_b512d97e">User</option><option value="shop" data-i18n="ui.shop_d00aae6b">Shop</option><option value="builder" data-i18n="ui.builder_090940e7">Builder</option><option value="repairer" data-i18n="ui.repairer_c379163b">Repairer</option><option value="organization" data-i18n="ui.organization_d764d425">Organization</option></select>
+    <p><label class="agreement"><input id="terms" type="checkbox"><span data-i18n="cloud.agree_terms">I agree to the Terms.</span></label> <button id="viewTerms" type="button" data-i18n="cloud.view_terms">View Terms</button></p>
+    <p><label class="agreement"><input id="privacy" type="checkbox"><span data-i18n="cloud.agree_privacy">I agree to the Privacy notice.</span></label> <button id="viewPrivacy" type="button" data-i18n="cloud.view_privacy">View Privacy notice</button></p>
+  </fieldset>
+  <button id="submit" type="submit" data-ui-action="primary" disabled data-i18n="account.sign_in">Sign In</button>
+</form>
+<p id="status" role="status" aria-live="polite" data-i18n="cloud.loading">Loading authentication...</p>
+</div><section hidden id="catalogList" class="panel product-list-panel content-frame page-section" aria-labelledby="listHeading">
+<div class="toolbar"><h2 id="listHeading" tabindex="-1">Guitar catalog</h2><button type="button" id="catalogRefresh">Refresh</button></div>
+<form id="catalogSearchForm" class="catalog-toolbar" role="search">
+<label class="search-field"><span id="searchLabel">Search guitars</span><input id="catalogSearch" type="search" maxlength="120" placeholder="Maker, model or serial" autocomplete="off"></label>
+<label><span id="sortLabel">Sort</span><select id="catalogSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="maker">Maker</option><option value="model">Model</option></select></label>
+<button id="catalogSearchSubmit" type="submit">Search</button>
+</form>
+<p id="catalogStatus" class="status" role="status" aria-live="polite"></p>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th id="columnMaker">Maker</th><th id="columnModel">Model</th><th id="columnFinish">Finish</th><th id="columnYear">Year</th><th id="columnSerial">Serial</th></tr></thead><tbody id="catalogRows"></tbody></table></div>
+<nav id="catalogPagination" class="pagination" aria-label="Catalog pages"><button type="button" id="catalogPrevious" disabled>Previous</button><span id="catalogPage"></span><button type="button" id="catalogNext" disabled>Next</button></nav>
+</section>
+<aside id="productDetailShell" class="detail-shell"><section id="catalogDetail" class="panel detail-panel product-detail" aria-labelledby="detailHeading">
+<div class="detail-panel-heading"><h2 id="detailHeading" tabindex="-1">Product Detail</h2><a id="catalogBack" href="/" hidden>Back to catalog</a></div>
+<div class="detail-scroll"><p id="detailStatus" class="status" role="status" aria-live="polite">Choose a guitar to explore its story.</p>
+<article id="detailContent" hidden>
+<div id="detailPhoto" class="detail-image-placeholder" role="img" aria-label="Photo unavailable"><span id="photoPlaceholder">Photo unavailable</span></div>
+<div class="detail-header"><h3 id="detailTitle"></h3><p id="detailIdentifier" class="muted"></p><a id="acquireLink" class="button-link" href="/account">Acquire</a><a id="addClaimLink" class="button-link" href="/account">Add Claim</a><a id="ownershipLink" class="button-link" href="/account">Transfer / Release</a><p id="ownershipDescription" class="muted">Current owners can propose a Transfer or record a Release from their account.</p><p id="addClaimDescription" class="muted">Record a specification, repair or incident from your account.</p><p id="acquireDescription" class="muted">Continue to your account to make an ownership application.</p></div>
+<section id="detailFavorite" hidden aria-label="Your private favorite"></section>
+<details class="accordion-section" id="specificationAccordion" open><summary id="specificationHeading">Specification</summary><dl id="detailSpecifications" class="catalog-spec"></dl></details>
+<details class="accordion-section" id="chronicleAccordion" open><summary id="chronicleHeading">Chronicle</summary><p id="chronicleOrder" class="muted">Latest recorded first</p><p id="chronicleStatus" class="status" role="status"></p><div id="chronicleEntries"></div><button type="button" id="chronicleMore" hidden>Load more</button></details>
+</article></div>
+</section></aside>
+</div>
+<noscript>This catalog requires JavaScript to load public guitar records. / 公開ギター情報の表示にはJavaScriptが必要です。</noscript>
+</main>
+<dialog id="shellSignInDialog" aria-labelledby="shellSignInTitle"><form id="shellSignInForm"><h2 id="shellSignInTitle">Sign In</h2><p id="shellCredentialsNotice">Your email and password are sent to Google for authentication.</p><label id="shellEmailLabel" for="shellEmail">Email</label><input id="shellEmail" type="email" autocomplete="username" required><label id="shellPasswordLabel" for="shellPassword">Password</label><input id="shellPassword" type="password" autocomplete="current-password" required><p id="shellLoginStatus" role="status"></p><div class="modal-actions"><button id="shellSubmit" data-ui-action="primary" type="submit">Sign In</button><button id="shellCancel" data-ui-action="close" type="button">Cancel</button><a id="shellRegister" href="/account">Create Account</a></div></form></dialog>
+<footer id="catalogFooter">Your Guitar Chronicle · Public catalog</footer>
+<dialog id="policyDialog" aria-labelledby="policyTitle"><h2 id="policyTitle"></h2><div id="policyContent"></div><button id="closePolicy" type="button" data-ui-action="close" data-i18n="action.close">Close</button></dialog>
+</body>
+</html>

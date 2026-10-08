@@ -15,13 +15,13 @@ async function favoriteRequest(auth,path,options={}){
 function favoriteResult(value,id){if(!favoriteExact(value,['individual_id','favorite'])||value.individual_id!==id||typeof value.favorite!=='boolean')throw Error('Invalid favorite result');return value.favorite}
 function favoriteError(error){return error.code==='service_restricted'?'favorites.restricted':[401,403].includes(error.status)?'favorites.session':error.status===404?'favorites.missing':'favorites.failed'}
 
-export function createFavorites({auth,state,busy,work}){
+export function createFavorites({auth,state,busy,work,tableLayout=false,guitarHref=id=>'/guitars/'+id,onNavigate}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params),root=document.getElementById('selfFavorites');
   const node=(tag,text='',id='')=>{const n=document.createElement(tag);n.textContent=text;if(id)n.id=id;return n};
   const button=(key,id)=>{const n=node('button',t(key),id);n.type='button';return n};
-  const heading=node('h2',t('favorites.heading'),'favoritesHeading'),status=node('p','','favoritesStatus'),count=node('p','','favoritesCount'),list=node('ul','','favoritesList');
+  const heading=node('h2',t('favorites.heading'),'favoritesHeading'),status=node('p','','favoritesStatus'),count=node('p','','favoritesCount'),list=node(tableLayout?'tbody':'ul','','favoritesList');
   const refreshButton=button('action.refresh','favoritesRefresh'),previous=button('users.previous','favoritesPrevious'),next=button('users.next','favoritesNext');
-  root.setAttribute('aria-labelledby',heading.id);status.setAttribute('role','status');root.append(heading,node('p',t('favorites.private_notice')),count,refreshButton,status,list,previous,next);
+  root.setAttribute('aria-labelledby',heading.id);status.setAttribute('role','status');root.append(heading,node('p',t('favorites.private_notice')),count,refreshButton,status);if(tableLayout){const wrap=node('div'),table=node('table'),head=node('thead'),row=node('tr');wrap.className='table-wrap';for(const key of ['ui.maker_287f4955','ui.model_5e2c614c','ui.finish_a6c7a84b','ui.year_89f68325','ui.serial_8ea09493'])row.append(node('th',t(key)));head.append(row);table.append(head,list);wrap.append(table);root.append(wrap)}else root.append(list);root.append(previous,next);
   let identity=favoriteIdentity(state()),epoch=0,history=[null],nextAfter=null,total=null,notice='',loading=false;
   const eligible=()=>favoriteEligible(state())&&auth()?.signedIn!==false;
   function clear(){epoch++;history=[null];nextAfter=total=null;notice='';loading=false;list.replaceChildren();count.textContent=status.textContent='';root.hidden=true;identity=favoriteIdentity(state())}
@@ -35,7 +35,7 @@ export function createFavorites({auth,state,busy,work}){
       for(const [index,row] of data.items.entries())if(!favoriteExact(row,['id',...favoriteFields,'photo'])||!favoriteId(row.id)||row.photo!==null||favoriteFields.some(key=>!favoriteText(row[key]))||after!==null&&BigInt(row.id)>=BigInt(after)||index>0&&BigInt(data.items[index-1].id)<=BigInt(row.id))throw Error('Invalid favorite guitar');
       if(data.next_after!==null&&(!data.items.length||data.items.at(-1).id!==data.next_after))throw Error('Invalid favorites cursor');
       history=[...path];nextAfter=data.next_after;total=data.total;
-      for(const row of data.items){const item=node('li'),link=node('a',[row.manufacturer,row.model].filter(Boolean).join(' ')||t('favorites.guitar',{id:row.id}));item.dataset.favoriteId=row.id;link.href='/guitars/'+row.id;item.append(link,node('p',[row.year,row.finish,row.serial_number].filter(Boolean).join(' · ')));list.append(item)}
+      for(const row of data.items){const item=node(tableLayout?'tr':'li'),link=node('a',[row.manufacturer,row.model].filter(Boolean).join(' ')||t('favorites.guitar',{id:row.id}));item.dataset.favoriteId=row.id;link.href=guitarHref(row.id);if(onNavigate)link.onclick=event=>{if(event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();onNavigate(row.id)};if(tableLayout){const first=node('td');link.textContent=row.manufacturer||'—';first.append(link);item.append(first);for(const value of [row.model,row.finish,row.year,row.serial_number])item.append(node('td',value??'—'))}else item.append(link,node('p',[row.year,row.finish,row.serial_number].filter(Boolean).join(' · ')));list.append(item)}
       notice=data.items.length?'':t('favorites.empty');
     }catch(error){if(current!==epoch||owner!==favoriteIdentity(state())||!eligible())return;list.replaceChildren();total=nextAfter=null;history=[null];notice=t(favoriteError(error))}
     finally{if(current===epoch){loading=false;render()}}

@@ -89,7 +89,8 @@ const validId=value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&
 const valueText=value=>typeof value==='string'&&value.length?value:'—';
 const safeSource=value=>typeof value==='string'&&value===value.trim()&&/^https:\/\/reverb\.com\/item\/[1-9][0-9]{0,19}$/.test(value)?value:null;
 
-export function createPublicCatalog({document=globalThis.document,window=globalThis.window,request=globalThis.fetch.bind(globalThis),loadAuth=loadCloudAuth}={}){
+export function createPublicCatalog({document=globalThis.document,window=globalThis.window,request=globalThis.fetch.bind(globalThis),loadAuth=loadCloudAuth,basePath='',listStyle='cards',onState=()=>{},detailOnly=false,accountPath='/account'}={}){
+  if(!['','/ui','/ui/profile'].includes(basePath)||!['/account','/ui/profile'].includes(accountPath)||!['cards','table'].includes(listStyle))throw Error('Invalid catalog presentation.');
   const $=id=>document.getElementById(id);
   let locale='en';
   try{if(window.localStorage.getItem('ygc_ui_language')==='ja')locale='ja'}catch{/* Storage is optional. */}
@@ -105,13 +106,14 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     const q=[...String(url.searchParams.get('q')||'').trim()].slice(0,120).join('');
     const sort=sorts.includes(url.searchParams.get('sort'))?url.searchParams.get('sort'):'newest';
     const raw=url.searchParams.get('page')||'1',page=/^[1-9][0-9]*$/.test(raw)&&Number(raw)<=1000000?Number(raw):1;
-    const match=/^\/guitars\/([1-9][0-9]{0,18})\/?$/.exec(url.pathname);
-    return {q,sort,page,id:match?.[1]||null,invalid:url.pathname!=='/'&&!match};
+    const pathname=basePath?(url.pathname===basePath?'/':url.pathname.startsWith(basePath+'/')?url.pathname.slice(basePath.length):'invalid'):url.pathname;
+    const match=/^\/guitars\/([1-9][0-9]{0,18})\/?$/.exec(pathname);
+    return {q,sort,page,id:match?.[1]||null,invalid:pathname!=='/'&&!match};
   }
   function routeURL(value){
     const query=new URLSearchParams();
     if(value.q)query.set('q',value.q);if(value.sort!=='newest')query.set('sort',value.sort);if(value.page!==1)query.set('page',String(value.page));
-    return (value.id?'/guitars/'+value.id:'/')+(query.size?'?'+query:'');
+    return (value.id?basePath+'/guitars/'+value.id:(basePath||'/'))+(query.size?'?'+query:'');
   }
   function intercept(link,target){
     link.href=target;
@@ -129,7 +131,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     if(authReady&&!retry)return authReady;
     authReady=(async()=>{
       authBlocked=null;authNotice='';favorite.clear();
-      try{auth=auth||await loadAuth();if(!unsubscribeIdentity)unsubscribeIdentity=auth.onIdentityChanged?.(()=>favorite.clear())||null;await auth.restore()}
+      try{auth=auth||await loadAuth();if(!unsubscribeIdentity)unsubscribeIdentity=auth.onIdentityChanged?.(invalidateIdentity)||null;await auth.restore()}
       catch(error){
         // A known identity or rejected token must never become an anonymous retry.
         if(auth?.signedIn||[401,403].includes(error.status)||['auth/invalid-user-token','auth/user-token-expired','auth/id-token-expired','auth/id-token-revoked','auth/user-disabled','auth/user-not-found'].includes(error.code)){
@@ -178,7 +180,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     detail=null;claims=[];nextAfter=null;moreLoading=false;
     $('detailContent').hidden=true;$('detailTitle').textContent='';$('detailIdentifier').textContent='';
     $('detailSpecifications').replaceChildren();$('chronicleEntries').replaceChildren();$('chronicleStatus').textContent='';
-    $('acquireLink').href=$('addClaimLink').href=$('ownershipLink').href='/account';$('chronicleMore').hidden=true;
+    $('acquireLink').href=$('addClaimLink').href=$('ownershipLink').href=accountPath;$('chronicleMore').hidden=true;
   }
   function renderStatic(){
     const labels={catalogTitle:'title',catalogEyebrow:'eyebrow',catalogDescription:'description',listHeading:'list',detailHeading:'detail',accountLink:'account',languageLabel:'language',searchLabel:'search',sortLabel:'sort',catalogSearchSubmit:'submit',catalogRefresh:'refresh',catalogPrevious:'previous',catalogNext:'next',catalogBack:'back',photoPlaceholder:'photo',specificationHeading:'specification',chronicleHeading:'chronicle',chronicleOrder:'chronicle_order',acquireLink:'acquire',acquireDescription:'acquire_help',addClaimLink:'add_claim',addClaimDescription:'add_claim_help',ownershipLink:'ownership_action',ownershipDescription:'ownership_help',catalogFooter:'footer'};
@@ -206,10 +208,20 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     $('authNotice').hidden=!authNotice;$('authNotice').textContent=authNotice?t(authNotice):'';
     const serviceText=serviceFailed?t('service_unknown'):service&&service.mode!=='normal'?t(service.mode)+(service.message?'\n'+service.message:''):'';
     $('serviceNotice').hidden=!serviceText;$('serviceNotice').textContent=serviceText;
+    onState({auth,locale,blocked:Boolean(authBlocked),loading,detailOpen:Boolean(route?.id||route?.invalid)});
   }
   function renderList(){
     $('catalogRows').replaceChildren();if(!list)return;
     for(const row of list.items){
+      if(listStyle==='table'){
+        const tr=node('tr',undefined,'clickable'+(row.id===route.id?' selected':''));
+        const id=node('td'),link=node('a',row.id);
+        link.setAttribute('aria-label',t('view')+' · '+t('identifier',{id:row.id}));
+        intercept(link,routeURL({...route,id:row.id}));id.append(link);tr.append(id);
+        for(const field of fixedFields)tr.append(node('td',valueText(row[field])));
+        tr.onclick=event=>{if(event.target?.closest('a')||event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;navigate(routeURL({...route,id:row.id}),true)};
+        $('catalogRows').append(tr);continue;
+      }
       const card=node('li',undefined,'guitar-card'+(row.id===route.id?' is-selected':''));
       card.append(node('h3',[row.manufacturer,row.model].filter(Boolean).join(' ')||t('identifier',{id:row.id})));
       const facts=node('p',undefined,'guitar-facts');
@@ -240,7 +252,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   function renderDetail(){
     if(!detail)return;
     $('detailContent').hidden=false;$('detailTitle').textContent=[detail.manufacturer,detail.model].filter(Boolean).join(' ')||t('identifier',{id:detail.id});
-    $('detailIdentifier').textContent=t('identifier',{id:detail.id});$('acquireLink').href='/account?acquire='+encodeURIComponent(detail.id);$('addClaimLink').href='/account?claim='+encodeURIComponent(detail.id);$('ownershipLink').href='/account?ownership='+encodeURIComponent(detail.id);
+    $('detailIdentifier').textContent=t('identifier',{id:detail.id});$('acquireLink').href=accountPath+'?acquire='+encodeURIComponent(detail.id);$('addClaimLink').href=accountPath+'?claim='+encodeURIComponent(detail.id);$('ownershipLink').href=accountPath+'?ownership='+encodeURIComponent(detail.id);
     $('detailSpecifications').replaceChildren();
     const add=(field,value)=>{const row=node('div',undefined,'catalog-spec-row');row.append(node('dt',fieldLabel(field),'catalog-spec-label'),node('dd',valueText(value),'catalog-spec-value'));$('detailSpecifications').append(row)};
     const finish=detail.specifications.find(item=>item.field_name.toLowerCase()==='finish');
@@ -272,7 +284,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
       await initializeAuth(retryAuth);
       if(current!==epoch||stopped)return;
       const query=new URLSearchParams({q:route.q,sort:route.sort,page:String(route.page),limit:'24'});
-      const listWork=publicRequest('/api/public/guitars?'+query,signal).then(page=>{validatePage(page);if(page.page!==next.page)throw Error('Unexpected catalog page.');return page});
+      const listWork=detailOnly?Promise.resolve({items:[],total:'0',page:next.page,page_size:24,total_pages:0}):publicRequest('/api/public/guitars?'+query,signal).then(page=>{validatePage(page);if(page.page!==next.page)throw Error('Unexpected catalog page.');return page});
       const detailWork=route.id?Promise.all([
         publicRequest('/api/public/guitars/'+route.id,signal).then(row=>{validateGuitar(row);validateItems(row.specifications);if(row.id!==next.id)throw Error('Unexpected guitar.');return row}),
         publicRequest('/api/public/guitars/'+route.id+'/chronicle?limit=25',signal).then(validateChronicle),
@@ -324,7 +336,12 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     locale=$('catalogLanguage').value==='ja'?'ja':'en';try{window.localStorage.setItem('ygc_ui_language',locale)}catch{/* Keep the change for this page. */}
     renderStatic();renderList();renderDetail();controls();
   }
-  function onPageHide(){++epoch;controller?.abort();moreController?.abort();favorite.clear()}
+  function invalidateIdentity(){
+    ++epoch;controller?.abort();moreController?.abort();authReady=null;
+    authBlocked=Object.assign(Error('Identity changed. Refresh to continue.'),{code:'sign_in_required'});
+    list=null;clearDetail();loading=false;listMessage=authNotice='session';detailMessage='choose';renderList();controls();
+  }
+  function onPageHide(){++epoch;controller?.abort();moreController?.abort();list=null;clearDetail();loading=false;listMessage='loading';renderList();controls()}
   function onPageShow(event){if(event.persisted){loading=false;return refresh()}}
   function start(){
     renderStatic();
@@ -337,10 +354,12 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     return loadRoute(readRoute());
   }
   function destroy(){stopped=true;++epoch;controller?.abort();moreController?.abort();window.removeEventListener('popstate',onPopstate);window.removeEventListener('pagehide',onPageHide);window.removeEventListener('pageshow',onPageShow);unsubscribeIdentity?.();favorite.clear()}
-  return {start,refresh,navigate,destroy};
+  return {start,refresh,navigate,destroy,invalidateIdentity};
 }
 
 // Readiness is for the disposable browser checks; it does not expose identity.
-const catalog=createPublicCatalog();
-await catalog.start();
-globalThis.YGCCloudPublicCatalogReady=true;
+if(document.body.dataset.catalogAutostart!=='false'){
+  const catalog=createPublicCatalog();
+  await catalog.start();
+  globalThis.YGCCloudPublicCatalogReady=true;
+}

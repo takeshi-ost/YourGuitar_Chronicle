@@ -91,7 +91,7 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
   dialog.addEventListener('ygc:closed',()=>{resetDialog();render()});close.onclick=()=>globalThis.YGCOverlays.close(dialog);
   function renderList(){
     list.replaceChildren();const c=context();
-    for(const row of rows){const li=node('li'),text=node('p',summary(row.individual)+'\n'+t('identity.listing_label',{id:row.id})+' · '+(row.occurred_at||t('identity.empty_value'))),link=node('a',t('catalog.view_guitar')),edit=button('identity.edit_listing');link.href='/guitars/'+row.individual.id;
+    for(const row of rows){const li=node('li'),text=node('p',summary(row.individual)+'\n'+t('identity.listing_label',{id:row.id})+' · '+(row.occurred_at||t('identity.empty_value'))),link=node('a',t('catalog.view_guitar')),edit=button('identity.edit_listing');link.href=(document.body?.dataset?.formalProfile==='true'?'/ui/profile/guitars/':'/guitars/')+row.individual.id;
       edit.onclick=()=>{if(sameAccount(c)&&c.navigation===navigationEpoch)return openListing(row.id)};li.append(text,link,edit);list.append(li)}
   }
   function renderHistory(){
