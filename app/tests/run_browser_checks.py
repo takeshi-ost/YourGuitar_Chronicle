@@ -64,6 +64,8 @@ def main():
                 cloud_ownership_disputes()
                 from browser_cloud_favorites_visibility import main as cloud_favorites_visibility
                 cloud_favorites_visibility()
+                from browser_cloud_follows import main as cloud_follows
+                cloud_follows()
                 from browser_cloud_ownership import main as cloud_ownership
                 cloud_ownership()
             finally:

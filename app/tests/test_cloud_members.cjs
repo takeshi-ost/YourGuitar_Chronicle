@@ -1,0 +1,9 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const code=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-members.js'),'utf8').replace(/^import .*;$/gm,'').replace(/export /g,'');
+const context=vm.createContext({});vm.runInContext(code+';globalThis.contracts={memberId,memberPerson,memberPage,memberProfile};',context);
+const {memberId,memberPerson,memberPage,memberProfile}=context.contracts;
+const person=(id='2')=>({id,display_name:'Same name',icon:null});
+test('member keys preserve BIGINT; no coercion or malformed IDs',()=>{assert(memberId('9223372036854775807'));for(const id of [2,true,null,'0','01','2\n','9223372036854775808'])assert(!memberId(id))});
+test('person response refuses profile/authority/photo expansion',()=>{for(const extra of [{email:'private'},{icon:'/private.jpg'},{bio:'private'},{id:2}])assert.throws(()=>memberPerson({...person(),...extra}));assert.equal(memberPerson({...person(),display_name:'<img src=x>'}).display_name,'<img src=x>')});
+test('same names retain separate internal IDs and cursor ordering',()=>{const page={items:[person('2'),person('3')],total:'2',next_after:'3'};assert.equal(memberPage(page).items.length,2);assert.throws(()=>memberPage(page,'2'));assert.throws(()=>memberPage({...page,next_after:'4'}));assert.throws(()=>memberPage({...page,items:[person('3'),person('2')]}))});
+test('profile enforces target and fixed member-only fields',()=>{const profile={person:person(),is_self:false,following:false,can_write:true,followers_count:'0',following_count:'3'};assert.equal(memberProfile(profile,'2').following,false);for(const p of [{...profile,bio:'private'},{...profile,can_write:1},{...profile,followers_count:2}])assert.throws(()=>memberProfile(p,'2'));assert.throws(()=>memberProfile(profile,'3'))});

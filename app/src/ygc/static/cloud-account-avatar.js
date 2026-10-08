@@ -55,7 +55,7 @@ export function createAvatar({auth,state,busy}){
       if(!current(c))return;
       if(!response.ok)throw Object.assign(Error('Save failed'),{status:response.status});
       await read(c);if(current(c))$('avatarStatus').textContent=t('avatar.saved');
-    }catch(error){fail(error,c)}
+    }catch(error){fail(error,c)}finally{try{const c=new globalThis.BroadcastChannel('ygc-member-avatar');c.postMessage('invalidate');c.close()}catch{}}
   }
   async function remove(){
     const c=begin();if(!c)return;
@@ -64,7 +64,7 @@ export function createAvatar({auth,state,busy}){
       if(!current(c))return;
       if(!response.ok)throw Object.assign(Error('Remove failed'),{status:response.status});
       resetImage();$('avatarStatus').textContent=t('avatar.removed');
-    }catch(error){fail(error,c)}
+    }catch(error){fail(error,c)}finally{try{const c=new globalThis.BroadcastChannel('ygc-member-avatar');c.postMessage('invalidate');c.close()}catch{}}
   }
   function failed(error){
     if(!eligible()||failures.has(error)&&!current(failures.get(error)))return;

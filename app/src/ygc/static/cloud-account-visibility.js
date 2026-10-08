@@ -1,5 +1,5 @@
-// Saved preferences for future profile publication only. This UI never serves
-// another user's fields, changes private-photo access, or publishes favorites.
+// Avatar visibility controls authenticated member images. Other profile
+// preferences do not publish fields or favorites.
 const visibilityKeys=['birth_visibility','residence_visibility','bio_visibility','avatar_visibility'];
 const visibilityEnums=['Public','Members','Followers','Private'];
 const visibilityExact=(value,keys)=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key)));
@@ -31,7 +31,7 @@ export function createVisibility({auth,state,busy,work}){
   form.onsubmit=event=>{
     event.preventDefault();if(busy()||loading||!pending||!current(pending.epoch,pending.owner)||visibilityKeys.some(key=>!visibilityEnums.includes(inputs[key].value))||visibilityKeys.every(key=>inputs[key].value===pending.fields[key]))return;
     const body={revision:pending.revision,fields:Object.fromEntries(visibilityKeys.map(key=>[key,inputs[key].value]))},actor=identity(),generation=++epoch;dismiss();profile=null;display();notice=t('cloud.working');
-    return work(async()=>{try{const data=await request({method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!current(generation,actor))return;if(visibilityKeys.some(key=>data.fields[key]!==body.fields[key]))throw Error('Unexpected visibility result');profile=data;notice=t('visibility.saved');display()}catch(error){if(!current(generation,actor))return;profile=null;if([400,401,403,404,409,422].includes(error.status))notice=errorText(error);else{uncertain=true;notice=''}}finally{if(current(generation,actor))render()}});
+    return work(async()=>{try{const data=await request({method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!current(generation,actor))return;if(visibilityKeys.some(key=>data.fields[key]!==body.fields[key]))throw Error('Unexpected visibility result');profile=data;notice=t('visibility.saved');display()}catch(error){if(!current(generation,actor))return;profile=null;if([400,401,403,404,409,422].includes(error.status))notice=errorText(error);else{uncertain=true;notice=''}}finally{try{const c=new globalThis.BroadcastChannel('ygc-member-avatar');c.postMessage('invalidate');c.close()}catch{}if(current(generation,actor))render()}});
   };
   globalThis.addEventListener('popstate',()=>{clear();render()});globalThis.addEventListener('pagehide',clear);render();return {render,clear,refresh};
 }

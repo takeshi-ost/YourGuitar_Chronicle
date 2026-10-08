@@ -36,6 +36,17 @@ def install(app, config):
     def account_page():
         return FileResponse(STATIC / 'cloud_account_html.html', headers={'Cache-Control': 'no-store'})
 
+    @app.get('/members')
+    @app.get('/members/{member_id}')
+    def members_page(member_id: str = None):
+        if member_id is not None:
+            from ygc.cloud_follow_routes import identifier
+            try:
+                identifier(member_id)
+            except ValueError:
+                raise HTTPException(404, 'Member not found.') from None
+        return FileResponse(STATIC / 'cloud_members_html.html', headers={'Cache-Control': 'no-store'})
+
     @app.get('/console')
     def console_page():
         return FileResponse(STATIC / 'cloud_console_html.html', headers={'Cache-Control': 'no-store'})
@@ -51,7 +62,7 @@ def install(app, config):
     @app.get('/assets/{filename}')
     def asset(filename: str):
         if filename not in ('identity-platform-auth.js', 'cloud-auth-loader.js',
-                            'cloud-public-catalog.js', 'cloud-public-catalog.css',
+                            'cloud-public-catalog.js', 'cloud-public-catalog.css', 'cloud-members.js', 'cloud-member-icons.js', 'cloud-members.css',
                             'cloud-account-favorites.js', 'cloud-account-visibility.js', 'cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-profile.js', 'cloud-account-guitars.js', 'cloud-account-ownership.js', 'cloud-account-identity.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-applications.js', 'cloud-console-guitars.js', 'cloud-console-media.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')
         return FileResponse(STATIC / filename, headers={'Cache-Control': 'no-store'})
