@@ -478,12 +478,19 @@ def main():
             # A private collection rejection invalidates the canonical page;
             # another private control must not remain usable after that denial.
             expect(rows).to_have_count(0)
-            expect(values).to_be_empty()
-            expect(page.locator('#selfVisibility')).to_be_hidden()
+            if status in (401,403):
+                expect(values).to_be_empty()
+                expect(page.locator('#selfVisibility')).to_be_hidden()
+            else:
+                # A resource outage clears that failed projection without
+                # treating a known actor as an authentication rejection.
+                refresh_visibility()
+                expect(values).to_be_empty()
             safe_content()
             store['read_error'] = None
-            page.reload()
-            page.wait_for_function('globalThis.YGCCloudAccountReady === true')
+            if status in (401,403):
+                page.reload()
+                page.wait_for_function('globalThis.YGCCloudAccountReady === true')
             refresh_favorites(); refresh_visibility()
 
         # Same-user navigation retains/reconciles Favorites. Visibility keeps

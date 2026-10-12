@@ -14,7 +14,7 @@ import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
-let auth,policies,mode=new URLSearchParams(location.search).get('register')==='1'?'register':'signin',busy=false,state=null,authPending=true,pageSuspended=false,sessionEpoch=0,formalView=null;
+let auth,policies,mode=new URLSearchParams(location.search).get('register')==='1'?'register':'signin',busy=false,state=null,authPending=true,pageSuspended=false,sessionEpoch=0,formalView=null,accountHydrating=0;
 const formalProfile=document.body?.dataset?.formalProfile==='true',formalTotals={};
 const favorites=createFavorites({tableLayout:formalProfile,guitarHref:formalProfile?id=>'/ui/profile/guitars/'+id:undefined,onNavigate:formalProfile?id=>formalView?.openGuitar(id):undefined,auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,work:avatarAction});
 const visibility=createVisibility({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,work:avatarAction});
@@ -173,8 +173,10 @@ async function loadAvatar(){
 }
 async function hydrateAccount(){
   const actor=state?.user?.app_user_id,version=sessionEpoch;
+  accountHydrating++;render();
   try{await loadAvatar()}
   catch(error){if(!pageSuspended&&version===sessionEpoch&&actor===state?.user?.app_user_id)$('status').textContent=errorMessage(error)}
+  finally{accountHydrating--;render()}
 }
 async function avatarAction(work){
   if(busy)return;busy=true;render();
@@ -195,7 +197,7 @@ $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
 if(formalProfile){
   const {createFormalProfileView}=await import('./cloud-ui-profile.js');
-  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,owners:guitars,claims,identityCorrections,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
+  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy||authPending||accountHydrating>0,totals:formalTotals,owners:guitars,claims,identityCorrections,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
 }
 try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{serviceBlocked=false;update(null);if(!authPending)$('status').textContent=t('cloud.session_changed')});auth.onUserDataInvalidated?.((reason,error)=>{if(reason==='blocked'){serviceBlocked=error?.code==='service_restricted';update(null);$('status').textContent=t('self_profile.restricted')}});const [restored]=await Promise.all([auth.restore(),documents()]);authPending=false;update(restored);if(state?.user&&state.identity?.email_verified===true)await hydrateAccount()}
 catch(error){authPending=false;$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
