@@ -378,7 +378,7 @@ def main():
                 expect(page.locator('#specificationAccordion .accordion-body')).to_be_visible()
                 assert page.locator('#detailTitle').evaluate('(el) => getComputedStyle(el).fontSize')=='16px'
                 selected=page.url;expect(page.locator('#acquireLink')).to_have_attribute('href','/ui/profile?acquire=29')
-                page.go_back();expect(page.locator('#detailContent')).not_to_be_visible()
+                page.go_back();expect(page.locator('#detailContent')).to_be_visible()
                 page.go_forward();expect(page.locator('#detailContent')).to_be_visible()
                 page.reload();expect(page.locator('#detailContent')).to_be_visible();assert page.url==selected
                 # Live filtering includes Finish/Year and retains selected detail.
