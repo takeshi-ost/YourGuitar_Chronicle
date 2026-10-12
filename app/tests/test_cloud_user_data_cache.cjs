@@ -4,14 +4,23 @@ function harness({store=new Map(),uid='A',clock={value:1000},denyStorage=false}=
  const events={},calls=[],listeners=[],user={uid,getIdToken:async()=>uid+'-token'},auth={currentUser:user,tenantId:null,authStateReady:async()=>{}},account={user:{app_user_id:uid+'-app',role:'member',status:'active'},identity:{email_verified:true}};
  const sdk={browserSessionPersistence:'session',setPersistence:async()=>{},onAuthStateChanged(_,fn){listeners.push(fn)},signOut:async()=>{auth.currentUser=null}};
  const storage={getItem:k=>{if(denyStorage)throw Error('Unavailable');return store.get(k)||null},setItem:(k,v)=>{if(denyStorage)throw Error('Unavailable');store.set(k,v)},removeItem:k=>{if(denyStorage)throw Error('Unavailable');store.delete(k)}};
- let mode='normal',status=200,hold=null,body={fields:{display_name:uid}},gateHold=null;
- const request=async(url,options)=>{calls.push({url,options});if(url.endsWith('/api/auth/me'))return Response.json(account);if(url.endsWith('/api/service/status')){if(gateHold)await gateHold;return Response.json({mode})}if(hold)await hold;return Response.json(body,{status})};
+ let mode='normal',status=200,hold=null,body={fields:{display_name:uid}},gateHold=null,gateStatus=200;
+ const request=async(url,options)=>{calls.push({url,options});if(url.endsWith('/api/auth/me'))return Response.json(account);if(url.endsWith('/api/service/status')){if(gateHold)await gateHold;return Response.json(gateStatus===200?{mode}:{code:'closed_test_participant_required'},{status:gateStatus})}if(hold)await hold;return Response.json(body,{status})};
  const context={URL,Headers,Response,Error,addEventListener:(name,fn)=>events[name]=fn,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
  const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request,storage,now:()=>clock.value});
- return {adapter,store,clock,calls,account,auth,user,events,mode:v=>mode=v,status:v=>status=v,hold:v=>hold=v,gateHold:v=>gateHold=v,body:v=>body=v,switchUser(){auth.currentUser={uid:'B',getIdToken:async()=> 'B-token'};listeners.forEach(fn=>fn())},count:path=>calls.filter(c=>new URL(c.url).pathname===path).length};
+ return {adapter,store,clock,calls,account,auth,user,events,mode:v=>mode=v,status:v=>status=v,gateStatus:v=>gateStatus=v,hold:v=>hold=v,gateHold:v=>gateHold=v,body:v=>body=v,switchUser(){auth.currentUser={uid:'B',getIdToken:async()=> 'B-token'};listeners.forEach(fn=>fn())},count:path=>calls.filter(c=>new URL(c.url).pathname===path).length};
 }
 const read=s=>s.adapter.authorizedFetch('/api/auth/settings',{reuseUserData:true});
 const defer=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve}};
+test('Cached display rechecks participant with bearer and rejects revoked membership without returning old data',async()=>{
+ const s=harness();await s.adapter.restore();await read(s);let blocked;
+ s.adapter.onUserDataInvalidated((reason,error)=>{if(reason==='blocked')blocked=error});
+ s.gateStatus(403);await assert.rejects(read(s),e=>e.status===403&&e.code==='closed_test_participant_required');
+ const check=s.calls.find(c=>c.url.endsWith('/api/service/status'));
+ assert.equal(check.options.headers.get('Authorization'),'Bearer A-token');
+ assert.equal(s.store.size,0);assert.equal(blocked.code,'closed_test_participant_required');
+ assert.equal(s.count('/api/auth/settings'),1);
+});
 test('Completed data reused in page and next document only after fresh canonical me; tokens/identity never persisted',async()=>{
  const s=harness();await s.adapter.restore();await read(s);await read(s);assert.equal(s.count('/api/auth/settings'),1);assert.equal(s.count('/api/service/status'),1);
  const next=harness({store:s.store});await next.adapter.restore();await read(next);assert.equal(next.count('/api/auth/me'),1);assert.equal(next.count('/api/auth/settings'),0);assert.equal(next.count('/api/service/status'),1);

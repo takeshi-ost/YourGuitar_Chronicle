@@ -1173,6 +1173,8 @@
   "cloud.refresh_verification": "Check verification status",
   "cloud.email_verified": "Email address verified.",
   "cloud.email_unverified": "Your email address is not verified yet.",
+  "cloud.participant_required": "This account is not a closed-test participant. Sign out to browse public guitars, or contact the test administrator.",
+  "cloud.participant_notice": "Closed test: sign in with your approved account. Public guitars remain available without signing in.",
   "cloud.verification_sent": "Verification email sent. Open the link in your email, then check verification status here.",
   "cloud.verification_pending": "Your email address is still unverified. Open the link in your email, then check again.",
   "console.title": "Your Guitar Chronicle — Browser Console",

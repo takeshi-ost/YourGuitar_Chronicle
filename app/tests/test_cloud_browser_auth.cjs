@@ -9,7 +9,7 @@ const profile={display_name:' Test User ',account_type:'builder',terms_accepted:
 const account={user:{id:7,app_user_id:'uuid',display_name:'Test User'},identity:{email_verified:false}};
 function setup(){
   const calls=[],sdkCalls=[],refreshes=[];
-  let token=0, failure=null, unregistered=false;
+  let token=0, failure=null, unregistered=false, participantOnly=false;
   const user={email:'test@example.invalid',getIdToken:async(force=false)=>{refreshes.push(force);return 'fresh-'+(++token)}};
   const auth={currentUser:null,authStateReady:async()=>{sdkCalls.push('ready')}};
   const sdk={browserSessionPersistence:'session',
@@ -21,7 +21,7 @@ function setup(){
     signOut:async()=>{sdkCalls.push('signout');auth.currentUser=null}};
   const fetch=async(url,options={})=>{
     calls.push({url,options});
-    if(url.endsWith('/registration'))return new Response(JSON.stringify({documents:policies}));
+    if(url.endsWith('/registration'))return new Response(JSON.stringify({documents:policies,participant_only:participantOnly}));
     if(failure)return new Response(JSON.stringify({detail:'Try again'}),{status:failure});
     if(unregistered&&url.endsWith('/me'))return new Response(JSON.stringify({code:'registration_required'}),{status:409});
     return new Response(JSON.stringify(account));
@@ -29,8 +29,15 @@ function setup(){
   const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch};
   vm.runInNewContext(source,context);
   return {adapter:context.YGCIdentityPlatformAuth.create({sdk,auth,fetch}),auth,sdk,calls,sdkCalls,user,refreshes,
-    fail:value=>failure=value,unregistered:value=>unregistered=value};
+    fail:value=>failure=value,unregistered:value=>unregistered=value,participantOnly:value=>participantOnly=value};
 }
+test('Closed-test registration requires an existing approved sign-in and never creates a Google user',async()=>{
+  const s=setup();s.participantOnly(true);
+  await assert.rejects(s.adapter.register(profile,{email:'test@example.invalid',password:'private-password'}),e=>e.code==='closed_test_participant_required');
+  assert.ok(!s.sdkCalls.some(c=>c[0]==='create'));assert.ok(!s.calls.some(c=>c.url.endsWith('/register')));
+  s.auth.currentUser=s.user;await s.adapter.register(profile);
+  assert.equal(s.calls.filter(c=>c.url.endsWith('/register')).length,1);
+});
 test('Sign In uses session persistence and sends only SDK credentials to Google',async()=>{
   const s=setup();assert.deepEqual(await s.adapter.signIn({email:'test@example.invalid',password:'private-password'}),account);
   assert.equal(s.sdkCalls[0][0],'persistence');assert.equal(s.sdkCalls[0][2],'session');

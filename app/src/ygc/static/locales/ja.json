@@ -1173,6 +1173,8 @@
   "cloud.refresh_verification": "確認状態を更新",
   "cloud.email_verified": "メールアドレスは確認済みです。",
   "cloud.email_unverified": "メールアドレスはまだ確認されていません。",
+  "cloud.participant_required": "このアカウントはクローズドテストの参加対象ではありません。公開ギターを見るにはサインアウトしてください。参加についてはテスト管理者へお問い合わせください。",
+  "cloud.participant_notice": "クローズドテスト中です。参加が許可されたアカウントでサインインしてください。公開ギターはサインインせずに閲覧できます。",
   "cloud.verification_sent": "確認メールを送信しました。メール内のリンクを開いてから、この画面で確認状態を更新してください。",
   "cloud.verification_pending": "メールアドレスはまだ未確認です。メール内のリンクを開いてから、もう一度確認状態を更新してください。",
   "console.title": "Your Guitar Chronicle — 管理コンソール",

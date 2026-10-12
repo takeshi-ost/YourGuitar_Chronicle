@@ -391,6 +391,21 @@ def main():
                 expect(page.locator('#selfGuitars_owned')).to_contain_text('この区分のギターはありません。')
                 expect(page.locator('#selfGuitars li')).to_have_count(0)
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                # Closed-test UI keeps anonymous browsing and sign-in, but does
+                # not offer an unrestricted Google account creation path.
+                def closed_documents(route):
+                    response=route.fetch()
+                    data=response.json();data['participant_only']=True
+                    route.fulfill(response=response,json=data)
+                context.route('**/api/auth/registration',closed_documents)
+                page.locator('#signOut').click()
+                ready()
+                expect(page.locator('#showRegistration')).to_be_hidden()
+                expect(page.locator('#showSignIn')).to_be_visible()
+                expect(page.locator('#closedTestNotice')).to_contain_text('クローズドテスト中')
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                page.locator('header select').select_option('en')
+                expect(page.locator('#closedTestNotice')).to_contain_text('Closed test')
                 context.close()
                 browser.close()
             print('Cloud account browser: self profile and ownership paging/empty/privacy/restriction/SignOut/mobile, registration retry, credential separation, Sign In/Out, reload, unregistered enrollment, policy backdrop, verification mail/refresh, Japanese and mobile passed.')

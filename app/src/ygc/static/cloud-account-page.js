@@ -64,6 +64,8 @@ function render(){
   $('consoleLink').hidden=!(registered&&verified&&state.user.role==='admin');
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
   $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered||resume;
+  $('showRegistration').hidden=policies?.participant_only===true;
+  $('closedTestNotice').hidden=policies?.participant_only!==true||registered;
   $('signOut').hidden=!auth?.signedIn;
   $('cloudAccountForm').hidden=serviceBlocked||authPending||pageSuspended||registered;
   $('profileFields').hidden=mode!=='register';
@@ -107,7 +109,7 @@ function errorMessage(error){
   const codes={'auth/email-already-in-use':'cloud.email_exists','auth/invalid-credential':'cloud.invalid_credentials',
     'auth/invalid-email':'cloud.invalid_email','auth/weak-password':'cloud.weak_password',
     'auth/too-many-requests':'cloud.too_many_requests','auth/network-request-failed':'cloud.network_error',
-    policy_changed:'cloud.policy_changed'};
+    policy_changed:'cloud.policy_changed',closed_test_participant_required:'cloud.participant_required'};
   return t(codes[error.code]||'cloud.failed');
 }
 function policy(kind){

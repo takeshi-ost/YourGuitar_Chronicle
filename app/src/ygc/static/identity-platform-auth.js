@@ -36,8 +36,8 @@
     async function userDataGate(){
       // Reuse saves expensive private reads, not the service-mode check. Concurrent
       // cache hits share only this in-flight check, never a completed decision.
-      const response=await request(new URL('/api/service/status',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
-      if(!response.ok)throw Object.assign(Error('Service status unavailable.'),{status:503});
+      const response=await dispatchApi('/api/service/status',{},false);
+      if(!response.ok){const data=await response.json().catch(()=>null);throw Object.assign(Error('Service access unavailable.'),{status:response.status,code:data?.code||data?.detail?.code})}
       const status=await response.json();
       if(!['normal','read_only','offline','admin_only'].includes(status?.mode))throw Object.assign(Error('Invalid service status.'),{status:503});
       return status.mode;
@@ -206,7 +206,8 @@
     }
     async function documents(){
       const response=await request(new URL('/api/auth/registration',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
-      return (await result(response)).documents;
+      const data=await result(response);
+      return data.participant_only===true?{...data.documents,participant_only:true}:data.documents;
     }
     function validate(profile,policies){
       const fields=['display_name','account_type','terms_accepted','privacy_accepted','terms_version','privacy_version'];
@@ -228,6 +229,7 @@
         const policies=await documents();validate(profile,policies);
         account=null;
         if(!auth.currentUser){
+          if(policies.participant_only===true)throw Object.assign(Error('Closed-test participant sign-in is required.'),{code:'closed_test_participant_required'});
           if(!credentials?.email||!credentials?.password)throw Error('Email and password are required.');
           await sdk.createUserWithEmailAndPassword(auth,credentials.email,credentials.password);
         }else if(credentials?.email&&credentials.email.trim().toLowerCase()!==auth.currentUser.email?.toLowerCase()){

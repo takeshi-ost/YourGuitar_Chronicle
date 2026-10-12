@@ -49,6 +49,50 @@ def test_verified_identity_uses_live_registry_and_revocation(sdk, accounts):
         identity.resolve(bearer_token='opaque-token')
 
 
+def test_request_verification_is_exact_scoped_and_does_not_cache_accounts(sdk, accounts):
+    identity = IdentityPlatformIdentity(accounts, project_id=PROJECT)
+    verified = identity.verify(bearer_token='token')
+    with identity.verified_request('token', verified):
+        identity.resolve(bearer_token='token')
+        identity.resolve(bearer_token='token')
+        assert sdk[2].call_count == 1
+        assert accounts.resolve_identity.call_count == 2
+        identity.verify(bearer_token='other-token')
+        assert sdk[2].call_count == 2
+    identity.verify(bearer_token='token')
+    assert sdk[2].call_count == 3
+    try:
+        with identity.verified_request('token', verified):
+            raise RuntimeError('aborted request')
+    except RuntimeError:
+        pass
+    identity.verify(bearer_token='token')
+    assert sdk[2].call_count == 4
+    identity.close()
+
+
+def test_admitted_http_requests_check_revocation_once_each_and_keep_live_accounts(sdk, accounts):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from ygc.cloud_account_routes import account_router
+    from ygc.cloud_participants import ParticipantAdmission
+    from ygc.cloud_registration import DOCUMENTS
+    accounts.resolve_identity.return_value.update(display_name='Participant',account_type='user',role='member')
+    verifier = IdentityPlatformIdentity(accounts, project_id=PROJECT)
+    app = FastAPI()
+    app.add_middleware(ParticipantAdmission,verifier=verifier,subjects=frozenset(['subject']))
+    app.include_router(account_router(verifier,DOCUMENTS))
+    with TestClient(app) as client:
+        for _ in range(2):
+            assert client.get('/api/auth/me',headers={'Authorization':'Bearer same-token'}).status_code==200
+        assert sdk[2].call_count==2
+        assert accounts.resolve_identity.call_count==2
+        sdk[2].side_effect=ValueError('revoked token')
+        assert client.get('/api/auth/me',headers={'Authorization':'Bearer same-token'}).status_code==401
+        assert accounts.resolve_identity.call_count==2
+    verifier.close()
+
+
 @pytest.mark.parametrize('claims', [None, {}, {'sub': 'subject', 'iss': ISSUER, 'aud': PROJECT, 'firebase': {'tenant': 'other'}},
     {'sub': 'subject', 'iss': ISSUER, 'aud': 'other', 'firebase': {}},
     {'sub': 'subject', 'iss': 'other', 'aud': PROJECT, 'firebase': {}},
