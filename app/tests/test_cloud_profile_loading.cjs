@@ -3,7 +3,7 @@ const root=path.join(__dirname,'../src/ygc/static');
 const source=fs.readFileSync(path.join(root,'cloud-account-page.js'),'utf8');
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
 function setup(){
- const calls=[],waits={};const context={state:{user:{app_user_id:'A'},identity:{email_verified:true}},sessionEpoch:0,pageSuspended:false,formalProfile:false};
+ const calls=[],waits={};const context={state:{user:{app_user_id:'A'},identity:{email_verified:true}},sessionEpoch:0,pageSuspended:false,formalProfile:false,accountHydrating:0,render:()=>{}};
  for(const name of ['profile','guitars','favorites','formalView','visibility','disputes','notifications','identityCorrections','ownership','applications','avatar']){
   waits[name]=deferred();context[name]={refresh:()=>{calls.push(name);return waits[name].promise},failed:error=>{throw error}};
  }
@@ -28,13 +28,13 @@ test('identity change or page suspension cancels scheduling secondary private re
 test('background hydration leaves mutation controls unlocked and discards stale failure messages',async()=>{
  for(const invalidate of [false,true]){
   const e=setup(),status={textContent:''};e.context.busy=false;e.context.$=()=>status;e.context.errorMessage=error=>error.message;
-  const done=e.context.hydrateAccount();assert.equal(e.context.busy,false);
+  const done=e.context.hydrateAccount();assert.equal(e.context.busy,false);assert.equal(e.context.accountHydrating,1);
   for(const name of ['profile','guitars','favorites'])e.waits[name].resolve();await e.flush();
   assert.equal(e.context.busy,false);assert.ok(e.calls.includes('notifications'));
   if(invalidate)e.context.sessionEpoch++;
   e.waits.notifications.reject(new Error('notification unavailable'));
   for(const name of e.calls.slice(3))if(name!=='notifications')e.waits[name].resolve();
-  await done;assert.equal(status.textContent,invalidate?'':'notification unavailable');
+  await done;assert.equal(e.context.accountHydrating,0);assert.equal(status.textContent,invalidate?'':'notification unavailable');
  }
 });
 test('formal section links scroll without firing the popstate reload path',()=>{
