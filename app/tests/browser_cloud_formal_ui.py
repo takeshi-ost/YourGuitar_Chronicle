@@ -94,7 +94,7 @@ def check_settings(page,base,fixture):
     expect(page.locator('#settings')).to_be_visible()
     expect(page.locator('#displayName')).to_have_value('Alice')
     expect(page.locator('#userId')).to_have_value('1')
-    assert not page.locator('dialog').count()
+    expect(page.locator('#cloudAuthDialog')).to_be_hidden();expect(page.locator('#authPolicyDialog')).to_be_hidden()
     for width in (1440,390,320):
         page.set_viewport_size({'width':width,'height':844})
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),width
@@ -328,9 +328,14 @@ def check_formal_follow(page,base,fixture):
 def check_prepublication(page,base,fixture):
     fixture.prepublication=True
     page.set_viewport_size({'width':1440,'height':900})
+    held=[]
+    page.route(base+'/api/public/guitars/1/photo',lambda route:held.append(route))
     page.goto(base+'/ui/guitars/1')
+    photo=page.locator('#detailPhoto');expect(photo).to_have_attribute('data-photo-loading','true');assert photo.get_attribute('src') is None
     card=page.locator('[data-claim-id="101"]')
     expect(card.locator('[data-vote="good"]')).to_be_enabled()
+    assert len(held)==1;held.pop().fulfill(content_type='image/jpeg',body=fixture.images[1]);page.unroute(base+'/api/public/guitars/1/photo')
+    expect(photo).to_be_visible();expect(photo).to_have_attribute('src',re.compile('^blob:'));assert len([call for call in fixture.calls if call==('GET','/api/public/guitars/1/photo')])==0
     card.locator('[data-vote="good"]').click()
     expect(card.locator('[data-vote="good"]')).to_have_attribute('aria-pressed','true')
     expect(card.locator('[data-vote="good"]')).to_have_text('👍 1')
@@ -343,6 +348,12 @@ def check_prepublication(page,base,fixture):
     expect(page.locator('#identityDialog')).to_be_visible()
     expect(page.locator('#identityGuitar')).to_contain_text('Fixture 1')
     page.locator('#identityClose').click()
+    expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
+    held_settings=[];page.route(base+'/api/auth/settings',lambda route:held_settings.append(route))
+    page.goto(base+'/ui/settings');expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
+    page.unroute(base+'/api/auth/settings')
+    for route in held_settings:route.continue_()
+    expect(page.locator('#settings')).to_be_visible()
     page.goto(base+'/ui/profile/guitars/1')
     expect(page.locator('#selfIdentityCorrections')).to_be_hidden()
     expect(page.locator('#selfFavorites .toolbar #favoritesRefresh')).to_be_visible()

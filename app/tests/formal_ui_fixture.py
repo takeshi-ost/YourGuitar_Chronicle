@@ -87,7 +87,10 @@ class FormalUIFixture(FollowFixture):
             if denied:return denied
             row=next((r for r in self.rows if r['id']==individual),None)
             if row is None:return JSONResponse({},status_code=404)
-            return {**row,**({'presentation':{'owner':{'id':'1','display_name':'Alice'},'location':None,'source_owner_name':None}} if manual else {}),'specifications':[{'field_name':'body','value_text':'Alder'},{'field_name':'pickups','value_text':'Original fixture pickups'}]}
+            return {**row,**({'public_photo':'/api/public/guitars/'+individual+'/photo'} if self.prepublication and individual=='1' else {}),**({'presentation':{'owner':{'id':'1','display_name':'Alice'},'location':None,'source_owner_name':None}} if manual else {}),'specifications':[{'field_name':'body','value_text':'Alder'},{'field_name':'pickups','value_text':'Original fixture pickups'}]}
+        @app.get('/api/public/guitars/{individual}/photo')
+        def photo(individual:str):
+            return Response(self.images[1],media_type='image/jpeg')
         @app.get('/api/public/guitars/{individual}/chronicle')
         def chronicle(individual:str,request:Request):
             denied=restricted(request)
