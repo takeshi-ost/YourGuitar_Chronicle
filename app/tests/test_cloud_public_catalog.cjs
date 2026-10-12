@@ -478,7 +478,7 @@ test('Representative image starts before a held Chronicle and catalog; late imag
  e.handler=c=>c.path==='/api/public/guitars/1/chronicle'?chronicle.promise:c.path==='/api/public/guitars/1/photo'?photo.promise:c.path==='/api/public/guitars'?list.promise:undefined;
  const start=e.ui.start();await tick();assert.match(e.text('detailTitle'),/Model 1/);assert.equal(e.ids.get('detailContent').hidden,false);assert.equal(e.publicCalls().filter(c=>c.path.endsWith('/photo')).length,1);
  e.handler=null;await e.ui.navigate('/ui/guitars/2');assert.equal(e.publicCalls().find(c=>c.path.endsWith('/photo')).options.signal.aborted,true);
- photo.resolve(new Response(new Blob(['old image'],{type:'image/jpeg'}),{headers:{'Content-Type':'image/jpeg'}}));chronicle.resolve(response({items:[],next_after:null}));list.resolve(response({items:e.guitars,total:'2',page:1,page_size:24,total_pages:1}));await start;await tick();assert.match(e.text('detailTitle'),/Model 2/);assert.equal(image.src,undefined);
+ photo.resolve(new Response(new Blob(['old image'],{type:'image/jpeg'}),{headers:{'Content-Type':'image/jpeg'}}));chronicle.resolve(response({items:[],next_after:null}));list.resolve(response({items:e.guitars,total:'2',page:1,page_size:24,total_pages:1}));await start;await tick();assert.match(e.text('detailTitle'),/Model 2/);assert.equal(image.src,'/assets/no-picture.svg');
 });
 
 test('After mutation refresh keeps list/detail visible without restoring auth, then reflects fresh projection',async()=>{

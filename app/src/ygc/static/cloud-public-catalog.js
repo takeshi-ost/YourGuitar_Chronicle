@@ -362,7 +362,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
         target.referrerPolicy='no-referrer';target.onerror=()=>{target.onerror=null;fallback()};target.src=path;
       }catch{fallback()}return;
     }
-    if(path!=='/api/public/guitars/'+id+'/photo')return;
+    if(path!=='/api/public/guitars/'+id+'/photo'){fallback();return;}
     const current=()=>version===photoEpoch&&!stopped&&detail?.id===id&&auth?.account?.user?.app_user_id===owner&&!authBlocked&&$('detailPhoto')===target;
     try{const options={cache:'no-cache',credentials:'omit',redirect:'error',signal:controller?.signal};const response=auth?.signedIn?await auth.authorizedFetch(path,options):await request(path,options);
       if(!current())return;if(!response.ok||response.headers.get('content-type')?.split(';')[0]!=='image/jpeg'){fallback();return}
