@@ -100,7 +100,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   let route=null,list=null,detail=null,claims=[],nextAfter=null,service=null,serviceFailed=false,compactDismissed=false,searchTimer=null;
   let listMessage='loading',detailMessage='choose',authNotice='',auth=null,authReady=null,authBlocked=null,authRestoring=true;
   let epoch=0,controller=null,moreController=null,loading=false,moreLoading=false,pending=null,stopped=false;
-  let readRevision=0;
+  let readRevision=0,initialDetailId=null;
 
   const formal=Boolean(basePath);
   let unfilteredTotal=null,photoURL=null,photoEpoch=0;
@@ -116,7 +116,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     const raw=url.searchParams.get('page')||'1',page=!formal&&/^[1-9][0-9]*$/.test(raw)&&Number(raw)<=1000000?Number(raw):1;
     const pathname=basePath?(url.pathname===basePath?'/':url.pathname.startsWith(basePath+'/')?url.pathname.slice(basePath.length):'invalid'):url.pathname;
     const match=/^\/guitars\/([1-9][0-9]{0,18})\/?$/.exec(pathname);
-    return {q,sort,page,id:match?.[1]||null,invalid:pathname!=='/'&&!match};
+    return {q,sort,page,id:match?.[1]||(pathname==='/'?initialDetailId:null),invalid:pathname!=='/'&&!match};
   }
   function routeURL(value){
     const query=new URLSearchParams();
@@ -499,6 +499,13 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     });
     return pending;
   }
+  function selectInitial(id){
+    // Only hydrate the untouched Top Page. Keep /ui so a full reload draws
+    // again, while explicit links and early user navigation keep their choice.
+    if(basePath!=='/ui'||epoch!==1||stopped||authBlocked||serviceFailed||route?.id||route?.invalid||!list||!id||!/^[1-9][0-9]{0,18}$/.test(id))return Promise.resolve();
+    initialDetailId=id;
+    return loadRoute({...route,id});
+  }
   function closeDetail(){compactDismissed=true;controls()}
   function navigate(target,focus=false){
     compactDismissed=false;
@@ -576,7 +583,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     return ready;
   }
   function destroy(){clearRowFavorites();window.clearTimeout?.(searchTimer);stopped=true;++epoch;controller?.abort();moreController?.abort();window.removeEventListener('popstate',onPopstate);window.removeEventListener('pagehide',onPageHide);window.removeEventListener('pageshow',onPageShow);unsubscribeIdentity?.();favorite.clear()}
-  return {start,refresh,navigate,select:id=>navigate(routeURL({...route,id}),true),closeDetail,destroy,invalidateIdentity,read:publicRequest};
+  return {start,refresh,navigate,selectInitial,select:id=>navigate(routeURL({...route,id}),true),closeDetail,destroy,invalidateIdentity,read:publicRequest};
 }
 
 // Readiness is for the disposable browser checks; it does not expose identity.

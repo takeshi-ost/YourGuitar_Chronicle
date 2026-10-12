@@ -115,4 +115,5 @@ window.addEventListener('pagehide',()=>{active=false;insights.clear({pause:true}
 window.addEventListener('pageshow',()=>{active=true;insights.resume()});
 await catalog.start();
 await insights.whenReady();
+await catalog.selectInitial(insights.pickDiscovery());
 globalThis.YGCCloudUIReady=true;

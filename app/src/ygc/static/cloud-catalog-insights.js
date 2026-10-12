@@ -164,5 +164,5 @@ export function createCatalogInsights({document=globalThis.document,read,onSelec
     })();return pending;
   }
   $('insightsRefresh').onclick=async()=>{clear();await onRefresh()};
-  return {sync,clear,resume(){paused=false;signature=null},whenReady:()=>pending};
+  return {sync,clear,resume(){paused=false;signature=null},whenReady:()=>pending,pickDiscovery:(random=Math.random)=>{const rows=data.discovery?.items;return rows?.length?rows[Math.floor(random()*rows.length)]?.id||null:null}};
 }

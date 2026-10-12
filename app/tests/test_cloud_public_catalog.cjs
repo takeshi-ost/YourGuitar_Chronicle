@@ -499,3 +499,24 @@ test('Verification-only update with unchanged table fields keeps exact rows and 
 test('Mutation affecting Claim count rereads full list rather than retaining stale counts',async()=>{
  const e=environment({url:'https://catalog.example/ui/guitars/1',guitars:[guitar(1,{claim_count:'1'}),guitar(2,{claim_count:'0'})],presentation:{basePath:'/ui',listStyle:'table'}});await e.ui.start();const reads=e.publicCalls().filter(c=>c.path==='/api/public/guitars').length;e.guitars[0]=guitar(1,{claim_count:'2'});await e.ui.refresh({preserveView:true});assert.equal(e.publicCalls().filter(c=>c.path==='/api/public/guitars').length,reads+1);assert.ok(e.ids.get('catalogRows').children.some(row=>row.children.at(-1).textContent==='2'));
 });
+
+
+test('Top Page hydrates a discovery without changing its URL and retains it on refresh',async()=>{
+ const e=environment({url:'https://catalog.example/ui',presentation:{basePath:'/ui'}});await e.ui.start();
+ const lists=e.calls.filter(c=>c.path==='/api/public/guitars').length;
+ await e.ui.selectInitial('2');assert.equal(e.window.location.pathname,'/ui');assert.match(e.text('detailTitle'),/Model 2/);
+ assert.equal(e.calls.filter(c=>c.path==='/api/public/guitars').length,lists);
+ await e.ui.refresh();assert.match(e.text('detailTitle'),/Model 2/);
+ await e.ui.selectInitial('1');assert.match(e.text('detailTitle'),/Model 2/);
+});
+
+test('Explicit guitar and navigation before discoveries arrive take precedence over random default',async()=>{
+ for(const direct of [true,false]){
+  const e=environment({url:'https://catalog.example/ui'+(direct?'/guitars/1':''),presentation:{basePath:'/ui'}});await e.ui.start();
+  if(!direct)await e.ui.select('1');await e.ui.selectInitial('2');assert.match(e.text('detailTitle'),/Model 1/);assert.equal(e.window.location.pathname,'/ui/guitars/1');
+ }
+});
+
+test('Restricted Top Page never loads an initial discovery detail',async()=>{
+ const e=environment({url:'https://catalog.example/ui',presentation:{basePath:'/ui'}});e.mode='offline';await e.ui.start();const before=e.calls.length;await e.ui.selectInitial('2');assert.equal(e.calls.length,before);
+});

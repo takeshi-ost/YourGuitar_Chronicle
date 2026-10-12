@@ -116,3 +116,13 @@ test('Chart end labels keep a full tick interval and all counts remain in tables
 test('Service invalidation clears insights with restriction text, without asking for sign-in',async()=>{
  const e=environment();await e.sync();e.state.blocked=true;e.state.blockCode='service_restricted';e.state.serviceMode='offline';await e.sync();assert.match(e.text('discoveryStatus'),/restricted/);assert.doesNotMatch(e.text('discoveryStatus'),/session|sign in/i);assert.equal(e.ids.get('newDiscoveryList').children.length,0);
 });
+
+
+test('Initial random detail draws only from displayed discoveries, including a single item or empty data',async()=>{
+ const e=environment();assert.equal(e.component.pickDiscovery(),null);
+ e.response.discovery.items=[news('2'),news('52'),news('9007199254740993')];await e.sync();
+ assert.equal(e.component.pickDiscovery(()=>0),'2');assert.equal(e.component.pickDiscovery(()=>.5),'52');assert.equal(e.component.pickDiscovery(()=>.999),'9007199254740993');
+ e.component.clear();assert.equal(e.component.pickDiscovery(),null);
+ e.response.discovery.items=[news('52')];await e.sync();assert.equal(e.component.pickDiscovery(()=>.999),'52');
+ e.response.discovery.items=[];e.state.readRevision++;await e.sync();assert.equal(e.component.pickDiscovery(),null);
+});

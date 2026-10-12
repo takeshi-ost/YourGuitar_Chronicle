@@ -325,6 +325,26 @@ def check_formal_follow(page,base,fixture):
     print('Members: canonical Follow/Following labels, authorized synthetic mutations, connections modal PC/390/320/Escape/focus, name search and Back retention passed. No profile/Owned/photo scope expansion.')
 
 
+def check_initial_discovery(page,base,fixture):
+    page.add_init_script("Math.random=()=>Number(sessionStorage.getItem('fixture-random')||'0')")
+    page.goto(base+'/ui');page.wait_for_function('globalThis.YGCCloudUIReady===true')
+    expect(page.locator('#detailTitle')).to_contain_text('Fixture 30');assert page.url==base+'/ui'
+    page.evaluate("sessionStorage.setItem('fixture-random','0.999')")
+    page.reload();page.wait_for_function('globalThis.YGCCloudUIReady===true')
+    expect(page.locator('#detailTitle')).to_contain_text('Fixture 1');assert page.url==base+'/ui'
+    page.locator('#catalogRefresh').click();expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
+    page.goto(base+'/ui/guitars/2');page.wait_for_function('globalThis.YGCCloudUIReady===true')
+    expect(page.locator('#detailTitle')).to_contain_text('Fixture 2');assert page.url.endswith('/ui/guitars/2')
+    fixture.insights_case='empty'
+    page.goto(base+'/ui');page.wait_for_function('globalThis.YGCCloudUIReady===true')
+    expect(page.locator('#detailContent')).not_to_be_visible()
+    fixture.insights_case='normal';fixture.mode='offline'
+    page.goto(base+'/ui');page.wait_for_function('globalThis.YGCCloudUIReady===true')
+    expect(page.locator('#detailContent')).not_to_be_visible()
+    fixture.mode='normal'
+    print('Top random discovery: different draws on reload at /ui, refresh retention, explicit URL, empty/restricted data passed.')
+
+
 def main():
     fixture=FormalUIFixture()
     with socket.socket() as sock:
@@ -338,6 +358,7 @@ def main():
                 # The fixture already serves a local fake SDK. No external traffic.
                 context.route('https://**/*',lambda route:route.abort())
                 page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+                check_initial_discovery(page,base,fixture)
                 page.goto(base+'/ui');expect(page.locator('#catalogRows tr')).to_have_count(30)
                 expect(page.locator('#shellIdentity')).to_contain_text('Explore guitar histories')
                 assert not any('/api/auth/favorites/' in path for _,path in fixture.calls)
