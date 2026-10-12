@@ -601,6 +601,9 @@ if(document.body.dataset.catalogAutostart!=='false'){
   if(!globalThis.YGCI18n)await import('./i18n.js');
   dialog=createAuthDialog({auth:()=>client,onAuthenticated:()=>catalog.refresh()});
   function continueMember(id,kind){const target='/account?'+kind+'='+id;if(client?.account?.identity?.email_verified===true)location.assign(target);else dialog.open({verificationPath:target,onSuccess:()=>location.assign(target)})}
+  for(const [element,kind] of [['acquireLink','acquire'],['addClaimLink','claim']]){
+    const link=document.getElementById(element);link.onclick=event=>{if(event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();const id=new URL(link.href,location.origin).searchParams.get(kind);if(validId(id))continueMember(id,kind)};
+  }
   document.getElementById('accountLink').onclick=event=>{if(!client?.account?.user){event.preventDefault();dialog.open({opener:event.currentTarget})}};
   globalThis.YGCCloudPublicCatalogReady=true;
 }
