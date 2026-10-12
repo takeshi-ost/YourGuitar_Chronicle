@@ -399,9 +399,10 @@ def main():
 
         # An anonymous/unverified page never requests private claims or photos.
         expect(page.locator('#catalogClaimStart')).to_be_disabled()
-        page.locator('#email').fill('media@example.invalid')
-        page.locator('#password').fill('fixture-password')
-        page.locator('#submit').click()
+        page.locator('#showSignIn').click()
+        page.locator('#authEmail').fill('media@example.invalid')
+        page.locator('#authPassword').fill('fixture-password')
+        page.locator('#authSubmit').click()
         expect(page.locator('#catalogClaimStatus')).to_contain_text('Verify your email')
         assert not any(call['path'] == API or '/media/' in call['path'] for call in store['calls'])
         page.evaluate("sessionStorage.setItem('verified-media@example.invalid', 'true')")

@@ -66,13 +66,13 @@ const identityCorrections=createIdentityCorrections({listPanel:false,auth:()=>au
 const detailActions=createDetailClaimActions({auth:()=>auth,state:()=>active&&!lastState?.blocked&&!lastState?.authPending?auth?.account:null,busy:()=>busy,owners,claims,identityCorrections});
 const detailDispute=createDetailDispute({auth:()=>auth,state:participantState,busy:()=>busy,openDispute:id=>disputes.openDispute(id)});
 const insights=createCatalogInsights({read:(path,signal)=>catalog.read(path,signal),onSelect:id=>catalog.select(id),onRefresh:()=>catalog.refresh()});
-const catalog=createPublicCatalog({basePath:'/ui',accountPath:'/ui/profile',listStyle:'table',onChronicle:(root,id)=>queueMicrotask(()=>detailActions.load(root,id)),onClaimPopup:detailActions.popup,onState:state=>{header(state);void insights.sync(state);claims.render();owners.render();detailActions.render();syncApplications(state);void detailDispute.sync(state)},onClaim:(id,type)=>memberAction(()=>claims.openCreate(id,type)),onAcquire:id=>memberAction(()=>detailDispute.blocked()?undefined:applications.openAcquire(id)),onOwnership:id=>detailDispute.blocked()?undefined:ownership.openGuitar(id),
+const catalog=createPublicCatalog({basePath:'/ui',accountPath:'/ui/profile',listStyle:'table',onChronicle:(root,id)=>queueMicrotask(()=>detailActions.load(root,id)),onClaimPopup:detailActions.popup,onState:state=>{header(state);void insights.sync(state);claims.render();owners.render();detailActions.render();syncApplications(state);void detailDispute.sync(state)},onClaim:(id,type)=>memberAction(()=>claims.openCreate(id,type),'/account?claim='+id),onAcquire:id=>memberAction(()=>detailDispute.blocked()?undefined:applications.openAcquire(id),'/account?acquire='+id),onOwnership:id=>detailDispute.blocked()?undefined:ownership.openGuitar(id),
   loadAuth:()=>authPromise??=loadCloudAuth().catch(error=>{authPromise=null;throw error})});
 function render(){if(lastState)header(lastState);detailActions.render();detailDispute.render()}
 const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:()=>catalog.refresh()});
 $('shellSignIn').onclick=()=>authDialog.open({opener:$('shellSignIn')});
 $('accountLink').onclick=event=>{if(!auth?.account?.user){event.preventDefault();authDialog.open({opener:event.currentTarget})}};
-function memberAction(fn){if(auth?.account?.identity?.email_verified===true)return fn();authDialog.open({onSuccess:fn})}
+function memberAction(fn,verificationPath){if(auth?.account?.identity?.email_verified===true)return fn();authDialog.open({onSuccess:fn,verificationPath})}
 $('shellSignOut').onclick=async()=>{
   if(busy||!auth)return;
   busy=true;notice('');authDialog.close();catalog.invalidateIdentity();render();

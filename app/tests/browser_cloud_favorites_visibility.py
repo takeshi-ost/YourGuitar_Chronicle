@@ -314,10 +314,11 @@ def main():
             idle(account=True)
 
         def sign_in_form(actor):
-            expect(page.locator('#cloudAccountForm')).to_be_visible()
-            page.locator('#email').fill(actor + '@example.invalid')
-            page.locator('#password').fill('fixture-password')
-            page.locator('#submit').click()
+            page.locator('#showSignIn').click()
+            expect(page.locator('#cloudAuthDialog')).to_be_visible()
+            page.locator('#authEmail').fill(actor + '@example.invalid')
+            page.locator('#authPassword').fill('fixture-password')
+            page.locator('#authSubmit').click()
             idle(account=True)
 
         def change_visibility(field=FIELDS[0], value='Private'):

@@ -596,7 +596,8 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
 // Readiness is for the disposable browser checks; it does not expose identity.
 if(document.body.dataset.catalogAutostart!=='false'){
   let client;const dialog=createAuthDialog({auth:()=>client,onAuthenticated:()=>catalog.refresh()});
-  const catalog=createPublicCatalog({onState:state=>{client=state.auth},onAcquire:id=>dialog.open({onSuccess:()=>location.assign('/account?acquire='+id)}),onClaim:id=>dialog.open({onSuccess:()=>location.assign('/account?claim='+id)})});
+  const catalog=createPublicCatalog({onState:state=>{client=state.auth},onAcquire:id=>continueMember(id,'acquire'),onClaim:id=>continueMember(id,'claim')});
+  function continueMember(id,kind){const target='/account?'+kind+'='+id;if(client?.account?.identity?.email_verified===true)location.assign(target);else dialog.open({verificationPath:target,onSuccess:()=>location.assign(target)})}
   document.getElementById('accountLink').onclick=event=>{if(!client?.account?.user){event.preventDefault();dialog.open({opener:event.currentTarget})}};
   await catalog.start();
   globalThis.YGCCloudPublicCatalogReady=true;
