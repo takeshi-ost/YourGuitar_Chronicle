@@ -10,7 +10,7 @@ export function createAvatar({auth,state,busy}){
   let url=null,hasImage=false,epoch=0,suspended=false,renderedIdentity=identity();
   const failures=new WeakMap();
   const path=()=>state()?.user?.role==='admin'?'/api/admin/accounts/me/avatar':'/api/auth/avatar';
-  function resetImage(){if(url)URL.revokeObjectURL(url);url=null;hasImage=false;$('avatarPreview').removeAttribute('src');$('avatarPreview').hidden=true;$('avatarStatus').textContent='';$('avatarFile').value=''}
+  function resetImage(){if(url)URL.revokeObjectURL(url);url=null;hasImage=false;if(document.body?.dataset?.formalProfile==='true'){$('avatarPreview').src='/assets/no-icon.svg';$('avatarPreview').hidden=false}else{$('avatarPreview').removeAttribute('src');$('avatarPreview').hidden=true};$('avatarStatus').textContent='';$('avatarFile').value=''}
   function clear(){epoch++;renderedIdentity=identity();resetImage()}
   function begin(){
     if(renderedIdentity!==identity())clear();
@@ -30,18 +30,21 @@ export function createAvatar({auth,state,busy}){
     for(const id of ['avatarFile','avatarUpload','avatarRefresh'])$(id).disabled=busy()||!eligible();
     $('avatarRemove').disabled=busy()||!eligible()||!hasImage;
   }
+  function publish(c,blob){
+    if(current(c)&&typeof globalThis.CustomEvent==='function')globalThis.dispatchEvent?.(new CustomEvent('ygc-self-avatar',{detail:{actor:state().user.app_user_id,blob}}));
+  }
   async function read(c){
     if(!current(c))return;
-    const response=await c.client.authorizedFetch(c.path,{},true);
+    const response=await c.client.authorizedFetch(c.path,{},false);
     if(!current(c))return;
-    if(response.status===404){resetImage();$('avatarStatus').textContent=t('avatar.empty');return}
+    if(response.status===404){resetImage();publish(c,null);$('avatarStatus').textContent=t('avatar.empty');return}
     if(!response.ok)throw Object.assign(Error('Image unavailable'),{status:response.status});
     if(!response.headers.get('Content-Type')?.startsWith('image/jpeg'))throw Error('Unexpected image type');
     const blob=await response.blob();if(!current(c))return;
     if(blob.size>25*1024*1024)throw Error('Image exceeds limit');
     const nextURL=URL.createObjectURL(blob);
     if(!current(c)){URL.revokeObjectURL(nextURL);return}
-    resetImage();url=nextURL;hasImage=true;$('avatarPreview').src=url;$('avatarPreview').hidden=false;
+    resetImage();url=nextURL;hasImage=true;$('avatarPreview').src=url;$('avatarPreview').hidden=false;publish(c,blob);
   }
   async function refresh(){
     const c=begin();if(!c)return;
@@ -63,7 +66,7 @@ export function createAvatar({auth,state,busy}){
       const response=await c.client.authorizedFetch(c.path,{method:'DELETE'},true);
       if(!current(c))return;
       if(!response.ok)throw Object.assign(Error('Remove failed'),{status:response.status});
-      resetImage();$('avatarStatus').textContent=t('avatar.removed');
+      resetImage();publish(c,null);$('avatarStatus').textContent=t('avatar.removed');
     }catch(error){fail(error,c)}finally{try{const c=new globalThis.BroadcastChannel('ygc-member-avatar');c.postMessage('invalidate');c.close()}catch{}}
   }
   function failed(error){

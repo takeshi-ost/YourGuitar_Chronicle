@@ -13,10 +13,10 @@ const detail=({admin=false,viewer=admin?'9':'2',submitted=false,...extra}={})=>{
 };
 const denied=(status=403,code='account_inactive',raw='SECRET backend stack')=>({httpStatus:status,code,raw});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
-function environment({admin=false,fullPage=false,initial=account(admin?'9':'2',true,'active',admin?'admin':'member'),storage=new Map(),storageDenied=false}={}){
+function environment({admin=false,formal=false,fullPage=false,initial=account(admin?'9':'2',true,'active',admin?'admin':'member'),storage=new Map(),storageDenied=false}={}){
  const ids=new Map(),listeners={};
  class Element{
-  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this._text='';this.classList={add(){},remove(){}};this.isConnected=true;this.tabIndex=0}
+  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this._text='';this._classes=new Set();this.classList={add:(...v)=>v.forEach(x=>this._classes.add(x)),remove:(...v)=>v.forEach(x=>this._classes.delete(x)),contains:v=>this._classes.has(v)};this.isConnected=true;this.tabIndex=0}
   set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
   set textContent(value){this._text=String(value);this.children=[]}get textContent(){return this._text+this.children.map(n=>n.textContent).join('')}
   set innerHTML(value){throw Error('Ownership must be text-only')}
@@ -48,7 +48,7 @@ function environment({admin=false,fullPage=false,initial=account(admin?'9':'2',t
  const context=vm.createContext({document,URL:{createObjectURL:blob=>{const url='blob:fixture-'+created.length;created.push({blob,url});return url},revokeObjectURL:url=>revoked.push(url)},URLSearchParams,Intl,Date,console,FormData,Blob,sessionStorage,location:{search:'',origin:'https://ygc.example'},CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:(key,params={})=>key+(Object.keys(params).length?JSON.stringify(params):'')}});
  context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
  vm.runInContext(fs.readFileSync(path.join(assets,'overlays.js'),'utf8'),context);
- vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-applications.js'),'utf8').split('export function createApplications')[0].replaceAll('export function','function'),context);
+ vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-applications.js'),'utf8').replace(/^import .*;\n/gm,'').split('export function createApplications')[0].replaceAll('export function','function'),context);
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-disputes.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createDisputes;context.createDisputes=value=>{args=value;component=create(value);return component};
  const root=new Element('section');root.id='disputeBrowser';document.body.append(root);
@@ -57,14 +57,14 @@ function environment({admin=false,fullPage=false,initial=account(admin?'9':'2',t
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
   Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createIdentityCorrections:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
   ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);
- }else{component=context.createDisputes({auth:()=>client,state:()=>state,busy:()=>busy,admin,onUnauthorized:error=>denials.push(error),work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
+ }else{component=context.createDisputes({auth:()=>client,state:()=>state,busy:()=>busy,admin,formal,onUnauthorized:error=>denials.push(error),work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
 
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,denials,created,revoked,storage,ready,get updates(){return updates},get dialog(){return control('disputeDialog')},get list(){return control('disputeList')},get history(){return control('disputeRounds')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setDetail(value){defaultDetail=value},setOption(value){defaultOption=value},setCases(value){defaultCases=value},setOptions(value){defaultOptions=value},
   open(id='31'){return component.openDispute(id)},openOption(id='41'){return component.openDisputeOption(id)},dismiss(){control('disputeClose').onclick()},review(){return control('disputeForm').onsubmit({preventDefault(){}})},confirm(){return control('disputeConfirm').onclick()},
 
-  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
+  restoreAccount(next){state=next;client.account=next},changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
   async flush(){for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve))}
  };
 }
@@ -74,7 +74,7 @@ const file=()=>new Blob(['%PDF fixture'],{type:'application/pdf'});
 async function compose(e,{opening=false}={}){if(opening)await e.openOption();else await e.open();field(e,'disputeExplanation','My private explanation');field(e,'disputeSummary','Summary for review');if(opening)e.control('disputeAttachment').files=[file()];await e.review()}
 function completed(admin=false){return detail({admin,submitted:true,version:'9007199254740994'})}
 for(const initial of [null,account('2',false),account('2',true,'banned'),account('2',true,'disabled')])test('Ineligible account never reads a dispute',async()=>{const e=environment({initial});await e.component.refresh();await e.open();await e.openOption();assert.equal(e.calls.length,0);assert.equal(e.dialog.open,false)});
-test('Participant entry uses fresh private reads and exact BIGINT version',async()=>{const e=environment();await e.component.refresh();await e.open();assert.match(e.control('disputeMeta').textContent,/Acquire|acquire/);assert.equal(e.control('disputeForm').hidden,false);assert.equal(e.control('disputeClaim').hidden,true);assert.equal(writes(e).length,0);for(const c of e.calls){assert.equal(c.verified,true);assert.equal(c.options.cache,'no-store');assert.equal(c.options.credentials,'omit');assert.equal(c.options.redirect,'error');assert.doesNotMatch(c.url,/viewer|user_id/)}});
+test('Participant entry uses fresh private reads and exact BIGINT version',async()=>{const e=environment();await e.component.refresh();await e.open();assert.match(e.control('disputeMeta').textContent,/Acquire|acquire/);assert.equal(e.control('disputeForm').hidden,false);assert.equal(e.control('disputeClaim').hidden,true);assert.equal(writes(e).length,0);for(const c of e.calls){assert.equal(c.verified,false);assert.equal(c.options.cache,'no-store');assert.equal(c.options.credentials,'omit');assert.equal(c.options.redirect,'error');assert.doesNotMatch(c.url,/viewer|user_id/)}});
 test('Decline acceptance is explicitly reviewed and confirmed separately from notification reads',async()=>{const e=environment();await e.openOption();await e.control('disputeAccept').onclick();assert.equal(writes(e).length,0);assert.match(e.control('disputePreview').textContent,/Owner decline reason/);const accepted=option({can_acknowledge:false,can_appeal:false,revision:'b'.repeat(64),decline:{reason:'Owner decline reason',created_at:now,acknowledged_at:now}});e.queue({option:accepted},'/acknowledge','POST');await e.confirm();assert.equal(writes(e).length,1);assert.deepEqual(JSON.parse(writes(e)[0].options.body),{revision});assert.equal(e.control('disputeAccept').hidden,true);assert.equal(e.control('disputeForm').hidden,true)});
 test('Appeal requires explanation, summary and initial attachment',async()=>{for(const missing of ['explanation','summary','file']){const e=environment();await e.openOption();field(e,'disputeExplanation',missing==='explanation'?'':'private');field(e,'disputeSummary',missing==='summary'?'':'summary');if(missing!=='file')e.control('disputeAttachment').files=[file()];await e.review();await e.confirm();assert.equal(writes(e).length,0);assert.equal(e.control('disputeConfirm').hidden,true)}});
 test('Confirmed appeal sends multipart exact opening payload and does not double-submit',async()=>{const e=environment();await compose(e,{opening:true});e.queue({detail:completed()},'/evidence','POST');const first=e.confirm();e.confirm();await first;assert.equal(writes(e).length,1);const payload=JSON.parse(writes(e)[0].options.body.get('data'));assert.deepEqual(payload,{revision,case_id:null,version:null,round_number:null,explanation:'My private explanation',summary:'Summary for review'});assert.ok(writes(e)[0].options.body.get('attachment'));assert.equal(e.control('disputeForm').hidden,true);assert.equal(e.storage.size,0)});
@@ -124,3 +124,14 @@ for(const resume of ['reload','BFCache'])test('Full account Dispute unknown-resu
  if(resume==='reload'){restored=environment({fullPage:true,storage:e.storage});await restored.ready}else{const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});await e.flush();assert.equal(e.calls.length,calls);held.resolve(e.client.account);await show}
  await restored.open();assert.equal(restored.control('disputeReview').disabled,true);assert.equal(restored.control('disputeCheck').hidden,false);assert.equal(restored.control('disputeAcknowledge').hidden,true);await restored.review();await restored.confirm();assert.equal(writes(restored).length,resume==='reload'?0:1);assert.equal(e.storage.get('ygc.disputes.uncertain.v1.participant'),marker);
 });
+
+
+test('Formal participant dispute uses the common modal and keeps its private evidence lifecycle',async()=>{
+ const e=environment({formal:true});e.setDetail(detail({submitted:true}));await e.open();
+ assert.equal(e.dialog.className,'modal-backdrop');assert.equal(e.dialog.children[0].className,'modal dispute-modal');
+ assert.equal(e.dialog.open,true);assert.match(e.history.textContent,/My private explanation/);
+ assert.equal(e.history.children[0].children[1].className,'dispute-timeline');
+ e.dismiss();assert.equal(e.dialog.open,false);assert.equal(e.history.textContent,'');
+});
+
+test('First admin refresh synchronizes restored identity before retaining cases',async()=>{const e=environment({admin:true,initial:null});e.restoreAccount(account('9',true,'active','admin'));e.setCases([caseRow()]);await e.component.refresh();assert.equal(e.list.children.length,1);assert.equal(e.list.children[0].dataset.disputeCase,'31')});

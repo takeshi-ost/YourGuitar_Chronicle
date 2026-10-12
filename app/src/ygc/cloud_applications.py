@@ -140,7 +140,89 @@ class CloudApplications:
             # an Admin acting as an applicant cannot write during read_only.
             return dict(items=[self.detail(row) for row in rows],can_write=mode['mode'] in ('normal','admin_only'))
 
-    def start(self,actor,data):
+    def preview(self, actor, data):
+        """Issue a private, expiring form handle without creating an application.
+
+        Store its trusted payload in canonical private account_metadata instead
+        of a process-local HMAC key (which would fail across Cloud Run workers).
+        The random handle carries no profile/photo data and is actor-scoped.
+        """
+        if not isinstance(data, dict) or set(data)-{'kind','payload','individual_id'}:
+            raise ValueError('Invalid preview.')
+        kind = data.get('kind')
+        if kind not in ('listing','acquire') or (kind=='listing' and 'individual_id' in data) or (kind=='acquire' and 'payload' in data):
+            raise ValueError('Invalid preview kind.')
+        payload = listing_input(data.get('payload')) if kind=='listing' else None
+        individual = positive_id(data.get('individual_id')) if kind=='acquire' else None
+        with self.transaction(actor, True) as (con,user,_):
+            shared = ObservationConnection(con)
+            if kind=='listing':
+                ids = duplicates(shared,payload)
+                if ids:return dict(status='duplicate',existing_individual_ids=[str(i) for i in ids])
+                serial = payload['serial_number']
+            else:
+                target = eligibility(shared,user,individual)
+                from ygc.disputes import guard
+                guard(shared,individual)
+                serial = target['serial_number']
+                waiting=con.execute("SELECT a.*,c.verification_status AS claim_verification FROM acquire_applications a JOIN claims c ON c.id=a.claim_id WHERE a.applicant_id=%s AND c.individual_id=%s AND a.status='accepted' AND c.status='active' AND c.verification_status='unverified' LIMIT 1",(user,individual)).fetchone()
+                if waiting:return self.detail(waiting)
+            unusable={row['revision'] for row in con.execute("SELECT revision FROM acquire_applications WHERE applicant_id=%s AND status IN ('accepted','cancelled','closed','expired','rejected')",(user,))}
+            # Reopen an existing live request rather than mint another form.
+            for row in con.execute('SELECT * FROM acquire_applications WHERE applicant_id=%s AND request_kind=%s AND status=ANY(%s)',(user,kind,list(LIVE))):
+                if row['status']=='draft' and row['expires_at']<=time.time():continue
+                matches = row['individual_id']==individual if kind=='acquire' else normalize_manufacturer(json.loads(row['listing_payload'])['manufacturer'])==normalize_manufacturer(payload['manufacturer']) and normalize_serial(row['serial'])==normalize_serial(serial)
+                if matches:return self.detail(row)
+        issued = dict(kind=kind,payload=payload,individual_id=str(individual) if individual else None,
+            serial=serial,revision=secrets.token_hex(16),challenge=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8)),expires_at=time.time()+86400)
+        token = secrets.token_hex(32)
+        prefix = 'application_preview:'+actor+':'
+        with connect(self.settings,'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:raise MediaConflict()
+            with self.operations.account_access('user_write',actor) as (con,_,account):
+                # Account row lock serializes issuance/limits for this actor.
+                records = con.execute('SELECT key,value FROM account_metadata WHERE starts_with(key,%s)',(prefix,)).fetchall()
+                live = 0;reused=False
+                for row in records:
+                    previous=json.loads(row['value'])
+                    if previous['expires_at']<=time.time() or previous['revision'] in unusable:con.execute('DELETE FROM account_metadata WHERE key=%s',(row['key'],))
+                    else:
+                        live+=1
+                        if all(previous.get(key)==issued.get(key) for key in ('kind','payload','individual_id')):
+                            issued=previous;token=row['key'][len(prefix):];reused=True
+                if not reused:
+                    if live>=25:raise ValueError('Too many active previews.')
+                    con.execute('INSERT INTO account_metadata(key,value) VALUES(%s,%s)',(prefix+token,json.dumps(issued)))
+        return {**issued,'draft_token':token,'unsaved':True,'status':'draft','acquisition_date':payload['occurred_at'] if payload else None,
+            'body':payload['body'] if payload else '', 'photos':[], 'claim_id':None,'verification_status':None,'reasons':[],'admin_review':None}
+
+    def keep_preview(self, actor, body):
+        if not isinstance(body,dict) or set(body) not in ({'draft_token','acquisition_date','body'},{'revision','acquisition_date','body'}):
+            raise ValueError('Invalid preview handle.')
+        acquired,description = body['acquisition_date'],body['body']
+        if not isinstance(acquired,str) or not isinstance(description,str) or len(description)>4000:raise ValueError('Invalid draft input.')
+        validate_claim_date(acquired)
+        if 'draft_token' in body:
+            token=body['draft_token']
+            if not isinstance(token,str) or not re.fullmatch('[a-f0-9]{64}',token):raise ValueError('Invalid preview handle.')
+            with self.operations.account_access('user_read',actor) as (con,_,account):
+                row=con.execute('SELECT value FROM account_metadata WHERE key=%s',('application_preview:'+actor+':'+token,)).fetchone()
+                if not row:raise GuitarMissing()
+                preview=json.loads(row['value'])
+            if preview['expires_at']<=time.time():raise ValueError('Preview expired.')
+            data={'kind':preview['kind']}
+            data.update(payload=preview['payload']) if preview['kind']=='listing' else data.update(individual_id=preview['individual_id'])
+            saved=self.start(actor,data,_preview=preview,_draft_input=(acquired,description))
+            if saved.get('revision')!=preview['revision']:raise ValueError('Another request already exists.')
+            return saved
+        else:revision=revision_id(body['revision'])
+        with self.transaction(actor,True) as (con,user,_):
+            row=self.find(con,user,revision);self.draft(row)
+            if row['request_kind']=='acquire':
+                con.execute('UPDATE acquire_applications SET acquisition_date=%s,body=%s WHERE revision=%s',(acquired or None,description,row['revision']))
+            return self.detail(self.find(con,user,row['revision']))
+
+    def start(self,actor,data,*,_preview=None,_draft_input=None):
         if not isinstance(data,dict) or set(data)-{'kind','payload','individual_id'}:raise ValueError('Invalid application.')
         kind=data.get('kind')
         payload=listing_input(data.get('payload')) if kind=='listing' else None
@@ -148,6 +230,13 @@ class CloudApplications:
         if kind not in ('listing','acquire') or (kind=='listing' and 'individual_id' in data) or (kind=='acquire' and 'payload' in data):raise ValueError('Invalid application kind.')
         with self.transaction(actor,True) as (con,user,_):
             shared=ObservationConnection(con)
+            if _preview is not None:
+                previous=con.execute('SELECT * FROM acquire_applications WHERE revision=%s AND applicant_id=%s FOR UPDATE',(_preview['revision'],user)).fetchone()
+                if previous:
+                    self.draft(previous)
+                    if previous['request_kind']=='acquire' and _draft_input is not None:
+                        con.execute('UPDATE acquire_applications SET acquisition_date=%s,body=%s WHERE revision=%s',(*_draft_input,previous['revision']))
+                    return self.detail(self.find(con,user,previous['revision']))
             if kind=='listing':
                 ids=duplicates(shared,payload)
                 if ids:return dict(status='duplicate',existing_individual_ids=[str(i) for i in ids])
@@ -172,13 +261,13 @@ class CloudApplications:
                 if matches:return self.detail(row)
             count=con.execute('SELECT COUNT(*) AS n FROM acquire_applications WHERE applicant_id=%s AND status=ANY(%s) AND (status<>%s OR expires_at>%s)',(user,list(LIVE),'draft',time.time())).fetchone()['n']
             if count>=25:raise ValueError('Too many active applications.')
-            revision=secrets.token_hex(16);challenge=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+            revision=_preview['revision'] if _preview else secrets.token_hex(16);challenge=_preview['challenge'] if _preview else ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
             con.execute('''INSERT INTO acquire_applications(revision,request_kind,listing_payload,applicant_id,individual_id,original_individual_id,
                 serial,challenge,expires_at,created_at,prompt_version,product_details,acquisition_date,body,image_meta)
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
-                (revision,kind,json.dumps(payload) if payload else None,user,individual,individual or 0,serial,challenge,time.time()+86400,
+                (revision,kind,json.dumps(payload) if payload else None,user,individual,individual or 0,serial,challenge,_preview['expires_at'] if _preview else time.time()+86400,
                  datetime.now(timezone.utc).isoformat(),kind+'-evidence-v1',json.dumps(details) if details else None,
-                 payload['occurred_at'] if payload else None,payload['body'] if payload else '',json.dumps(dict(storage=IMAGE_VERSION))))
+                 payload['occurred_at'] if payload else (_draft_input[0] if _draft_input else None),payload['body'] if payload else (_draft_input[1] if _draft_input else ''),json.dumps(dict(storage=IMAGE_VERSION))))
             self.event(con,revision,'created')
             return self.detail(self.find(con,user,revision))
 
@@ -219,6 +308,21 @@ class CloudApplications:
                 self.event(con,revision,'cancelled');row=row|{'status':'cancelled'}
             elif row['status']!='cancelled':raise ValueError('Application is already decided.')
             return self.detail(row)
+
+    def replace_photos(self,actor,revision):
+        """Reopen only an undecided failed Listing within its original photo deadline."""
+        revision_id(revision)
+        with self.transaction(actor,True) as (con,user,_):
+            row=self.find(con,user,revision)
+            if row['request_kind']!='listing' or row['claim_id'] or row['expires_at']<=time.time():
+                raise ValueError('Only unexpired failed Listings can replace photos.')
+            if row['status']=='draft':return self.detail(row)
+            if row['status']!='error':raise ValueError('Review must have stopped before replacing photos.')
+            # Revoke the old review authority and require both photos again.
+            # Keep the original serial/challenge/date and deadline; do not extend it.
+            con.execute("UPDATE acquire_applications SET status='draft',images='{}',submitted_at=NULL,started_at=NULL,completed_at=NULL,received=NULL,result=NULL,report=NULL,error=NULL,attempts=0,lease_token=NULL,lease_until=NULL,product_observations=NULL WHERE revision=%s",(revision,))
+            self.event(con,revision,'photos_reopened')
+            return self.detail(self.find(con,user,revision))
 
     def retry(self,actor,revision):
         with self.transaction(actor,True) as (con,user,_):

@@ -37,7 +37,7 @@ function environment(){
   const context=vm.createContext({document,URL,Blob,Intl,Date,console,CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:key=>key}});context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/overlays.js'),'utf8'),context);
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}};
-  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-applications.js'),'utf8').replaceAll('export function','function');
+  const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-applications.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function');
   vm.runInContext(source+';globalThis.create=createApplications;',context);component=context.create(args);
   const dialog=ids.get('applicationDialog'),list=root.children.at(-1),retry=ids.get('applicationRetry');
   return {component,calls,replies,root,dialog,list,retry,ids,
@@ -49,6 +49,7 @@ function environment(){
       else{const event={target:dialog,key:kind==='escape'?'Escape':undefined,clientX:1,clientY:1,preventDefault(){},stopImmediatePropagation(){}};for(const listener of listeners[kind==='escape'?'keydown':'click']||[])listener(event)}
       assert.equal(dialog.open,false);
     },
+    setAccount(value){state=value},
     changeAccount(value,{clear=true}={}){if(clear)component.clear();state=value;component.render()},
     listText(){return list.children.map(item=>item.children[0].textContent).join('\n')},
     async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))},
@@ -250,3 +251,31 @@ test('Applicant sees manual Admin reason separately from retained AI reasons, wi
   assert.match(e.dialog.children[1].textContent,/applications.ai_reasons.*\nOriginal AI reason/);assert.doesNotMatch(e.dialog.children[1].textContent,/Manual rejection/);
   e.dismiss('escape');assert.equal(review.hidden,true);assert.equal(review.textContent,'');
 });
+
+test('Failed Listing photo recovery refreshes into a draft and requires photos again',async()=>{
+  const e=environment(),failed={...application(),kind:'listing',payload:{manufacturer:'Squier',serial_number:'FIRST',occurred_at:'2025-04-15',body:''},challenge:'UNCHANGED',photos:['closeup','overview']},draft={...failed,status:'draft',photos:[]};
+  e.replies.push(page(failed));await e.component.refresh();e.list.children[0].children[1].onclick();
+  const replace=e.ids.get('applicationReplacePhotos');assert.equal(replace.hidden,false);
+  e.replies.push(draft,page(draft));await replace.onclick();await e.flush();
+  assert.equal(e.calls[1].url,'/api/auth/applications/'+failed.revision+'/replace_photos');
+  assert.deepEqual(JSON.parse(e.calls[1].options.body),{});assert.equal(replace.hidden,true);
+  assert.match(e.listText(),/status_draft/);
+});
+
+test('Acquire errors never offer Listing photo replacement',async()=>{
+  const e=environment();await e.start();const replace=e.ids.get('applicationReplacePhotos');assert.equal(replace.hidden,true);
+  await replace.onclick();assert.equal(e.calls.length,1);
+});
+
+for(const explicitClear of [true,false]){
+  test(`Initial account refresh survives render and opens saved draft (clear=${explicitClear})`,async()=>{
+    const e=environment(),pending=deferred();
+    e.setAccount(account('restored'));
+    if(explicitClear)e.component.clear();
+    e.replies.push(pending.promise);const loading=e.component.refresh();
+    e.component.render();pending.resolve(page(application('draft')));await loading;
+    assert.equal(e.list.children.length,1);
+    e.list.children[0].children[1].onclick();assert.equal(e.dialog.open,true);
+    assert.match(e.dialog.children[1].textContent,/status_draft/);
+  });
+}

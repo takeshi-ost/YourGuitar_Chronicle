@@ -139,6 +139,8 @@ protobuf==7.36.2
     #   googleapis-common-protos
     #   grpcio-status
     #   proto-plus
+psycopg-pool==3.3.3
+    # via your-guitar-chronicle (app/pyproject.toml)
 psycopg==3.3.6
     # via
     #   your-guitar-chronicle (app/pyproject.toml)
@@ -194,6 +196,7 @@ typer==0.27.2
     # via
     #   your-guitar-chronicle (app/pyproject.toml)
 typing-extensions==4.16.0
+    # via psycopg-pool
     # via
     #   anyio
     #   fastapi

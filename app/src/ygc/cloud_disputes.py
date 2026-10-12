@@ -91,7 +91,7 @@ class CloudDisputes:
         return result
 
     @staticmethod
-    def _rows(connection, user, kind, after, limit, status, admin):
+    def _rows(connection, user, kind, after, limit, status, admin, individual_filter=None):
         if kind == 'options':
             return connection.execute('''SELECT c.id,c.individual_id FROM claims c
                 WHERE c.author_user_id=? AND c.status='active' AND c.claim_type='ownership'
@@ -102,10 +102,10 @@ class CloudDisputes:
                 AND NOT EXISTS (SELECT 1 FROM ownership_declines d WHERE d.claim_id=c.id AND d.acknowledged_at IS NOT NULL)
                 AND (?=0 OR c.id<?) ORDER BY c.id DESC LIMIT ?''', (user, after, after, limit + 1)).fetchall()
         return connection.execute('''SELECT d.id,d.individual_id FROM ownership_disputes d
-            WHERE (?='all' OR d.status=?) AND (?=1 OR d.owner_id=? OR EXISTS (
+            WHERE (CAST(? AS BIGINT) IS NULL OR d.individual_id=?) AND (?='all' OR d.status=?) AND (?=1 OR d.owner_id=? OR EXISTS (
                 SELECT 1 FROM ownership_dispute_claims dc WHERE dc.dispute_id=d.id AND dc.applicant_id=?))
             AND (?=0 OR d.id<?) ORDER BY d.id DESC LIMIT ?''',
-            (status, status, int(admin), user, user, after, after, limit + 1)).fetchall()
+            (individual_filter, individual_filter, status, status, int(admin), user, user, after, after, limit + 1)).fetchall()
 
     @staticmethod
     def _target(connection, user, *, claim=None, case=None, evidence=None, admin=False):
@@ -117,7 +117,7 @@ class CloudDisputes:
         return candidate(connection, claim, user)['individual_id']
 
     @contextmanager
-    def transaction(self, actor, *, claim=None, case=None, evidence=None, admin=False, write=False, listing=None):
+    def transaction(self, actor, *, claim=None, case=None, evidence=None, admin=False, write=False, listing=None, individual_filter=None):
         for value in (claim, case, evidence):
             if value is not None:
                 identifier(value)
@@ -136,7 +136,7 @@ class CloudDisputes:
                     raw.execute("SET LOCAL lock_timeout='2s'")
                     before = ObservationConnection(raw)
                     if listing is not None:
-                        rows = self._rows(before, account['id'], *listing, admin)
+                        rows = self._rows(before, account['id'], *listing, admin, individual_filter)
                         targets = {r['individual_id'] for r in rows}
                     else:
                         targets = {self._target(before, account['id'], claim=claim, case=case, evidence=evidence, admin=admin)}
@@ -155,7 +155,7 @@ class CloudDisputes:
                     raw.execute("SET LOCAL lock_timeout='2s'")
                     connection = DisputeConnection(raw)
                     if listing is not None:
-                        current = self._rows(connection, canonical['id'], *listing, admin)
+                        current = self._rows(connection, canonical['id'], *listing, admin, individual_filter)
                         if [dict(r) for r in current] != [dict(r) for r in rows]:
                             raise ClaimConflict('Dispute inbox changed; reload.')
                     elif {self._target(connection, canonical['id'], claim=claim, case=case, evidence=evidence, admin=admin)} != targets:
@@ -227,13 +227,16 @@ class CloudDisputes:
                 'applicants': [person(connection, r['applicant_id']) for r in applicants],
                 'round_number': rnd['number'], 'round_phase': rnd['phase']}
 
-    def list(self, actor, *, after=0, limit=25, status='open', admin=False):
+    def list(self, actor, *, after=0, limit=25, status='open', admin=False, individual=None):
         page(after, limit)
         if status not in ('open', 'resolved', 'all') or type(admin) is not bool:
             raise ValueError('Invalid dispute filter.')
+        if individual is not None:
+            identifier(individual)
         listing = ('list', after, limit, status)
-        with self.transaction(actor, listing=listing, admin=admin) as (repo, user, can_write):
-            rows = self._rows(repo.connection, user, *listing, admin)
+        filters = {'individual_filter': individual} if individual is not None else {}
+        with self.transaction(actor, listing=listing, admin=admin, **filters) as (repo, user, can_write):
+            rows = self._rows(repo.connection, user, *listing, admin, individual)
             return result_projection('list', {'items': [self._case(repo.connection,
                 case_row(repo.connection, r['id'], user, admin), user, admin) for r in rows[:limit]],
                 'next_after': str(rows[limit - 1]['id']) if len(rows) > limit else None,

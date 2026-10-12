@@ -120,3 +120,10 @@ button:is(.owner-claim-card,.add-claim-action,.new-guitar-action){border:3px dou
 .language-picker{display:inline-flex;align-items:center;flex-shrink:0;margin-inline-start:8px}
 .language-picker select{width:auto;max-width:140px;padding:4px 6px;font:inherit;color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:6px}
 @media(max-width:900px){.language-picker{order:-1;margin-inline-start:0;margin-inline-end:8px}}
+
+/* Compact favorite notices remain accessible without enlarging table cells. */
+.favorite-status-compact{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+.favorite-cell .favorite-refresh-compact{width:14px;min-width:0;padding:0;border:0;background:none;font-size:14px;line-height:20px;vertical-align:middle}
+
+.favorite-cell .favorite-control-compact:not([hidden]){display:inline-flex;width:36px;align-items:center;justify-content:center;vertical-align:middle}
+.favorite-cell .favorite-control-compact>.favorite-button{box-sizing:border-box;width:20px;min-width:0;padding:2px}

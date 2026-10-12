@@ -1,3 +1,4 @@
+import {createClaimPresentation} from './cloud-claim-presentation.js';
 import {catalogIndividualId} from './cloud-account-applications.js';
 import {createPrivateMedia,validateMediaItems,validMediaFiles} from './cloud-account-media.js';
 
@@ -11,11 +12,11 @@ export function readClaimIntent(search){
 
 // This surface contains only the authenticated author's own submissions. Public
 // Chronicle rendering stays in the public projection and never reads this data.
-export function createClaims({auth,state,busy,work}){
+export function createClaims({auth,state,busy,work,formal=Boolean(document.body?.dataset?.formalProfile),root:providedRoot,intentRoot:providedIntent,onSaved=()=>{}}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params),$=id=>document.getElementById(id);
   const node=(tag,text,id)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(id)n.id=id;return n};
   const button=(key,id)=>{const n=node('button',t(key),id);n.type='button';return n};
-  const root=$('selfClaims'),intentRoot=$('catalogClaimIntent');
+  const root=providedRoot||$('selfClaims'),intentRoot=providedIntent||$('catalogClaimIntent');
   const heading=node('h2',t('claims.heading')),notice=node('p',t('claims.help')),status=node('p','','claimsStatus'),list=node('ul','','claimsList');
   status.setAttribute('role','status');
   const browse=node('a',t('catalog.select_guitar'));browse.href=document.body?.dataset?.formalProfile==='true'?'/ui':'/';
@@ -24,7 +25,7 @@ export function createClaims({auth,state,busy,work}){
   const intentHeading=node('h2',t('claims.intent_title'),'catalogClaimTitle'),intentDetail=node('p','','catalogClaimDetail'),intentStatus=node('p','','catalogClaimStatus'),intentLink=node('a',t('catalog.view_guitar'),'catalogClaimLink'),start=button('claims.add','catalogClaimStart');
   intentStatus.setAttribute('role','status');intentRoot.setAttribute('aria-labelledby',intentHeading.id);intentRoot.append(intentHeading,intentDetail,intentStatus,intentLink,start);
 
-  const dialog=node('dialog','','claimDialog'),title=node('h2','','claimTitle'),guitarDetail=node('p','','claimGuitar'),savedState=node('p','','claimSavedState'),form=node('form','','claimForm'),fields=node('fieldset'),message=node('p','','claimMessage');
+  const dialog=node(formal?'div':'dialog','','claimDialog'),title=node('h2','','claimTitle'),guitarDetail=node(formal?'div':'p','','claimGuitar'),savedState=node('p','','claimSavedState'),form=node('form','','claimForm'),fields=node('fieldset'),message=node('p','','claimMessage');
   dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
   const kind=node('select','','claimKind'),eventKind=node('select','','claimEventKind'),date=node('input','','claimDate'),body=node('textarea','','claimBody'),items=node('div','','claimItems');
   date.type='date';body.maxLength=2000;
@@ -39,7 +40,9 @@ export function createClaims({auth,state,busy,work}){
   for(const value of eventKinds){const option=node('option',t('claims.event_'+value));option.value=value;eventKind.append(option)}
   fields.append(label(kind,'claims.kind'),kind,eventKindLabel,eventKind,label(date,'claims.date'),date,items,addItem,label(body,'claims.body'),body,mediaLabel,mediaInput);form.append(fields,save);
   const mediaSection=node('section','','claimMediaSection');mediaSection.append(mediaHelp,mediaMessage,mediaPhotos,mediaReload);
-  dialog.append(title,guitarDetail,savedState,node('p',t('claims.editor_help')),form,mediaSection,deactivate,message,latest,rebase,checkLatest,uncertainResults,checkSubmission,retryCreate,close);document.body.append(dialog);
+  const panel=formal?node('div'):dialog;
+  if(formal){dialog.className='modal-backdrop';panel.className='modal';dialog.append(panel);Object.defineProperty(dialog,'open',{get:()=>dialog.classList.contains('open')});savedState.hidden=true}
+  panel.append(title,guitarDetail,savedState,...(formal?[]:[node('p',t('claims.editor_help'))]),form,mediaSection,deactivate,message,latest,rebase,checkLatest,uncertainResults,checkSubmission,retryCreate,close);document.body.append(dialog);
 
   const identity=()=>JSON.stringify([state()?.user?.app_user_id??null,state()?.identity?.email_verified===true,state()?.user?.status??null]);
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true&&(!state().user.status||state().user.status==='active'));
@@ -48,6 +51,7 @@ export function createClaims({auth,state,busy,work}){
   let mediaFiles=[],mediaReady=false,mediaFailed=false,photoContext=null;
   const media=createPrivateMedia({auth,container:mediaPhotos,isCurrent:()=>Boolean(photoContext&&photoContext()&&dialog.open),onState:ready=>{mediaReady=ready;render()},onError:photoError});
   let itemInputs=[],fieldSequence=0,editing=false,dateChanged=false,draftDate=null,conflict=false,latestClaim=null,confirmDeactivate=false,uncertainCreate=false,submissionChecked=false;
+  const presentation=formal?createClaimPresentation({panel,form,fields,title,guitarDetail,kind,eventKind,date,body,items,save,close,mediaInput,addItem,getItems:()=>itemInputs,addField}):null;
   const writable=()=>eligible()&&canWrite===true&&Boolean(guitar)&&guitar.id===guitarId;
   const current=(accountVersion,actor,intentVersion,id)=>accountVersion===accountEpoch&&identity()===actor&&intentVersion===intentEpoch&&id===guitarId;
   const publicFields=['id','manufacturer','model','finish','year','serial_number'];
@@ -91,18 +95,19 @@ export function createClaims({auth,state,busy,work}){
   }
   function render(){
     if(renderedIdentity!==identity()){clear();renderedIdentity=identity()}
-    root.hidden=!eligible();intentRoot.hidden=guitarId===null;intentDetail.textContent=summary(guitar);
+    root.hidden=formal||!eligible();intentRoot.hidden=formal||guitarId===null;intentDetail.textContent=summary(guitar);
     intentLink.href=catalogIndividualId(guitarId)?(document.body?.dataset?.formalProfile==='true'?'/ui/profile/guitars/':'/guitars/')+guitarId:(document.body?.dataset?.formalProfile==='true'?'/ui':'/');intentLink.textContent=t(catalogIndividualId(guitarId)?'catalog.view_guitar':'catalog.browse');
     const hint=lookupState==='loading'?'catalog.acquire_loading':guitarId===''?'catalog.acquire_invalid':!guitar?'catalog.acquire_unavailable':!state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite===true?'claims.ready':canWrite===false?'applications.read_only':'applications.access_unavailable';
     intentStatus.textContent=t(hint);start.disabled=busy()||!writable();refreshButton.disabled=busy()||!catalogIndividualId(guitarId);more.hidden=nextAfter===null;more.disabled=busy()||!eligible();
     const active=!selected||selected.status==='active',spec=['specification','repair'].includes(kind.value),isMedia=kind.value==='media',isEvent=kind.value==='event',hasMedia=isMedia||isEvent;
     fields.disabled=busy()||!writable()||!active;kind.disabled=Boolean(selected&&selected.claim_type!=='specification');
     eventKind.hidden=eventKindLabel.hidden=!isEvent;eventKind.required=isEvent;eventKind.disabled=Boolean(selected);date.required=isEvent;
-    mediaHelp.textContent=t(isEvent?'claims.event_help':'claims.media_help');mediaSection.hidden=!hasMedia;mediaInput.hidden=mediaLabel.hidden=!hasMedia||Boolean(selected);mediaInput.required=isMedia&&!selected;mediaReload.hidden=!selected||!hasMedia||!mediaFailed;mediaReload.disabled=busy()||!eligible();
-    items.hidden=addItem.hidden=!spec;addItem.disabled=itemInputs.length>=50;
+    mediaHelp.textContent=t(isEvent?'claims.event_help':'claims.media_help');mediaSection.hidden=!hasMedia||formal&&!selected&&!mediaMessage.textContent;mediaHelp.hidden=formal;mediaInput.hidden=mediaLabel.hidden=!hasMedia||Boolean(selected);mediaInput.required=isMedia&&!selected;mediaReload.hidden=!selected||!hasMedia||!mediaFailed;mediaReload.disabled=busy()||!eligible();
+    items.hidden=addItem.hidden=!spec;if(formal)addItem.hidden=true;addItem.disabled=itemInputs.length>=50;
     body.required=!spec&&!isMedia;save.textContent=t(selected?'claims.save':'claims.add');save.disabled=busy()||!writable()||!active||conflict||uncertainCreate||!editing||(hasMedia&&!selected&&(isMedia||mediaFiles.length>0)&&!mediaReady);
     deactivate.hidden=!selected||!active;deactivate.disabled=busy()||!writable()||conflict;deactivate.textContent=t(confirmDeactivate?'claims.deactivate_confirm':'claims.deactivate');
     latest.hidden=!conflict;rebase.hidden=!conflict||!latestClaim||latestClaim.status!=='active';rebase.disabled=busy()||!writable();checkLatest.hidden=!conflict;checkLatest.disabled=busy()||!eligible();
+    presentation?.render();
     checkSubmission.hidden=uncertainResults.hidden=!uncertainCreate;checkSubmission.disabled=busy()||!eligible();retryCreate.hidden=!uncertainCreate||!submissionChecked;retryCreate.disabled=busy()||!writable();
   }
   function errorText(error){return t(error.code==='service_restricted'?'applications.service_restricted':[401,403].includes(error.status)?'self_profile.restricted':error.status===409?'claims.conflict':[400,413,415,422].includes(error.status)?'claims.invalid':'claims.failed')}
@@ -111,7 +116,7 @@ export function createClaims({auth,state,busy,work}){
     return response.json();
   }
   async function ownRequest(id,suffix='',options={}){
-    return json(await auth().authorizedFetch('/api/auth/guitars/'+id+'/claims'+suffix,{cache:'no-store',credentials:'omit',redirect:'error',...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},true));
+    return json(await auth().authorizedFetch('/api/auth/guitars/'+id+'/claims'+suffix,{cache:'no-store',credentials:'omit',redirect:'error',...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase()))));
   }
   async function publicGuitar(id){
     const options={cache:'no-store',credentials:'omit',redirect:'error'};
@@ -153,18 +158,19 @@ export function createClaims({auth,state,busy,work}){
     fieldInput.setAttribute('aria-label',t('claims.field'));valueInput.setAttribute('aria-label',t('claims.value'));fieldInput.placeholder=t('claims.field_example');valueInput.placeholder=t('claims.value');
     const index=fieldSequence++;fieldInput.id='claimField_'+index;valueInput.id='claimValue_'+index;
     row.append(label(fieldInput,'claims.field'),fieldInput,label(valueInput,'claims.value'),valueInput,remove);items.append(row);
-    const entry={row,field:fieldInput,value:valueInput};itemInputs.push(entry);
+    const entry={row,field:fieldInput,value:valueInput};if(!itemInputs.length)items.replaceChildren(row);itemInputs.push(entry);presentation?.decorateField(row,fieldInput,valueInput,remove);
     remove.onclick=()=>{if(busy()||!writable()||selected?.status==='inactive')return;itemInputs=itemInputs.filter(item=>item!==entry);items.replaceChildren(...itemInputs.map(item=>item.row));confirmDeactivate=false;render()};
     fieldInput.oninput=valueInput.oninput=()=>{confirmDeactivate=false;render()};
   }
-  function show(row=null){
-    resetDialog();editing=true;selected=row;draftGuitar=guitar;title.textContent=t(row?'claims.edit':'claims.add');guitarDetail.textContent=summary(draftGuitar);savedState.textContent=row?contentSummary(row):'';draftDate=row?.occurred_at??null;
-    const choices=photoClaim(row)?[row.claim_type]:row?.claim_type==='incident'?[row.incident_kind]:row?['specification','repair']:['specification','repair','damage','lost','theft','media','event'];
+  function show(row=null,requested=null){
+    resetDialog();editing=true;selected=row;draftGuitar=guitar;title.textContent=t(row?'claims.edit':'claims.add');guitarDetail.textContent=formal?[draftGuitar?.manufacturer,draftGuitar?.model].filter(Boolean).join(' ')+(draftGuitar?.serial_number?' / '+draftGuitar.serial_number:''):summary(draftGuitar);savedState.textContent=row?contentSummary(row):'';draftDate=row?.occurred_at??null;
+    const choices=requested==='incident'?['damage','lost','theft']:requested==='specification'?['specification','repair']:requested?[requested]:photoClaim(row)?[row.claim_type]:row?.claim_type==='incident'?[row.incident_kind]:row?['specification','repair']:['specification','repair','damage','lost','theft','media','event'];
     for(const value of choices){const option=node('option',t('claims.'+value));option.value=value;kind.append(option)}
-    kind.value=row?(row.claim_type==='specification'?row.specification_kind:photoClaim(row)?row.claim_type:row.incident_kind):'specification';
+    kind.value=row?(row.claim_type==='specification'?row.specification_kind:photoClaim(row)?row.claim_type:row.incident_kind):requested==='incident'?'damage':requested||'specification';
     eventKind.value=row?.event_kind||'exhibition';date.value=row?dateValue(row.occurred_at):today();date.max=today();body.value=row?.body||'';
     if(row?.claim_type==='specification')for(const item of row.spec_items)addField(item.field_name,item.value_text);
-    if(!row)addField();
+    if(!row&&!formal)addField();
+    presentation?.mount(kind.value,Boolean(row));
     render();globalThis.YGCOverlays.open(dialog);if(photoClaim(row))loadPhotos(row);
   }
   function showConflict(row){
@@ -269,7 +275,7 @@ export function createClaims({auth,state,busy,work}){
         }
         throw err;
       }
-      show(row);message.textContent=t('claims.saved');await refresh();
+      if(formal){globalThis.YGCOverlays.close(dialog);await refresh();await onSaved(id)}else{show(row);message.textContent=t('claims.saved');await refresh();}
     });
   };
   deactivate.onclick=()=>{
@@ -284,5 +290,20 @@ export function createClaims({auth,state,busy,work}){
   refreshButton.onclick=()=>action(async()=>{await refresh()});more.onclick=()=>{if(nextAfter!==null)return action(async()=>{await refresh(nextAfter)})};
   globalThis.addEventListener('pagehide',()=>purgePrivate());
   globalThis.addEventListener('focus',()=>{if(!busy()&&guitarId!==null)refresh(currentAfter)});
-  render();return {render,refresh,clear,failed,setCatalogIntent};
+  async function readActions(id){
+    if(!eligible()||!catalogIndividualId(id))return [];
+    const version=accountEpoch,actor=identity(),result=[],seen=new Set();let after=null;
+    do{const page=validatePage(await ownRequest(id,after?'?after='+after:''),id);if(version!==accountEpoch||actor!==identity()||!eligible())return [];
+      for(const row of page.items){if(seen.has(row.id))throw Error('Repeated own Claim');seen.add(row.id);result.push(row)}
+      after=page.next_after;
+    }while(after!==null);
+    return result;
+  }
+  async function openEdit(id,claim){
+    if(busy()||!eligible())return;
+    await setCatalogIntent(id);const version=accountEpoch,actor=identity(),selection=intentEpoch;
+    while(!rows.some(row=>row.id===claim)&&nextAfter!==null){if(!await refresh(nextAfter))return;if(!current(version,actor,selection,id))return}
+    if(current(version,actor,selection,id)&&writable()&&!dialog.open){const row=rows.find(row=>row.id===claim);if(row)show(row)}
+  }
+  render();return {render,refresh,clear,failed,setCatalogIntent,readActions,openEdit,async openCreate(id,type){if(!['specification','incident','event','media'].includes(type)||busy())return;await setCatalogIntent(id);if(writable()&&!dialog.open)show(null,type)},openOwn(id){const row=rows.find(item=>item.id===id);if(row&&!busy()&&eligible())show(row)},ownRows:()=>rows};
 }

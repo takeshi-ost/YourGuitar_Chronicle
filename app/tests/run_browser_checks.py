@@ -52,6 +52,10 @@ def main():
                 cloud_public_catalog()
                 from browser_cloud_formal_ui import main as cloud_formal_ui
                 cloud_formal_ui()
+                from browser_detail_dispute import main as detail_dispute
+                detail_dispute()
+                from browser_formal_claim_actions import main as formal_claim_actions
+                formal_claim_actions()
                 from browser_cloud_claim_posting import main as cloud_claim_posting
                 cloud_claim_posting()
                 from browser_cloud_media_claims import main as cloud_media_claims

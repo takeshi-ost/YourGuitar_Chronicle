@@ -25,9 +25,9 @@ from ygc.identity_platform import VerifiedIdentity
 BASE = '/api/public/guitars'
 BIG_ID = 9007199254741009
 PRIVATE = 'CATALOG-PRIVATE-DO-NOT-PUBLISH'
-CARD_FIELDS = {'id', 'manufacturer', 'model', 'finish', 'year', 'serial_number', 'photo'}
+CARD_FIELDS = {'id', 'manufacturer', 'model', 'finish', 'year', 'serial_number', 'photo', 'claim_count'}
 CLAIM_FIELDS = {'id', 'claim_type', 'ownership_kind', 'occurred_at', 'created_at',
-                'verification_status', 'items', 'source_url'}
+                'verification_status', 'items', 'source_url', 'presentation'}
 
 
 def rejected(error, action):
@@ -57,7 +57,7 @@ def run(port):
                 migrate(owner, target, runtime)
             accounts, operations = PostgresAccounts(app), PostgresOperations(app)
             records = {name: accounts.ensure_identity(issuer='public-catalog-fixture',
-                subject=name, display_name=PRIVATE + '-' + name)
+                subject=name, display_name='Public member-' + name)
                 for name in ('admin', 'member', 'banned', 'silent', 'disabled')}
             admin = records['admin']['app_user_id']
             assert grant_first_admin(app, admin, 'local-test-operator')
@@ -103,7 +103,7 @@ def seed(settings, records):
                 previous_owner_text,occurred_at,created_at,updated_at)
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
                 (guitar_id, records[author]['id'], kind, ownership, status, verification,
-                 field, value, PRIVATE, PRIVATE, occurred, created, created)).fetchone()
+                 field, value, 'Public Claim prose', PRIVATE, occurred, created, created)).fetchone()
             return row['id']
 
         def items(table, claim_id, values):
@@ -225,14 +225,18 @@ def checks(settings, owner, accounts, operations, records, fixture):
     def private_free(payload):
         text = json.dumps(payload)
         assert PRIVATE not in text
-        for forbidden in ('gcs-content-v1:', 'storage_path', 'bucket', 'owner_name',
+        for forbidden in ('gcs-content-v1:', 'storage_path', 'bucket',
                           'author_name', 'author_user_id', 'location_country', 'location_region',
-                          'current_owner', 'payload_json', 'previous_owner_text', '"body":'):
+                          'current_owner', 'payload_json', 'previous_owner_text'):
             assert forbidden not in text, forbidden
 
     def card(row, *, detail=False):
-        assert set(row) == CARD_FIELDS | ({'specifications'} if detail else set())
+        assert set(row) == CARD_FIELDS | ({'specifications', 'presentation', 'public_photo'} if detail else set())
         assert isinstance(row['id'], str) and row['id'].isdecimal()
+        assert isinstance(row['claim_count'], str) and row['claim_count'].isdecimal()
+        assert int(row['claim_count']) > 0
+        if row['id'] != '10':
+            assert row['claim_count'] == '1'
         assert row['photo'] is None
         private_free(row)
 
@@ -245,7 +249,8 @@ def checks(settings, owner, accounts, operations, records, fixture):
         response = client.get(BASE)
         assert response.status_code == 200, response.text
         assert verifier.calls == []  # Anonymous reads never invoke an identity provider.
-        assert 'no-store' in response.headers['cache-control']
+        assert response.headers['cache-control']=='private, no-cache, max-age=0, must-revalidate'
+        assert client.get(BASE,headers={'If-None-Match':response.headers['etag']}).status_code==304
         result = response.json()
         assert set(result) == {'items', 'total', 'page', 'page_size', 'total_pages'}
         assert result['total'] == str(len(fixture['visible']))
@@ -268,7 +273,7 @@ def checks(settings, owner, accounts, operations, records, fixture):
 
         # Concatenated pages are stable and exhaustive, including equal Maker,
         # Model and creation timestamp ties; repeating any page returns it intact.
-        for sort in ('newest', 'oldest', 'maker', 'model'):
+        for sort in ('newest', 'oldest', 'maker', 'model', *(field+'_'+direction for field in ('manufacturer','model','finish','year','serial_number') for direction in ('asc','desc'))):
             full = client.get(BASE, params={'sort': sort}).json()['items']
             paged = []
             for number in range(1, 5):
@@ -279,12 +284,17 @@ def checks(settings, owner, accounts, operations, records, fixture):
                 assert payload['page'] == number and payload['page_size'] == 2
                 paged.extend(payload['items'])
             assert paged == full and len({row['id'] for row in paged}) == 7
+        for field in ('manufacturer','model','finish','year','serial_number'):
+            for direction in ('asc','desc'):
+                rows=client.get(BASE, params={'sort':field+'_'+direction}).json()['items']
+                expected=sorted(sorted(rows,key=lambda row:int(row['id'])),key=lambda row:(row[field] or '').lower(),reverse=direction=='desc')
+                assert rows==expected
         newest = client.get(BASE, params={'sort': 'newest'}).json()['items']
         oldest = client.get(BASE, params={'sort': 'oldest'}).json()['items']
         assert [row['id'] for row in newest] == [row['id'] for row in reversed(oldest)]
         assert [row['id'] for row in client.get(BASE, params={'sort': 'maker'}).json()['items'][:3]] == ['13', '10', '11']
         for query, expected in (('fEnDeR', {10, 11}), ('Alpha', {10, 11}),
-                ('SERIAL-12', {12}), ('%', {13}), ('_', {13}), ('\\', {13}),
+                ('SERIAL-12', {12}), ('Sunburst 1960', set(fixture['visible'])), ('Fender Alpha', {10,11}), ('%', {13}), ('_', {13}), ('\\', {13}),
                 ("' OR 1=1 --", set()), ('nothing-matches', set())):
             payload = client.get(BASE, params={'q': query}).json()
             assert {int(row['id']) for row in payload['items']} == expected
@@ -309,6 +319,7 @@ def checks(settings, owner, accounts, operations, records, fixture):
         identifiers = [int(row['id']) for row in history]
         assert identifiers == sorted(set(identifiers), reverse=True)
         assert not set(identifiers) & set(fixture['excluded'])
+        assert detail['claim_count'] == str(len(history)), 'Claim count includes hidden neighbors or omits visible history'
         by_id = {int(row['id']): row for row in history}
         for row in history:
             assert set(row) == CLAIM_FIELDS
@@ -341,16 +352,56 @@ def checks(settings, owner, accounts, operations, records, fixture):
             response = client.get(BASE, headers={'Authorization': 'Bearer ' + token})
             assert response.status_code == expected, (token, response.status_code, response.text)
             assert PRIVATE not in response.text
+        # New Discovery/Statistics/Map share the same public-only boundary.
+        discoveries = client.get(BASE + '/discoveries')
+        assert discoveries.status_code == 200, discoveries.text
+        news = discoveries.json()['items']
+        assert {int(row['id']) for row in news} == set(fixture['visible'])
+        assert len(news) == len(fixture['visible'])
+        for row in news:
+            assert set(row) == CARD_FIELDS | {'activity_at', 'activity_type', 'claim_type'}
+            private_free(row)
+        statistics = client.get(BASE + '/statistics')
+        assert statistics.status_code == 200, statistics.text
+        statistics = statistics.json()
+        assert statistics['individuals'] == str(len(fixture['visible']))
+        assert sum(int(row['count']) for row in statistics['models']) == len(fixture['visible'])
+        assert statistics['years'] == [{'label': '1960', 'count': str(len(fixture['visible']))}]
+        assert len(statistics['listings_30d']) == 30
+        private_free(statistics)
+        # All visible snapshots contain PRIVATE country. Canonical Accounts
+        # default Private must suppress that stale residence for every caller.
+        for token in (None, 'member', 'admin'):
+            headers = {'Authorization': 'Bearer ' + token} if token else {}
+            response = client.get(BASE + '/world-map', headers=headers)
+            assert response.status_code == 200, response.text
+            assert response.json() == {'countries': []}
+        with connect(owner, 'accounts') as con:
+            con.execute("UPDATE account_records SET location_country='Japan',residence_visibility='Public' WHERE id=%s",
+                (records['member']['id'],))
+        assert client.get(BASE + '/world-map').json() == {'countries': [{'country': 'Japan', 'count': str(len(fixture['visible']))}]}
+        for visibility in ('Members', 'Followers', 'Private'):
+            with connect(owner, 'accounts') as con:
+                con.execute('UPDATE account_records SET residence_visibility=%s WHERE id=%s',
+                    (visibility, records['member']['id']))
+            assert client.get(BASE + '/world-map', headers={'Authorization': 'Bearer admin'}).json() == {'countries': []}
+        for suffix in ('/discoveries', '/statistics', '/world-map'):
+            assert client.get(BASE + suffix + '?viewer_id=1').status_code == 400
+            for method in ('post', 'put', 'patch', 'delete'):
+                assert getattr(client, method)(BASE + suffix).status_code == 405
         for mode in ('normal', 'read_only', 'admin_only', 'offline'):
             operations.set_mode(admin, mode=mode, message='', version=operations.details(admin)['version'])
             for actor in (None, 'member', 'admin'):
                 headers = {'Authorization': 'Bearer ' + actor} if actor else {}
                 allowed = mode in ('normal', 'read_only') or (mode == 'admin_only' and actor == 'admin')
-                for suffix in ('', '/10', '/10/chronicle'):
+                for suffix in ('', '/10', '/10/chronicle', '/discoveries', '/statistics', '/world-map'):
                     response = client.get(BASE + suffix, headers=headers)
                     assert (response.status_code == 200) == allowed, (mode, actor, suffix, response.text)
                     if not allowed:
                         assert response.status_code == 403
                         assert PRIVATE not in response.text
+                    conditional = client.get(BASE + suffix, headers={**headers, 'If-None-Match': response.headers.get('etag', '"previously-visible"')})
+                    assert conditional.status_code == (304 if allowed else 403), (mode, actor, suffix)
+                    assert conditional.content == b'' if allowed else 'no-store' in conditional.headers['cache-control']
         # Supplying an arbitrary app_user_id cannot grant administrator visibility.
         rejected(PermissionError, lambda: service.list('not-a-canonical-account'))

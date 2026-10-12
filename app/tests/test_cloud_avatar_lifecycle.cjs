@@ -25,7 +25,7 @@ const empty=e=>{assert.equal(e.control('avatarPreview').src,undefined);assert.eq
 
 for(const role of ['member','admin'])test('Avatar happy path preserves the private Bearer adapter and '+role+' endpoint',async()=>{
  const e=environment(account('A',{role}));e.queue(response());await e.avatar.refresh();e.avatar.render();
- assert.equal(e.calls[0].url,role==='admin'?'/api/admin/accounts/me/avatar':'/api/auth/avatar');assert.equal(e.calls[0].verified,true);
+ assert.equal(e.calls[0].url,role==='admin'?'/api/admin/accounts/me/avatar':'/api/auth/avatar');assert.equal(e.calls[0].verified,false);
  assert.equal(e.control('avatarPreview').src,e.created[0]);assert.equal(e.control('avatarPreview').hidden,false);assert.equal(e.control('avatarRemove').disabled,false);
  e.control('avatarFile').value='private selection';e.avatar.clear();empty(e);assert.equal(e.control('avatarFile').value,'');assert.deepEqual(e.revoked,e.created);
 });

@@ -253,7 +253,7 @@ class Workflow:
     def release(self, guitar='release', name='a', *, seen=None, date='2026-02-01'):
         seen = seen or self.view(name, guitar)
         return self.service.release(self.actor(name), self.ids[guitar], {
-            'occurred_at': date, 'body': PRIVATE, 'revision': seen['revision']})
+            'occurred_at': date, 'body': 'Public release description', 'revision': seen['revision']})
 
     def mode(self, value):
         admin = self.actor('admin')
@@ -408,7 +408,7 @@ def release_checks(w):
     for data in ({'revision': '0' * 64, 'occurred_at': '2026-02-01', 'body': None},):
         w.unchanged(ClaimConflict, lambda: w.service.release(w.actor('a'), w.ids['release'], data))
     for extra in ({'author_user_id': str(w.user('b'))}, {'ownership_kind': 'acquire'},
-                  {'previous_owner_text': 'untrusted'}, {'verification_status': 'positive'}):
+                  {'previous_owner_text': ['invalid']}, {'verification_status': 'positive'}):
         w.unchanged(ValueError, lambda: w.service.release(w.actor('a'), w.ids['release'],
             {'revision': before['revision'], 'occurred_at': '2026-02-01', 'body': None, **extra}))
     for date in ('9999-01-01', 'not-a-date'):
@@ -419,7 +419,7 @@ def release_checks(w):
     exact_id(claim['id'])
     exact_id(claim['individual_id'], w.ids['release'])
     assert claim['ownership_kind'] == 'release' and claim['verification_status'] == 'positive'
-    assert claim['status'] == 'active' and claim['occurred_at'] == '2026-02-01' and claim['body'] == PRIVATE
+    assert claim['status'] == 'active' and claim['occurred_at'] == '2026-02-01' and claim['body'] == 'Public release description'
     assert result['ownership']['current_owner_user_id'] is None
     assert result['ownership']['revision'] != before['revision']
     relations = w.current('release', None, former=('a',))
@@ -435,7 +435,9 @@ def release_checks(w):
     w.unchanged((ClaimConflict, PermissionError), lambda: w.release(seen=before))
     assert claim['id'] in {row['id'] for row in w.view('a', 'release')['items']}
     assert claim['id'] not in {row['id'] for row in w.view('b', 'release')['items']}
-    private_free(w.catalog.chronicle(None, w.ids['release']), w.records)
+    public_chronicle=w.catalog.chronicle(None, w.ids['release'])
+    assert 'Public release description' in json.dumps(public_chronicle)
+    private_free(public_chronicle, w.records)
     private_free(w.catalog.detail(None, w.ids['release']), w.records)
 
 

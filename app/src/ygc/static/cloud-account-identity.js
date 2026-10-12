@@ -73,7 +73,7 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
   }
   async function request(id=null,options={},after=null){
     const url='/api/auth/identity-corrections'+(id?'/'+id:'')+(after?'?after='+after+'&limit=25':'');
-    const response=await auth().authorizedFetch(url,{cache:'no-store',credentials:'omit',redirect:'error',...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},true);
+    const response=await auth().authorizedFetch(url,{cache:'no-store',credentials:'omit',redirect:'error',...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase())));
     if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(Error('Identity request failed'),{status:response.status,code:(value?.detail?.code||value?.code)==='service_restricted'?'service_restricted':null})}
     return response.json();
   }
@@ -105,7 +105,7 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
     historyRows=append?[...historyRows,...value.items]:[...value.items];historyAfter=value.next_after;renderHistory();return changed;
   }
   function render(){
-    if(renderedIdentity!==identity())clear();restoreMarkers();root.hidden=!eligible();status.textContent=[notice,eligible()&&uncertain.size?t('identity.uncertain'):'' ].filter(Boolean).join(' ');
+    if(renderedIdentity!==identity())clear();restoreMarkers();root.hidden=!eligible()||Boolean(document.body?.dataset?.formalProfile)&&!rows.length&&(!notice||notice===t('cloud.working')||notice.startsWith(t('identity.empty')));status.textContent=[notice,eligible()&&uncertain.size?t('identity.uncertain'):'' ].filter(Boolean).join(' ');
     refreshButton.disabled=busy()||!eligible();more.hidden=nextAfter===null;more.disabled=busy()||!eligible();for(const n of list.querySelectorAll('button'))n.disabled=busy()||!eligible();
     create.hidden=editing;create.disabled=busy()||!allowed()||unknown();form.hidden=!editing;fields.disabled=busy()||!allowed()||unknown();review.disabled=busy()||!allowed()||unknown()||!editing;
     preview.hidden=!pending;confirm.hidden=!pending;confirm.disabled=busy()||!allowed()||unknown();check.hidden=!unknown();check.disabled=busy()||!eligible();acknowledge.hidden=!unknown()||!checked;acknowledge.disabled=busy()||!eligible();historyMore.hidden=historyAfter===null;historyMore.disabled=busy()||!detail||!eligible();reload.disabled=busy()||!eligible()||!selected;

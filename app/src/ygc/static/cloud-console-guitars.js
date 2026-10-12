@@ -3,7 +3,7 @@ import {createMediaBrowser} from './cloud-console-media.js';
 export function createGuitarBrowser({request,authorized,onUnauthorized}){
   const $=id=>document.getElementById(id),t=(key,params={})=>YGCI18n.t(key,params);
   let busy=false,epoch=0,next=null,history=[0],query='',selectedId=null,claimNext=null,claimHistory=[0];
-  let pending=null;
+  let pending=null,detailRow=null;
   const media=createMediaBrowser({request,authorized,selected:()=>selectedId,busy:()=>busy,work:action,onUnauthorized,updated:async current=>{await page(current);if(current!==epoch)return;await loadDetail(selectedId,current,false)}});
   const dialog=document.createElement('dialog');dialog.id='claimDecisionDialog';
   const title=document.createElement('h2'),description=document.createElement('p'),selection=document.createElement('select'),confirm=document.createElement('button'),cancel=document.createElement('button');
@@ -29,12 +29,14 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
       try{
         await request('/api/admin/guitars/'+saved.individual+'/claims/'+saved.claim+'/verification',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:saved.action,revision:saved.revision})});
         if(current!==epoch)return;
-        await page(current);await loadDetail(saved.individual,current,false);
+        const before=detailRow;await loadDetail(saved.individual,current,false,{preserve:true});
+        if(current!==epoch)return;
+        if(!before||['manufacturer','model','year','serial_number'].some(field=>before[field]!==detailRow[field]))await page(current);
         if(current===epoch)decisionStatus.textContent=t('chronicle.decision_saved');
       }catch(error){
         if(current!==epoch)return;
         if([401,403].includes(error.status)){clear();onUnauthorized(error)}
-        decisionStatus.textContent=t(error.status===409?'chronicle.decision_conflict':'chronicle.decision_unavailable');
+        decisionStatus.textContent=t(error.code==='dispute_claim_locked'?'chronicle.dispute_claim_locked':error.status===409?'chronicle.decision_conflict':'chronicle.decision_unavailable');
       }
     });
   };
@@ -51,9 +53,9 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
     $('chronicleNext').disabled=busy||!authorized()||claimNext===null;
     for(const button of document.querySelectorAll('#guitarRows button,#chronicleRows button'))button.disabled=busy||!authorized();
   }
-  function clear(){media.clear();closeDecision();decisionStatus.textContent='';selectedId=null;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';epoch++;next=null;history=[0];query='';$('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarStatus').textContent='';$('guitarSearch').value='';$('guitarDetailEmpty').hidden=false;render()}
+  function clear(){detailRow=null;media.clear();closeDecision();decisionStatus.textContent='';selectedId=null;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';epoch++;next=null;history=[0];query='';$('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarStatus').textContent='';$('guitarSearch').value='';$('guitarDetailEmpty').hidden=false;render()}
   function failed(error){
-    media.clear();
+    detailRow=null;media.clear();
     selectedId=null;claimNext=null;$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';
     $('guitarRows').replaceChildren();$('guitarDetailFields').replaceChildren();$('guitarDetailEmpty').hidden=false;next=null;
     if([401,403].includes(error.status)){clear();onUnauthorized(error)}
@@ -102,15 +104,18 @@ export function createGuitarBrowser({request,authorized,onUnauthorized}){
     $('chronicleStatus').textContent=t(result.total==='0'?'chronicle.empty':'chronicle.total',{count:result.total});
   }
   function refresh(){return action(page)}
-  async function loadDetail(id,current,jump=true){
-    media.clear();closeDecision();decisionStatus.textContent='';
+  async function loadDetail(id,current,jump=true,{preserve=false}={}){
+    preserve=preserve&&selectedId===id;
+    if(!preserve)media.clear();closeDecision();decisionStatus.textContent='';
     if(typeof id!=='string'||!/^[1-9][0-9]*$/.test(id))throw Error('Invalid identifier');
     const row=await request('/api/admin/guitars/'+id);
     if(current!==epoch)return;
+    if(!preserve||!detailRow||fields.some(field=>detailRow[field]!==row[field])){
     $('guitarDetailFields').replaceChildren();
     for(const field of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('guitars.field_'+field);dd.textContent=row[field]??'—';$('guitarDetailFields').append(dt,dd)}
-    selectedId=id;claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent='';render();await chronicle(current);if(current!==epoch)return;
-    await media.refresh();if(current!==epoch)return;
+    }
+    detailRow=row;selectedId=id;if(!preserve){claimNext=null;claimHistory=[0];$('chronicleRows').replaceChildren();$('chronicleStatus').textContent=''}render();await chronicle(current);if(current!==epoch)return;
+    if(!preserve)await media.refresh();if(current!==epoch)return;
     $('guitarDetailEmpty').hidden=true;if(jump)$('cloudProductDetail').scrollIntoView({block:'start'});
   }
   function detail(id){return action(current=>loadDetail(id,current))}

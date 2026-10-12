@@ -297,6 +297,7 @@ th.sortable{cursor:pointer;user-select:none}.sort-indicator{font-size:10px;margi
 .detail-panel #detail{padding-inline:4px;scrollbar-gutter:stable both-edges}
 #detail #chronicleEntries{padding-inline:0}
 #detail .claim-card{margin:8px 0 12px;width:100%;box-sizing:border-box}
+#detail .claim-compact-row{margin-inline:0;width:100%;box-sizing:border-box}
 #detail .chronicle-toolbar .claim-menu-wrap{width:100%;margin-inline:0}
 #detail :is(.owner-claim-card,.add-claim-action){width:100%;margin-inline:0;box-sizing:border-box}
 

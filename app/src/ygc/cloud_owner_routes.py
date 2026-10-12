@@ -12,7 +12,7 @@ def owner_router(verifier, service):
     router = APIRouter()
     headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'}
 
-    async def handle(request, individual, claim=None):
+    async def handle(request, individual=None, claim=None):
         try:
             identity = await run_in_threadpool(verifier.verify, bearer_token=bearer_token(request))
         except HTTPException:
@@ -26,6 +26,13 @@ def owner_router(verifier, service):
                 raise PermissionError()
             account = await run_in_threadpool(verifier.accounts.resolve_identity,
                 issuer=identity.issuer, subject=identity.subject, tenant=identity.tenant)
+            if individual is None:
+                if (request.headers.get('content-encoding') or set(request.query_params)-{'after'}
+                        or len(request.query_params.getlist('after'))>1):
+                    raise ValueError()
+                after=positive_id(request.query_params['after']) if 'after' in request.query_params else 0
+                result=await run_in_threadpool(service.inbox,account['app_user_id'],after)
+                return JSONResponse(result,headers=headers)
             if request.query_params or request.headers.get('content-encoding'):
                 raise ValueError()
             individual = positive_id(individual)
@@ -54,6 +61,10 @@ def owner_router(verifier, service):
             raise HTTPException(400, 'Invalid or unauthorized Owner response.', headers=headers) from None
         except Exception:
             raise HTTPException(503, 'Owner response unavailable. Refresh before retrying.', headers=headers) from None
+
+    @router.get('/api/auth/owner-acquire-requests')
+    async def inbox(request: Request):
+        return await handle(request)
 
     @router.get('/api/auth/guitars/{individual}/owner-responses')
     async def pending(request: Request, individual: str):

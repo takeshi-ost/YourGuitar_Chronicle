@@ -9,14 +9,15 @@ const date=value=>text(value,40)&&value.length>0;
 // A notice describes a past event. Its destination is only a hint: existing
 // destination components fetch their canonical API again before showing data.
 // Opening a notice never marks it read or performs a workflow decision.
-export function createNotifications({auth,state,busy,work,openTransfer,openOwner,openDispute,openDisputeOption}){
+export function createNotifications({auth,state,busy,work,openTransfer,openOwner,openDispute,openDisputeOption,formal=Boolean(document.body?.dataset?.formalProfile)}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   const node=(tag,value='',id='')=>{const n=document.createElement(tag);n.textContent=value;if(id)n.id=id;return n};
   const button=(key,id='')=>{const n=node('button',t(key),id);n.type='button';return n};
-  const root=document.getElementById('selfNotifications'),heading=node('h2',t('notifications.heading'),'notificationHeading'),unread=node('p','','notificationUnread'),status=node('p','','notificationStatus'),list=node('ul','','notificationList');
+  const root=document.getElementById('selfNotifications'),heading=node('h2',t('notifications.heading'),'notificationHeading'),unread=node('p','','notificationUnread'),status=node('p','','notificationStatus'),list=node(formal?'div':'ul','','notificationList');
   const refreshButton=button('action.refresh','notificationRefresh'),markAll=button('notifications.mark_all','notificationMarkAll'),previous=button('users.previous','notificationPrevious'),next=button('users.next','notificationNext');
   root.setAttribute('aria-labelledby',heading.id);status.setAttribute('role','status');unread.setAttribute('aria-live','polite');
   root.append(heading,node('p',t('notifications.history_help'),'notificationHistoryHelp'),unread,refreshButton,markAll,status,list,previous,next);
+  if(formal){list.className='notification-list';heading.dataset.countItems='#notificationList > .notification-item';document.getElementById('notificationHistoryHelp').hidden=true;unread.hidden=refreshButton.hidden=true;markAll.textContent=t('ui.mark_all_read_3bc62a9e')}
   const identity=()=>JSON.stringify([state()?.user?.app_user_id??null,state()?.identity?.email_verified===true,state()?.user?.status??null]);
   const eligible=()=>Boolean(state()?.user?.app_user_id&&state()?.identity?.email_verified===true&&(!state()?.user?.status||state().user.status==='active'));
   let renderedIdentity=identity(),accountEpoch=0,readEpoch=0,writeEpoch=0,navigationEpoch=0,rows=[],history=[null],nextAfter=null,unreadCount=null,canWrite=null,notice='',uncertain=false;
@@ -44,7 +45,7 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
     return {items,next_after:value.next_after,unread_count:value.unread_count,can_write:value.can_write};
   }
   async function request(path='',options={}){
-    const response=await auth().authorizedFetch('/api/auth/notifications'+path,{cache:'no-store',credentials:'omit',redirect:'error',...options},true);
+    const response=await auth().authorizedFetch('/api/auth/notifications'+path,{cache:'no-store',credentials:'omit',redirect:'error',...options},Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase())));
     if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(Error('Notification request failed'),{status:response.status,code:(value?.detail?.code||value?.code)==='service_restricted'?'service_restricted':null})}
     return response.json();
   }
@@ -54,6 +55,15 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
   function renderRows(){
     list.replaceChildren();const c=context(),generation=readEpoch;
     for(const row of rows){
+      if(formal){
+        const item=node('button');item.type='button';item.className='notification-item'+(row.is_read?'':' unread');item.dataset.notificationId=row.id;item.dataset.read=String(row.is_read);
+        const title=node('div',row.title),body=node('div',row.body??''),time=node('div');title.className='notification-item-title';body.className='notification-item-body';time.className='notification-item-time';const date=new Date(row.created_at);time.textContent=Number.isNaN(date.getTime())?row.created_at:date.toLocaleString(globalThis.YGCI18n.locale||'en-US');item.append(title,body,time);
+        item.onclick=async()=>{if(busy()||!current(c)||generation!==readEpoch)return;
+          if(!row.is_read&&writable()){await markRead(row.id);if(!current(c)||uncertain||!rows.some(item=>item.id===row.id&&item.is_read))return}
+          globalThis.YGCOverlays.close(document.getElementById('formalNotifications'));
+          const target=row.destination;if(target)return target.kind==='transfer'?openTransfer(target.claim_id):target.kind==='owner'?openOwner(target.individual_id,target.claim_id):target.kind==='dispute'?openDispute(target.case_id):openDisputeOption(target.claim_id);
+        };list.append(item);continue;
+      }
       const item=node('li'),title=node('h3',row.title),body=node('p',row.body??''),meta=node('p',(row.actor?row.actor.display_name+' · ':'')+row.created_at),readState=node('p',t(row.is_read?'notifications.read':'notifications.unread')+(row.read_at?' · '+row.read_at:'')),mark=button('notifications.mark_one');
       item.dataset.notificationId=row.id;item.dataset.read=String(row.is_read);mark.dataset.notificationMark=row.id;mark.hidden=row.is_read;
       const valid=()=>current(c)&&generation===readEpoch;
@@ -65,27 +75,30 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
       }else item.append(node('p',t('notifications.no_destination')));
       list.append(item);
     }
+    if(formal&&!rows.length){const empty=node('div',t('ui.no_notifications_0b78998d'));empty.className='notification-empty';list.append(empty)}
   }
   function render(){
     if(renderedIdentity!==identity())clear();root.hidden=!eligible();
+    if(formal)heading.dataset.countPending=String(unreadCount===null);
     unread.textContent=unreadCount===null?'':t('notifications.unread_count',{count:unreadCount});
     status.textContent=[notice,uncertain?t('notifications.uncertain'):canWrite===false?t('applications.read_only'):''].filter(Boolean).join(' ');
     refreshButton.disabled=busy()||!eligible();markAll.disabled=busy()||!writable()||unreadCount===null||unreadCount==='0';
+    if(formal){previous.hidden=history.length<2;next.hidden=nextAfter===null;refreshButton.hidden=!notice||notice===t('notifications.empty')||notice===t('cloud.working');if(notice===t('notifications.empty'))status.textContent=''}
     previous.disabled=busy()||!eligible()||history.length<2;next.disabled=busy()||!eligible()||nextAfter===null;
     for(const control of list.querySelectorAll('button'))control.disabled=busy()||!eligible()||(control.dataset.notificationMark?!writable():false);
   }
   function action(fn){if(busy()||!eligible())return;return work(async()=>{try{return await fn()}finally{render()}})}
-  async function load(after=null,{checked=false,path=[null]}={}){
+  async function load(after=null,{checked=false,path=[null],reuse=false}={}){
     if(!eligible())return false;const c=context(),generation=++readEpoch;writeEpoch++;rows=[];list.replaceChildren();nextAfter=null;unreadCount=null;canWrite=null;notice=t('cloud.working');render();
     try{
-      const data=page(await request('?'+new URLSearchParams({...after?{after}:{},limit:'25'})),after);
+      const data=page(await request('?'+new URLSearchParams({...after?{after}:{},limit:'25'}),{reuseUserData:reuse}),after);
       if(!current(c)||generation!==readEpoch)return false;
-      rows=data.items;nextAfter=data.next_after;unreadCount=data.unread_count;canWrite=data.can_write;history=[...path];if(checked)uncertain=false;notice=rows.length?'':t('notifications.empty');renderRows();render();return true;
+      rows=data.items;nextAfter=data.next_after;unreadCount=data.unread_count;if(typeof globalThis.CustomEvent==='function')globalThis.dispatchEvent?.(new CustomEvent('ygc-notification-count',{detail:{actor:state()?.user?.app_user_id,count:unreadCount}}));canWrite=data.can_write;history=[...path];if(checked)uncertain=false;notice=rows.length?'':t('notifications.empty');renderRows();render();return true;
     }catch(error){
       if(!current(c)||generation!==readEpoch)return false;purge();notice=errorText(error);render();return false;
     }
   }
-  function refresh(){return load(null,{checked:true})}
+  function refresh({reuse=false}={}){return load(null,{checked:true,reuse})}
   function result(value,id){
     if(id===null){if(!exact(value,['marked_count','unread_count'])||!count(value.marked_count)||!count(value.unread_count))throw Error('Invalid read-all result')}
     else if(!exact(value,['id','is_read','read_at','unread_count'])||value.id!==id||value.is_read!==true||!date(value.read_at)||!count(value.unread_count))throw Error('Invalid read result');

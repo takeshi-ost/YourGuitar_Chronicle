@@ -139,7 +139,9 @@ def relation_checks(w):
     assert second['total'] == '3' and second['next_after'] is None
     assert [row['id'] for row in second['items']] == public[2:]
     for row in first['items'] + second['items']:
-        assert set(row) == {'id', *GUITAR_FIELDS, 'photo'} and row['photo'] is None
+        assert set(row) == {'id', *GUITAR_FIELDS, 'photo', 'claim_count'} and row['photo'] is None
+        assert isinstance(row['claim_count'], str) and row['claim_count'].isdecimal()
+        assert int(row['claim_count']) > 0
     assert PRIVATE not in json.dumps(first)
     assert w.service.list(w.actor('b'))['total'] == '1'
     assert w.service.detail(w.actor('b'), BIG)['favorite'] is False

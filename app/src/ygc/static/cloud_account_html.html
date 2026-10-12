@@ -18,7 +18,7 @@
 <section id="catalogOwnershipIntent" hidden></section>
 <p data-i18n="cloud.staging">Staging account test. Test data may be reset.</p>
 <p data-i18n="cloud.credentials_notice">Your email and password are sent to Google for authentication.</p>
-<div id="authActions"><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
+<div id="authActions" hidden><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
 <p id="accountSummary" hidden></p>
 <p id="consoleLink" hidden><a href="/console" data-i18n="ui.browser_console_bc10c95d">Browser Console</a></p>
 <button id="signOut" type="button" hidden data-i18n="account.sign_out">SignOut</button>
@@ -48,7 +48,7 @@
 <p data-i18n="avatar.limits">JPEG, PNG or WebP, up to 8 MiB and 8 million pixels.</p>
 <button id="avatarUpload" type="submit" data-i18n="avatar.save">Save image</button><button id="avatarRemove" type="button" disabled data-i18n="avatar.remove">Remove image</button><button id="avatarRefresh" type="button" data-i18n="action.refresh">Refresh</button></form><p id="avatarStatus" role="status"></p>
 </section>
-<form id="cloudAccountForm">
+<form id="cloudAccountForm" hidden>
   <fieldset id="credentialsFields">
     <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>
     <label for="password" data-i18n="ui.password_e7cf3ef4">Password</label><input id="password" type="password" autocomplete="current-password" required>

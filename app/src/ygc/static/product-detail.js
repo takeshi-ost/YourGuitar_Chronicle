@@ -11,12 +11,15 @@ window.YGCProductDetail = (() => {
     const sorted = (source || []).slice().sort((a, b) => {
       const value = c => String(c.occurred_at || c.created_at || '').slice(0, 10);
       const av = value(a), bv = value(b);
-      return av < bv ? 1 : av > bv ? -1 : Number(b.id) - Number(a.id);
+      if(av!==bv)return av < bv ? 1 : -1;
+      // PostgreSQL identifiers can exceed Number's exact integer range.
+      const ai=BigInt(a.id),bi=BigInt(b.id);
+      return ai===bi?0:ai<bi?1:-1;
     });
     const corrections = new Map(), roots = [];
     for (const claim of sorted) {
       if (claim.claim_type === 'identity_correction' && claim.target_claim_id) {
-        const key = Number(claim.target_claim_id);
+        const key = String(claim.target_claim_id);
         if (!corrections.has(key)) corrections.set(key, []);
         corrections.get(key).push(claim);
       } else roots.push(claim);
@@ -24,10 +27,10 @@ window.YGCProductDetail = (() => {
     const ordered = [];
     for (const claim of roots) {
       ordered.push(claim);
-      const related = corrections.get(Number(claim.id)) || [];
+      const related = corrections.get(String(claim.id)) || [];
       related.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
       ordered.push(...related);
-      corrections.delete(Number(claim.id));
+      corrections.delete(String(claim.id));
     }
     for (const related of corrections.values()) ordered.push(...related);
     return ordered;

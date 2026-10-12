@@ -1,3 +1,4 @@
+import re
 from unittest.mock import Mock
 import pytest
 pytest.importorskip('psycopg')
@@ -74,7 +75,7 @@ def test_console_serves_only_shell_and_whitelisted_assets(environment, monkeypat
     with TestClient(runtime.application()) as client:
         shell = client.get('/console')
         assert shell.status_code == 200 and shell.headers['cache-control'] == 'no-store'
-        assert '/assets/cloud-console-page.js' in shell.text
+        assert '/assets/cloud-console-page.js' in re.sub(r'/assets/v/[0-9a-f]{64}/', '/assets/', shell.text)
         assert client.get('/assets/cloud-console-page.js').status_code == 200
         assert client.get('/assets/cloud-console.css').status_code == 200
         assert client.get('/assets/pages/console.js').status_code == 404
@@ -91,11 +92,11 @@ def test_public_catalog_shell_does_not_mount_prototype_or_private_assets(environ
         for path in ('/', '/guitars/1', '/guitars/9223372036854775807'):
             response = client.get(path)
             assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
-            assert '/assets/cloud-public-catalog.js' in response.text
+            assert '/assets/cloud-public-catalog.js' in re.sub(r'/assets/v/[0-9a-f]{64}/', '/assets/', response.text)
             assert 'cloud-account-page.js' not in response.text
-        for path in ('/assets/cloud-public-catalog.js', '/assets/cloud-public-catalog.css', '/account', '/console'):
+        for path in ('/assets/cloud-public-catalog.js', '/assets/cloud-public-catalog.css', '/assets/product-detail.js', '/assets/list-navigation.js', '/assets/table-columns.js', '/account', '/console'):
             assert client.get(path).status_code == 200
-        for path in ('/guitars/0', '/guitars/9223372036854775808', '/assets/product-detail.js',
+        for path in ('/guitars/0', '/guitars/9223372036854775808', '/assets/pages/user-view.js', '/assets/local-auth.js',
                      '/assets/cloud_public_catalog_html.html', '/user-view', '/users/1', '/api/individuals/1', '/images/1'):
             assert client.get(path).status_code == 404
         verifier.verify.assert_not_called()
@@ -139,7 +140,43 @@ def test_private_favorites_and_visibility_wiring(environment, monkeypatch):
             assert client.put(path, json={}).status_code == 401
         for asset in ('cloud-account-favorites.js', 'cloud-account-visibility.js'):
             result = client.get('/assets/' + asset)
-            assert result.status_code == 200 and result.headers['cache-control'] == 'no-store'
+            assert result.status_code == 200 and result.headers['cache-control'] == 'public, no-cache, max-age=0, must-revalidate'
         for path in ('/api/public/favorites', '/api/users/1/favorites', '/api/public/profiles/1', '/users/1'):
             assert client.get(path).status_code == 404
     verifier.verify.assert_not_called()
+
+
+@pytest.mark.parametrize('cloud', [False, True])
+def test_https_adapter_is_only_installed_on_cloud_run(monkeypatch, cloud):
+    app=Mock()
+    monkeypatch.setattr(runtime,'application',lambda:app)
+    run=Mock();monkeypatch.setattr(runtime.uvicorn,'run',run)
+    monkeypatch.delenv('K_SERVICE',raising=False)
+    if cloud:monkeypatch.setenv('K_SERVICE','ygc-staging')
+    runtime.main()
+    served=run.call_args.args[0]
+    assert isinstance(served,runtime.CloudRunHTTPS) if cloud else served is app
+
+
+def test_cloud_https_notification_origin_keeps_cross_site_rejection():
+    from fastapi import FastAPI
+    from ygc.cloud_notification_routes import notification_router
+    from ygc.identity_platform import VerifiedIdentity
+    verifier,service=Mock(),Mock()
+    verifier.verify.return_value=VerifiedIdentity('issuer','subject','',True)
+    verifier.accounts.resolve_identity.return_value={'app_user_id':'canonical'}
+    service.mark_read.return_value={'id':'4','is_read':True,'read_at':'2026-10-11','unread_count':'0'}
+    app=FastAPI();app.include_router(notification_router(verifier,service))
+    headers={'Authorization':'Bearer synthetic','Origin':'https://ygc.example'}
+    # Reproduce the TLS-termination mismatch on the unadapted HTTP socket.
+    with TestClient(app,base_url='http://ygc.example') as client:
+        assert client.post('/api/auth/notifications/4/read',json={},headers=headers).status_code==403
+    service.mark_read.assert_not_called()
+    with TestClient(runtime.CloudRunHTTPS(app),base_url='http://ygc.example') as client:
+        assert client.post('/api/auth/notifications/4/read',json={},headers=headers).status_code==200
+        service.mark_read.assert_called_once_with('canonical',4)
+        for changed in ({'Origin':'https://attacker.example'}, {'Origin':'http://ygc.example'},
+                        {'Sec-Fetch-Site':'cross-site'},
+                        {'Origin':'https://attacker.example','X-Forwarded-Host':'attacker.example'}):
+            assert client.post('/api/auth/notifications/4/read',json={},headers=headers|changed).status_code==403
+        assert service.mark_read.call_count==1

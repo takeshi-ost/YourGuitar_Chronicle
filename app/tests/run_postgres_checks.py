@@ -260,3 +260,6 @@ if __name__ == '__main__':
         profile_visibility_checks(port)
         from postgres_follow_checks import run as follow_checks
         follow_checks(port)
+
+        from postgres_pool_checks import run as pool_checks
+        pool_checks(port)

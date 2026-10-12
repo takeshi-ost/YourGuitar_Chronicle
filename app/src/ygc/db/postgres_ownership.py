@@ -14,6 +14,10 @@ from ygc.db.postgres_queries import ObservationConnection
 from ygc.db.repository import Repository
 
 
+class DisputeClaimLocked(ValueError):
+    """Ordinary moderation cannot replace a dispute decision."""
+
+
 class BoundRepository(Repository):
     def __init__(self, connection):
         super().__init__(Path(':memory:'))
@@ -115,6 +119,10 @@ class PostgresOwnership:
                     raise ClaimConflict('Claim changed; reload before retrying.')
             if account['role'] != 'admin':
                 raise PermissionError('An active administrator account is required.')
+            # Dispute decisions use their own transaction path. Ordinary Admin
+            # moderation must reject before the database's append-only guard.
+            if repo.connection.execute('SELECT 1 FROM ownership_dispute_claims WHERE claim_id=?', (claim_id,)).fetchone():
+                raise DisputeClaimLocked()
             return repo.admin_moderate_claim_in_connection(repo.connection, claim_id, action,
                 confirm_individual_delete=confirm_individual_delete, actor='identity-platform:' + account['app_user_id'])
 

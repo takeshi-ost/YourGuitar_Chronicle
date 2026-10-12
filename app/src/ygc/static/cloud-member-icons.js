@@ -11,7 +11,7 @@ export function createMemberIcons({document,window,auth,identity,eligible}) {
     if(entry.url)window.URL.revokeObjectURL(entry.url);
     entry.url=null;
     entry.host.replaceChildren();
-    entry.host.textContent='♙';
+    if(document.body?.dataset?.formalMembers==='true'){const image=document.createElement('img');image.alt='';image.src='/assets/no-icon.svg';entry.host.append(image)}else entry.host.textContent='♙';
   }
   function current(entry,version,owner) {
     return active&&!document.hidden&&eligible()&&owner===identity()&&
@@ -23,7 +23,7 @@ export function createMemberIcons({document,window,auth,identity,eligible}) {
     try {
       const response=await auth().authorizedFetch('/api/auth/members/'+entry.id+'/avatar',{
         method:'GET',cache:'no-store',credentials:'omit',redirect:'error',signal:controller.signal
-      },true);
+      },false);
       if(!current(entry,version,owner)||!response.ok)return;
       if(response.headers.get('Content-Type')?.split(';')[0]!=='image/jpeg')return;
       const blob=await response.blob();

@@ -1,4 +1,4 @@
-export function createProfile({auth,state,busy,work,updated}){
+export function createProfile({formalProfile=false,auth,state,busy,work,updated}){
   const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
   const fields=['display_name','location_country','location_region','bio'];
   let profile=null,pending=null,epoch=0;
@@ -16,17 +16,27 @@ export function createProfile({auth,state,busy,work,updated}){
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true);
   function clear(){epoch++;profile=pending=null;globalThis.YGCOverlays.close(dialog);for(const input of Object.values(inputs))input.value='';$('selfProfileValues').replaceChildren();$('selfProfileStatus').textContent=''}
   function render(){
-    $('selfProfile').hidden=!eligible();$('selfProfileEdit').disabled=busy()||!profile;$('selfProfileRefresh').disabled=busy()||!eligible();
+    $('selfProfile').hidden=!eligible();$('selfProfileEdit').disabled=busy()||!profile;if(formalProfile){$('selfProfileEdit').textContent=t('ui.user_settings_818ed0c8');$('selfProfileEdit').removeAttribute('data-i18n')};$('selfProfileRefresh').disabled=busy()||!eligible();
     if(!eligible())clear();
   }
-  async function refresh(){
+  async function refresh({reuse=false}={}){
     const current=++epoch;profile=null;$('selfProfileEdit').disabled=true;
     try{
-    const response=await auth().authorizedFetch('/api/auth/profile',{},true);
+    const response=await auth().authorizedFetch(formalProfile?'/api/auth/settings':'/api/auth/profile',{reuseUserData:reuse},false);
     if(!response.ok)throw Object.assign(Error('Profile unavailable'),{status:response.status});
     const data=await response.json();if(current!==epoch||!eligible())return;
     profile=data;$('selfProfileValues').replaceChildren();
-    for(const key of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('users.field_'+key);dd.textContent=data.fields[key]||'—';$('selfProfileValues').append(dt,dd)}
+    if(formalProfile){
+      const node=(tag,cls,value)=>{const el=document.createElement(tag);el.className=cls;el.textContent=value;return el};
+      const user=state()?.user||{},meta=node('div','profile-meta','');if(data.fields.theme)document.documentElement.dataset.theme=data.fields.theme;
+      const location=[data.fields.location_country,data.fields.location_region].filter(Boolean).join(' / ');
+      const values=[[t('ui.account_type_dce81c5b'),data.fields.account_type||user.account_type||'user']];
+      if(user.created_at)values.push([t('ui.member_since_9321bcc0'),String(user.created_at).slice(0,10)]);
+      if(location)values.push([t('ui.location_15b61974'),location]);
+      if(data.fields.date_of_birth)values.push([t('ui.date_of_birth_fdc739f5'),data.fields.date_of_birth]);
+      for(const [label,value] of values){const item=node('div','profile-meta-item','');item.append(node('span','profile-meta-label',label),node('span','profile-meta-value',value));meta.append(item)}
+      $('selfProfileValues').append(node('div','profile-name',data.fields.display_name),meta,node('div',data.fields.bio?'profile-bio':'profile-bio sub',data.fields.bio||t('ui.bio_has_not_been_added_yet_228545e8')));
+    }else{for(const key of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('users.field_'+key);dd.textContent=data.fields[key]||'—';$('selfProfileValues').append(dt,dd)}}
     $('selfProfileStatus').textContent='';render();
     }catch(error){if(current!==epoch||!eligible())return;throw error}
   }
@@ -36,6 +46,7 @@ export function createProfile({auth,state,busy,work,updated}){
   }
   $('selfProfileRefresh').onclick=()=>work(async()=>{try{await refresh()}catch(error){failed(error)}});
   $('selfProfileEdit').onclick=()=>{
+    if(formalProfile){if(!busy()&&profile)location.assign('/ui/settings');return}
     if(busy()||!profile)return;pending={revision:profile.profile_revision};
     for(const key of fields)inputs[key].value=profile.fields[key];
     globalThis.YGCOverlays.open(dialog,{initialFocus:'#selfProfile_display_name'});

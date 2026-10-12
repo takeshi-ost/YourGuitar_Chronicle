@@ -69,3 +69,35 @@ def visibility_result(result):
     except (KeyError, TypeError, ValueError):
         raise RuntimeError('Invalid visibility result.') from None
     return {'profile_revision': revision, 'fields': fields}
+
+# User Settings uses the canonical account fields. These are self-only values;
+# returning or saving them does not add them to any public/member projection.
+SETTINGS_FIELDS = FIELDS + ('account_type', 'date_of_birth', 'theme') + VISIBILITY_FIELDS
+
+
+def validate_settings(body):
+    from datetime import date
+    from ygc.registration_fields import ACCOUNT_TYPES
+    from ygc.theme_catalog import THEME_IDS
+    if not isinstance(body, dict) or set(body) != {'revision', 'fields'} or not isinstance(body['fields'], dict) or set(body['fields']) != set(SETTINGS_FIELDS):
+        raise ValueError('Invalid settings.')
+    fields = body['fields']
+    version, result = validate({'revision': body['revision'], 'fields': {key: fields[key] for key in FIELDS}})
+    if fields['account_type'] not in ACCOUNT_TYPES or fields['theme'] not in THEME_IDS:
+        raise ValueError('Invalid settings choice.')
+    birth = fields['date_of_birth']
+    if not isinstance(birth, str) or birth and (len(birth) != 10 or date.fromisoformat(birth).isoformat() != birth or date.fromisoformat(birth) > date.today()):
+        raise ValueError('Invalid birth date.')
+    _, visibility = validate_visibility({'revision': str(version), 'fields': {key: fields[key] for key in VISIBILITY_FIELDS}})
+    result.update(account_type=fields['account_type'], date_of_birth=birth, theme=fields['theme'], **visibility)
+    return version, result
+
+
+def validate_signature(body):
+    from ygc.cloud_users import positive_id
+    if not isinstance(body, dict) or set(body) != {'previous', 'individual_id'}:
+        raise ValueError('Invalid signature.')
+    for value in body.values():
+        if value is not None and (not isinstance(value, str) or str(positive_id(value)) != value):
+            raise ValueError('Invalid signature identifier.')
+    return body

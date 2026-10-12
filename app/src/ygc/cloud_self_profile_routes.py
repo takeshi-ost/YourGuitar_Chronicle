@@ -4,13 +4,17 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
-from ygc.cloud_profile import validate, ProfileConflict
+from ygc.cloud_profile import validate, validate_settings, validate_signature, ProfileConflict
 
 
 def self_profile_router(verifier, service):
     router = APIRouter()
     headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'}
 
+    @router.get('/api/auth/profile/chronicle')
+    @router.get('/api/auth/profile/summary')
+    @router.api_route('/api/auth/settings/signature', methods=['GET', 'PUT'])
+    @router.api_route('/api/auth/settings', methods=['GET', 'PUT'])
     @router.api_route('/api/auth/profile', methods=['GET', 'PUT'])
     async def profile(request: Request):
         try:
@@ -28,8 +32,9 @@ def self_profile_router(verifier, service):
                 issuer=identity.issuer, subject=identity.subject, tenant=identity.tenant)
             if request.query_params:
                 raise ValueError()
+            kind = 'chronicle' if request.url.path.endswith('/chronicle') else 'summary' if request.url.path.endswith('/summary') else 'signature' if request.url.path.endswith('/signature') else 'settings' if request.url.path.endswith('/settings') else 'profile'
             if request.method == 'GET':
-                result = await run_in_threadpool(service.own_profile, account['app_user_id'])
+                result = await run_in_threadpool(getattr(service, 'own_'+kind), account['app_user_id'])
             else:
                 if request.headers.get('content-encoding') or request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
                     raise ValueError()
@@ -47,8 +52,8 @@ def self_profile_router(verifier, service):
                         result[key] = value
                     return result
                 body = json.loads(b''.join(chunks), object_pairs_hook=unique)
-                validate(body)
-                result = await run_in_threadpool(service.edit_own_profile, account['app_user_id'], body)
+                {'profile': validate, 'settings': validate_settings, 'signature': validate_signature}[kind](body)
+                result = await run_in_threadpool(getattr(service, 'edit_own_'+kind), account['app_user_id'], body)
             return JSONResponse(result, headers=headers)
         except HTTPException:
             raise
