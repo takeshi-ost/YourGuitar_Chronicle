@@ -83,7 +83,8 @@ def check_profile_lists(page,base,fixture):
     assert '/guitars/30' in page.url
     owned.locator('.toolbar input').fill('')
     expect(owned.locator('tr.selected')).to_have_count(1)
-    assert len(page.locator('[id]').evaluate_all('(els)=>els.map(e=>e.id)'))==len(set(page.locator('[id]').evaluate_all('(els)=>els.map(e=>e.id)')))
+    ids=page.locator('[id]').evaluate_all('(els)=>els.map(e=>e.id)')
+    assert len(ids)==len(set(ids)),[value for value in set(ids) if ids.count(value)>1]
     fixture.profile_all=False
     print('Formal profile lists: 30-row cursor aggregation, local columns/order/live filter, fixed unfiltered desktop height, cross-list selection and 1440/390/320 passed.')
 
