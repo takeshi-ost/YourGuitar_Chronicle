@@ -17,7 +17,7 @@ from ygc.db.postgres_accounts import AccountNotRegistered
 from ygc.identity_platform import VerifiedIdentity
 
 SDK = r'''
-const makeUser=email=>({email,emailVerified:false,getIdToken:async()=> 'fixture-'+(sessionStorage.getItem('verified-'+email)==='true'?'verified-':'')+email});
+const makeUser=email=>({uid:'fixture-uid-'+email,email,emailVerified:false,getIdToken:async()=> 'fixture-'+(sessionStorage.getItem('verified-'+email)==='true'?'verified-':'')+email});
 const saved=sessionStorage.getItem('fixture-sdk-email');
 const auth={currentUser:saved?makeUser(saved):null,authStateReady:async()=>{}};
 export const browserSessionPersistence='session';

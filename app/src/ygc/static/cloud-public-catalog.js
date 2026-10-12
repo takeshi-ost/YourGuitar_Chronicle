@@ -598,6 +598,7 @@ if(document.body.dataset.catalogAutostart!=='false'){
   let client,dialog;
   const catalog=createPublicCatalog({onState:state=>{client=state.auth},onAcquire:id=>continueMember(id,'acquire'),onClaim:id=>continueMember(id,'claim')});
   await catalog.start();
+  if(!globalThis.YGCI18n)await import('./i18n.js');
   dialog=createAuthDialog({auth:()=>client,onAuthenticated:()=>catalog.refresh()});
   function continueMember(id,kind){const target='/account?'+kind+'='+id;if(client?.account?.identity?.email_verified===true)location.assign(target);else dialog.open({verificationPath:target,onSuccess:()=>location.assign(target)})}
   document.getElementById('accountLink').onclick=event=>{if(!client?.account?.user){event.preventDefault();dialog.open({opener:event.currentTarget})}};
