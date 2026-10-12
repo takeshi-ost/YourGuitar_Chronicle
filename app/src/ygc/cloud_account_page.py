@@ -88,7 +88,9 @@ def install(app, config):
 
     def static_file(request, path):
         content = snapshots[request.url.path] if getattr(request.state, 'ygc_asset_revision', None) == revision else path.read_bytes()
-        return static_response(request, content, mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+        # Minimal container MIME registries may not recognize WebP.
+        media_type = 'image/webp' if path.suffix.lower() == '.webp' else mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+        return static_response(request, content, media_type)
 
     @app.get('/')
     @app.get('/guitars/{individual_id}')

@@ -139,7 +139,9 @@ def test_versioned_formal_module_graph_resolves_inside_same_allowlisted_revision
         assert len(seen)>25
 
 
-def test_wallpapers_are_served_as_immutable_curated_images():
+def test_wallpapers_are_served_as_immutable_curated_images(monkeypatch):
+    # Match a minimal Linux runtime without a host WebP MIME registration.
+    monkeypatch.setattr('ygc.cloud_account_page.mimetypes.guess_type', lambda _: (None, None))
     app=FastAPI();install(app,{})
     with TestClient(app) as client:
         prefix=re.search(r'/assets/v/[0-9a-f]{64}/',client.get('/ui').text)[0]
