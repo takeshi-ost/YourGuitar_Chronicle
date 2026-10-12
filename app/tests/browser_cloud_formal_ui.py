@@ -1,5 +1,6 @@
 """Formal shell acceptance: isolated loopback app and synthetic SDK only."""
 import os
+import re
 from pathlib import Path
 import socket
 import threading
