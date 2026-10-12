@@ -7,6 +7,7 @@ test('Known notification templates use requested Japanese terms and preserve nam
  assert.deepEqual(JSON.parse(JSON.stringify(c.notificationText(row,'ja'))),{title:'新しいスペックClaim',body:'AliceがFender StratocasterにスペックClaimを追加しました。'});
  assert.equal(c.notificationText(row,'en').body,row.body);
  row={notification_type:'ownership_dispute',title:'Ownership dispute updated',body:'I wrote this English statement.'};assert.equal(c.notificationText(row,'ja').body,row.body);assert.match(c.notificationText(row,'ja').title,/異議申立て/);
+ row={notification_type:'acquire_review',title:'Ownership Request updated by administrator',body:'accept: User-written English reason.'};assert.equal(c.notificationText(row,'ja').body,'承認：User-written English reason.');
  row={notification_type:'transfer_result',title:'Transfer accepted',body:'The Transfer proposal was accepted.'};assert.match(c.notificationText(row,'ja').body,/承諾/);
  row={notification_type:'claim_verified',title:'Claim Verification: Negative',body:'Bob set your Claim on Gibson to Negative.'};assert.equal(c.notificationText(row,'ja').body,'BobがGibsonのあなたのClaimを「否定」に判定しました。');
 });

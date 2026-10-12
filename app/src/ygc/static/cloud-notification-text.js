@@ -23,7 +23,11 @@ export function notificationText(row,locale=globalThis.YGCI18n.locale){
    if(title==='Acquire awaiting approval'||title==='Acquire承認待ち')title='所有者申請の承認待ち';
    if(body==='Image review passed. Please review the evidence and ownership request.')body='画像審議を通過しました。証拠と所有者申請を確認してください。';
  }else if(row.notification_type==='acquire_review'){
-   if(title==='Ownership Request updated by administrator')title='管理者が所有者申請を更新しました';
+   if(title==='Ownership Request updated by administrator'){
+     title='管理者が所有者申請を更新しました';
+     match=/^(accept|reject|positive|negative|unverified|cancel|retry): ([\s\S]*)$/.exec(body||'');
+     if(match){const actions={accept:'承認',reject:'却下',positive:'肯定',negative:'否定',unverified:'未検証',cancel:'取消',retry:'再試行'};body=actions[match[1]]+'：'+match[2]}
+   }
    match=/^(Listing|Acquire) review result$/.exec(title);if(match)title=(match[1]==='Listing'?'掲載':'所有者申請')+'の審議結果';
    match=/^Open Ownership Requests to view the report\. Status: (.+)$/.exec(body||'');if(match)body='申請一覧を開いて審議結果を確認してください。状態：'+(states[match[1]]||match[1]);
  }
