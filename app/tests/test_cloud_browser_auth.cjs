@@ -173,12 +173,12 @@ for(const claim of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','h
 });
 
 function delayed(){let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}}
-function principalHarness({readiness=Promise.resolve(),token=Promise.resolve('A-token'),fetch}={}){
- const first={email:'a@example.invalid',getIdToken:()=>token},second={email:'b@example.invalid',getIdToken:async()=> 'B-token'};
+function principalHarness({readiness=Promise.resolve(),token=Promise.resolve('A-token'),fetch,theme}={}){
+ const first={uid:'A',email:'a@example.invalid',getIdToken:()=>token},second={uid:'B',email:'b@example.invalid',getIdToken:async()=> 'B-token'};
  const auth={currentUser:first,authStateReady:()=>readiness},calls=[],listeners=[];
  const sdk={browserSessionPersistence:'session',setPersistence:async()=>{},onAuthStateChanged(_auth,listener){listeners.push(listener)}};
  const request=async(url,options)=>{calls.push({url,options});return fetch?fetch(url,options):new Response(JSON.stringify(account))};
- const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
+ const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch:request,YGCTheme:theme,Response};vm.runInNewContext(source,context);
  const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request});
  return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener(user)}};
 }
@@ -288,4 +288,17 @@ for(const [path,method,cache] of [
  ['/api/public/guitars/52/photo','GET','no-store'],['/api/auth/avatar','GET','no-store'],['/api/auth/notifications','GET','no-store'],['/api/auth/me','GET','no-store'],['/api/public/guitars','POST','no-store']])test('revalidation opt-in applies only to public JSON GET '+path+' '+method,async()=>{
  const s=setup();s.auth.currentUser=s.user;await s.adapter.authorizedFetch(path,{method,cache:'no-cache'});
  assert.equal(s.calls.at(-1).options.cache,cache);assert.equal(s.calls.at(-1).options.credentials,'omit');assert.match(s.calls.at(-1).options.headers.get('Authorization'),/^Bearer /);
+});
+
+test('A direct account entry restores its own theme once and ignores a late old-account preference',async()=>{
+ const hold=delayed(),applied=[],theme={bind:()=>false,remember:value=>applied.push(value),clear:()=>{}},tick=()=>new Promise(r=>setImmediate(r));
+ const s=principalHarness({theme,fetch:async(url)=>{
+  if(url.endsWith('/me'))return new Response(JSON.stringify({user:{app_user_id:'uuid'},identity:{email_verified:true}}));
+  await hold.promise;return new Response(JSON.stringify({fields:{theme:'butterscotch_black'}}),{headers:{'Content-Type':'application/json'}});
+ }});
+ await s.adapter.restore();await tick();await s.adapter.restore();await tick();
+ assert.equal(s.calls.filter(c=>c.url.endsWith('/settings')).length,1);
+ s.switchUser(null);hold.resolve();await tick();assert.equal(applied.length,0);
+ s.switchUser(s.first);await s.adapter.restore();await tick();assert.deepEqual(applied,['butterscotch_black']);
+ assert.equal(s.calls.filter(c=>c.url.endsWith('/settings')).length,2);
 });

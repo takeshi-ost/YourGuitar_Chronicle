@@ -63,6 +63,8 @@ def install(app, config):
     app.add_middleware(VersionedAssets, revision=revision)
 
     def page_response(html):
+        if '/assets/themes.css' not in html:
+            html = html.replace('</head>', '<link rel="stylesheet" href="/assets/themes.css"></head>', 1)
         if '/assets/overlays.js' not in html:
             html = html.replace('</head>', '<script src="/assets/overlays.js" defer></script></head>', 1)
         html = html.replace('<head>', '<head><script src="/assets/cloud-theme.js"></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css">', 1)

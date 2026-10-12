@@ -7,7 +7,7 @@
     // from this tab-scoped, short-lived cache. Every document restores /me first.
     const storageKey='ygc-self-display-v1';
     try{storage??=globalThis.sessionStorage}catch{/* Storage is optional. */}
-    let dataOwner=null,dataEpoch=0,dataWrites=0,entries={};
+    let dataOwner=null,dataEpoch=0,dataWrites=0,entries={},themeOwner=null;
     const dataListeners=new Set();
     globalThis.addEventListener?.('pagehide',()=>{dataEpoch++;dataGate=null});
     const ttl=path=>path==='/api/auth/settings'?30000:path==='/api/auth/profile/summary'?15000:
@@ -19,7 +19,15 @@
     function bindUserData(){
       const user=auth.currentUser,valid=account?.user?.app_user_id&&account.identity?.email_verified===true;
       const owner=valid&&typeof user?.uid==='string'?JSON.stringify([origin,user.uid,auth.tenantId||'',account.user.app_user_id,account.user.role||'',account.user.status||'']):null;
-      globalThis.YGCTheme?.bind(owner);
+      const themeKnown=globalThis.YGCTheme?.bind(owner);
+      if(owner&&globalThis.YGCTheme&&!themeKnown&&themeOwner!==owner){
+        themeOwner=owner;
+        // A direct Account/Console/Member entry also restores the same display
+        // preference. Never authorize an operation from a saved theme.
+        Promise.resolve().then(()=>displayRead('/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
+          if(response.ok){const data=await response.json();if(dataOwner===owner&&accountUser===auth.currentUser)globalThis.YGCTheme?.remember(data?.fields?.theme)}
+        }).catch(()=>{});
+      }
       if(owner===dataOwner)return;
       dataOwner=owner;entries={};dataEpoch++;
       try{
@@ -88,7 +96,7 @@
     function identityChanged(initial=false){
       if(observedUser===auth.currentUser)return;
       observedUser=auth.currentUser;account=null;accountUser=null;
-      sharedReads.clear();dataOwner=null;
+      sharedReads.clear();dataOwner=null;themeOwner=null;
       if(!initial){invalidateUserData();globalThis.YGCTheme?.clear()}
       if(initial)return;
       for(const listener of identityListeners){try{listener()}catch{/* One view cannot retain another view's private data. */}}
