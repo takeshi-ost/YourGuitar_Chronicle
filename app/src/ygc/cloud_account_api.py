@@ -51,9 +51,9 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     from ygc.request_metrics import RequestTiming
-    app.add_middleware(RequestTiming)
     if subjects is not None:
         app.add_middleware(ParticipantAdmission, verifier=verifier, subjects=subjects)
+    app.add_middleware(RequestTiming)
     app.include_router(account_router(verifier, DOCUMENTS, participant_only=subjects is not None))
     if review_verifier is not None:
         from ygc.cloud_review_gateway import review_gateway

@@ -81,10 +81,14 @@ def test_admitted_http_requests_check_revocation_once_each_and_keep_live_account
     verifier = IdentityPlatformIdentity(accounts, project_id=PROJECT)
     app = FastAPI()
     app.add_middleware(ParticipantAdmission,verifier=verifier,subjects=frozenset(['subject']))
+    from ygc.request_metrics import RequestTiming
+    app.add_middleware(RequestTiming)
     app.include_router(account_router(verifier,DOCUMENTS))
     with TestClient(app) as client:
         for _ in range(2):
-            assert client.get('/api/auth/me',headers={'Authorization':'Bearer same-token'}).status_code==200
+            response=client.get('/api/auth/me',headers={'Authorization':'Bearer same-token'})
+            assert response.status_code==200
+            assert 'identity;dur=' in response.headers['server-timing']
         assert sdk[2].call_count==2
         assert accounts.resolve_identity.call_count==2
         sdk[2].side_effect=ValueError('revoked token')

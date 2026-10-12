@@ -143,6 +143,7 @@ def test_all_mounted_user_api_routes_reject_before_private_reads_or_writes(monke
                 if method not in ('get','post','put','patch','delete'):continue
                 response=client.request(method,path,headers=AUTH)
                 assert response.status_code==403,(method,path,response.status_code)
+                assert 'app;dur=' in response.headers['server-timing']
                 assert response.json()['code']=='closed_test_participant_required'
                 seen+=1
     assert seen>80
