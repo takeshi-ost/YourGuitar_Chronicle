@@ -52,7 +52,7 @@ function environment({initial=account(),fullPage=false,storage=new Map(),storage
  return {component,context,client,control,calls,storage,ready,get updates(){return updates},get dialog(){return control('identityDialog')},get list(){return control('identityListings')},get history(){return control('identityHistory')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setDetail(value){defaultDetail=value},setListings(value){defaultListings=value},
   open(id='31'){return component.openListing(id)},create(){return control('identityCreate').onclick()},dismiss(){control('identityClose').onclick()},review(){return control('identityForm').onsubmit({preventDefault(){}})},confirm(){return control('identityConfirm').onclick()},
-  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},sdkSwitch(next){client.account=next;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
+  changeAccount(next,reconcile=true){state=next;client.signedIn=Boolean(next);if(reconcile)component.render()},sdkSwitch(next){client.account=next;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
   async flush(){for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve))}
  };
 }
@@ -153,4 +153,10 @@ for(const next of [account(),account('2'),null])test('Full account BFCache reche
 for(const exit of ['signout','SDK change'])test('Full account '+exit+' still erases active Identity Correction retry state',async()=>{
  const e=environment({fullPage:true});await e.ready;await compose(e);e.queue(Error('Lost result'),'/31','POST');await e.confirm();if(exit==='signout')await e.control('signOut').onclick();else e.sdkSwitch(account('2'));
  assert.equal(e.storage.size,0);assert.equal(e.list.children.length,0);assert.equal(e.dialog.open,false);assert.equal(e.control('identityReason').value,'');assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(writes(e).length,1);
+});
+
+test('Listing Detail entry reconciles a newly signed-in actor before opening without a standalone list read',async()=>{
+ const e=environment({initial:null});e.changeAccount(account(),false);await e.open();
+ assert.equal(e.dialog.open,true);assert.match(e.control('identityGuitar').textContent,/31|Maker/);
+ assert.equal(writes(e).length,0);assert.equal(e.calls.filter(c=>c.url==='/api/auth/identity-corrections').length,0);
 });

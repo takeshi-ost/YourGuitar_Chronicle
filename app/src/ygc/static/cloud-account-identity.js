@@ -126,6 +126,9 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
     }else if([401,403,404].includes(error.status)){purge();notice=errorText(error)}
   }
   function openListing(id){
+    // Reconcile an authenticated Detail entry before selecting/opening. The
+    // detached editor no longer receives the former standalone list refresh.
+    render();
     if(busy()||!eligible()||dialog.open||!catalogIndividualId(id))return;resetDialog();selected=id;globalThis.YGCOverlays.open(dialog);message.textContent=t('cloud.working');render();const c=context(),read=++detailEpoch;
     return action(async()=>{try{const value=await readDetail(id);if(!sameDialog(c)||read!==detailEpoch)return;applyDetail(value);message.textContent=unknown()?t('identity.uncertain'):value.can_write?'':t('identity.write_unavailable')}catch(error){await handleError(error,c)}});
   }
@@ -178,6 +181,6 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
   globalThis.addEventListener('pagehide',()=>{navigationEpoch++;purge()});
   globalThis.addEventListener('pageshow',()=>{if(eligible())refresh()});
   globalThis.addEventListener('focus',()=>{if(!busy()&&eligible()){refresh();if(dialog.open)reloadCurrent()}});
-  async function readActions(guitar){if(!eligible())return [];const actor=identity(),items=[];let after=null;do{const data=listings(await request(null,{},after),after);if(identity()!==actor||!eligible())return [];items.push(...data.items.filter(row=>row.individual.id===guitar));after=data.next_after}while(after);return items}
+  async function readActions(guitar){render();if(!eligible())return [];const actor=identity(),items=[];let after=null;do{const data=listings(await request(null,{},after),after);if(identity()!==actor||!eligible())return [];items.push(...data.items.filter(row=>row.individual.id===guitar));after=data.next_after}while(after);return items}
   render();return {render,clear,refresh,openListing,readActions};
 }

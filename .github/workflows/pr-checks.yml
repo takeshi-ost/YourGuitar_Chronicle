@@ -11,7 +11,7 @@ on:
         description: Validation scope (pull requests always run all checks)
         type: choice
         default: full
-        options: [full, top-page]
+        options: [full, top-page, browser]
 
 permissions:
   contents: read
@@ -80,6 +80,9 @@ jobs:
           if [ "$CHECK_SCOPE" = "top-page" ]; then
             node --test app/tests/test_cloud_public_catalog.cjs app/tests/test_cloud_catalog_insights.cjs
             PYTHONPATH=app/src:app/tests python app/tests/browser_cloud_formal_ui.py
+          elif [ "$CHECK_SCOPE" = "browser" ]; then
+            node --test app/tests/test_*.cjs
+            YGC_BROWSER_ARTIFACTS=test-artifacts PYTHONPATH=app/src:app/tests python app/tests/run_browser_checks.py
           else
             python scripts/run_tests.py --browser --browser-artifacts test-artifacts --postgres-port 5432
           fi
