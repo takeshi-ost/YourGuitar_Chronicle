@@ -326,20 +326,25 @@ def check_formal_follow(page,base,fixture):
 
 
 def check_initial_discovery(page,base,fixture):
-    page.add_init_script("Math.random=()=>Number(sessionStorage.getItem('fixture-random')||'0')")
-    page.goto(base+'/ui');page.wait_for_function('()=>globalThis.YGCCloudUIReady===true')
+    page.add_init_script("""
+      Math.random=()=>Number(sessionStorage.getItem('fixture-random')||'0');
+      const readyTimer=setInterval(()=>{
+        if(globalThis.YGCCloudUIReady===true){document.documentElement.dataset.fixtureReady='true';clearInterval(readyTimer)}
+      },10);
+    """)
+    page.goto(base+'/ui');expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailTitle')).to_contain_text('Fixture 30');assert page.url==base+'/ui'
     page.evaluate("sessionStorage.setItem('fixture-random','0.999')")
-    page.reload();page.wait_for_function('()=>globalThis.YGCCloudUIReady===true')
+    page.reload();expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailTitle')).to_contain_text('Fixture 1');assert page.url==base+'/ui'
     page.locator('#catalogRefresh').click();expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
-    page.goto(base+'/ui/guitars/2');page.wait_for_function('()=>globalThis.YGCCloudUIReady===true')
+    page.goto(base+'/ui/guitars/2');expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailTitle')).to_contain_text('Fixture 2');assert page.url.endswith('/ui/guitars/2')
     fixture.insights_case='empty'
-    page.goto(base+'/ui');page.wait_for_function('()=>globalThis.YGCCloudUIReady===true')
+    page.goto(base+'/ui');expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailContent')).not_to_be_visible()
     fixture.insights_case='normal';fixture.mode='offline'
-    page.goto(base+'/ui');page.wait_for_function('()=>globalThis.YGCCloudUIReady===true')
+    page.goto(base+'/ui');expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailContent')).not_to_be_visible()
     fixture.mode='normal'
     print('Top random discovery: different draws on reload at /ui, refresh retention, explicit URL, empty/restricted data passed.')
