@@ -3,13 +3,13 @@
 import {createFavoriteControl,createFavoriteSnapshotReader} from './cloud-account-favorites.js';
 const presentations=new Set();
 export function selectProfileGuitar(id){for(const view of presentations)view.select(id)}
-export function createProfileList({section,title,list,onSelect,guitarHref,actions,auth,state,busy}){
+export function createProfileList({section,title,list,onSelect,guitarHref,actions,auth,state,busy,refreshButton=null}){
   const favorites=new Map(),readFavorite=createFavoriteSnapshotReader({auth,state});
   const t=key=>globalThis.YGCI18n.t(key),columns=globalThis.YGCProfileList.columns();
   section.classList.add('panel','profile-panel','profile-list-panel','page-section');
   const toolbar=document.createElement('div');toolbar.className='toolbar';
   const filter=document.createElement('input');filter.placeholder=t('ui.maker_model_finish_year_serial_c99806fd');filter.setAttribute('aria-label',filter.placeholder);
-  title.dataset.countItems='#'+list.id+' > tr.clickable';title.dataset.countPending='true';toolbar.append(title,filter);
+  title.dataset.countItems='#'+list.id+' > tr.clickable';title.dataset.countPending='true';toolbar.append(title,filter);if(refreshButton){refreshButton.hidden=false;toolbar.append(refreshButton)}
   const wrap=document.createElement('div');wrap.className='table-wrap';
   const table=document.createElement('table'),head=document.createElement('thead'),headers=document.createElement('tr');
   const indicators=new Map();let rows=[],key='id',direction=1,selected=null;

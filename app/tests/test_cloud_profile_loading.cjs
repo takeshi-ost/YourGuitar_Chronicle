@@ -13,7 +13,7 @@ function setup(){
 test('visible profile and lists start together before secondary panels, independent failures do not block siblings',async()=>{
  const e=setup(),done=e.run();assert.deepEqual(e.calls,['profile','guitars','favorites']);
  e.waits.profile.resolve();e.waits.guitars.resolve();e.waits.favorites.resolve();await e.flush();
- assert.equal(e.calls.length,11);assert.equal(e.calls[3],'formalView');
+ assert.equal(e.calls.length,10);assert.equal(e.calls[3],'formalView');
  const error=new Error('notification unavailable');e.waits.notifications.reject(error);
  let completed=false;done.catch(()=>{completed=true});await e.flush();assert.equal(completed,false);
  for(const name of e.calls.slice(3))if(name!=='notifications')e.waits[name].resolve();

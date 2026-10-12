@@ -67,7 +67,7 @@ test('One network/data error keeps other valid public sections and offers retry'
 test('Empty data is honest and language changes do not make another request',async()=>{
   const e=environment();e.response.discovery={items:[]};e.response.statistics={...stats(),individuals:'0',models:[],years:[]};e.response.map={countries:[]};await e.sync();
   assert.match(e.text('newDiscoveryList'),/No recent/);assert.match(e.text('modelChart'),/No model/);assert.match(e.text('yearChart'),/No single-year/);assert.match(e.text('mapSelection'),/No public country/);
-  e.state.locale='ja';await e.sync();assert.equal(e.calls.length,3);assert.equal(e.text('discoveryHeading'),'新着ギター');assert.match(e.text('newDiscoveryList'),/新着情報/);
+  e.state.locale='ja';await e.sync();assert.equal(e.calls.length,3);assert.equal(e.text('discoveryHeading'),'新着情報');assert.match(e.text('newDiscoveryList'),/新着情報/);
 });
 
 test('Country aliases combine counts and unknown small countries stay in accessible table',async()=>{

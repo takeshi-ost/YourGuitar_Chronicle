@@ -1,6 +1,8 @@
 // Pin the official modular SDK; do not use an unversioned CDN URL.
 export const FIREBASE_VERSION='12.19.0';
-export async function loadCloudAuth(){
+let shared;
+export function loadCloudAuth(){return shared??=(initialize().catch(error=>{shared=null;throw error}))}
+async function initialize(){
   const response=await fetch('/api/auth/config',{cache:'no-store'});
   if(!response.ok)throw Error('Cloud authentication is not configured.');
   const config=await response.json();

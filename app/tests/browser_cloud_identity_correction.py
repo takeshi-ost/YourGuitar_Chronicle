@@ -58,6 +58,9 @@ def main():
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in names}
     from browser_assets import include_module_dependencies
     include_module_dependencies(STATIC, assets)
+    # Exercise the standalone editor's paging and recovery independently of the
+    # production Profile, whose entrance is now the Listing card's Edit.
+    assets['cloud-account-page.js'] = assets['cloud-account-page.js'].replace('listPanel:false', 'listPanel:true').replace('notifications.refresh({reuse:true}),', 'notifications.refresh({reuse:true}),identityCorrections.refresh(),')
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')

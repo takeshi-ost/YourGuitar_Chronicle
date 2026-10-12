@@ -26,7 +26,7 @@ def claim_router(verifier, service):
     headers = {'Cache-Control': 'private, no-store', 'Vary': 'Authorization',
                'X-Content-Type-Options': 'nosniff'}
 
-    async def handle(request, individual, claim=None, deactivate=False):
+    async def handle(request, individual, claim=None, deactivate=False, voting=False):
         try:
             identity = await run_in_threadpool(verifier.verify, bearer_token=bearer_token(request))
         except HTTPException:
@@ -52,7 +52,9 @@ def claim_router(verifier, service):
                     raise ValueError()
                 after = positive_id(query['after']) if 'after' in query else 0
                 limit = positive_id(query['limit']) if 'limit' in query else 25
-                result = await run_in_threadpool(service.list, who, individual, after=after, limit=limit)
+                if voting and query:
+                    raise ValueError()
+                result = await run_in_threadpool(service.votes, who, individual) if voting else await run_in_threadpool(service.list, who, individual, after=after, limit=limit)
             else:
                 # Authentication is never cookie-based. Also reject cross-site
                 # browser writes explicitly; this router does not enable CORS.
@@ -75,7 +77,9 @@ def claim_router(verifier, service):
                 data = json.loads(raw, object_pairs_hook=unique_object)
                 if not isinstance(data, dict):
                     raise ValueError()
-                if claim is None:
+                if voting:
+                    result = await run_in_threadpool(service.votes, who, individual, claim, data)
+                elif claim is None:
                     result = await run_in_threadpool(service.create, who, individual, data)
                 elif deactivate:
                     result = await run_in_threadpool(service.deactivate, who, individual, claim, data)
@@ -111,5 +115,13 @@ def claim_router(verifier, service):
     @router.post('/api/auth/guitars/{individual}/claims/{claim}/deactivate')
     async def deactivate(request: Request, individual: str, claim: str):
         return await handle(request, individual, claim, True)
+
+    @router.get('/api/auth/guitars/{individual}/votes')
+    async def votes(request: Request, individual: str):
+        return await handle(request, individual, voting=True)
+
+    @router.put('/api/auth/guitars/{individual}/claims/{claim}/vote')
+    async def vote(request: Request, individual: str, claim: str):
+        return await handle(request, individual, claim, voting=True)
 
     return router

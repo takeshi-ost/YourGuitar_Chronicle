@@ -325,6 +325,35 @@ def check_formal_follow(page,base,fixture):
     print('Members: canonical Follow/Following labels, authorized synthetic mutations, connections modal PC/390/320/Escape/focus, name search and Back retention passed. No profile/Owned/photo scope expansion.')
 
 
+def check_prepublication(page,base,fixture):
+    fixture.prepublication=True
+    page.set_viewport_size({'width':1440,'height':900})
+    page.goto(base+'/ui/guitars/1')
+    card=page.locator('[data-claim-id="101"]')
+    expect(card.locator('[data-vote="good"]')).to_be_enabled()
+    card.locator('[data-vote="good"]').click()
+    expect(card.locator('[data-vote="good"]')).to_have_attribute('aria-pressed','true')
+    expect(card.locator('[data-vote="good"]')).to_have_text('👍 1')
+    card.locator('[data-vote="bad"]').click()
+    expect(card.locator('[data-vote="bad"]')).to_have_attribute('aria-pressed','true')
+    page.reload();expect(card.locator('[data-vote="bad"]')).to_have_text('👎 1')
+    expect(card.locator('[data-vote="bad"]')).to_have_attribute('aria-pressed','true')
+    expect(card.locator('[data-private-claim-action="edit"]')).to_be_enabled()
+    card.locator('[data-private-claim-action="edit"]').click()
+    expect(page.locator('#identityDialog')).to_be_visible()
+    expect(page.locator('#identityGuitar')).to_contain_text('Fixture 1')
+    page.locator('#identityClose').click()
+    page.goto(base+'/ui/profile/guitars/1')
+    expect(page.locator('#selfIdentityCorrections')).to_be_hidden()
+    expect(page.locator('#selfFavorites .toolbar #favoritesRefresh')).to_be_visible()
+    expect(page.locator('#selfGuitars_owned .toolbar button')).to_be_visible()
+    expect(page.locator('[data-claim-id="101"] [data-private-claim-action="edit"]')).to_be_enabled()
+    page.locator('[data-claim-id="101"] [data-private-claim-action="edit"]').click()
+    expect(page.locator('#identityDialog')).to_be_visible();page.locator('#identityClose').click()
+    print('Prepublication: member Good/Bad persist through reload independently of owner decisions; Listing Edit opens author correction on Top/Profile; independent Profile panel removed and list Refresh visible.')
+    fixture.prepublication=False
+
+
 def check_initial_discovery(page,base,fixture):
     page.add_init_script("""
       Math.random=()=>Number(sessionStorage.getItem('fixture-random')||'0');
@@ -400,17 +429,17 @@ def main():
                 expect(page.locator('#catalogList th[data-sort-field="model"]')).to_have_attribute('aria-sort','descending')
                 selected=page.url
                 # Focus trap, Escape and credential disposal, with return to opener.
-                page.locator('#shellSignIn').click();expect(page.locator('#shellEmail')).to_be_focused()
-                page.locator('#shellEmail').fill('alice@example.invalid');page.locator('#shellPassword').fill('discard-me')
+                page.locator('#shellSignIn').click();expect(page.locator('#authEmail')).to_be_focused()
+                page.locator('#authEmail').fill('alice@example.invalid');page.locator('#authPassword').fill('discard-me')
                 page.keyboard.press('Escape');expect(page.locator('#shellSignIn')).to_be_focused()
-                assert page.locator('#shellPassword').input_value()=='' and page.locator('#shellEmail').input_value()==''
-                page.locator('#shellSignIn').click();page.keyboard.press('Shift+Tab');expect(page.locator('#shellRegister')).to_be_focused()
-                page.keyboard.press('Tab');expect(page.locator('#shellEmail')).to_be_focused()
-                page.locator('#shellEmail').fill('alice@example.invalid');page.locator('#shellPassword').fill('bad');page.locator('#shellSubmit').click()
-                expect(page.locator('#shellLoginStatus')).to_contain_text('could not be completed');assert page.locator('#shellPassword').input_value()==''
+                assert page.locator('#authPassword').input_value()=='' and page.locator('#authEmail').input_value()==''
+                page.locator('#shellSignIn').click();page.keyboard.press('Shift+Tab');expect(page.locator('#authCreateAccount')).to_be_focused()
+                page.keyboard.press('Tab');expect(page.locator('#authEmail')).to_be_focused()
+                page.locator('#authEmail').fill('alice@example.invalid');page.locator('#authPassword').fill('bad');page.locator('#authSubmit').click()
+                expect(page.locator('#cloudAuthStatus')).to_contain_text('incorrect');assert page.locator('#authPassword').input_value()=='bad'
                 page.evaluate("sessionStorage.setItem('verified-alice@example.invalid','true')")
-                page.locator('#shellEmail').fill('alice@example.invalid');page.locator('#shellPassword').fill('fixture-password');page.locator('#shellSubmit').click()
-                expect(page.locator('#shellIdentity')).to_have_text('Alice');expect(page.locator('#shellSignInDialog')).not_to_be_visible()
+                page.locator('#authEmail').fill('alice@example.invalid');page.locator('#authPassword').fill('fixture-password');page.locator('#authSubmit').click()
+                expect(page.locator('#shellIdentity')).to_have_text('Alice');expect(page.locator('#cloudAuthDialog')).not_to_be_visible()
                 expect(page.locator('#favoriteToggle')).to_be_visible()
                 assert page.url==selected
                 # Canonical identity changes clear private controls before Refresh.
@@ -434,7 +463,7 @@ def main():
                 box=page.locator('#productDetailShell').bounding_box();assert box['x']>=0 and box['x']+box['width']<=390
                 page.screenshot(path=str(artifacts/'formal-ui-mobile.png'))
                 page.keyboard.press('Escape');expect(page.locator('#productDetailShell')).not_to_be_visible();expect(page.locator('#listHeading')).to_be_focused()
-                page.locator('#shellSignIn').click();page.keyboard.press('Escape');expect(page.locator('#shellSignInDialog')).not_to_be_visible()
+                page.locator('#shellSignIn').click();page.keyboard.press('Escape');expect(page.locator('#cloudAuthDialog')).not_to_be_visible()
                 page.set_viewport_size({'width':320,'height':640});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.locator('#catalogRows a').first.click();expect(page.locator('#detailContent')).to_be_visible()
                 box=page.locator('#productDetailShell').bounding_box();assert box['x']>=0 and box['x']+box['width']<=320
@@ -457,6 +486,7 @@ def main():
                 check_formal_follow(page,base,fixture)
                 check_notification_cards(page,base,fixture)
                 check_ownership_entry(page,base,fixture)
+                check_prepublication(page,base,fixture)
                 assert not errors,errors
                 context.close();browser.close()
                 print('Formal UI: routes/history, canonical auth/identity switch/revocation, credential disposal, modal focus, Offline, Japanese and 1440/390/320px passed; synthetic GETs and explicit Settings/Signature/Favorite test saves only.')

@@ -19,6 +19,7 @@
     function bindUserData(){
       const user=auth.currentUser,valid=account?.user?.app_user_id&&account.identity?.email_verified===true;
       const owner=valid&&typeof user?.uid==='string'?JSON.stringify([origin,user.uid,auth.tenantId||'',account.user.app_user_id,account.user.role||'',account.user.status||'']):null;
+      globalThis.YGCTheme?.bind(owner);
       if(owner===dataOwner)return;
       dataOwner=owner;entries={};dataEpoch++;
       try{
@@ -88,7 +89,7 @@
       if(observedUser===auth.currentUser)return;
       observedUser=auth.currentUser;account=null;accountUser=null;
       sharedReads.clear();dataOwner=null;
-      if(!initial)invalidateUserData();
+      if(!initial){invalidateUserData();globalThis.YGCTheme?.clear()}
       if(initial)return;
       for(const listener of identityListeners){try{listener()}catch{/* One view cannot retain another view's private data. */}}
     }
@@ -191,7 +192,7 @@
     async function me(forceRefresh=false){
       identityChanged();account=null;accountUser=null;
       const user=auth.currentUser;
-      if(!user)return null;
+      if(!user){globalThis.YGCTheme?.clear();return null;}
       const response=await api('/api/auth/me',{},forceRefresh);
       if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
       if(response.status===409){
@@ -240,7 +241,7 @@
         const registered=await result(await api('/api/auth/register',{method:'POST',
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
         if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
-        accountUser=user;return account=registered;
+        accountUser=user;account=registered;bindUserData();return account;
       })},
       requestEmailVerification({language='en',acquire,claim}={}){return serial(async()=>{
         const user=auth.currentUser;
@@ -268,7 +269,7 @@
         // Force a new JWT: SDK emailVerified alone cannot authorize an app action.
         return me(true);
       })},
-      logout(){invalidateUserData();return serial(async()=>{try{await sdk.signOut(auth);account=null;dataOwner=null}finally{invalidateUserData()}})},
+      logout(){globalThis.YGCTheme?.clear();invalidateUserData();return serial(async()=>{try{await sdk.signOut(auth);account=null;dataOwner=null}finally{invalidateUserData()}})},
       authorizedFetch:api,
       invalidateUserData,
       onUserDataInvalidated(listener){dataListeners.add(listener);return ()=>dataListeners.delete(listener)},

@@ -1,3 +1,4 @@
+import {notificationText} from './cloud-notification-text.js';
 import {catalogIndividualId} from './cloud-account-applications.js';
 
 const object=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value));
@@ -55,16 +56,17 @@ export function createNotifications({auth,state,busy,work,openTransfer,openOwner
   function renderRows(){
     list.replaceChildren();const c=context(),generation=readEpoch;
     for(const row of rows){
+      const translated=notificationText(row);
       if(formal){
         const item=node('button');item.type='button';item.className='notification-item'+(row.is_read?'':' unread');item.dataset.notificationId=row.id;item.dataset.read=String(row.is_read);
-        const title=node('div',row.title),body=node('div',row.body??''),time=node('div');title.className='notification-item-title';body.className='notification-item-body';time.className='notification-item-time';const date=new Date(row.created_at);time.textContent=Number.isNaN(date.getTime())?row.created_at:date.toLocaleString(globalThis.YGCI18n.locale||'en-US');item.append(title,body,time);
+        const title=node('div',translated.title),body=node('div',translated.body??''),time=node('div');title.className='notification-item-title';body.className='notification-item-body';time.className='notification-item-time';const date=new Date(row.created_at);time.textContent=Number.isNaN(date.getTime())?row.created_at:date.toLocaleString(globalThis.YGCI18n.locale||'en-US');item.append(title,body,time);
         item.onclick=async()=>{if(busy()||!current(c)||generation!==readEpoch)return;
           if(!row.is_read&&writable()){await markRead(row.id);if(!current(c)||uncertain||!rows.some(item=>item.id===row.id&&item.is_read))return}
           globalThis.YGCOverlays.close(document.getElementById('formalNotifications'));
           const target=row.destination;if(target)return target.kind==='transfer'?openTransfer(target.claim_id):target.kind==='owner'?openOwner(target.individual_id,target.claim_id):target.kind==='dispute'?openDispute(target.case_id):openDisputeOption(target.claim_id);
         };list.append(item);continue;
       }
-      const item=node('li'),title=node('h3',row.title),body=node('p',row.body??''),meta=node('p',(row.actor?row.actor.display_name+' · ':'')+row.created_at),readState=node('p',t(row.is_read?'notifications.read':'notifications.unread')+(row.read_at?' · '+row.read_at:'')),mark=button('notifications.mark_one');
+      const item=node('li'),title=node('h3',translated.title),body=node('p',translated.body??''),meta=node('p',(row.actor?row.actor.display_name+' · ':'')+row.created_at),readState=node('p',t(row.is_read?'notifications.read':'notifications.unread')+(row.read_at?' · '+row.read_at:'')),mark=button('notifications.mark_one');
       item.dataset.notificationId=row.id;item.dataset.read=String(row.is_read);mark.dataset.notificationMark=row.id;mark.hidden=row.is_read;
       const valid=()=>current(c)&&generation===readEpoch;
       mark.onclick=()=>{if(valid())return markRead(row.id)};

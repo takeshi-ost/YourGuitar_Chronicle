@@ -1,3 +1,4 @@
+import {createAuthDialog} from './cloud-auth-dialog.js';
 import {createFavoriteControl,createFavoriteSnapshotReader} from './cloud-account-favorites.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 
@@ -77,7 +78,7 @@ const messages={
     read_only:'閲覧専用モード：閲覧できますが、変更は一時停止中です。',offline:'カタログは一時停止中です。',
     admin_only:'現在カタログを閲覧できるのは管理者のみです。',service_unknown:'サービス状態を取得できません。カタログの閲覧可否は個別に確認されます。',
     footer:'Your Guitar Chronicle · 公開カタログ',positive:'承認済み',negative:'否認',unverified:'未確認',
-    ownership:'所有権',specification_claim:'仕様',repair:'修理',incident:'事故・被害',event:'イベント',media:'メディア',listing:'出品',
+    ownership:'所有権',specification_claim:'スペック',repair:'修理',incident:'事故・被害',event:'イベント',media:'メディア',listing:'掲載',
     identity_correction:'個体情報の訂正',acquire_kind:'取得',release:'手放し',transfer:'譲渡',lost:'紛失',found:'発見',inherit:'相続',
     body:'ボディ',bridge:'ブリッジ',fingerboard:'指板',frets:'フレット',neck:'ネック',nut:'ナット',pickups:'ピックアップ',pickguard:'ピックガード',
     potentiometers:'ポット',tuners:'ペグ',wiring:'配線',weight:'重量',pages_label:'カタログのページ',nav_label:'アカウントと言語',
@@ -260,14 +261,14 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   function controls(){
     favorite.render();
     if(formal)$('listHeading').dataset.countPending=String(!list);
-    if(formal){$('acquireLink').hidden=!auth?.account?.user||authBlocked!==null||Boolean(detail?.presentation?.owner);$('ownershipLink').hidden=true;}
+    if(formal){$('acquireLink').hidden=authBlocked!==null||Boolean(detail?.presentation?.owner);$('ownershipLink').hidden=true;}
     $('catalogLayout').dataset.detailOpen=String(Boolean((route?.id||route?.invalid)&&!compactDismissed));
     $('catalogRows').setAttribute('aria-busy',String(loading));$('catalogDetail').setAttribute('aria-busy',String(loading||moreLoading));
     $('catalogRefresh').disabled=loading;$('catalogPrevious').disabled=loading||!list||route.page<=1;
     $('catalogNext').disabled=loading||!list||route.page>=list.total_pages||route.page>=1000000;
     $('catalogPage').textContent=list?t('page',{page:list.page,pages:Math.max(list.total_pages,1)}):'';
     $('catalogStatus').textContent=listMessage?t(listMessage):list?t(list.items.length?'count':'empty',{count:list.total}):'';
-    if(formal){$('catalogPagination').hidden=true;$('catalogRefresh').hidden=!listMessage;$('catalogStatus').hidden=!listMessage}
+    if(formal){$('catalogPagination').hidden=true;$('catalogRefresh').hidden=false;$('catalogStatus').hidden=!listMessage}
     $('detailStatus').textContent=detailMessage?t(detailMessage):'';$('detailStatus').hidden=!detailMessage;
     $('catalogBack').hidden=!route?.id&&!route?.invalid;
     if(route){intercept($('catalogBack'),routeURL({...route,id:null,invalid:false}));if(formal)$('catalogBack').onclick=event=>{event.preventDefault();closeDetail()}}
@@ -352,18 +353,20 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     const id=detail?.id,path=detail?.public_photo,target=$('detailPhoto'),version=++photoEpoch,owner=auth?.account?.user?.app_user_id;
     if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;
     if(!target)return;
+    const fallback=()=>{delete target.dataset.photoLoading;target.src='/assets/no-picture.svg'};
+    target.onload=()=>{delete target.dataset.photoLoading};
     if(typeof path==='string'&&path.startsWith('https://')){
       try{const url=new URL(path);if(!['images.reverb.com','photos.reverb.com','rvb-img.reverb.com'].includes(url.hostname)||url.username||url.password||url.hash||url.port&&url.port!=='443')return;
-        target.referrerPolicy='no-referrer';target.onerror=()=>{target.onerror=null;target.src='/assets/no-picture.svg'};target.src=path;
+        target.referrerPolicy='no-referrer';target.onerror=()=>{target.onerror=null;fallback()};target.src=path;
       }catch{}return;
     }
     if(path!=='/api/public/guitars/'+id+'/photo')return;
     const current=()=>version===photoEpoch&&!stopped&&detail?.id===id&&auth?.account?.user?.app_user_id===owner&&!authBlocked&&$('detailPhoto')===target;
     try{const options={cache:'no-cache',credentials:'omit',redirect:'error',signal:controller?.signal};const response=auth?.signedIn?await auth.authorizedFetch(path,options):await request(path,options);
-      if(!current()||!response.ok||response.headers.get('content-type')?.split(';')[0]!=='image/jpeg')return;
-      const blob=await response.blob();if(!current()||!blob.size||blob.size>25*1024*1024)return;
+      if(!current())return;if(!response.ok||response.headers.get('content-type')?.split(';')[0]!=='image/jpeg'){fallback();return}
+      const blob=await response.blob();if(!current())return;if(!blob.size||blob.size>25*1024*1024){fallback();return}
       photoURL=URL.createObjectURL(blob);target.src=photoURL;
-    }catch{/* Keep the placeholder when an image was revoked or is unavailable. */}
+    }catch{if(current())fallback()}
   }
   function renderSharedDetail(){
     const shared=globalThis.YGCProductDetail;
@@ -374,14 +377,14 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     // Only explicit public presentation fields are rendered; Evidence is never used.
     // Do not infer them, fetch local APIs, or turn a private image into a public one.
     $('detailContent').innerHTML=shared.render({individual:detail,specifications:detail.specifications,
-      image:'<img id="detailPhoto" class="detail-image" src="/assets/no-picture.svg" alt="'+escape(t('photo'))+'">',
+      image:'<img id="detailPhoto" class="detail-image" '+(detail.public_photo?'data-photo-loading="true"':'src="/assets/no-picture.svg"')+' alt="'+escape(t('photo'))+'">',
       owner:detail.presentation?.owner&&validId(detail.presentation.owner.id)?'<a href="/ui/members/'+detail.presentation.owner.id+'">'+escape(detail.presentation.owner.display_name)+'</a>':escape(detail.presentation?.source_owner_name||'—'),location:escape(detail.presentation?.location||'—'),fieldLabel,escape});
     const photo=$('detailPhoto');photo.alt=[detail.manufacturer,detail.model].filter(Boolean).join(' ');photo.setAttribute('role','button');photo.tabIndex=0;// The shared image album handles click and keyboard activation.
     const caption=node('span',globalThis.YGCI18n.t(detail.public_photo?'ui.representative_image_c23db047':'ui.no_picture_b2e8e688'),'detail-source');photo.after(caption);
     const title=$('detailContent').querySelector('.detail-header-title');title.id='detailTitle';
     const identifier=node('span',undefined,'sub');identifier.id='detailIdentifier';identifier.hidden=true;title.after(identifier);
     $('detailContent').querySelector('.catalog-spec').id='detailSpecifications';
-    const ownerAction=keep.acquireLink;ownerAction.className='owner-claim-card';if(onAcquire)ownerAction.onclick=event=>{if(!auth?.account?.user||authBlocked)return;event.preventDefault();void onAcquire(detail.id)};
+    const ownerAction=keep.acquireLink;ownerAction.className='owner-claim-card';if(onAcquire)ownerAction.onclick=event=>{if(authBlocked)return;event.preventDefault();void onAcquire(detail.id)};
     const claimAction=keep.addClaimLink;claimAction.className='add-claim-action';claimAction.textContent=globalThis.YGCI18n?.t('claim.add')||"Let's add your Claim !!";
     $('detailContent').querySelector('.detail-title-row').append(keep.detailFavorite);
     $('detailContent').querySelector('.detail-header').append(ownerAction,keep.ownershipLink);
@@ -399,7 +402,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
           else void onAcquire?.(detail.id);
         };options.prepend(ownership);
       }
-      claimAction.onclick=event=>{if(!auth?.account?.user||authBlocked)return;event.preventDefault();event.stopPropagation();options.classList.toggle('open')};menu.append(options);
+      claimAction.onclick=event=>{if(authBlocked)return;event.preventDefault();event.stopPropagation();if(!auth?.account?.user){void onClaim(detail.id,'specification');return}options.classList.toggle('open')};menu.append(options);
     }
     toolbar.append(menu);
     $('chronicleAccordion').querySelector('.accordion-body').prepend(toolbar,keep.chronicleStatus);
@@ -588,7 +591,9 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
 
 // Readiness is for the disposable browser checks; it does not expose identity.
 if(document.body.dataset.catalogAutostart!=='false'){
-  const catalog=createPublicCatalog();
+  let client;const dialog=createAuthDialog({auth:()=>client,onAuthenticated:()=>catalog.refresh()});
+  const catalog=createPublicCatalog({onState:state=>{client=state.auth},onAcquire:id=>dialog.open({onSuccess:()=>location.assign('/account?acquire='+id)}),onClaim:id=>dialog.open({onSuccess:()=>location.assign('/account?claim='+id)})});
+  document.getElementById('accountLink').onclick=event=>{if(!client?.account?.user){event.preventDefault();dialog.open({opener:event.currentTarget})}};
   await catalog.start();
   globalThis.YGCCloudPublicCatalogReady=true;
 }

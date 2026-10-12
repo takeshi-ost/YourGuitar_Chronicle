@@ -406,3 +406,45 @@ def test_all_incident_kinds_leave_ownership_unchanged(services, incident_kind):
     claim = service.create(a, guitar, INCIDENT | {'incident_kind': incident_kind})['claim']
     assert claim['incident_kind'] == incident_kind and claim['verification_status'] == 'positive'
     assert repo.get_individual(guitar)[0]['current_owner_user_id'] == a
+
+
+def test_member_votes_are_idempotent_separate_from_verification_and_persistent(services):
+    repo, service, owner, a, b, c, guitar = services
+    claim = service.create(b, guitar, SPEC)['claim']
+    key = int(claim['id'])
+    initial = service.votes(c, guitar)
+    assert next(row for row in initial['items'] if row['id'] == str(key))['vote'] is None
+    one = service.votes(c, guitar, key, {'vote': 'good'})['items'][0]
+    assert one == {'id': str(key), 'vote': 'good', 'good_count': '1', 'bad_count': '0'}
+    assert service.votes(c, guitar, key, {'vote': 'good'})['items'][0] == one
+    switched = service.votes(c, guitar, key, {'vote': 'bad'})['items'][0]
+    assert switched['good_count'] == '0' and switched['bad_count'] == '1'
+    assert next(row for row in service.votes(c, guitar)['items'] if row['id'] == str(key)) == switched
+    assert service.list(b, guitar)['items'][0]['verification_status'] == 'unverified'
+    service.votes(c, guitar, key, {'vote': None})
+    assert next(row for row in service.votes(c, guitar)['items'] if row['id'] == str(key))['bad_count'] == '0'
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET status='inactive' WHERE id=?", (key,))
+    with pytest.raises(GuitarMissing):
+        service.votes(c, guitar, key, {'vote': 'good'})
+
+
+@pytest.mark.parametrize('data', [{'vote':'positive'}, {'vote':True}, {}, {'vote':'good','user_id':1}])
+def test_vote_payload_rejects_verification_and_actor_injection(services, data):
+    _, service, _, a, b, c, guitar = services
+    with pytest.raises(ValueError):
+        service.votes(c, guitar, 1, data)
+
+
+def test_vote_routes_authenticate_and_reject_cross_site_and_queries(api):
+    client, verifier, service = api
+    service.votes.return_value = {'can_write': True, 'items': []}
+    assert client.get('/api/auth/guitars/12/votes', headers=AUTH).status_code == 200
+    service.votes.assert_called_once_with('canonical', 12)
+    service.votes.reset_mock()
+    url = '/api/auth/guitars/12/claims/21/vote'
+    assert client.put(url, headers=AUTH, json={'vote':'good'}).status_code == 200
+    assert client.put(url, headers=AUTH | {'Origin':'https://other.invalid'}, json={'vote':'bad'}).status_code == 403
+    assert client.get('/api/auth/guitars/12/votes?user_id=2', headers=AUTH).status_code == 400
+    verifier.verify.return_value = VerifiedIdentity('issuer','subject','',False)
+    assert client.put(url, headers=AUTH, json={'vote':'good'}).status_code == 403

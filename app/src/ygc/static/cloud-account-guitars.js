@@ -140,8 +140,8 @@ export function createGuitars({auth,state,busy,work,openOwnership,root:providedR
     list.id='profileRows-'+kind;
     let presentation=null;
     if(tableLayout){
-      presentation=createProfileList({section,title,list,onSelect,guitarHref:id=>'/ui/profile/guitars/'+id,auth,state,busy});
-      section.append(status);refresh.hidden=previous.hidden=next.hidden=true;
+      presentation=createProfileList({section,title,list,onSelect,guitarHref:id=>'/ui/profile/guitars/'+id,auth,state,busy,refreshButton:refresh});
+      section.append(status);previous.hidden=next.hidden=true;
     }else section.append(title,status,list,refresh,previous,next);root.append(section);
     panels[kind]={status,list,refresh,previous,next,history:[0],nextAfter:null,read:0,presentation,rows:[]};
     refresh.onclick=()=>{if(busy())return;panels[kind].history=[0];work(()=>page(kind))};

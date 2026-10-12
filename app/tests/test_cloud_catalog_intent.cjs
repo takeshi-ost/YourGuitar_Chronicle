@@ -44,7 +44,7 @@ function environment({initial=account(),search='',fullPage=false,catalogReplies=
   const create=context.createApplications;
   context.createApplications=args=>{componentArgs=args;component=create(args);return component};
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){}});
-  Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
+  Object.assign(context,{createAuthDialog:options=>{context.authComplete=options.onAuthenticated;return {open(){},close(){},render(){}}},createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
   let ready;
   if(fullPage){const source=fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'');ready=vm.runInContext('(async()=>{'+source+'})()',context)}
   else{component=context.createApplications({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}
@@ -136,7 +136,7 @@ test('An authorization rejection clears private application data while retaining
 
 test('Guest sign-in, email verification and refreshed access preserve intent without automatic application writes',async()=>{
   const id='9223372036854775807',e=environment({initial:null,search:'?acquire='+id+'&next=https://evil.invalid',fullPage:true});await e.ready;await e.flush();assert.equal(e.status,'catalog.acquire_sign_in');assert.equal(e.control('catalogAcquireStart').disabled,true);
-  e.control('email').value='member@example.invalid';e.control('password').value='password';await e.control('cloudAccountForm').onsubmit({preventDefault(){}});await e.flush();assert.equal(e.status,'catalog.acquire_verify');assert.equal(posts(e).length,0);
+  e.control('email').value='member@example.invalid';e.control('password').value='password';await e.context.authComplete(await e.client.signIn({email:e.control('email').value,password:e.control('password').value}));await e.flush();assert.equal(e.status,'catalog.acquire_verify');assert.equal(posts(e).length,0);
   await e.control('sendVerification').onclick();assert.deepEqual(JSON.parse(JSON.stringify(e.authCalls.at(-1).options)),{language:'en',acquire:id});
   await e.control('refreshVerification').onclick();await e.flush();assert.equal(e.status,'catalog.acquire_ready');assert.equal(e.control('catalogAcquireStart').disabled,false);assert.equal(posts(e).length,0);
   assert.equal(e.context.location.search,'?acquire='+id+'&next=https://evil.invalid');e.start();assert.equal(e.control('application_individual_id').value,id);
@@ -144,16 +144,13 @@ test('Guest sign-in, email verification and refreshed access preserve intent wit
 });
 
 test('Registration and incomplete-enrollment retry retain selection and never automatically draft',async()=>{
-  const e=environment({initial:null,search:'?acquire=12',fullPage:true});await e.ready;e.authReplies.push({registration_required:true});await e.control('cloudAccountForm').onsubmit({preventDefault(){}});await e.flush();
-  assert.equal(e.control('credentialsFields').hidden,true);assert.equal(e.control('profileFields').hidden,false);assert.equal(e.status,'catalog.acquire_sign_in');
-  e.control('displayName').value='Member';e.control('accountType').value='user';e.control('terms').checked=e.control('privacy').checked=true;await e.control('cloudAccountForm').onsubmit({preventDefault(){}});await e.flush();
+  const e=environment({initial:null,search:'?acquire=12',fullPage:true});await e.ready;e.authReplies.push({registration_required:true});await e.context.authComplete(await e.client.signIn({email:e.control('email').value,password:e.control('password').value}));await e.flush();
+  assert.equal(e.status,'catalog.acquire_sign_in');
+  await e.context.authComplete(await e.client.register({display_name:'Member',account_type:'user',terms_accepted:true,privacy_accepted:true},undefined));await e.flush();
   assert.equal(e.authCalls.at(-1).name,'register');assert.equal(e.authCalls.at(-1).credentials,undefined);assert.equal(e.status,'catalog.acquire_verify');assert.equal(posts(e).length,0);assert.equal(e.context.location.search,'?acquire=12');
 });
 
-test('Create Account mode switches retain URL selection',async()=>{
-  const e=environment({initial:null,search:'?acquire=12',fullPage:true});await e.ready;e.control('showRegistration').onclick();e.control('showSignIn').onclick();e.control('showRegistration').onclick();await e.control('cloudAccountForm').onsubmit({preventDefault(){}});await e.flush();
-  assert.equal(e.authCalls[0].name,'register');assert.equal(e.context.location.search,'?acquire=12');assert.equal(posts(e).length,0);
-});
+test('Shared authentication entry points retain URL selection without automatically creating an account',async()=>{const e=environment({initial:null,search:'?acquire=12',fullPage:true});await e.ready;e.control('showSignIn').onclick();e.control('showRegistration').onclick();assert.equal(e.authCalls.length,0);assert.equal(e.context.location.search,'?acquire=12');assert.equal(posts(e).length,0)});
 
 test('Account page handles Back/Forward query changes and malformed duplicate intent without redirecting',async()=>{
   const e=environment({search:'?acquire=12',fullPage:true});await e.ready;await e.flush();e.start();e.navigate('');await e.flush();assert.equal(e.control('catalogAcquireIntent').hidden,true);assert.equal(e.dialog.open,false);

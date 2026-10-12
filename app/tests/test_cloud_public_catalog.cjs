@@ -303,7 +303,7 @@ test('Formal compact close preserves selected record and URL; reopening and filt
 test('Formal catalog aggregates API pages without pager UI and rejects changed or duplicate snapshots',async()=>{
   const guitars=Array.from({length:55},(_,i)=>guitar(i+1));
   const e=environment({url:'https://catalog.example/ui?page=2',guitars,presentation:{basePath:'/ui',listStyle:'table'}});
-  await e.ui.start();assert.equal(e.links().length,55);assert.equal(e.ids.get('catalogPagination').hidden,true);assert.equal(e.ids.get('catalogRefresh').hidden,true);
+  await e.ui.start();assert.equal(e.links().length,55);assert.equal(e.ids.get('catalogPagination').hidden,true);assert.equal(e.ids.get('catalogRefresh').hidden,false);
   assert.deepEqual(e.publicCalls().filter(c=>c.path==='/api/public/guitars').map(c=>c.params.get('page')),['1','2','3']);
   for(const fault of ['duplicate','changed','incomplete']){
     e.handler=call=>{if(call.path==='/api/public/guitars'&&call.params.get('page')==='2')return response({items:fault==='incomplete'?[]:guitars.slice(fault==='duplicate'?31:7,fault==='duplicate'?55:31),total:fault==='changed'?'56':'55',page:2,page_size:24,total_pages:3})};

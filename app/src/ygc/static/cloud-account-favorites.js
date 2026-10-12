@@ -67,7 +67,7 @@ export function createFavorites({auth,state,busy,work,tableLayout=false,guitarHr
   const refreshButton=button('action.refresh','favoritesRefresh'),previous=button('users.previous','favoritesPrevious'),next=button('users.next','favoritesNext');
   root.setAttribute('aria-labelledby',heading.id);status.setAttribute('role','status');
   let presentation=null;
-  if(tableLayout){heading.textContent=t('ui.favorite_guitars_e1514ac1');presentation=createProfileList({section:root,title:heading,list,onSelect:onNavigate,guitarHref,auth,state,busy});root.append(status);refreshButton.hidden=previous.hidden=next.hidden=count.hidden=true}
+  if(tableLayout){heading.textContent=t('ui.favorite_guitars_e1514ac1');presentation=createProfileList({section:root,title:heading,list,onSelect:onNavigate,guitarHref,auth,state,busy,refreshButton});root.append(status);previous.hidden=next.hidden=count.hidden=true}
   else root.append(heading,node('p',t('favorites.private_notice')),count,refreshButton,status,list,previous,next);
   let identity=favoriteIdentity(state()),epoch=0,history=[null],nextAfter=null,total=null,notice='',loading=false;
   const eligible=()=>favoriteEligible(state())&&auth()?.signedIn!==false;
@@ -99,7 +99,7 @@ export function createFavorites({auth,state,busy,work,tableLayout=false,guitarHr
   previous.onclick=()=>{if(history.length<2)return;const path=history.slice(0,-1);return action(()=>load(path.at(-1),path))};
   next.onclick=()=>{if(nextAfter===null)return;const after=nextAfter;return action(()=>load(after,[...history,after]))};
   favoriteObservers.add(change=>{if(change.phase==='saved'&&change.owner===favoriteIdentity(state())&&eligible())void refresh()});
-  globalThis.addEventListener('popstate',()=>{clear();render()});globalThis.addEventListener('pagehide',clear);render();return {render,clear,refresh};
+  globalThis.addEventListener('popstate',()=>render());globalThis.addEventListener('pagehide',clear);render();return {render,clear,refresh};
 }
 
 // The public catalog renders only this visitor's own state, never a public
@@ -117,7 +117,7 @@ export function createFavoriteControl({auth,state,root,compact=false,idPrefix=''
     toggle.hidden=refreshButton.hidden=!eligible();account.hidden=eligible();account.textContent=t('favorites.account');help.textContent=t('favorites.private_notice');
     toggle.textContent=t(value===true?'favorites.remove':'favorites.add');toggle.setAttribute('aria-pressed',String(value===true));toggle.disabled=!id||!eligible()||loading||mutating||uncertain||value===null||!canWrite()||busy()||favoritePending.has(favoriteKey(identity,id));refreshButton.textContent=t('action.refresh');refreshButton.disabled=!id||!eligible()||loading||mutating||busy()||favoritePending.has(favoriteKey(identity,id));
     status.textContent=uncertain?t('favorites.uncertain'):notice?t(notice):eligible()&&!canWrite()?t('favorites.restricted'):'';
-    if(compact){root.hidden=!id||!eligible();help.hidden=account.hidden=true;refreshButton.hidden=!eligible()||!(uncertain||value===null&&!loading&&!mutating&&!favoritePending.has(favoriteKey(identity,id)));toggle.className='favorite-button'+(value===true?' is-favorite':'');toggle.setAttribute('aria-label',t(value===true?'favorites.remove':'favorites.add'));toggle.title=status.textContent||t(busy()?'cloud.working':value===true?'favorites.remove':'favorites.add');toggle.setAttribute('aria-describedby',status.id);refreshButton.className='favorite-refresh-compact';refreshButton.textContent='↻';refreshButton.setAttribute('aria-label',t('action.refresh'));refreshButton.title=t('action.refresh');status.className='favorite-status-compact';toggle.textContent=value===true?'♥':'♡';status.hidden=!status.textContent;}
+    if(compact){root.hidden=!id||!eligible();help.hidden=account.hidden=true;refreshButton.hidden=!eligible()||!(uncertain||value===null&&notice&&notice!=='cloud.working'&&!loading&&!mutating&&!favoritePending.has(favoriteKey(identity,id)));toggle.className='favorite-button'+(value===true?' is-favorite':'');toggle.setAttribute('aria-label',t(value===true?'favorites.remove':'favorites.add'));toggle.title=status.textContent||t(busy()?'cloud.working':value===true?'favorites.remove':'favorites.add');toggle.setAttribute('aria-describedby',status.id);refreshButton.className='favorite-refresh-compact';refreshButton.textContent='↻';refreshButton.setAttribute('aria-label',t('action.refresh'));refreshButton.title=t('action.refresh');status.className='favorite-status-compact';toggle.textContent=value===true?'♥':'♡';status.hidden=!status.textContent;}
   }
   function observe(change){
     if(change.owner!==favoriteIdentity(state())||change.id!==id||!eligible()||change.source===observe)return;

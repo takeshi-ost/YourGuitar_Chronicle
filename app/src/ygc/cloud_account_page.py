@@ -49,6 +49,8 @@ def install(app, config):
     # actual source bytes. Only existing allowlisted routes can serve snapshots.
     snapshots = {'/assets/' + path.relative_to(STATIC).as_posix(): path.read_bytes()
                  for path in STATIC.rglob('*') if path.is_file()}
+    snapshots.update({'/assets/theme-textures/' + name: (STATIC / name).read_bytes()
+                      for name in ('butterscotch-wood.webp', 'rellic-black-wood.webp', 'cherry-wood.webp', 'white-pearl.webp') if (STATIC / name).is_file()})
     snapshots.update({'/assets/i18n.js': i18n_content(),
         '/assets/ownership-presentation.js': ownership_presentation_script().encode('utf-8'),
         '/assets/no-picture.svg': NO_PICTURE_SVG.encode('utf-8'),
@@ -61,6 +63,9 @@ def install(app, config):
     app.add_middleware(VersionedAssets, revision=revision)
 
     def page_response(html):
+        if '/assets/overlays.js' not in html:
+            html = html.replace('</head>', '<script src="/assets/overlays.js" defer></script></head>', 1)
+        html = html.replace('<head>', '<head><script src="/assets/cloud-theme.js"></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css">', 1)
         return HTMLResponse(html.replace('/assets/', asset_prefix), headers={'Cache-Control': 'no-store'})
 
     def static_response(request, content, media_type):
@@ -153,6 +158,12 @@ def install(app, config):
     def formal_ui_styles(request: Request):
         return static_file(request, STATIC / 'pages/user-view.css')
 
+    @app.get('/assets/theme-textures/{filename}')
+    def theme_texture(filename: str, request: Request):
+        if filename not in ('butterscotch-wood.webp', 'rellic-black-wood.webp', 'cherry-wood.webp', 'white-pearl.webp'):
+            raise HTTPException(404, 'Asset not found.')
+        return static_file(request, STATIC / filename)
+
     @app.get('/assets/logos/{filename}')
     def wordmark(filename: str, request: Request):
         if filename not in ('script.png', 'block.png', 'badge.png'):
@@ -213,7 +224,7 @@ def install(app, config):
     def asset(filename: str, request: Request):
         if filename in ('cloud-catalog-insights.js', 'cloud-catalog-insights.css', 'cloud-world-geometry.js'):
             return static_file(request, STATIC / filename)
-        if filename not in ('cloud-detail-dispute.js', 'cloud-application-presentation.js', 'cloud-ownership-presentation.js', 'cloud-account-hub.js', 'cloud-profile-connections.js', 'cloud-detail-claim-actions.js', 'cloud-claim-presentation.js', 'cloud-user-settings.js', 'profile-list.js', 'cloud-profile-list.js', 'list-navigation.js', 'product-detail.js', 'table-columns.js', 'cloud-ui.js', 'cloud-ui.css', 'cloud-ui-profile.js', 'cloud-ui-profile.css', 'themes.css', 'sunburst-wood.webp', 'identity-platform-auth.js', 'cloud-auth-loader.js',
+        if filename not in ('cloud-notification-text.js', 'cloud-claim-votes.js', 'cloud-auth-dialog.css', 'cloud-auth-dialog.js', 'cloud-theme.js', 'cloud-detail-dispute.js', 'cloud-application-presentation.js', 'cloud-ownership-presentation.js', 'cloud-account-hub.js', 'cloud-profile-connections.js', 'cloud-detail-claim-actions.js', 'cloud-claim-presentation.js', 'cloud-user-settings.js', 'profile-list.js', 'cloud-profile-list.js', 'list-navigation.js', 'product-detail.js', 'table-columns.js', 'cloud-ui.js', 'cloud-ui.css', 'cloud-ui-profile.js', 'cloud-ui-profile.css', 'themes.css', 'sunburst-wood.webp', 'identity-platform-auth.js', 'cloud-auth-loader.js',
                             'cloud-public-catalog.js', 'cloud-public-catalog.css', 'cloud-members.js', 'cloud-member-icons.js', 'cloud-members.css',
                             'cloud-account-favorites.js', 'cloud-account-visibility.js', 'cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-profile.js', 'cloud-account-guitars.js', 'cloud-owner-acquire-inbox.js', 'cloud-account-ownership.js', 'cloud-account-identity.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-applications.js', 'cloud-console-guitars.js', 'cloud-console-media.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')

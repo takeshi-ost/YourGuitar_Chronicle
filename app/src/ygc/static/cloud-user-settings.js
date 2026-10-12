@@ -1,5 +1,7 @@
+import {createAuthDialog} from './cloud-auth-dialog.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
+const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:()=>load()});
 const fieldIds={display_name:'displayName',account_type:'accountType',location_country:'country',location_region:'city',bio:'bio',date_of_birth:'dateOfBirth',theme:'theme'};
 const visibility=['birth','residence','bio','avatar'],choices=['Public','Members','Followers','Private'];
 const exactId=value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&BigInt(value)<=9223372036854775807n;
@@ -16,14 +18,14 @@ async function load(){
   clear();const token=epoch;
   try{
     account=await auth.restore();const owner=identity();if(token!==epoch)return;
-    if(!eligible()){$('emptyState').textContent=t('self_profile.restricted');const link=document.createElement('a');link.href='/ui/profile';link.textContent=t('account.sign_in');$('emptyState').append(' ',link);return}
+    if(!eligible()){$('emptyState').textContent=t('self_profile.restricted');const link=document.createElement('a');link.href='/ui/profile';link.textContent='Sign in / Create Account';link.onclick=event=>{event.preventDefault();authDialog.open({opener:link})};$('emptyState').append(' ',link);return}
     const data=await request('/api/auth/settings');if(!current(token,owner))return;
     const keys=[...Object.keys(fieldIds),...visibility.map(key=>key+'_visibility')];
     if(!data||!exactId(data.id)||!exactId(data.profile_revision)||!data.fields||Object.keys(data.fields).length!==keys.length||keys.some(key=>!Object.hasOwn(data.fields,key)||!(typeof data.fields[key]==='string'||key.endsWith('_visibility')&&data.fields[key]===null)))throw Error(t('users.profile_unavailable'));
     const themeResponse=await fetch('/api/themes',{credentials:'omit'});if(!themeResponse.ok)throw Error(t('users.profile_unavailable'));const themes=await themeResponse.json();if(!current(token,owner))return;
     if(!Array.isArray(themes)||themes.some(theme=>!theme||typeof theme.id!=='string'||typeof theme.label!=='string')||!themes.some(theme=>theme.id===data.fields.theme))throw Error(t('users.profile_unavailable'));
     $('theme').replaceChildren();for(const theme of themes){const option=document.createElement('option');option.value=theme.id;option.textContent=theme.label;$('theme').append(option)}
-    settings=data;savedTheme=data.fields.theme;document.documentElement.dataset.theme=savedTheme;
+    settings=data;savedTheme=data.fields.theme;globalThis.YGCTheme?.remember(savedTheme);document.documentElement.dataset.theme=savedTheme;
     for(const [key,id] of Object.entries(fieldIds))$(id).value=data.fields[key];$('userId').value=data.id;
     for(const name of visibility){const select=document.querySelector('.visibility[data-field="'+name+'"]');select.replaceChildren();if(data.fields[name+'_visibility']===null){const blank=document.createElement('option');blank.value='';blank.textContent=t('visibility.choose');select.append(blank)}for(const value of choices){const option=document.createElement('option');option.value=value;option.textContent=t('visibility.option_'+value);select.append(option)}select.value=data.fields[name+'_visibility']??'';select.required=true}
     const selected=await request('/api/auth/settings/signature');if(!current(token,owner))return;if(!selected||Object.keys(selected).length!==1||!(selected.individual_id===null||exactId(selected.individual_id)))throw Error(t('users.profile_unavailable'));signature=selected.individual_id;
@@ -47,7 +49,7 @@ globalThis.saveSettings=async()=>{
   const token=epoch,owner=identity();saving=true;controls();status(t('ui.saving_dc85af8f'));let phase='settings';
   try{
     const result=await request('/api/auth/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:settings.profile_revision,fields})});if(!current(token,owner))return;if(!result||result.saved!==true||!exactId(result.profile_revision))throw Error(t('users.profile_unavailable'));
-    settings={...settings,profile_revision:result.profile_revision,fields};savedTheme=fields.theme;
+    settings={...settings,profile_revision:result.profile_revision,fields};savedTheme=fields.theme;globalThis.YGCTheme?.remember(savedTheme);
     if(target!==signature){phase='signature';const result=await request('/api/auth/settings/signature',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({previous:signature,individual_id:target})});if(!current(token,owner))return;if(result.individual_id!==target)throw Error(t('users.profile_unavailable'));signature=target}
     if(file){phase='avatar';const result=await auth.authorizedFetch('/api/auth/avatar',{method:'PUT',headers:{'Content-Type':file.type},body:file},true);if(!current(token,owner))return;if(!result.ok)throw Object.assign(Error(t('avatar.failed')),{status:result.status})}
     location.assign('/ui/profile');

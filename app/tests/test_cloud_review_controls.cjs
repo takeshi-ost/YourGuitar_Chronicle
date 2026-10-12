@@ -45,7 +45,7 @@ test('Applicant result shows Claim state as text; retry requires second confirma
   e.replies.push({can_write:true,items:[{...row,status:'accepted',claim_id:'23',verification_status:'unverified'}]});await ui.refresh();list.children[0].children[1].onclick();const detail=e.ids.get('applicationDialog').children[1];assert.match(detail.textContent,/owner_waiting/);assert.ok(detail.textContent.includes('<img src=x>'));assert.equal(detail.children.length,0);
 });
 test('Review switch confirms ON/OFF and sends compare-and-set without starting a job',async()=>{
-  const e=environment();e.replies.push({mode:'normal',message:'',version:1},{enabled:false},{content:'available',accounts:'available'});
+  const e=environment();e.context.createAuthDialog=()=>({open(){}});e.replies.push({mode:'normal',message:'',version:1},{enabled:false},{content:'available',accounts:'available'});
   const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-console-page.js'),'utf8').replace(/^import .*;\n/gm,'');await vm.runInContext('(async()=>{'+source+'})()',e.context);
   e.ids.get('reviewToggle').onclick();assert.equal(e.calls.length,3);assert.equal(e.ids.get('reviewDialog').open,true);e.ids.get('reviewCancel').onclick();assert.equal(e.calls.length,3);
   e.ids.get('reviewToggle').onclick();e.replies.push({enabled:true});e.ids.get('reviewConfirm').onclick();await e.flush();assert.equal(e.calls.length,4);assert.equal(e.calls[3].url,'/api/admin/operations/review');assert.deepEqual(JSON.parse(e.calls[3].options.body),{enabled:true,expected_enabled:false});assert.equal(e.ids.get('reviewDialog').open,false);

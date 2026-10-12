@@ -177,6 +177,46 @@ class CloudClaims:
                 'items': [own_projection(repo.connection, row) for row in rows[:limit]],
                 'next_after': str(rows[limit - 1]['id']) if len(rows) > limit else None}
 
+    def votes(self, actor, individual, claim=None, data=None):
+        writing = data is not None
+        if writing and (not isinstance(data, dict) or set(data) != {'vote'} or data['vote'] not in (None, 'good', 'bad')):
+            raise ValueError('Invalid vote.')
+        with self.transaction(actor, individual, write=writing) as (repo, user, can_write):
+            marks = ','.join('?' for _ in CLAIM_TYPES)
+            states = ','.join('?' for _ in STATES)
+            rows = repo.connection.execute(f'''SELECT c.id FROM claims c JOIN users u ON u.id=c.author_user_id
+                WHERE c.individual_id=? AND c.status='active' AND u.ban_status='normal'
+                  AND c.claim_type IN ({marks}) AND c.verification_status IN ({states})
+                ORDER BY c.id LIMIT 10000''', (individual, *CLAIM_TYPES, *STATES)).fetchall()
+            ids = [row['id'] for row in rows]
+            if writing:
+                if claim not in ids:
+                    raise GuitarMissing()
+                # Explicit desired state makes retries idempotent. Locking the
+                # guitar fences concurrent votes and preserves owner decisions.
+                if data['vote'] is None:
+                    repo.connection.execute('DELETE FROM claim_votes WHERE claim_id=? AND user_id=?', (claim, user))
+                else:
+                    from ygc.db.repository import utcnow
+                    now = utcnow()
+                    repo.connection.execute('''INSERT INTO claim_votes(claim_id,user_id,vote,created_at,updated_at)
+                        VALUES (?,?,?,?,?) ON CONFLICT(claim_id,user_id) DO UPDATE SET
+                        vote=excluded.vote,updated_at=excluded.updated_at''', (claim, user, data['vote'], now, now))
+                ids = [claim]
+            if not ids:
+                return {'can_write': can_write, 'items': []}
+            placeholders = ','.join('?' for _ in ids)
+            votes = repo.connection.execute(f'''SELECT c.id,
+                COALESCE(SUM(CASE WHEN v.vote='good' AND u.ban_status='normal' THEN 1 ELSE 0 END),0) AS good_count,
+                COALESCE(SUM(CASE WHEN v.vote='bad' AND u.ban_status='normal' THEN 1 ELSE 0 END),0) AS bad_count,
+                MAX(CASE WHEN v.user_id=? THEN v.vote ELSE NULL END) AS own_vote
+                FROM claims c LEFT JOIN claim_votes v ON v.claim_id=c.id
+                LEFT JOIN users u ON u.id=v.user_id WHERE c.id IN ({placeholders})
+                GROUP BY c.id ORDER BY c.id''', (user, *ids)).fetchall()
+            items = [{'id': str(row['id']), 'vote': row['own_vote'],
+                      'good_count': str(row['good_count']), 'bad_count': str(row['bad_count'])} for row in votes]
+            return {'can_write': can_write, 'items': items}
+
     def create(self, actor, individual, data):
         data = payload(data)
         with self.transaction(actor, individual, write=True) as (repo, user, _):

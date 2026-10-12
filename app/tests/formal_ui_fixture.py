@@ -24,6 +24,8 @@ class FormalUIFixture(FollowFixture):
         self.own_claims = {}
         self.detail_actions = False
         self.insights_case = 'normal'
+        self.prepublication = False
+        self.votes = {}
 
     def app(self, *, manual=False):
         app=super().app(manual=False)
@@ -216,9 +218,31 @@ class FormalUIFixture(FollowFixture):
             return {key:row[key] for key in ('id','is_read','read_at')}|{'unread_count':str(sum(not item['is_read'] for item in self.notices))}
         @app.get('/api/auth/ownership-disputes')
         @app.get('/api/auth/ownership-disputes/options')
-        @app.get('/api/auth/identity-corrections')
         def empty(request:Request):
             key=actor(request);return {'items':[],'next_after':None,'viewer_user_id':str(key),'can_write':self.mode=='normal'}
+        @app.get('/api/auth/identity-corrections')
+        def listing_actions(request:Request):
+            key=actor(request)
+            return {'items':[{'id':'101','individual':{k:self.rows[0][k] for k in ('id','manufacturer','model','year','serial_number')},'occurred_at':'2026-01-01'}] if self.prepublication and key==1 else [],'next_after':None,'can_write':self.mode=='normal'}
+        @app.get('/api/auth/identity-corrections/{listing}')
+        def listing_detail(listing:str,request:Request):
+            key=actor(request)
+            if not self.prepublication or key!=1 or listing!='101':return JSONResponse({},status_code=404)
+            return {'listing':{'id':'101','individual_id':'1','occurred_at':'2026-01-01'},'individual':{k:self.rows[0][k] for k in ('id','manufacturer','model','year','serial_number')},'revision':'a'*64,'can_write':self.mode=='normal','items':[],'next_after':None}
+        def vote_page(key,claim='101'):
+            own=self.votes.get((key,claim))
+            return {'can_write':self.mode=='normal','items':[{'id':claim,'vote':own,'good_count':str(sum(v=='good' for (a,c),v in self.votes.items() if c==claim)),'bad_count':str(sum(v=='bad' for (a,c),v in self.votes.items() if c==claim))}]}
+        @app.get('/api/auth/guitars/{individual}/votes')
+        def votes(individual:str,request:Request):
+            key=actor(request)
+            return vote_page(key) if self.prepublication else {'can_write':self.mode=='normal','items':[]}
+        @app.put('/api/auth/guitars/{individual}/claims/{claim}/vote')
+        async def cast_vote(individual:str,claim:str,request:Request):
+            key=actor(request,True);data=await request.json();assert data['vote'] in ('good','bad',None)
+            if data['vote'] is None:self.votes.pop((key,claim),None)
+            else:self.votes[(key,claim)]=data['vote']
+            self.writes.append(('vote',key,claim,data['vote']))
+            return vote_page(key,claim)
         released=set();transfers={}
         def ownership_value(key,individual):
             row=next(r for r in self.rows if r['id']==individual);owner=None if individual in released else '1'
