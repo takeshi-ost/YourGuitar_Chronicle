@@ -38,13 +38,14 @@ from ygc.platform_boundaries import ActorContext
 
 ISSUER = 'local-private-media-contract'
 PRIVATE = 'MEDIA-PRIVATE-DO-NOT-PUBLISH'
+PUBLIC = 'Synthetic public Claim prose'
 BIG_ID = 9007199254741009
 OWN_FIELDS = {'id', 'individual_id', 'claim_type', 'specification_kind',
               'incident_kind', 'event_kind', 'field_name', 'value_text', 'body', 'occurred_at',
               'status', 'verification_status', 'created_at', 'updated_at',
               'spec_items', 'revision', 'media_items'}
 PUBLIC_FIELDS = {'id', 'claim_type', 'ownership_kind', 'occurred_at', 'created_at',
-                 'verification_status', 'items', 'source_url'}
+                 'verification_status', 'items', 'source_url', 'presentation'}
 SNAPSHOT_TABLES = ('claims', 'media_assets', 'claim_evidence', 'notifications',
                    'claim_responses', 'individuals', 'user_guitars', 'observations')
 
@@ -69,7 +70,7 @@ def image_bytes(kind='PNG', size=(80, 40)):
     return out.getvalue()
 
 
-def metadata(*, body=PRIVATE, date='2026-03-01'):
+def metadata(*, body=PUBLIC, date='2026-03-01'):
     return dict(claim_type='media', body=body, occurred_at=date)
 
 
@@ -132,7 +133,7 @@ def run(port):
                 migrate(owner, target, runtime)
             accounts, operations = PostgresAccounts(app), PostgresOperations(app)
             records = {name: accounts.ensure_identity(issuer=ISSUER, subject=name,
-                display_name=PRIVATE + '-' + name) for name in ('admin', 'a', 'b', 'c')}
+                display_name='Synthetic public member-' + name) for name in ('admin', 'a', 'b', 'c')}
             admin = records['admin']['app_user_id']
             assert grant_first_admin(app, admin, 'local-test-operator')
             accounts.drain_projection()
@@ -260,7 +261,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture, storage):
         return service.image(actors[name], guitar, int(row['id']),
             int(media if media is not None else row['media_items'][0]['id']), row['revision'])
 
-    def edit(name, row, body=PRIVATE + '-edited'):
+    def edit(name, row, body=PUBLIC + '-edited'):
         return service.edit(actors[name], individual, int(row['id']),
                             metadata(body=body) | {'revision': row['revision']})['claim']
 
@@ -311,11 +312,11 @@ def checks(settings, db_owner, accounts, operations, records, fixture, storage):
     rejected(ClaimConflict, lambda: respond('a', review, 'positive'))
     for stance in ('positive', 'negative', 'unverified'):
         respond('a', pending('a', third['id']), stance)
-        changed = edit('b', own('b', third['id']), PRIVATE + '-' + stance)
+        changed = edit('b', own('b', third['id']), PUBLIC + '-' + stance)
         assert changed['verification_status'] == stance
     principal = ActorContext(records['admin']['id'], 'identity-platform', None, True, actors['admin'])
     ownership.admin_moderate_claim(int(third['id']), principal, 'negative')
-    changed = edit('b', own('b', third['id']), PRIVATE + '-admin-verdict-retained')
+    changed = edit('b', own('b', third['id']), PUBLIC + '-admin-verdict-retained')
     assert changed['verification_status'] == 'negative'
     with connect(settings, 'chronicle') as con:
         assert con.execute('SELECT admin_verification FROM claims WHERE id=%s',
@@ -332,7 +333,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture, storage):
         rejected(ValueError, lambda: service.create_media(actors['b'], individual, bad, uploads))
     rejected(ValueError, lambda: service.create(actors['b'], individual, metadata()))
     rejected(ValueError, lambda: service.edit(actors['b'], individual, int(third['id']),
-        dict(claim_type='incident', incident_kind='damage', body=PRIVATE,
+        dict(claim_type='incident', incident_kind='damage', body=PUBLIC,
              occurred_at='2026-03-01', revision=third['revision'])))
     for invalid in ([], uploads * 4, [(b'broken', 'image/png')],
                     [(uploads[0][0], 'image/jpeg')], [(b'<svg/>', 'image/svg+xml')],
@@ -413,7 +414,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture, storage):
                  individual, handoff, storage, uploads, snapshot)
 
     # GETs do not repair projections, write audit/evidence, or publish private
-    # prose, filenames, references, author/location data, or ownership photos.
+    # filenames, references, profile-only data, or ownership photos.
     before, objects, deletes = snapshot(), dict(storage.objects), list(storage.deleted)
     assert photo('c', own('c', handoff['id']))
     assert photo('b', pending('b', handoff['id']))
@@ -423,6 +424,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture, storage):
     assert detail['photo'] is None
     serialized = json.dumps([public, detail, catalog.list(None)])
     assert PRIVATE not in serialized and 'gcs-content-v1:' not in serialized
+    assert PUBLIC in serialized
     for forbidden in ('media_items', 'storage_path', 'original_filename', 'caption', 'image_meta'):
         assert forbidden not in serialized
     for row in public['items']:
@@ -460,7 +462,7 @@ def attachment_revision_checks(owner, service, owners, actors, individual, claim
     before, owner_before = current(), review()
     with connect(owner, 'chronicle') as con:
         con.execute('UPDATE claims SET body=%s WHERE id=%s',
-                    (PRIVATE + '-same-timestamp', int(claim['id'])))
+                    (PUBLIC + '-same-timestamp', int(claim['id'])))
     assert_stale(before, owner_before)
     before, owner_before = current(), review()
     replacement = storage.put('content', image_bytes('JPEG', (60, 60)), content_type='image/jpeg')
@@ -570,7 +572,7 @@ def rollback_checks(owner, service, actor, individual, storage, uploads, snapsho
     before, objects, deleted = snapshot(), set(storage.objects), list(storage.deleted)
     with patch.object(service, 'transaction', lost_acknowledgement):
         rejected(RuntimeError, lambda: service.create_media(actor, individual,
-            metadata(body=PRIVATE + '-committed-with-lost-ack'), uploads))
+            metadata(body=PUBLIC + '-committed-with-lost-ack'), uploads))
     after = snapshot()
     assert len(after['claims']) == len(before['claims']) + 1
     assert len(after['media_assets']) == len(before['media_assets']) + len(uploads)
@@ -578,7 +580,7 @@ def rollback_checks(owner, service, actor, individual, storage, uploads, snapsho
     assert len(after['notifications']) == len(before['notifications']) + 1
     retained = set(storage.objects) - objects
     assert len(retained) == len(uploads) and storage.deleted == deleted
-    committed = next(r for r in after['claims'] if r['body'] == PRIVATE + '-committed-with-lost-ack')
+    committed = next(r for r in after['claims'] if r['body'] == PUBLIC + '-committed-with-lost-ack')
     linked = {e['media_asset_id'] for e in after['claim_evidence'] if e['claim_id'] == committed['id']}
     assert {decode_reference(m['storage_path']) for m in after['media_assets'] if m['id'] in linked} == retained
 
@@ -824,7 +826,7 @@ def http_checks(settings, owner, accounts, operations, records, service, owners,
         # author retires the Claim; normal Owner permission disappears at once.
         old = row
         response = client.patch(base + '/claims/' + row['id'], headers=headers('c'),
-            json=metadata(body=PRIVATE + '-http-edited') | {'revision': row['revision']})
+            json=metadata(body=PUBLIC + '-http-edited') | {'revision': row['revision']})
         assert response.status_code == 200, response.text
         row = response.json()['claim']
         assert client.get(path(old), params={'revision': old['revision']}, headers=headers('c')).status_code == 409

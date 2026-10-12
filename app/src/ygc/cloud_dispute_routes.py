@@ -110,7 +110,7 @@ def dispute_router(verifier, service):
                 kwargs['admin'] = admin
             if request.method == 'GET':
                 query = request.query_params
-                allowed = {'after', 'limit', 'status'} if method == 'list' else {'after', 'limit'} if method == 'options' else set()
+                allowed = {'after', 'limit', 'status', 'individual'} if method == 'list' else {'after', 'limit'} if method == 'options' else set()
                 if set(query) - allowed or any(len(query.getlist(key)) != 1 or len(query[key]) > 19 for key in query):
                     raise ValueError()
                 if method in ('list', 'options'):
@@ -119,6 +119,8 @@ def dispute_router(verifier, service):
                     if kwargs['limit'] > 50:
                         raise ValueError()
                 if method == 'list':
+                    if 'individual' in query:
+                        kwargs['individual'] = identifier(query['individual'])
                     kwargs['status'] = query.get('status', 'open')
                     if kwargs['status'] not in ('open', 'resolved', 'all'):
                         raise ValueError()

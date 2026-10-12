@@ -11,14 +11,14 @@ const disputeCaseKeys=['id','individual_id','owner_id','locked_owner_id','winner
 
 // Shared private participant/Admin presentation. Every destination is freshly
 // authorized, and only the server decides eligibility, parties and redaction.
-export function createDisputes({auth,state,busy,work,admin=false,updated=async()=>{},onUnauthorized=()=>{}}){
+export function createDisputes({auth,state,busy,work,admin=false,formal=!admin&&Boolean(document.body?.dataset?.formalProfile),updated=async()=>{},onUnauthorized=()=>{}}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params),node=(tag,text='',id='')=>{const n=document.createElement(tag);n.textContent=text;if(id)n.id=id;return n};
   const button=(key,id='')=>{const n=node('button',t(key),id);n.type='button';return n},label=(key,input)=>{const n=node('label',t(key));n.htmlFor=input.id;return n};
   const root=document.getElementById(admin?'disputeBrowser':'selfDisputes'),heading=node('h2',t('cloud_disputes.heading')),status=node('p','','disputeStatus'),list=node('ul','','disputeList'),options=node('ul','','disputeOptions');
   const refreshButton=button('action.refresh','disputeRefresh'),filter=node('select','','disputeFilter'),previous=button('users.previous','disputePrevious'),next=button('users.next','disputeNext'),optionPrevious=button('users.previous','disputeOptionPrevious'),optionNext=button('users.next','disputeOptionNext');
   for(const value of ['open','resolved','all']){const n=node('option',t('cloud_disputes.'+value));n.value=value;filter.append(n)}filter.value='open';filter.hidden=!admin;filter.setAttribute('aria-label',t('cloud_disputes.filter'));status.setAttribute('role','status');
   root.append(heading,node('p',t('cloud_disputes.scope')),refreshButton,filter,status,list,previous,next,options,optionPrevious,optionNext);
-  const dialog=node('dialog','','disputeDialog'),title=node('h2',t('cloud_disputes.details'),'disputeTitle'),meta=node('div','','disputeMeta'),message=node('p','','disputeMessage'),rounds=node('div','','disputeRounds');
+  const dialog=node(formal?'div':'dialog','','disputeDialog'),title=node('h2',t('cloud_disputes.details'),'disputeTitle'),meta=node('div','','disputeMeta'),message=node('p','','disputeMessage'),rounds=node('div','','disputeRounds');
   const reload=button('action.refresh','disputeReload'),close=button('action.close','disputeClose'),accept=button('cloud_disputes.accept','disputeAccept');
   const form=node('form','','disputeForm'),fields=node('fieldset','','disputeFields'),claim=node('select','','disputeClaim'),claimLabel=label('cloud_disputes.claim',claim),explanation=node('textarea','','disputeExplanation'),summary=node('textarea','','disputeSummary'),attachment=node('input','','disputeAttachment'),review=node('button',t('cloud_disputes.review_submit'),'disputeReview');
   explanation.required=summary.required=true;explanation.maxLength=16000;summary.maxLength=8000;attachment.type='file';attachment.accept='image/jpeg,image/png,image/webp,image/gif,application/pdf';review.type='submit';
@@ -26,7 +26,11 @@ export function createDisputes({auth,state,busy,work,admin=false,updated=async()
   const adminPanel=node('section','','disputeAdmin'),operation=node('select','','disputeOperation'),reason=node('textarea','','disputeReason'),winner=node('select','','disputeWinner'),winnerLabel=label('cloud_disputes.winner',winner),reviewDecision=button('cloud_disputes.review_decision','disputeReviewDecision');reason.maxLength=8000;reason.required=true;
   adminPanel.append(node('h3',t('cloud_disputes.adjudicate')),node('p',t('cloud_disputes.incomplete_allowed')),label('cloud_disputes.operation',operation),operation,winnerLabel,winner,label('cloud_disputes.reason',reason),reason,reviewDecision);
   const preview=node('section','','disputePreview'),confirm=button('cloud_disputes.confirm','disputeConfirm'),check=button('cloud_disputes.check','disputeCheck'),acknowledge=button('cloud_disputes.retry_ack','disputeAcknowledge');
-  dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');dialog.append(title,meta,rounds,accept,form,adminPanel,preview,confirm,message,check,acknowledge,reload,close);document.body.append(dialog);
+  dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
+  const panel=formal?node('div'):dialog;
+  if(formal){dialog.className='modal-backdrop';panel.className='modal dispute-modal';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-labelledby',title.id);dialog.append(panel);Object.defineProperty(dialog,'open',{get:()=>dialog.classList.contains('open')});root.className='important-information-group';form.className='dispute-submission';meta.className='dispute-overview';fields.style.cssText='border:0;padding:0;margin:0';close.dataset.uiAction='close';review.dataset.uiAction=confirm.dataset.uiAction='primary'}
+  panel.append(title,meta,rounds,accept,form,adminPanel,preview,confirm,message,check,acknowledge);
+  const actions=formal?node('div'):panel;if(formal){actions.className='modal-actions';panel.append(actions)}actions.append(reload,close);document.body.append(dialog);
   const base='/api/auth/'+(admin?'admin/':'')+'ownership-disputes',storageKey='ygc.disputes.uncertain.v1.'+(admin?'admin':'participant');
   const identity=()=>JSON.stringify([state()?.user?.app_user_id??null,state()?.identity?.email_verified===true,state()?.user?.status??null,state()?.user?.role??null]);
   const eligible=()=>Boolean(state()?.user?.app_user_id&&state()?.identity?.email_verified===true&&(!state()?.user?.status||state().user.status==='active')&&(!admin||state().user.role==='admin'));
@@ -82,7 +86,7 @@ export function createDisputes({auth,state,busy,work,admin=false,updated=async()
     if(new Set(value.items.map(row=>row[key])).size!==value.items.length||value.items.some((row,i)=>after!==null&&BigInt(row[key])>=BigInt(after)||i>0&&BigInt(value.items[i-1][key])<=BigInt(row[key]))||value.next_after!==null&&(isOption?(after!==null&&BigInt(value.next_after)>=BigInt(after)||value.items.some(row=>BigInt(row[key])<BigInt(value.next_after))):value.items.at(-1)?.[key]!==value.next_after)||isOption&&value.items.some(row=>row.applicant.id!==value.viewer_user_id))throw Error('Invalid dispute cursor');return value;
   }
   async function request(path='',options={},binary=false){
-    const response=await auth().authorizedFetch(base+path,{cache:'no-store',credentials:'omit',redirect:'error',...options},true);
+    const response=await auth().authorizedFetch(base+path,{cache:'no-store',credentials:'omit',redirect:'error',...options},Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase())));
     if(!response.ok){const data=await response.json().catch(()=>({}));throw Object.assign(Error('Dispute request failed'),{status:response.status,code:['service_restricted','dispute_storage_preflight_required'].includes(data?.detail?.code||data?.code)?(data?.detail?.code||data?.code):null})}
     if(binary){const type=response.headers.get('Content-Type')?.split(';')[0];if(!['image/jpeg','application/pdf'].includes(type))throw Error('Invalid attachment');const blob=await response.blob();if(!blob.size||blob.size>12*1024*1024||blob.type!==type)throw Error('Invalid attachment');return {blob,type}}
     return response.json();
@@ -121,7 +125,7 @@ export function createDisputes({auth,state,busy,work,admin=false,updated=async()
     else{
       detail=value;option=null;meta.append(node('p',guitarText(value.individual)),node('p',value.claims.map(r=>t('cloud_disputes.acquire',{id:r.claim_id})+' · '+r.applicant_name+' · '+displayDate(r.requested_at)).join('\n')),node('p',t('cloud_disputes.owner')+': '+(value.current_owner?.display_name||'—')+'\n'+t('cloud_disputes.'+(value.status==='resolved'?'resolved':value.round.phase))));
       const c=context();for(const [index,r] of value.rounds.entries()){
-        const section=node('section'),timeline=node('ol');section.className='dispute-round';section.append(node('h3',t('cloud_disputes.round',{number:r.number})));
+        const section=node('section'),timeline=node('ol');section.className='dispute-round';if(formal)timeline.className='dispute-timeline';section.append(node('h3',t('cloud_disputes.round',{number:r.number})));
         const entries=value.events.filter(e=>e.round_number===r.number&&!['opened','request_evidence','evidence_submitted','resolved'].includes(e.kind)).map(e=>({at:e.created_at,id:e.id,content:node('p',t('cloud_disputes.event_'+e.kind)+(e.note?'\n'+e.note:''))}));
         for(const p of r.parties){if(p.submitted_at){const content=node('div');content.append(node('p',p.display_name+' · '+t('cloud_disputes.submitted')));for(const e of value.evidence.filter(e=>e.round_number===r.number&&e.claim_id===p.claim_id&&e.author_id===p.user_id))content.append(renderEvidence(e,c,value.version));entries.push({at:p.submitted_at,id:'0',content})}}
         entries.sort((a,b)=>a.at.localeCompare(b.at)||(BigInt(a.id)<BigInt(b.id)?-1:BigInt(a.id)>BigInt(b.id)?1:0));for(const entry of entries){const li=node('li');li.append(node('time',displayDate(entry.at)),entry.content);timeline.append(li)}section.append(timeline);
@@ -138,7 +142,7 @@ export function createDisputes({auth,state,busy,work,admin=false,updated=async()
   }
   function action(fn){if(busy()||!eligible())return;return work(async()=>{try{return await fn()}finally{render()}})}
   async function loadList(isOption=false,after=null,path=[null]){
-    if(!eligible()||isOption&&admin)return;const c=context(),generation=isOption?++optionEpoch:++listEpoch;
+    render();if(!eligible()||isOption&&admin)return;const c=context(),generation=isOption?++optionEpoch:++listEpoch;
     try{const params=new URLSearchParams({...after?{after}:{},limit:'25',...isOption?{}:{status:admin?filter.value:'open'}}),value=page(await request((isOption?'/options':'')+'?'+params),isOption,after);if(!current(c)||generation!==(isOption?optionEpoch:listEpoch))return;
       if(isOption){candidates=value.items;optionAfter=value.next_after;optionHistory=[...path]}else{rows=value.items;caseAfter=value.next_after;caseHistory=[...path]}
       notice=t('cloud_disputes.count',{count:String(rows.length)})+(value.can_write?'':' '+t('applications.read_only'));if(!admin&&!rows.length&&!candidates.length)notice='';renderLists();

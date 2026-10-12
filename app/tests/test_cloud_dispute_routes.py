@@ -292,3 +292,13 @@ def test_legacy_storage_capacity_is_operator_blocker_without_private_sizes(api):
     assert response.json() == {'detail': {'code': 'dispute_storage_preflight_required'}}
     assert '123456789' not in response.text and 'legacy_bytes' not in response.text
     private(response)
+
+
+def test_selected_individual_filter_uses_canonical_actor(api):
+    client, _, service = api
+    response = client.get(BASE + '?status=open&limit=1&individual=' + BIG, headers=AUTH)
+    assert response.status_code == 200
+    private(response)
+    service.list.assert_called_once_with('canonical', admin=False, after=0, limit=1, status='open', individual=int(BIG))
+    for query in ('individual=01', 'individual=0', 'individual=-1', 'individual=1&individual=2', 'individual=9223372036854775808'):
+        assert client.get(BASE + '?' + query, headers=AUTH).status_code == 400

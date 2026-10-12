@@ -43,7 +43,7 @@ def workflow(tmp_path, monkeypatch):
     state = {'mode': 'normal', 'admin': admin, 'trace': []}
 
     @contextmanager
-    def transaction(actor, *, claim=None, case=None, evidence=None, admin=False, write=False, listing=None):
+    def transaction(actor, *, claim=None, case=None, evidence=None, admin=False, write=False, listing=None, individual_filter=None):
         with repo.connect() as con:
             con.set_trace_callback(state['trace'].append)
             if write:
@@ -562,3 +562,14 @@ def test_image_normalization_is_serialized_and_denied_before_decode(workflow, mo
     with pytest.raises(ServiceRestricted):
         service.submit(applicant, claim, data, image_bytes())
     normalize.assert_not_called()
+
+
+def test_selected_individual_filter_preserves_private_scope(workflow):
+    _, service, owner, applicant, _, admin, outsider, individual, _, _, _ = workflow
+    detail, _ = begin(workflow)
+    for actor in (owner, applicant):
+        assert service.list(actor, individual=individual)['items'][0]['id'] == detail['id']
+        assert service.list(actor, individual=individual + 1)['items'] == []
+    assert service.list(outsider, individual=individual)['items'] == []
+    assert service.list(admin, individual=individual, admin=True)['items'][0]['id'] == detail['id']
+    assert service.list(admin, individual=individual)['items'] == []

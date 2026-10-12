@@ -96,7 +96,7 @@ def test_self_only_idempotent_bigint_keyset_and_no_side_effects(workflow):
     page = service.list(a, limit=2)
     assert [row['id'] for row in page['items']] == [str(ids[3]), str(ids[2])]
     assert page['total'] == '4' and page['next_after'] == str(ids[2])
-    assert all(set(row) == {'id', *GUITAR_FIELDS, 'photo'} and row['photo'] is None for row in page['items'])
+    assert all(set(row) == {'id', *GUITAR_FIELDS, 'photo', 'claim_count'} and row['photo'] is None and row['claim_count'] == '1' for row in page['items'])
     second = service.list(a, after=int(page['next_after']), limit=2)
     assert [row['id'] for row in second['items']] == [str(ids[1]), str(ids[0])]
     assert second['total'] == '4' and second['next_after'] is None
@@ -570,3 +570,16 @@ def test_participant_scope_follows_only_self_favorites_or_selected_target(workfl
         con.execute("UPDATE claims SET status='inactive' WHERE individual_id=?", (ids[0],))
         assert service._participants(SQLiteSQL(con), a) == {a, author}
         assert service._participants(SQLiteSQL(con), a, ids[1]) == {a, b}
+
+
+def test_counts_exclude_inactive_and_banned_author_claims(workflow):
+    repo, service, a, _, author, ids, _ = workflow
+    service.set(a, ids[0], favorite=True)
+    assert service.list(a)['items'][0]['claim_count'] == '1'
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET status='inactive' WHERE individual_id=?", (ids[0],))
+    assert service.list(a)['items'] == []
+    with repo.connect() as con:
+        con.execute("UPDATE claims SET status='active' WHERE individual_id=?", (ids[0],))
+        con.execute("UPDATE users SET ban_status='ban' WHERE id=?", (author,))
+    assert service.list(a)['items'] == []

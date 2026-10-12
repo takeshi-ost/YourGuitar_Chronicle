@@ -114,6 +114,8 @@ def main():
              'cloud-public-catalog.css', 'cloud-auth-loader.js', 'identity-platform-auth.js',
              'overlays.js', 'ui-components.css']
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in names}
+    from browser_assets import include_module_dependencies
+    include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     account_html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')

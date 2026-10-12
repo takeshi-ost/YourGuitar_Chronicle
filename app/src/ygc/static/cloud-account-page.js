@@ -4,7 +4,7 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 import {createGuitars} from './cloud-account-guitars.js';
 import {createProfile} from './cloud-account-profile.js';
 import {createAvatar} from './cloud-account-avatar.js';
-import {createApplications,readCatalogIntent} from './cloud-account-applications.js';
+import {createApplications,readCatalogIntent,catalogIndividualId} from './cloud-account-applications.js';
 import {createClaims,readClaimIntent} from './cloud-account-claims.js';
 import {createOwnership,readOwnershipIntent} from './cloud-account-ownership.js';
 import {createIdentityCorrections} from './cloud-account-identity.js';
@@ -13,22 +13,46 @@ import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
-let auth,policies,mode='signin',busy=false,state=null,pageSuspended=false,sessionEpoch=0,formalView=null;
+let auth,policies,mode=new URLSearchParams(location.search).get('register')==='1'?'register':'signin',busy=false,state=null,authPending=true,pageSuspended=false,sessionEpoch=0,formalView=null;
 const formalProfile=document.body?.dataset?.formalProfile==='true',formalTotals={};
 const favorites=createFavorites({tableLayout:formalProfile,guitarHref:formalProfile?id=>'/ui/profile/guitars/'+id:undefined,onNavigate:formalProfile?id=>formalView?.openGuitar(id):undefined,auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
 const visibility=createVisibility({auth:()=>auth,state:()=>pageSuspended?null:auth?.account,busy:()=>busy,work:avatarAction});
 const avatar=createAvatar({auth:()=>auth,state:()=>state,busy:()=>busy});
-const profile=createProfile({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
-const guitars=createGuitars({tableLayout:formalProfile,onSelect:formalProfile?id=>formalView?.openGuitar(id):undefined,onTotal:(kind,total)=>{formalTotals[kind]=total;formalView?.render()},auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
-const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
+const profile=createProfile({formalProfile,auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:async()=>update(await auth.restore())});
+const guitars=createGuitars({tableLayout:formalProfile,inboxRoot:document.getElementById('selfOwnerAcquire'),onOwnerSaved:()=>formalView?.refresh({preserveView:true}),onSelect:formalProfile?id=>formalView?.openGuitar(id):undefined,onTotal:(kind,total)=>{formalTotals[kind]=total;formalView?.render()},auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
+const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-const claims=createClaims({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
-const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:()=>guitars.refreshHistory()});
+const claims=createClaims({onSaved:()=>formalView?.refresh({preserveView:true}),auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
+const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
+async function refreshOwnershipViews(){
+  const actor=state?.user?.app_user_id,version=sessionEpoch;
+  await guitars.refreshHistory();
+  if(pageSuspended||version!==sessionEpoch||actor!==state?.user?.app_user_id)return;
+  await formalView?.refresh();
+}
 let acquireIntent=readCatalogIntent(location.search),claimIntent=readClaimIntent(location.search),ownershipIntent=readOwnershipIntent(location.search);
 applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);
-globalThis.addEventListener('popstate',()=>{if(formalProfile&&!busy)void avatarAction(loadAvatar);acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent)});
+let resumedFormalIntent=null;
+async function resumeFormalIntent(){
+  if(!formalProfile||busy||!formalView||!state?.user||state.identity?.email_verified!==true)return;
+  const query=location.search,actor=state.user.app_user_id,key=JSON.stringify([actor,query]);
+  const entries=[['acquire',readCatalogIntent(query)],['claim',readClaimIntent(query)],['ownership',readOwnershipIntent(query)]].filter(([,id])=>id!==null);
+  if(!entries.length||resumedFormalIntent===key)return;
+  resumedFormalIntent=key;
+  if(entries.length!==1||!catalogIndividualId(entries[0][1])){$('status').textContent=t('catalog.acquire_invalid');return}
+  const [kind,id]=entries[0];
+  try{
+    await formalView.openGuitar(id);
+    if(state?.user?.app_user_id!==actor||state.identity?.email_verified!==true||pageSuspended||location.pathname!=='/ui/profile/guitars/'+id)return;
+    if(kind==='acquire')await applications.openAcquire(id);
+    else if(kind==='ownership')await ownership.openGuitar(id);
+    else $('addClaimMenu')?.classList.add('open');
+  }catch{$('status').textContent=t('catalog.acquire_unavailable')}
+}
+globalThis.addEventListener('popstate',()=>{acquireIntent=readCatalogIntent(location.search);claimIntent=readClaimIntent(location.search);ownershipIntent=readOwnershipIntent(location.search);applications.setCatalogIntent(acquireIntent);claims.setCatalogIntent(claimIntent);ownership.setCatalogIntent(ownershipIntent);resumedFormalIntent=null;if(formalProfile&&!busy)void avatarAction(loadAvatar)});
+let serviceBlocked=false;
 function render(){
   const registered=Boolean(state?.user),resume=Boolean(state?.registration_required);
   $('emailVerification').hidden=!registered;
@@ -39,9 +63,9 @@ function render(){
   $('accountSummary').hidden=!registered;
   $('consoleLink').hidden=!(registered&&verified&&state.user.role==='admin');
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
-  $('authActions').hidden=registered||resume;
+  $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered||resume;
   $('signOut').hidden=!auth?.signedIn;
-  $('cloudAccountForm').hidden=registered;
+  $('cloudAccountForm').hidden=serviceBlocked||authPending||pageSuspended||registered;
   $('profileFields').hidden=mode!=='register';
   $('profileFields').disabled=mode!=='register';
   $('credentialsFields').hidden=resume;
@@ -69,6 +93,7 @@ function suspendAccount(){
   pageSuspended=true;sessionEpoch++;state=null;clearPrivateAccount({preserveRetryMarkers:true});$('status').textContent='';render();
 }
 function update(result,refreshCatalog=false){
+  if(result)serviceBlocked=false;
   if(pageSuspended&&result!==null)return;
   const changed=state?.user?.app_user_id!==result?.user?.app_user_id||state?.identity?.email_verified!==result?.identity?.email_verified;
   if(state?.user?.app_user_id!==result?.user?.app_user_id)clearPrivateAccount();
@@ -108,7 +133,7 @@ $('cloudAccountForm').onsubmit=async event=>{
       terms_accepted:$('terms').checked,privacy_accepted:$('privacy').checked,
       terms_version:policies.terms.version,privacy_version:policies.privacy.version,
     },state?.registration_required?undefined:credentials);
-    $('email').value='';update(result,true);await loadAvatar();
+    $('email').value='';update(result,true);
   }catch(error){
     if(error.code==='policy_changed'){
       try{await documents()}catch{error={code:'auth/network-request-failed'}}
@@ -116,6 +141,8 @@ $('cloudAccountForm').onsubmit=async event=>{
     if(auth.signedIn&&!auth.account&&error.status!==401&&error.status!==403){state={registration_required:true};mode='register'}
     $('status').textContent=errorMessage(error);
   }finally{$('password').value='';busy=false;render()}
+  await hydrateAccount();
+  await resumeFormalIntent();
 };
 $('signOut').onclick=async()=>{
   if(busy)return;busy=true;update(null);favorites.clear();visibility.clear();notifications.clear();disputes.clear();render();
@@ -137,46 +164,69 @@ $('refreshVerification').onclick=async()=>{
   if(busy||!state?.user)return;
   busy=true;render();
   try{
-    const result=await auth.refreshVerification();update(result,true);await loadAvatar();
+    const result=await auth.refreshVerification();update(result,true);
     if(result?.user)$('status').textContent=t(result.identity?.email_verified===true?'cloud.email_verified':'cloud.verification_pending');
   }catch(error){$('status').textContent=errorMessage(error)}
   finally{busy=false;render()}
+  await hydrateAccount();
+  await resumeFormalIntent();
 };
 async function loadAvatar(){
-  if(state?.user&&state.identity?.email_verified===true)await favorites.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await visibility.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await disputes.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await notifications.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await identityCorrections.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await ownership.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await applications.refresh().catch(applications.failed);
-  if(state?.user&&state.identity?.email_verified===true)await guitars.refresh();
-  if(state?.user&&state.identity?.email_verified===true)await profile.refresh().catch(profile.failed);
-  if(state?.user&&state.identity?.email_verified===true){
-    try{await avatar.refresh()}catch(error){avatar.failed(error)}
-  }
-  if(state?.user&&state.identity?.email_verified===true)await formalView?.refresh();
+  const actor=state?.user?.app_user_id,version=sessionEpoch;
+  const current=()=>actor&&actor===state?.user?.app_user_id&&version===sessionEpoch&&!pageSuspended&&state?.identity?.email_verified===true;
+  if(!current())return;
+  // Start the visible profile and lists first. authorizedFetch retains the
+  // shared two-request limit; unrelated panels cannot block these reads.
+  const primary=await Promise.allSettled([profile.refresh({reuse:true}).catch(profile.failed),guitars.refresh(),favorites.refresh({reuse:true})]);
+  if(!current())return;
+  const secondary=await Promise.allSettled([
+    formalView?.refresh(),...formalProfile?[]:[visibility.refresh()],disputes.refresh(),notifications.refresh({reuse:true}),
+    identityCorrections.refresh(),ownership.refresh(),applications.refresh().catch(applications.failed),
+    avatar.refresh().catch(avatar.failed),
+  ]);
+  if(!current())return;
+  const failure=[...primary,...secondary].find(result=>result.status==='rejected');
+  if(failure)throw failure.reason;
+}
+async function hydrateAccount(){
+  const actor=state?.user?.app_user_id,version=sessionEpoch;
+  try{await loadAvatar()}
+  catch(error){if(!pageSuspended&&version===sessionEpoch&&actor===state?.user?.app_user_id)$('status').textContent=errorMessage(error)}
 }
 async function avatarAction(work){
   if(busy)return;busy=true;render();
   try{await work()}catch(error){avatar.failed(error)}finally{busy=false;render()}
+  await resumeFormalIntent();
 }
 globalThis.addEventListener('pagehide',suspendAccount);
 globalThis.addEventListener('pageshow',async event=>{
   if(!event.persisted||!auth)return;
-  busy=true;suspendAccount();const current=sessionEpoch;
-  try{const restored=await auth.restore();if(current!==sessionEpoch)return;pageSuspended=false;update(restored,true);await loadAvatar()}
-  catch(error){if(current!==sessionEpoch)return;pageSuspended=false;update(null);$('status').textContent=errorMessage(error)}
+  busy=true;authPending=true;suspendAccount();const current=sessionEpoch;
+  try{const restored=await auth.restore();if(current!==sessionEpoch)return;pageSuspended=false;authPending=false;update(restored,true)}
+  catch(error){if(current!==sessionEpoch)return;pageSuspended=false;authPending=false;update(null);$('status').textContent=errorMessage(error)}
   finally{if(current===sessionEpoch&&!pageSuspended){busy=false;render()}}
+  if(current===sessionEpoch&&!pageSuspended)await hydrateAccount();
 });
 $('avatarForm').onsubmit=event=>{event.preventDefault();avatarAction(()=>avatar.save($('avatarFile').files[0]))};
 $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
 if(formalProfile){
   const {createFormalProfileView}=await import('./cloud-ui-profile.js');
-  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,refreshAccount:()=>avatarAction(async()=>{update(await auth.restore(),true);await loadAvatar()})});
+  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,owners:guitars,claims,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
 }
-try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{update(null);$('status').textContent=t('cloud.session_changed')});await documents();update(await auth.restore());if(state?.user&&state.identity?.email_verified===true)await avatarAction(loadAvatar)}
-catch(error){$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
+try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{serviceBlocked=false;update(null);if(!authPending)$('status').textContent=t('cloud.session_changed')});auth.onUserDataInvalidated?.((reason,error)=>{if(reason==='blocked'){serviceBlocked=error?.code==='service_restricted';update(null);$('status').textContent=t('self_profile.restricted')}});const [restored]=await Promise.all([auth.restore(),documents()]);authPending=false;update(restored);if(state?.user&&state.identity?.email_verified===true)await hydrateAccount()}
+catch(error){authPending=false;$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');
+// Navigation from Top notifications is a hint; each destination rechecks its API.
+if(formalProfile&&state?.user&&state.identity?.email_verified===true){
+ const query=new URLSearchParams(location.search),kind=query.get('notice'),id=query.get('target'),claim=query.get('claim');
+ const valid=value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&BigInt(value)<=9223372036854775807n;
+ if(valid(id)&&['transfer','owner','dispute','dispute_option'].includes(kind)&&(kind!=='owner'||valid(claim))){
+  history.replaceState(null,'',location.pathname);
+  if(kind==='transfer')await ownership.openTransfer(id);
+  else if(kind==='owner')await guitars.openOwner(id,claim);
+  else if(kind==='dispute')await disputes.openDispute(id);
+  else await disputes.openDisputeOption(id);
+ }
+}
 globalThis.YGCCloudAccountReady=true;

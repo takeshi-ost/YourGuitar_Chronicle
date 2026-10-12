@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from ygc.cloud_account_routes import bearer_token
 from ygc.cloud_guitars import parameters,positive_id,GuitarMissing
 from ygc.claim_revision import ClaimConflict
+from ygc.db.postgres_ownership import DisputeClaimLocked
 
 
 def guitar_router(verifier,service):
@@ -76,6 +77,8 @@ def guitar_router(verifier,service):
             result=await run_in_threadpool(service.moderate,who,positive_id(individual_id),positive_id(claim_id),**data)
             return JSONResponse(result,headers=headers)
         except GuitarMissing:raise HTTPException(404,'Claim not found.',headers=headers) from None
+        except DisputeClaimLocked:
+            raise HTTPException(409,{'code':'dispute_claim_locked','message':'This Claim requires administrator dispute reconsideration.'},headers=headers) from None
         except ClaimConflict:
             raise HTTPException(409,'Claim changed or database maintenance is running. Refresh before retrying.',headers=headers) from None
         except (ValueError,TypeError):raise HTTPException(400,'Invalid decision.',headers=headers) from None

@@ -35,6 +35,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
                 raise RuntimeError('Cloud account database initialization check failed.') from None
             yield
         finally:
+            if getattr(settings, 'pool', None) is not None:
+                await run_in_threadpool(settings.pool.close)
             verifier.close()
             if review_verifier is not None:review_verifier.close()
             if backup_client is not None:
@@ -46,6 +48,8 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
 
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
+    from ygc.request_metrics import RequestTiming
+    app.add_middleware(RequestTiming)
     app.include_router(account_router(verifier, DOCUMENTS))
     if review_verifier is not None:
         from ygc.cloud_review_gateway import review_gateway
@@ -63,7 +67,7 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app.include_router(guitar_router(verifier, CloudGuitars(settings,operations)))
     from ygc.cloud_public_catalog import CloudPublicCatalog
     from ygc.cloud_public_catalog_routes import public_catalog_router
-    app.include_router(public_catalog_router(verifier, CloudPublicCatalog(settings, operations)))
+    app.include_router(public_catalog_router(verifier, CloudPublicCatalog(settings, operations, storage)))
     from ygc.cloud_content_media import CloudContentMedia
     from ygc.cloud_content_media_routes import content_media_router
     app.include_router(content_media_router(verifier,CloudContentMedia(settings,operations,storage)))

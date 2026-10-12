@@ -163,3 +163,31 @@ def test_service_invalid_decision_no_database(action,revision):
     from ygc.cloud_guitars import CloudGuitars
     service=CloudGuitars(None,None)
     with pytest.raises(ValueError):service.moderate('actor',1,2,action=action,revision=revision)
+
+
+def test_dispute_locked_decision_is_explicit_conflict(api):
+    from ygc.db.postgres_ownership import DisputeClaimLocked
+    client,verifier,service=api
+    service.moderate.side_effect=DisputeClaimLocked()
+    response=client.post('/api/admin/guitars/1/claims/2/verification',headers=AUTH,
+                         json=dict(action='negative',revision='a'*64))
+    assert response.status_code==409
+    assert response.json()['detail']['code']=='dispute_claim_locked'
+    assert response.headers['cache-control']=='private, no-store'
+
+
+@pytest.mark.parametrize('linked',[False,True])
+def test_admin_adapter_checks_dispute_before_moderation(monkeypatch,linked):
+    from contextlib import nullcontext
+    from ygc.db.postgres_ownership import PostgresOwnership,DisputeClaimLocked
+    service=PostgresOwnership(None);repo=Mock()
+    repo.connection.execute.return_value.fetchone.side_effect=[{'individual_id':1}, {'claim_id':2} if linked else None]
+    monkeypatch.setattr(service,'_verified',lambda actor:None)
+    monkeypatch.setattr(service,'_individual',lambda claim:1)
+    monkeypatch.setattr(service,'_transaction',lambda *args,**kwargs:nullcontext((repo,{'id':3,'role':'admin','app_user_id':'canonical'})))
+    if linked:
+        with pytest.raises(DisputeClaimLocked):service.admin_moderate_claim(2,object(),'negative')
+        repo.admin_moderate_claim_in_connection.assert_not_called()
+    else:
+        service.admin_moderate_claim(2,object(),'negative')
+        repo.admin_moderate_claim_in_connection.assert_called_once()

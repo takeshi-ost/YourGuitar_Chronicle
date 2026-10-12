@@ -54,8 +54,9 @@ class ReviewConnection(ObservationConnection):
 
 class ReviewRepository(BoundRepository):
     def create_initial_listing_claim(self, user_id, **kwargs):
-        # Keep submitted evidence private: no public representative Media is
-        # introduced until the separate publication/consent flow is connected.
+        # Do not duplicate the application image into a legacy Media path.
+        # Public catalog resolves only an accepted Listing overview directly;
+        # closeups and Acquire evidence remain private.
         result = super().create_initial_listing_claim(user_id, **kwargs)
         con = kwargs['connection']
         con.execute('DELETE FROM claim_evidence WHERE media_asset_id=?', (result[3],))

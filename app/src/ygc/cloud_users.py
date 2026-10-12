@@ -83,6 +83,7 @@ class CloudUsers:
 
     def _guitars(self,user_id,app_user_id,kind,after,limit):
         from ygc.owned_guitar_visibility import VISIBLE_SQL
+        from ygc.cloud_public_catalog import PUBLIC_CLAIM_COUNT
         with connect(self.settings,'chronicle') as con:
             con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
             con.execute("SET LOCAL statement_timeout='5s'")
@@ -96,9 +97,141 @@ class CloudUsers:
             scope=f"{where} AND u.app_user_id=%s"
             params=(user_id,app_user_id)
             total=con.execute(f'SELECT COUNT(*) AS total FROM {table} WHERE {scope}',params).fetchone()['total']
-            rows=con.execute(f'SELECT i.id,i.manufacturer,i.model,i.year,i.serial_number FROM {table} WHERE {scope} AND i.id>%s ORDER BY i.id LIMIT %s',params+(after,limit+1)).fetchall()
+            rows=con.execute(f'SELECT i.id,i.manufacturer,i.model,i.finish,i.year,i.serial_number,{PUBLIC_CLAIM_COUNT} FROM {table} WHERE {scope} AND i.id>%s ORDER BY i.id LIMIT %s',params+(after,limit+1)).fetchall()
             more=len(rows)>limit;rows=[dict(row) for row in rows[:limit]]
             return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)
+
+    def own_summary(self,actor):
+        """Self-only counters; do not expose another member's inventory/activity."""
+        from ygc.owned_guitar_visibility import VISIBLE_SQL
+        from ygc.cloud_public_catalog import PUBLIC_CLAIM_COUNT
+        from ygc.cloud_profile import ProfileConflict
+        with self.operations.account_access('user_read',actor) as (source,mode,account):
+            with connect(self.settings,'chronicle') as con:
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                user=con.execute('SELECT id FROM users WHERE id=%s AND app_user_id=%s',(account['id'],actor)).fetchone()
+                if not user:raise ProfileConflict('Account projection is not ready.')
+                owned=con.execute('SELECT COUNT(*) AS n FROM individuals WHERE current_owner_user_id=%s',(user['id'],)).fetchone()['n']
+                former=con.execute("SELECT COUNT(*) AS n FROM user_guitars ug JOIN individuals i ON i.id=ug.individual_id WHERE ug.user_id=%s AND ug.ownership_status='former_owner' AND "+VISIBLE_SQL,(user['id'],)).fetchone()['n']
+                claims=con.execute("SELECT COUNT(*) AS n FROM claims WHERE author_user_id=%s AND status='active'",(user['id'],)).fetchone()['n']
+                return dict(owned_count=str(owned),former_count=str(former),claim_count=str(claims))
+
+    def own_chronicle(self, actor):
+        """Self-only milestones; never includes application or dispute Evidence."""
+        from datetime import datetime, timezone
+        entries = []
+        def add(category, when, subject, message, individual_id=None):
+            if when:
+                entries.append(dict(category=category, event_at=str(when), subject=subject,
+                    message=message, individual_id=str(individual_id) if individual_id else None))
+        def product(row):
+            return ' '.join(filter(None, (row['manufacturer'], row['model'])))[:400]
+        with self.operations.account_access('user_read', actor) as (source, mode, user):
+            name = user['display_name']
+            add('User', user['created_at'], name, 'joined Your Guitar Chronicle.')
+            add('User', user['date_of_birth'], name, 'was born.')
+            if user['updated_at'] > user['created_at']:
+                add('User', user['updated_at'], name, 'updated their profile.')
+            with connect(self.settings, 'chronicle') as con:
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                visible = "c.status='active' AND (u.ban_status='normal' OR (u.ban_status='silent_ban' AND u.id=%s))"
+                rows = con.execute("""SELECT c.id,c.individual_id,c.claim_type,c.ownership_kind,
+                    c.specification_kind,c.created_at,i.manufacturer,i.model FROM claims c
+                    JOIN users u ON u.id=c.author_user_id JOIN individuals i ON i.id=c.individual_id
+                    WHERE c.author_user_id=%s AND """+visible+" ORDER BY c.created_at DESC,c.id DESC LIMIT 100",
+                    (user['id'], user['id'])).fetchall()
+                for row in rows:
+                    kind = row['ownership_kind'] if row['claim_type']=='ownership' else 'repair' if row['specification_kind']=='repair' else row['claim_type']
+                    add('Claim', row['created_at'], product(row), 'has a new '+str(kind or 'ownership').replace('_',' ').title()+' Claim on record.', row['individual_id'])
+                for table, field, value, label in [('claim_votes','user_id','vote','vote'),('claim_responses','responder_user_id','stance','response')]:
+                    rows = con.execute(f"""SELECT x.{value} AS value,x.updated_at,c.individual_id,i.manufacturer,i.model
+                        FROM {table} x JOIN claims c ON c.id=x.claim_id JOIN users u ON u.id=c.author_user_id
+                        JOIN individuals i ON i.id=c.individual_id WHERE x.{field}=%s AND """+visible+
+                        ' ORDER BY x.updated_at DESC,x.id DESC LIMIT 100', (user['id'],user['id'])).fetchall()
+                    for row in rows:
+                        add('Social',row['updated_at'],product(row),'has a Claim with a '+str(row['value']).replace('_',' ').title()+' '+label+' from this user.',row['individual_id'])
+                rows = con.execute("""SELECT ug.created_at,ug.individual_id,i.manufacturer,i.model FROM user_guitars ug
+                    JOIN individuals i ON i.id=ug.individual_id WHERE ug.user_id=%s
+                    ORDER BY ug.created_at DESC,ug.id DESC LIMIT 100""", (user['id'],)).fetchall()
+                for row in rows:
+                    add('Product',row['created_at'],product(row),"was added to this user's Chronicle.",row['individual_id'])
+        def sort_time(item):
+            try:
+                value=datetime.fromisoformat(item['event_at'].replace('Z','+00:00'))
+                return value.replace(tzinfo=timezone.utc).timestamp() if value.tzinfo is None else value.timestamp()
+            except ValueError:
+                return float('-inf')
+        entries.sort(key=sort_time, reverse=True)
+        return {'items': entries[:100]}
+
+    def own_settings(self, actor):
+        from ygc.cloud_profile import SETTINGS_FIELDS
+        from ygc.theme_catalog import THEME_IDS
+        with self.operations.account_access('user_read', actor) as (con, mode, account):
+            fields = {key: account[key] or '' for key in SETTINGS_FIELDS}
+            theme = account['theme_override'] or account['theme']
+            fields['theme'] = theme if theme in THEME_IDS else 'dark_default'
+            # Preserve unknown visibility as unset; saving requires explicit choices.
+            from ygc.cloud_profile import visibility_fields
+            fields.update(visibility_fields(account))
+            return dict(id=str(account['id']), profile_revision=str(account['projection_version']), fields=fields)
+
+    def edit_own_settings(self, actor, body):
+        import json, uuid
+        from psycopg import sql
+        from ygc.cloud_profile import validate_settings, ProfileConflict
+        from ygc.db.postgres_accounts import now
+        version, fields = validate_settings(body)
+        fields['theme_override'] = fields.pop('theme')
+        with connect(self.settings, 'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ProfileConflict('Maintenance is running.')
+            with self.operations.account_access('user_write', actor) as (con, mode, account):
+                con.execute("SET LOCAL lock_timeout='2s'")
+                con.execute("SET LOCAL statement_timeout='5s'")
+                if account['projection_version'] != version:
+                    raise ProfileConflict('Settings changed.')
+                timestamp = now()
+                assignments = sql.SQL(',').join(sql.SQL('{}=%s').format(sql.Identifier(key)) for key in fields)
+                result = con.execute(sql.SQL('UPDATE account_records SET {},updated_at=%s WHERE id=%s RETURNING projection_version').format(assignments), (*fields.values(), timestamp, account['id'])).fetchone()
+                con.execute('INSERT INTO account_metadata(key,value) VALUES(%s,%s)',
+                    ('self_settings:'+str(uuid.uuid4()), json.dumps(dict(action='self_settings_edit', actor_app_user_id=actor,
+                    changed_fields=[key for key, value in fields.items() if account[key] != value], previous_revision=version,
+                    revision=result['projection_version'], occurred_at=timestamp))))
+            return dict(profile_revision=str(result['projection_version']), saved=True)
+
+    def own_signature(self, actor):
+        from ygc.cloud_profile import ProfileConflict
+        with self.operations.account_access('user_read', actor) as (source, mode, account):
+            with connect(self.settings, 'chronicle') as con:
+                con.execute('SET TRANSACTION READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                row = con.execute('SELECT signature_individual_id FROM users WHERE id=%s AND app_user_id=%s', (account['id'], actor)).fetchone()
+                if not row: raise ProfileConflict('Account projection is not ready.')
+                value = row['signature_individual_id']
+                return {'individual_id': str(value) if value is not None else None}
+
+    def edit_own_signature(self, actor, body):
+        from ygc.cloud_profile import validate_signature, ProfileConflict
+        validate_signature(body)
+        with connect(self.settings, 'operations') as guard:
+            if not guard.execute('SELECT pg_try_advisory_xact_lock(79432190) AS locked').fetchone()['locked']:
+                raise ProfileConflict('Maintenance is running.')
+            with self.operations.account_access('user_write', actor) as (source, mode, account):
+                with connect(self.settings, 'chronicle') as con:
+                    con.execute("SET LOCAL lock_timeout='2s'")
+                    con.execute("SET LOCAL statement_timeout='5s'")
+                    row = con.execute('SELECT signature_individual_id FROM users WHERE id=%s AND app_user_id=%s FOR UPDATE', (account['id'], actor)).fetchone()
+                    if not row: raise ProfileConflict('Account projection is not ready.')
+                    previous = str(row['signature_individual_id']) if row['signature_individual_id'] is not None else None
+                    if previous != body['previous']: raise ProfileConflict('Signature changed.')
+                    target = body['individual_id']
+                    if target is not None and not con.execute('SELECT id FROM individuals WHERE id=%s AND current_owner_user_id=%s FOR UPDATE', (int(target), account['id'])).fetchone():
+                        raise ValueError('Select a currently owned guitar.')
+                    con.execute('UPDATE users SET signature_individual_id=%s WHERE id=%s AND app_user_id=%s', (int(target) if target else None, account['id'], actor))
+                return {'individual_id': target}
 
     def own_profile(self,actor):
         from ygc.cloud_profile import FIELDS as PROFILE_FIELDS

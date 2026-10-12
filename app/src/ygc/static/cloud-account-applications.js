@@ -1,3 +1,4 @@
+import {createApplicationPresentation} from './cloud-application-presentation.js';
 // IDs stay decimal strings throughout the public-to-private handoff.
 export function catalogIndividualId(value){
   return typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&
@@ -7,21 +8,21 @@ export function readCatalogIntent(search){
   const values=new URLSearchParams(search).getAll('acquire');
   return values.length===0?null:values.length===1?(catalogIndividualId(values[0])||''):'';
 }
-export function createApplications({auth,state,busy,work}){
-  const root=document.getElementById('selfApplications'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
+export function createApplications({auth,state,busy,work,formal=Boolean(document.body?.dataset?.formalProfile),root:providedRoot,intentRoot:providedIntent}){
+  const root=providedRoot||document.getElementById('selfApplications'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   const node=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n};
   const button=(key,id)=>{const n=node('button',t(key));n.type='button';if(id)n.id=id;return n};
   const heading=node('h2',t('applications.heading')),notice=node('p',t('applications.staging')),status=node('p'),list=node('ul');status.setAttribute('role','status');
   const accessNotice=node('p'),accessDetail=node('p');accessNotice.setAttribute('role','status');accessDetail.setAttribute('role','status');
   const add=button('applications.listing','applicationListing'),acquire=node('a',t('catalog.select_guitar')),refreshButton=button('action.refresh');
   acquire.id='applicationAcquire';acquire.href=document.body?.dataset?.formalProfile==='true'?'/ui':'/';
-  const intentRoot=document.getElementById('catalogAcquireIntent')||node('section'),intentHeading=node('h2',t('catalog.acquire_title')),
+  const intentRoot=providedIntent||document.getElementById('catalogAcquireIntent')||node('section'),intentHeading=node('h2',t('catalog.acquire_title')),
     intentDetail=node('p'),intentStatus=node('p'),intentLink=node('a',t('catalog.view_guitar')),intentStart=button('catalog.acquire_start','catalogAcquireStart');
   intentDetail.id='catalogAcquireDetail';intentStatus.id='catalogAcquireStatus';intentStatus.setAttribute('role','status');
   intentHeading.id='catalogAcquireTitle';intentRoot.style.overflowWrap='anywhere';intentRoot.setAttribute('aria-labelledby',intentHeading.id);
   intentLink.id='catalogAcquireLink';intentRoot.append(intentHeading,intentDetail,intentStatus,intentLink,intentStart);intentRoot.hidden=true;
   root.append(heading,notice,accessNotice,add,acquire,refreshButton,status,list);
-  const dialog=node('dialog'),title=node('h2'),detail=node('p'),form=node('form'),fields=node('fieldset'),photos=node('fieldset'),message=node('p');
+  const dialog=node(formal?'div':'dialog'),title=node('h2'),detail=node('p'),form=node('form'),fields=node('fieldset'),photos=node('fieldset'),message=node('p');
   const adminReview=node('p');adminReview.id='applicationAdminReview';adminReview.hidden=true;adminReview.style.whiteSpace='pre-wrap';
   dialog.id='applicationDialog';title.id='applicationTitle';dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
   const inputs={},files={},previews={},urls=new Set();let selected=null,kind=null,epoch=0,accountEpoch=0,refreshEpoch=0,canWrite=null,renderedAccount=state()?.user?.app_user_id;
@@ -45,21 +46,30 @@ export function createApplications({auth,state,busy,work}){
   }
   const limits=node('p',t('avatar.limits')),save=node('button',t('applications.create')),submit=button('applications.submit','applicationSubmit'),cancel=button('applications.cancel','applicationCancel'),close=button('action.close');
   const retry=button('applications.retry','applicationRetry'),dialogRefresh=button('action.refresh','applicationRefresh');let retryReady=false;
-  save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);dialog.append(title,detail,adminReview,accessDetail,form,photos,submit,cancel,retry,dialogRefresh,message,close);document.body.append(dialog);
+  const replacePhotos=button('applications.replace_photos','applicationReplacePhotos');
+  const keep=button('ui.keep_request_95011d14','applicationKeep'),panel=formal?node('div'):dialog;
+  if(formal){dialog.className='modal-backdrop';panel.className='modal ownership-request-modal';dialog.append(panel);Object.defineProperty(dialog,'open',{get:()=>dialog.classList.contains('open')})}
+  form.id='applicationForm';save.type='submit';save.id='applicationCreate';photos.append(limits);form.append(fields,save);panel.append(title,detail,adminReview,accessDetail,form,photos,submit,cancel,retry,replacePhotos,dialogRefresh,message,close);document.body.append(dialog);
+  if(formal){const content=node('div');content.id='acquireReviewContent';title.after(content);content.append(detail,adminReview,accessDetail,form,photos,message);form.style.display=fields.style.display='contents'}
+  const presentation=formal?createApplicationPresentation({panel,title,detail,form,fields,photos,inputs,files,previews,save,submit,close,cancel,retry,replacePhotos,dialogRefresh,keep}):null;
+  if(formal){root.className='important-information-group';heading.hidden=notice.hidden=acquire.hidden=refreshButton.hidden=true;list.className='formal-request-rows';add.className='new-guitar-action';add.textContent=t('ui.let_s_add_your_undiscovered_new_guitar_a2e1bb34');}
+
   const eligible=()=>Boolean(state()?.user&&state()?.identity?.email_verified===true);
   const account=()=>state()?.user?.app_user_id;
   const writable=()=>eligible()&&canWrite;
   const sameAccount=(version,id)=>version===accountEpoch&&eligible()&&id===account();
   function clearImages(){for(const url of urls)URL.revokeObjectURL(url);urls.clear();for(const role of ['closeup','overview']){files[role].value='';previews[role].image.removeAttribute('src');previews[role].image.hidden=true}}
-  function closeDialog(){epoch++;selected=null;kind=null;draftGuitar=null;clearImages();form.reset();detail.textContent=message.textContent=adminReview.textContent='';adminReview.hidden=true;retryReady=false}
+  function closeDialog(){presentation?.closeConfirmation();epoch++;selected=null;kind=null;draftGuitar=null;clearImages();form.reset();detail.textContent=message.textContent=adminReview.textContent='';adminReview.hidden=true;retryReady=false}
   dialog.addEventListener('ygc:closed',closeDialog);close.onclick=()=>globalThis.YGCOverlays.close(dialog);
-  function clear(){accountEpoch++;refreshEpoch++;epoch++;canWrite=null;list.replaceChildren();status.textContent='';accessNotice.textContent=accessDetail.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
+  function clear(){renderedAccount=account();accountEpoch++;refreshEpoch++;epoch++;canWrite=null;list.replaceChildren();status.textContent='';accessNotice.textContent=accessDetail.textContent='';globalThis.YGCOverlays.close(dialog);closeDialog()}
   function render(){
     if(renderedAccount!==account()){clear();renderedAccount=account()}
-    root.hidden=!eligible();add.disabled=busy()||!writable();refreshButton.disabled=dialogRefresh.disabled=busy()||!eligible();
+    root.hidden=!eligible()||formal&&!list.children.length&&!status.textContent;add.disabled=busy()||!writable();refreshButton.disabled=dialogRefresh.disabled=busy()||!eligible();
+    keep.disabled=busy()||!writable();
     const draft=selected?.status==='draft';fields.disabled=busy()||!writable();photos.disabled=busy();save.disabled=busy()||!writable()||Boolean(selected)||(kind==='acquire'&&!readySelection());save.hidden=Boolean(selected);submit.disabled=busy()||!writable()||!draft;
     form.hidden=Boolean(selected)&&!(kind==='acquire'&&draft);photos.hidden=!selected;submit.hidden=!draft;cancel.hidden=!selected||!['draft','pending','processing','error'].includes(selected.status);cancel.disabled=busy()||!writable();
     for(const role of ['closeup','overview']){files[role].disabled=busy()||!writable()||!draft;previews[role].view.disabled=busy()||!eligible()||!selected?.photos.includes(role)}
+    replacePhotos.hidden=selected?.kind!=='listing'||selected?.status!=='error'||selected.expires_at*1000<=Date.now();replacePhotos.disabled=busy()||!writable();
     retry.hidden=selected?.status!=='error';retry.disabled=busy()||!writable();
     accessNotice.textContent=accessDetail.textContent=eligible()&&!canWrite?t(canWrite===false?'applications.read_only':'applications.access_unavailable'):'';
     if(!writable()){retryReady=false;retry.textContent=t('applications.retry')}
@@ -71,18 +81,19 @@ export function createApplications({auth,state,busy,work}){
     const hint=catalogState==='loading'?'catalog.acquire_loading':catalogState==='invalid'?'catalog.acquire_invalid':!catalogGuitar?'catalog.acquire_unavailable':
       !state()?.user?'catalog.acquire_sign_in':!eligible()?'catalog.acquire_verify':canWrite!==true?(canWrite===false?'applications.read_only':'applications.access_unavailable'):'catalog.acquire_ready';
     intentStatus.textContent=t(hint);intentStart.disabled=busy()||!writable()||!catalogGuitar;
+    if(formal)intentRoot.hidden=true;presentation?.update(kind,selected);
   }
   function readySelection(){return Boolean(draftGuitar&&catalogGuitar&&draftGuitar.id===catalogId&&catalogGuitar.id===catalogId)}
   async function lookupCatalog(id){
     const path='/api/public/guitars/'+id,options={cache:'no-store',credentials:'omit',redirect:'error'};
-    const response=auth()?.signedIn&&state()?.user?await auth().authorizedFetch(path,options,true):await globalThis.fetch(path,options);
+    const response=auth()?.signedIn&&state()?.user?await auth().authorizedFetch(path,options,Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase()))):await globalThis.fetch(path,options);
     // A rejected bearer request is never retried anonymously.
     if(!response.ok)throw Object.assign(Error('Catalog unavailable'),{status:response.status});
     const data=await response.json();
     if(!data||typeof data!=='object'||Array.isArray(data)||data.id!==id||!catalogIndividualId(data.id)||
       !['manufacturer','model','serial_number','finish','year'].every(key=>data[key]===null||typeof data[key]==='string'))throw Error('Invalid catalog guitar');
     // Keep only public identity fields. Never retain extra response properties.
-    return Object.freeze(Object.fromEntries(['id','manufacturer','model','serial_number','finish','year'].map(key=>[key,data[key]])));
+    return Object.freeze({...Object.fromEntries(['id','manufacturer','model','serial_number','finish','year'].map(key=>[key,data[key]])),owner_id:catalogIndividualId(data.presentation?.owner?.id)||null});
   }
   async function refreshCatalog(){
     if(!catalogIndividualId(catalogId))return;
@@ -107,22 +118,24 @@ export function createApplications({auth,state,busy,work}){
   }
   function error(error){return t(error.code==='service_restricted'?'applications.service_restricted':error.status===403||error.status===401?'self_profile.restricted':error.code&&['image_format','image_pixel_limit','image_size_limit','invalid_image'].includes(error.code)?'content_media.'+error.code:error.status===400?'applications.invalid':error.status===409?'applications.conflict':'applications.failed')}
   async function request(path='',options={},json=true){
-    const response=await auth().authorizedFetch('/api/auth/applications'+path,{...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},true);
+    const response=await auth().authorizedFetch('/api/auth/applications'+path,{...options,headers:{'X-YGC-Timezone':Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',...options.headers}},Boolean(options.method&&!['GET','HEAD'].includes(options.method.toUpperCase())));
     if(!response.ok){const detail=await response.json().catch(()=>({}));throw Object.assign(Error('Application unavailable'),{status:response.status,code:detail.detail?.code})}
     return json?response.json():response;
   }
   function post(path,body){return request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
   async function refresh(){
+    if(renderedAccount!==account())clear();
     // Dismissing details does not invalidate the account's application list.
     const version=accountEpoch,id=account(),latest=++refreshEpoch;
     let data;try{data=await request();if(!Array.isArray(data?.items))throw Error('Invalid application list')}catch(err){if(sameAccount(version,id)&&latest===refreshEpoch){failed(err);return false}return}
     if(!sameAccount(version,id)||latest!==refreshEpoch)return;
     canWrite=typeof data.can_write==='boolean'?data.can_write:null;list.replaceChildren();
-    for(const row of data.items){
-      const item=node('li'),label=node('span',t('applications.'+row.kind)+' · '+row.serial+' · '+t('applications.status_'+row.status)),view=button('applications.detail');
-      view.onclick=()=>{if(!busy()&&sameAccount(version,id)){selected=row;kind=row.kind;show()}};item.append(label,view);list.append(item);
+    const visible=formal?data.items.filter(row=>['draft','pending','processing','error'].includes(row.status)||row.status==='accepted'&&row.verification_status==='unverified'):data.items;
+    for(const row of visible){
+      const item=node(formal?'div':'li'),label=node(formal?'p':'span',t('applications.'+row.kind)+' · '+row.serial+' · '+t('applications.status_'+row.status)),view=button('applications.detail');
+      view.onclick=()=>{if(!busy()&&sameAccount(version,id)){selected=row;kind=row.kind;show()}};if(formal){const holder=node('div');holder.innerHTML=globalThis.YGCOwnershipPresentation.requestRow({...row,request_kind:row.kind,original_individual_id:row.individual_id,product_name:row.kind==='listing'?[row.payload?.manufacturer,row.payload?.model].filter(Boolean).join(' '):null});item.className='unanswered-request';item.replaceChildren(...holder.firstElementChild.childNodes);item.querySelector('button').replaceWith(view)}else item.append(label,view);list.append(item);
     }
-    status.textContent=data.items.length?'':t('applications.empty');render();return true;
+    status.textContent=formal||data.items.length?'':t('applications.empty');render();return true;
   }
   function failed(err){
     // Authentication/read-access revocation must still purge private data.
@@ -167,12 +180,19 @@ export function createApplications({auth,state,busy,work}){
         adminReview.textContent=t('applications.admin_review')+'\n'+(['accept','reject','retry'].includes(operation)?t('admin_applications.operation_'+operation)+'\n':'')+(review.at?String(review.at)+'\n':'')+review.reason;adminReview.hidden=false;
       }
     }else{form.reset();inputs.occurred_at.input.value=today();inputs.individual_id.input.value=kind==='acquire'?draftGuitar?.id||'':'';detail.textContent=t('applications.instructions')+(kind==='acquire'?'\n'+[draftGuitar?.manufacturer,draftGuitar?.model,draftGuitar?.serial_number].filter(Boolean).join(' · '):'')}
-    inputs.occurred_at.input.max=today();render();globalThis.YGCOverlays.open(dialog);
+    inputs.occurred_at.input.max=today();presentation?.mount(kind,selected);render();globalThis.YGCOverlays.open(dialog);
   }
   function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
   add.onclick=()=>{if(!busy()&&writable()){selected=null;draftGuitar=null;kind='listing';show()}};
-  intentStart.onclick=()=>{if(!dialog.open&&!busy()&&writable()&&catalogGuitar){selected=null;draftGuitar=catalogGuitar;kind='acquire';show()}};
-  refreshButton.onclick=dialogRefresh.onclick=()=>action(refresh);
+  intentStart.onclick=()=>{if(formal)return openAcquire(catalogId);if(!dialog.open&&!busy()&&writable()&&catalogGuitar){selected=null;draftGuitar=catalogGuitar;kind='acquire';show()}};
+  refreshButton.onclick=()=>action(refresh);
+  dialogRefresh.onclick=async()=>{
+    if(!formal)return action(refresh);
+    if(busy()||!dialog.open)return;const version=epoch,revision=selected?.revision;
+    const saved=selected&&!selected.unsaved;
+    if(!await presentation.confirm('ui.reflesh_7228c81b',saved?'ui.reload_the_saved_request_unsaved_input_and_selected_photos_5e13d43a':'ui.refresh_this_form_entered_text_and_the_current_challenge_w_7f53526d')||version!==epoch)return;
+    return action(async current=>{if(saved){const row=await request('/'+revision);if(!current()||version!==epoch)return;selected=row;show()}else clearImages()});
+  };
   globalThis.addEventListener('focus',()=>{if(eligible())action(refresh);if(catalogId!==null)refreshCatalog()});
   form.onsubmit=event=>{
     event.preventDefault();if(selected||!dialog.open||!['listing','acquire'].includes(kind)||(kind==='acquire'&&!readySelection()))return;
@@ -185,14 +205,20 @@ export function createApplications({auth,state,busy,work}){
         const checked=await refreshCatalog();
         if(!checked||!current()||version!==epoch||!writable()||guitar.id!==catalogId){if(!checked&&current()&&version===epoch)message.textContent=t('catalog.acquire_unavailable');return}
       }
-      const row=await post('',body);if(!current())return;
+      const row=await post(formal?'/preview':'',body);if(!current())return;
       if(row.status==='duplicate'){if(version===epoch)message.textContent=t('applications.duplicate',{ids:row.existing_individual_ids.join(', ')});return}
       if(version===epoch){selected=row;show()}
       await refresh();
     },true);
   };
-  submit.onclick=()=>{if(selected?.status!=='draft')return;return action(async current=>{
-    const version=epoch,revision=selected.revision;
+  submit.onclick=async()=>{if(selected?.status!=='draft'||busy())return;
+    if(formal){const version=epoch;try{if(!inputs.occurred_at.input.value)throw {status:400};for(const role of ['closeup','overview']){const file=files[role].files[0];if(!file&&!selected.photos.includes(role))throw {status:400};if(file&&file.size>8*1024*1024)throw {code:'image_size_limit'};if(file&&!['image/jpeg','image/png','image/webp'].includes(file.type))throw {code:'image_format'}}}catch(err){message.textContent=error(err);return}
+      if(!await presentation.confirm('ui.submit_155f816c','ui.save_this_request_and_submit_both_photos_for_review_489d42bd')||version!==epoch)return;
+    }
+    return action(async current=>{
+    const version=epoch;
+    if(formal&&selected.unsaved){for(const role of ['closeup','overview'])if(!files[role].files[0])throw {status:400};const row=await post('/keep',keepBody());if(!current()||version!==epoch)return;selected=row}
+    const revision=selected.revision;
     for(const role of ['closeup','overview']){
       if(!current()||!writable()||version!==epoch)return;
       const file=files[role].files[0];if(!file&&!selected.photos.includes(role))throw {status:400};
@@ -204,7 +230,13 @@ export function createApplications({auth,state,busy,work}){
     const row=await post('/'+revision+'/submit',{acquisition_date:selected.kind==='listing'?selected.payload.occurred_at:inputs.occurred_at.input.value,body:selected.kind==='listing'?selected.payload.body:inputs.body.input.value});
     if(!current()||version!==epoch)return;selected=row;clearImages();show();await refresh();
   },true)};
-  cancel.onclick=()=>{if(!['draft','pending','processing','error'].includes(selected?.status))return;return action(async current=>{const version=epoch,row=await post('/'+selected.revision+'/cancel',{});if(!current())return;if(version===epoch){selected=row;show()}await refresh()},true)};
+  cancel.onclick=async()=>{if(busy()||!['draft','pending','processing','error'].includes(selected?.status))return;const version=epoch;if(formal&&(!await presentation.confirm('ui.cansel_request_dfc8109a','ui.withdraw_this_saved_request_any_in_progress_review_will_be_2fca27e6')||version!==epoch))return;return action(async current=>{const version=epoch,row=await post('/'+selected.revision+'/cancel',{});if(!current())return;if(version===epoch){selected=row;show()}await refresh()},true)};
+  replacePhotos.onclick=async()=>{
+    if(busy()||!writable()||selected?.kind!=='listing'||selected.status!=='error')return;
+    const version=epoch,revision=selected.revision;
+    if(formal&&(!await presentation.confirm('applications.replace_photos','applications.replace_photos_confirm')||version!==epoch))return;
+    return action(async current=>{const row=await post('/'+revision+'/replace_photos',{});if(!current()||version!==epoch)return;clearImages();selected=row;show();await refresh()},true);
+  };
   retry.onclick=()=>{
     if(busy()||!writable()||selected?.status!=='error')return;
     if(!retryReady){retryReady=true;retry.textContent=t('applications.retry_confirm');message.textContent=t('applications.retry_notice');return}
@@ -215,5 +247,20 @@ export function createApplications({auth,state,busy,work}){
       await refresh();
     },true);
   };
-  return {render,refresh,clear,failed,setCatalogIntent};
+  function keepBody(){return {...(selected?.unsaved?{draft_token:selected.draft_token}:{revision:selected?.revision}),acquisition_date:inputs.occurred_at.input.value,body:inputs.body.input.value}}
+  keep.onclick=async()=>{if(busy()||selected&&selected.status!=='draft'||!dialog.open)return;const initial=epoch;
+    if(!await presentation.confirm('ui.keep_request_95011d14','ui.save_the_request_details_and_close_this_window_selected_ph_39330ea1')||initial!==epoch)return;
+    return action(async current=>{const version=epoch;
+    if(!selected){if(kind!=='listing')return;const draft=await post('/preview',{kind:'listing',payload:Object.fromEntries(keys.filter(k=>k!=='individual_id').map(k=>[k,inputs[k].input.value]))});if(!current()||version!==epoch)return;if(draft.status==='duplicate'){message.textContent=t('applications.duplicate',{ids:draft.existing_individual_ids.join(', ')});return}selected=draft}
+    const row=await post('/keep',keepBody());if(!current()||version!==epoch)return;selected=row;globalThis.YGCOverlays.close(dialog);await refresh()},true)};
+  async function openAcquire(id){
+    if(busy()||!catalogIndividualId(id))return;
+    const actor=account(),accountVersion=accountEpoch;
+    await setCatalogIntent(id);await refresh();
+    if(!sameAccount(accountVersion,actor)||!writable()||!catalogGuitar||catalogId!==id)return;
+    if(catalogGuitar.owner_id&&String(state()?.user?.id)===catalogGuitar.owner_id)return;
+    const version=catalogEpoch;
+    if(formal&&catalogGuitar.owner_id&&(!await presentation.confirm('ui.ownership_claim_warning_186144e7','ui.this_guitar_already_has_an_owner_are_you_sure_it_belongs_t_bdb41c29')||version!==catalogEpoch||!sameAccount(accountVersion,actor)||catalogId!==id))return;
+    return action(async current=>{const guitar=catalogGuitar,row=await post('/preview',{kind:'acquire',individual_id:id});if(!current()||catalogId!==id)return;draftGuitar=guitar;selected=row;kind='acquire';show()},true)}
+  return {render,refresh,clear,failed,setCatalogIntent,openAcquire};
 }

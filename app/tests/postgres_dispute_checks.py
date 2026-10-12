@@ -31,12 +31,13 @@ from postgres_media_claim_checks import BIG_ID, image_bytes, reject_new_rows
 from postgres_ownership_workflow_checks import grants, rejected
 from ygc import disputes
 from ygc.admin_bootstrap_job import grant_first_admin
-from ygc.claim_revision import ClaimConflict
+from ygc.claim_revision import ClaimConflict, revision as claim_revision
 from ygc.cloud_claims import CloudClaims
 from ygc.cloud_disputes import CloudDisputes
 from ygc.cloud_dispute_storage import OriginalUnavailable
 from ygc.cloud_dispute_routes import dispute_router
-from ygc.cloud_guitars import GuitarMissing
+from ygc.cloud_guitars import CloudGuitars, GuitarMissing
+from ygc.cloud_guitar_routes import guitar_router
 from ygc.cloud_notifications import CloudNotifications
 from ygc.cloud_storage import ObjectReference
 from ygc.cloud_owner import CloudOwner
@@ -44,7 +45,7 @@ from ygc.cloud_ownership import CloudOwnership
 from ygc.db.postgres import PostgresSettings, bootstrap, connect, migrate
 from ygc.db.postgres_accounts import PostgresAccounts
 from ygc.db.postgres_operations import PostgresOperations, ServiceRestricted
-from ygc.db.postgres_ownership import BoundRepository, PostgresOwnership
+from ygc.db.postgres_ownership import BoundRepository, DisputeClaimLocked, PostgresOwnership
 from ygc.db.postgres_queries import ObservationConnection
 from ygc.platform_boundaries import ActorContext
 from ygc.identity_platform import VerifiedIdentity
@@ -761,8 +762,32 @@ def decisions_locks_and_reopen_checks(w):
         for name in ('a', 'b', 'c'):
             w.unchanged(ValueError, lambda: service.set_claim_response(claim, w.principal(name), 'positive'))
         for operation in ('positive', 'negative', 'delete'):
-            w.unchanged((ValueError, errors.RaiseException), lambda: service.admin_moderate_claim(
+            w.unchanged(DisputeClaimLocked, lambda: service.admin_moderate_claim(
                 claim, w.principal('admin'), operation))
+        # Exercise the actual Admin HTTP route and PostgreSQL revision fence,
+        # rather than accepting the DB trigger's generic operational failure.
+        class Verifier:
+            accounts = w.accounts
+
+            def verify(self, *, bearer_token):
+                assert bearer_token == 'admin'
+                return VerifiedIdentity(ISSUER, 'admin', '', True)
+
+        api = FastAPI()
+        api.include_router(guitar_router(Verifier(), CloudGuitars(w.settings, w.operations)))
+        with connect(w.settings, 'chronicle') as con:
+            locked_revision = claim_revision(con.execute('SELECT * FROM claims WHERE id=%s', (claim,)).fetchone())
+        before = w.snapshot()
+        with TestClient(api) as client:
+            for stance in ('positive', 'negative', 'unverified'):
+                response = client.post(f'/api/admin/guitars/{guitar}/claims/{claim}/verification',
+                    headers={'Authorization': 'Bearer admin'},
+                    json={'action': stance, 'revision': locked_revision})
+                assert response.status_code == 409, response.text
+                assert response.json()['detail']['code'] == 'dispute_claim_locked'
+                assert response.headers['cache-control'] == 'private, no-store'
+                assert PRIVATE not in response.text and ISSUER not in response.text
+                assert w.snapshot() == before
         for statement in ('UPDATE claims SET body=\'changed\' WHERE id=%s',
                           "UPDATE claims SET status='inactive' WHERE id=%s", 'DELETE FROM claims WHERE id=%s'):
             def mutate():
@@ -1010,6 +1035,11 @@ def pagination_and_http_checks(w):
             decimal(page['viewer_user_id'], w.user(name))
             assert len(page['items']) <= 2
             private_projection(page, w.records)
+            if page['items']:
+                target = int(page['items'][0]['individual_id'])
+                filtered = w.service.list(w.actor(name), admin=admin, status='all', individual=target, limit=50)
+                assert filtered['items'] and all(int(row['individual_id']) == target for row in filtered['items'])
+                assert w.service.list(w.actor(name), admin=admin, individual=2**63-1)['items'] == []
             ids.extend(decimal(row['id']) for row in page['items'])
             if page['next_after'] is None:
                 break

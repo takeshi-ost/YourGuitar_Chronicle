@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-function environment(){
+function environment({providedRoot=false}={}){
   const ids=new Map(),listeners={},createdUrls=[],revokedUrls=[],photoCalls=[],photoReplies=[],decodes=[];
   class MediaURL extends URL{static createObjectURL(){const url='blob:owner-'+(createdUrls.length+1);createdUrls.push(url);return url}static revokeObjectURL(url){revokedUrls.push(url)}}
   class Element{
@@ -17,7 +17,7 @@ function environment(){
   const client={authorizedFetch:async(url,options={},verified)=>{if(url.includes('/media/')){photoCalls.push({url,options,verified});const value=await (photoReplies.length?photoReplies.shift():new Blob(['private'],{type:'image/jpeg'}));if(value instanceof Error)throw value;return value?.status?{ok:false,status:value.status}:{ok:true,blob:async()=>value}}calls.push({url,options,verified});const value=await replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
   const context=vm.createContext({AbortController,addEventListener:(key,fn)=>(listeners[key]??=[]).push(fn),document,URL:MediaURL,URLSearchParams,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-media.js'),'utf8').replaceAll('export function','function'),context);
-  const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.ui.render()}}};
+  const args={...(providedRoot?{root:document.createElement('section')}:{}),auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.ui.render()}}};
   const source=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-account-guitars.js'),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function');
   vm.runInContext(source+';globalThis.ui=createGuitars(args);',Object.assign(context,{args}));
   return {ui:context.ui,document,calls,replies,ids,photoCalls,photoReplies,decodes,createdUrls,revokedUrls,dispatch:key=>{for(const fn of listeners[key]||[])fn()},setState:value=>{state=value},setBusy:value=>{busy=value},async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}};
@@ -193,10 +193,18 @@ test('Existing Event value_text subtype is localized once in the Owner review de
 
 test('A historical notification cannot render an Owner review when its Claim is absent from a fresh canonical read',async()=>{
  const e=environment();e.replies.push({items:[{...acquire,id:'24'}],can_write:true});await e.ui.openOwner('12','23');
- const dialog=e.ids.get('ownerResponseDialog');assert.equal(e.calls.length,1);assert.equal(e.calls[0].url,'/api/auth/guitars/12/owner-responses');assert.equal(e.calls[0].verified,true);assert.equal(dialog.children[2].children.length,0);assert.match(dialog.children[3].textContent,/notifications.unavailable/);assert.equal(e.photoCalls.length,0);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+ const dialog=e.ids.get('ownerResponseDialog');assert.equal(e.calls.length,1);assert.equal(e.calls[0].url,'/api/auth/guitars/12/owner-responses');assert.equal(e.calls[0].verified,false);assert.equal(dialog.children[2].children.length,0);assert.match(dialog.children[3].textContent,/notifications.unavailable/);assert.equal(e.photoCalls.length,0);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
 });
 
 test('An authorized notification target rechecks its Claim and presents the normal explicit review controls only',async()=>{
  const e=environment();e.replies.push({items:[acquire],can_write:false});await e.ui.openOwner('12','23');
  const dialog=e.ids.get('ownerResponseDialog'),card=dialog.children[2].children[0];assert.match(card.children[0].textContent,/#23/);assert.equal(card.children[2].disabled,true);assert.equal(card.children[3].hidden,true);assert.equal(e.calls.length,1);assert.equal(e.calls.filter(c=>c.options.method==='POST').length,0);
+});
+
+
+for(const status of [404,401,403,503])test(`Top owner capability probe handles HTTP ${status} without inventing permission`,async()=>{
+ const e=environment({providedRoot:true});e.replies.push(Object.assign(new Error('unavailable'),{status}));
+ if(status===404)assert.equal((await e.ui.readActions('12')).length,0);
+ else await assert.rejects(e.ui.readActions('12'),error=>error.status===status);
+ assert.equal(e.calls.length,1);assert.match(e.calls[0].url,/12\/ownership$/);
 });

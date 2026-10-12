@@ -2,17 +2,10 @@
    own the wordmarks, two-row header, surfaces, spacing and compact panels. */
 [hidden]{display:none!important}
 .account-hub-actions a{text-decoration:none}
-#accountHub{grid-template-columns:minmax(200px,1fr) auto auto}
-.language-picker{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
-.language-picker select{padding:4px;border-radius:6px;font:inherit}
-#catalogList{height:auto;min-height:200px;max-height:calc(100dvh - var(--header-height,108px) - 28px)}
 .catalog-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .catalog-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:11px}
 .catalog-toolbar .search-field{flex:1;min-width:160px}
 .catalog-toolbar select{padding:9px;border-radius:8px;font:inherit}
-#catalogList table{min-width:660px}
-#catalogList :is(th,td){width:auto}
-#catalogList :is(th,td):first-child{width:70px}
 #catalogList td a{color:var(--text);display:block}
 #catalogList .pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:11px}
 #catalogList .status,#catalogDetail .status{background:transparent!important;border-radius:0;padding:0;line-height:1.5}
@@ -20,10 +13,10 @@
 .detail-scroll{overflow:auto;min-height:0;flex:1;padding-right:4px}
 #catalogBack{font-size:11px;color:var(--text);margin-bottom:8px}
 .detail-image-placeholder{width:75%;aspect-ratio:1.2;background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;margin:0 0 14px}
-#detailTitle{font-size:16px;margin:0 0 6px}
+
 #detailIdentifier,.muted{font-size:11px;color:var(--muted)}
 .button-link{display:inline-block;border:3px double var(--line);border-radius:8px;padding:6px 9px;margin:2px;color:var(--text);text-decoration:none;font-size:11px}
-.accordion-section{margin:16px 0}.accordion-section>summary{cursor:pointer;font-size:13px;font-weight:700;border-bottom:1px solid var(--line);padding:8px 0}
+.accordion-section>summary{cursor:pointer;font-size:13px;font-weight:700;border-bottom:1px solid var(--line);padding:8px 0}
 #detailSpecifications{margin:8px 0}.catalog-spec-row dt,.catalog-spec-row dd{display:inline;margin:0}.catalog-spec-row dt{font-weight:700;margin-right:5px}
 .chronicle-record{font-size:11px;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .chronicle-record summary{font-weight:700;cursor:pointer}.chronicle-record p{color:var(--muted)}.chronicle-record dl{margin:0}.chronicle-record dd{margin:0 0 6px;overflow-wrap:anywhere}.chronicle-record a{color:var(--text)}
@@ -31,16 +24,87 @@
 .notice{white-space:pre-line;background:var(--panel);border:1px solid var(--line);padding:10px;border-radius:8px}
 #catalogFooter{margin:10px 22px;color:var(--muted);font-size:11px}
 #shellSignInDialog{width:min(430px,calc(100vw - 28px));padding:20px;max-height:calc(100dvh - 28px);overflow:auto}
-#shellSignInForm>label{display:block;margin:12px 0 5px}#shellSignInForm>input{width:100%}.modal-actions{display:flex;gap:8px;align-items:center;margin-top:16px}
-@media(max-width:1050px){#accountHub{grid-template-columns:1fr auto}#accountHub>.account-hub-actions:last-child{grid-column:1/-1;justify-content:flex-start}}
-@media(max-width:900px){#catalogList{max-height:none;min-height:200px}#accountHub{grid-template-columns:1fr}.detail-shell{max-height:calc(100dvh - 28px)}.language-picker{margin-left:auto}.account-hub-actions{flex-wrap:wrap}}
+#shellSignInForm>label{display:block;margin:12px 0 5px}#shellSignInForm>input{width:100%}#shellSignInDialog .modal-actions{display:flex;gap:8px;align-items:center;margin-top:16px}
+@media(max-width:900px){.detail-shell{max-height:calc(100dvh - 28px)}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
 /* Members reuse the theme wordmark without the catalog's fixed detail layout. */
 body[data-formal-members] .sticky-header{position:static}
 body[data-formal-members] main{width:calc(100% - 28px);max-width:760px;margin:24px auto;padding:24px}
-@media(max-width:900px){
-  .sticky-header h1{flex-wrap:wrap;max-width:100%}
-  .sticky-header .page-nav{flex-wrap:wrap;overflow:visible}
-  .sticky-header .page-nav .language-picker{margin-left:0}
-}
+
+/* Match the local #detail geometry; remaining API actions retain their guards. */
+#catalogBack{color:var(--text);text-decoration:none;font-size:18px}
+
+#detail .owner-claim-card,#detail .add-claim-action{display:block;text-decoration:none;text-align:center;color:var(--text)}
+#detail .claim-body{margin:0}#detail .claim-body dd{margin:0 0 6px;overflow-wrap:anywhere}
+#detail .claim-footer-meta{margin:0 0 8px}
+
+/* The formal list uses the local one-line toolbar and heading sorting. */
+body[data-formal-catalog] #catalogSearchForm{display:contents}
+body[data-formal-catalog] .catalog-toolbar .search-field{flex:0 1 320px;min-width:0}
+body[data-formal-catalog] #searchLabel,body[data-formal-catalog] #catalogSearchSubmit,body[data-formal-catalog] .catalog-toolbar label:has(#catalogSort){display:none}
+body[data-formal-catalog] #catalogRefresh{align-self:flex-end;font-size:11px;padding:4px 7px;margin-bottom:6px}
+
+#detail a.add-claim-action{display:block;text-decoration:none;text-align:center;color:var(--text)}
+
+/* Link actions share the canonical button palette without changing navigation semantics. */
+#detail a:is(.owner-claim-card,.add-claim-action){border:3px double var(--ui-line);border-radius:9px;background:var(--ui-surface);color:var(--ui-text);font-weight:700}
+.sticky-header a[data-ui-action="primary"]{background:var(--ui-primary)!important;color:#fff!important}
+
+.language-picker>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+#catalogBack[data-ui-action="close"]{background:var(--ui-close)!important;color:var(--ui-text)!important;border-radius:8px}
+
+/* Long translated page titles may wrap beside the canonical wordmark. */
+.sticky-header h1>.sub{white-space:normal;min-width:0}
+
+/* Empty protocol/recovery messages do not add space to canonical Claim forms. */
+#claimDialog p:empty{display:none}
+
+#applicationDialog p:empty{display:none}
+.formal-request-rows{list-style:none;padding:0;margin:0}
+
+/* Formal member shell uses canonical profile typography and connections modal.
+   Search has no standalone local counterpart; retain its existing navigation. */
+body[data-formal-members] main{display:block;background:transparent;border:0;padding:0;max-width:1200px}
+body[data-formal-members] .member-nav,body[data-formal-members] .pager{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+body[data-formal-members] #memberSearchForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+body[data-formal-members] #memberQuery{min-width:0;flex:1}
+body[data-formal-members] #memberSearch{padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:12px}
+body[data-formal-members] .people{list-style:none;padding:0}
+body[data-formal-members] .people a{display:flex;gap:12px;align-items:center;padding:8px 0;color:var(--text);border-bottom:1px solid var(--line)}
+body[data-formal-members] .person-icon{overflow:hidden;display:inline-flex;align-items:center;justify-content:center}
+body[data-formal-members] .people .person-icon{width:36px;height:36px;border-radius:50%}
+body[data-formal-members] .person-icon img{width:100%;height:100%;object-fit:cover}
+body[data-formal-members] #memberStatus:empty{display:none}
+
+#ownershipDialog p:empty{display:none}
+
+/* The authorized owner review uses the same Claim popup surface. */
+#ownerResponseDialog.modal-backdrop{background:transparent;align-items:initial;justify-content:initial;padding:0}
+#ownerResponseDialog .claim-popup-modal>p:empty{display:none}
+
+/* Favorite recovery text must not take width away from the product name. */
+#detailFavorite{min-width:0;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 10px}
+#detailFavorite p{flex-basis:100%;min-width:0;overflow-wrap:anywhere;margin:0;font-size:12px}
+
+/* Participant disputes use the same compact, theme-independent modal as local. */
+#disputeDialog.modal-backdrop{width:auto;padding:0;max-height:none}
+#disputeDialog .dispute-modal{box-sizing:border-box}
+#disputeDialog :is(input,select,textarea){box-sizing:border-box;max-width:100%;font:inherit}
+#disputeDialog :is(select,textarea){width:100%}
+#disputeDialog fieldset{min-width:0}
+#disputeDialog p{white-space:pre-wrap;overflow-wrap:anywhere}
+#importantInformation #selfDisputes h2{font-size:14px;margin:4px 0}
+#importantInformation :is(#disputeList,#disputeOptions){list-style:none;padding:0;margin:0}
+#importantInformation :is(#disputeList,#disputeOptions)>li{padding:4px 0;border-bottom:1px solid var(--line)}
+#importantInformation #selfDisputes p{margin:4px 0}
+
+.detail-title-row:has(#detailFavorite){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.detail-title-row #detailFavorite{display:contents}
+.detail-title-row #detailFavorite>.favorite-button{grid-column:2;grid-row:1}
+.detail-title-row #detailFavorite>:not(.favorite-button){grid-column:1/-1}
+#detailPhoto[role=button]{cursor:zoom-in}
+#catalogList td>a{text-decoration:none}
+
+#catalogSearch{font-size:14px}

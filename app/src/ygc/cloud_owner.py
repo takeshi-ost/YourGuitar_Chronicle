@@ -67,6 +67,42 @@ class CloudOwner:
                     repo.can_write = mode['mode'] != 'read_only'
                     yield repo, canonical['id']
 
+    def inbox_candidates(self, actor, after, limit):
+        with self.operations.access('user_read', actor) as (_, _, account):
+            with connect(self.settings, 'chronicle') as con:
+                con.execute("SET LOCAL statement_timeout='5s'")
+                return [dict(row) for row in con.execute("""SELECT c.id,c.individual_id,
+                    i.manufacturer,i.model FROM claims c
+                    JOIN individuals i ON i.id=c.individual_id
+                    JOIN acquire_applications a ON a.claim_id=c.id
+                    JOIN users u ON u.id=c.author_user_id
+                    WHERE i.current_owner_user_id=%s AND c.author_user_id<>%s
+                    AND c.id>%s AND c.status='active' AND c.verification_status='unverified'
+                    AND c.claim_type='ownership' AND c.ownership_kind='acquire'
+                    AND COALESCE(c.ownership_source,'') NOT IN ('former_owner','automation','merged_listing')
+                    AND a.status='accepted' AND a.request_kind='acquire' AND u.ban_status='normal'
+                    ORDER BY c.id LIMIT %s""", (account['id'],account['id'],after,limit)).fetchall()]
+
+    def inbox(self, actor, after=0):
+        if type(after) is not int or not 0 <= after < 2**63:
+            raise ValueError('Invalid cursor.')
+        candidates = self.inbox_candidates(actor, after, 51)
+        items, checked = [], {}
+        for candidate in candidates[:50]:
+            individual = candidate['individual_id']
+            if individual not in checked:
+                # Reuse canonical participant/BAN/dispute/ownership rules. This
+                # list is advisory; opening and answering revalidate once more.
+                checked[individual] = self.pending(actor, individual)
+            for row in checked[individual]['items']:
+                if (row['id'] == str(candidate['id']) and row['verification_status'] == 'unverified'
+                        and row['decline_reason_required']):
+                    items.append(dict(id=row['id'], individual_id=str(individual),
+                        author_name=row['author_name'], product_name=' '.join(filter(None,
+                            [candidate['manufacturer'], candidate['model']])),
+                        can_write=checked[individual]['can_write']))
+        return dict(items=items, next_after=str(candidates[49]['id']) if len(candidates)>50 else None)
+
     def pending(self, actor, individual):
         from ygc import disputes
         with self.transaction(actor, individual) as (repo, user):

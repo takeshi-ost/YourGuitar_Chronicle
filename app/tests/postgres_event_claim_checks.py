@@ -43,6 +43,7 @@ from ygc.platform_boundaries import ActorContext
 
 ISSUER = 'local-private-event-contract'
 PRIVATE = 'EVENT-PRIVATE-DO-NOT-PUBLISH'
+PUBLIC = 'Synthetic public Claim prose'
 KINDS = ('exhibition', 'performance', 'recording', 'auction', 'other')
 OWN_FIELDS = {'id', 'individual_id', 'claim_type', 'specification_kind',
               'incident_kind', 'event_kind', 'field_name', 'value_text', 'body',
@@ -52,7 +53,7 @@ SNAPSHOT_FIELDS = ('manufacturer', 'model', 'serial_number', 'finish',
                    'location_country', 'location_region', 'current_owner_user_id')
 
 
-def metadata(*, body=PRIVATE, date='2026-03-01', kind='performance'):
+def metadata(*, body=PUBLIC, date='2026-03-01', kind='performance'):
     return dict(claim_type='event', event_kind=kind, body=body, occurred_at=date)
 
 
@@ -104,7 +105,7 @@ def run(port):
                         rejected(errors.InsufficientPrivilege, forbidden)
             accounts, operations = PostgresAccounts(app), PostgresOperations(app)
             records = {name: accounts.ensure_identity(issuer=ISSUER, subject=name,
-                display_name=PRIVATE + '-' + name) for name in ('admin', 'a', 'b', 'c')}
+                display_name='Synthetic public member-' + name) for name in ('admin', 'a', 'b', 'c')}
             admin = records['admin']['app_user_id']
             assert grant_first_admin(app, admin, 'local-event-test-operator')
             accounts.drain_projection()
@@ -158,7 +159,7 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
         return next(row for row in owners.pending(actors[name], individual)['items']
                     if row['id'] == str(claim))
 
-    def create(name='b', *, images=None, kind='performance', body=PRIVATE, json_only=False):
+    def create(name='b', *, images=None, kind='performance', body=PUBLIC, json_only=False):
         data = metadata(body=body, kind=kind)
         if json_only:
             assert images is None
@@ -197,7 +198,7 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
         return service.image(actors[name], guitar, int(row['id']),
             int(media or row['media_items'][0]['id']), row['revision'])
 
-    def edit(name, row, *, body=PRIVATE + '-edited', date='2026-03-02'):
+    def edit(name, row, *, body=PUBLIC + '-edited', date='2026-03-02'):
         return service.edit(actors[name], individual, int(row['id']),
             metadata(body=body, date=date, kind=row['event_kind']) | {'revision': row['revision']})['claim']
 
@@ -262,17 +263,17 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
     rejected(ClaimConflict, lambda: respond('a', review))
     for stance in ('positive', 'negative', 'unverified'):
         respond('a', pending('a', third['id']), stance)
-        changed = edit('b', current('b', third['id']), body=PRIVATE + '-' + stance)
+        changed = edit('b', current('b', third['id']), body=PUBLIC + '-' + stance)
         assert changed['verification_status'] == stance and changed['media_items'] == third['media_items']
     principal = ActorContext(records['admin']['id'], 'identity-platform', None, True, actors['admin'])
     ownership.admin_moderate_claim(int(third['id']), principal, 'negative')
-    changed = edit('b', current('b', third['id']), body=PRIVATE + '-admin-retained')
+    changed = edit('b', current('b', third['id']), body=PUBLIC + '-admin-retained')
     assert changed['verification_status'] == 'negative'
     with connect(settings, 'chronicle') as con:
         assert con.execute('SELECT admin_verification FROM claims WHERE id=%s',
                            (int(third['id']),)).fetchone()['admin_verification'] == 1
     for data in (metadata(kind='auction'), dict(claim_type='incident', incident_kind='damage',
-                    body=PRIVATE, occurred_at='2026-03-01')):
+                    body=PUBLIC, occurred_at='2026-03-01')):
         rejected(ValueError, lambda: service.edit(actors['b'], individual, int(changed['id']),
                                                 data | {'revision': changed['revision']}))
     attachment_checks(owner, service, owners, actors, individual, third, fixture, storage)
@@ -372,6 +373,7 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
     assert detail['photo'] is None
     serialized = json.dumps([public, detail, catalog.list(None)])
     assert PRIVATE not in serialized and 'gcs-content-v1:' not in serialized
+    assert PUBLIC in serialized
     for forbidden in ('media_items', 'storage_path', 'original_filename', 'event_kind', 'author_name'):
         assert forbidden not in serialized
     for row in public['items']:
@@ -385,14 +387,14 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
     # Two real runtime transactions start with the same complete revision. The
     # advisory fence or revision check must reject exactly one, never lose one
     # mutation behind another successful acknowledgement.
-    racing = create('c', images=[uploads[1]], body=PRIVATE + '-race')
+    racing = create('c', images=[uploads[1]], body=PUBLIC + '-race')
     reviewed = pending('b', racing['id'])
     gate = Barrier(2)
     def race(action):
         gate.wait(timeout=10)
         try:
             if action == 'edit':
-                edit('c', racing, body=PRIVATE + '-race-edited')
+                edit('c', racing, body=PUBLIC + '-race-edited')
             else:
                 respond('b', reviewed)
             return action, 'accepted'
@@ -405,9 +407,9 @@ def checks(settings, owner, accounts, operations, records, fixture, storage):
     fresh = current('c', racing['id'])
     assert fresh['revision'] != racing['revision'] and fresh['media_items'] == racing['media_items']
     if results['edit'] == 'accepted':
-        assert fresh['body'] == PRIVATE + '-race-edited' and fresh['verification_status'] == 'unverified'
+        assert fresh['body'] == PUBLIC + '-race-edited' and fresh['verification_status'] == 'unverified'
     else:
-        assert fresh['body'] == PRIVATE + '-race' and fresh['verification_status'] == 'positive'
+        assert fresh['body'] == PUBLIC + '-race' and fresh['verification_status'] == 'positive'
     rejected(ClaimConflict, lambda: photo('c', racing))
 
     # PR57's explicit Transfer acceptance must revoke Event review/photo access
@@ -457,7 +459,7 @@ def attachment_checks(owner, service, owners, actors, individual, claim, fixture
         rejected(ClaimConflict, lambda: service.image(actors['b'], individual, int(claim['id']),
             int(before['media_items'][0]['id']), before['revision']))
         return after
-    for column, value in (('body', PRIVATE + '-same-timestamp'), ('value_text', 'auction'),
+    for column, value in (('body', PUBLIC + '-same-timestamp'), ('value_text', 'auction'),
                           ('occurred_at', '2026-03-03')):
         before, old_review = own(), review()
         with connect(owner, 'chronicle') as con:
@@ -525,13 +527,13 @@ def rollback_checks(owner, service, actor, individual, storage, uploads, snapsho
     before, objects, deletes = snapshot(), set(storage.objects), list(storage.deleted)
     with patch.object(service, 'transaction', lost_acknowledgement):
         rejected(RuntimeError, lambda: service.create_event(actor, individual,
-            metadata(body=PRIVATE + '-unknown-commit'), uploads))
+            metadata(body=PUBLIC + '-unknown-commit'), uploads))
     after = snapshot()
     assert len(after['claims']) == len(before['claims']) + 1
     assert len(after['notifications']) == len(before['notifications']) + 1
     retained = set(storage.objects) - objects
     assert len(retained) == len(uploads) and storage.deleted == deletes
-    committed = next(row for row in after['claims'] if row['body'] == PRIVATE + '-unknown-commit')
+    committed = next(row for row in after['claims'] if row['body'] == PUBLIC + '-unknown-commit')
     linked = {e['media_asset_id'] for e in after['claim_evidence'] if e['claim_id'] == committed['id']}
     assert {decode_reference(m['storage_path']) for m in after['media_assets'] if m['id'] in linked} == retained
 
@@ -700,7 +702,7 @@ def http_checks(owner, accounts, operations, records, service, owners, fixture, 
         private(response)
         old = row
         response = client.patch(base + '/claims/' + row['id'], headers=headers('c'),
-            json=metadata(body=PRIVATE + '-http-edited') | {'revision': row['revision']})
+            json=metadata(body=PUBLIC + '-http-edited') | {'revision': row['revision']})
         assert response.status_code == 200, response.text
         row = response.json()['claim']
         assert row['media_items'] == old['media_items'] and row['event_kind'] == old['event_kind']

@@ -370,18 +370,20 @@ class CloudOwnership:
 
     def release(self, actor, individual, data):
         expected = expected_revision(data)
-        if set(data) != {'occurred_at', 'body', 'revision'}:
+        if set(data) not in ({'occurred_at', 'body', 'revision'}, {'occurred_at', 'body', 'revision', 'previous_owner_text'}):
             raise ValueError('Invalid Release.')
         date, body = data['occurred_at'], data['body']
-        if not isinstance(date, str) or not date.strip() or len(date) > 40:
-            raise ValueError('A Release date is required.')
-        date = validate_claim_date(date)
+        if date is not None and (not isinstance(date,str) or len(date)>40):raise ValueError('Invalid Release date.')
+        date = validate_claim_date(date.strip() if date and date.strip() else utcnow()[:10])
+        previous=data.get('previous_owner_text')
+        if previous is not None and (not isinstance(previous,str) or len(previous)>2000 or '\x00' in previous):raise ValueError('Invalid related person.')
+        previous=previous.strip() if previous else None
         if body is not None and (not isinstance(body, str) or len(body) > 2000 or '\x00' in body):
             raise ValueError('Invalid Release note.')
         body = body.strip() if body else None
         with self.transaction(actor, individual, write=True) as (repo, user, can_write):
             self._compare_owner(repo, individual, user, expected)
             _, claim = repo._create_ownership_claim_in_connection(repo.connection,
-                user, individual, 'release', date, body, None, utcnow())
+                user, individual, 'release', date, body, previous, utcnow())
             row = repo.connection.execute('SELECT * FROM claims WHERE id=?', (claim,)).fetchone()
             return {'claim': release_projection(row), 'ownership': self._view(repo, individual, user, can_write)}

@@ -40,7 +40,7 @@ function environment({initial=account(),search='',fullPage=false,catalogReplies=
   function catalogResponse(url,options,extra={}){publicCalls.push({url,options,...extra});return response(publicReplies.length?publicReplies.shift():guitar(url.split('/').at(-1)))}
   context.fetch=catalogResponse;
   vm.runInContext(fs.readFileSync(path.join(staticPath,'overlays.js'),'utf8'),context);
-  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-applications.js'),'utf8').replaceAll('export function','function'),context);
+  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-applications.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
   const create=context.createApplications;
   context.createApplications=args=>{componentArgs=args;component=create(args);return component};
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){}});
@@ -164,7 +164,7 @@ test('Account page handles Back/Forward query changes and malformed duplicate in
 
 test('Verified Admin catalog validation uses a fresh authorized read before Acquire',async()=>{
   const admin={...account(),user:{...account().user,role:'admin'}},e=environment({initial:admin});await select(e);e.start();e.replies.push(draft(),{items:[draft()],can_write:true});e.submit();await e.flush();
-  assert.equal(e.publicCalls.length,2);assert.equal(e.publicCalls.every(call=>call.authorized===true&&call.verified===true),true);assert.equal(posts(e).length,1);
+  assert.equal(e.publicCalls.length,2);assert.equal(e.publicCalls.every(call=>call.authorized===true&&call.verified===false),true);assert.equal(posts(e).length,1);
 });
 
 test('A denied bearer catalog read clears current private data and is never retried as Guest',async()=>{
@@ -187,4 +187,11 @@ test('Restored verified Admin retries the selection with identity after anonymou
 test('Explicit verification refresh rechecks a temporarily unavailable selection for the same verified account',async()=>{
   const e=environment({search:'?acquire=12',fullPage:true,catalogReplies:[denied(503),denied(503)]});await e.ready;await e.flush();assert.equal(e.status,'catalog.acquire_unavailable');const count=e.publicCalls.length;
   await e.control('refreshVerification').onclick();await e.flush();assert.equal(e.publicCalls.length,count+1);assert.equal(e.publicCalls.at(-1).authorized,true);assert.equal(e.status,'catalog.acquire_ready');assert.equal(posts(e).length,0);
+});
+
+
+test('Acquire entry rejects the current canonical owner even with an opaque authentication ID',async()=>{
+ const e=environment({initial:{...account('opaque-auth-id'),user:{...account('opaque-auth-id').user,id:'12'}},catalogReplies:[guitar('12',{presentation:{owner:{id:'12',display_name:'Owner'}}})]});
+ await e.component.openAcquire('12');
+ assert.equal(e.calls.filter(call=>call.options.method==='POST').length,0);assert.equal(e.dialog.open,false);
 });

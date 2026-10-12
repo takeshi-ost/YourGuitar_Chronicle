@@ -6,7 +6,7 @@ const page=(extra={})=>({items:[row()],next_after:null,unread_count:'1',can_writ
 const success=(extra={})=>({id:row().id,is_read:true,read_at:'2026-10-07T02:00:00Z',unread_count:'0',...extra});
 const denied=(status=403,code='account_inactive')=>({httpStatus:status,code});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
-function environment({initial=account(),fullPage=false}={}){
+function environment({initial=account(),fullPage=false,formal=false}={}){
  const ids=new Map(),listeners={};
  class Element{
   constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.style={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this._text='';this.classList={add(){},remove(){}};this.isConnected=true;this.tabIndex=0}
@@ -38,7 +38,7 @@ function environment({initial=account(),fullPage=false}={}){
  const context=vm.createContext({document,URL,URLSearchParams,Intl,Date,console,location:{search:'',origin:'https://ygc.example'},CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:(key,params={})=>key+(Object.keys(params).length?JSON.stringify(params):'')}});
  context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
  vm.runInContext(fs.readFileSync(path.join(assets,'overlays.js'),'utf8'),context);
- vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-applications.js'),'utf8').split('export function createApplications')[0].replaceAll('export function','function'),context);
+ vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-applications.js'),'utf8').replace(/^import .*;\n/gm,'').split('export function createApplications')[0].replaceAll('export function','function'),context);
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-notifications.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createNotifications;context.createNotifications=value=>{args=value;component=create(value);return component};
  const openTransfer=async id=>{opened.push(['transfer',id]);return client.authorizedFetch('/api/auth/transfers/'+id,{cache:'no-store',credentials:'omit',redirect:'error'},true)};
@@ -47,7 +47,7 @@ function environment({initial=account(),fullPage=false}={}){
  const openDisputeOption=async id=>{opened.push(['dispute_option',id]);return client.authorizedFetch('/api/auth/ownership-disputes/options/'+id,{cache:'no-store',credentials:'omit',redirect:'error'},true)};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{},failed(){},setCatalogIntent(){},openGuitar(){},openTransfer,openOwner,openDispute,openDisputeOption});
  Object.assign(context,{createFavorites:noOp,createVisibility:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,createDisputes:noOp,createIdentityCorrections:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
- let ready;if(fullPage)ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);else{component=context.createNotifications({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},openTransfer,openOwner,openDispute,openDisputeOption});ready=Promise.resolve()}
+ let ready;if(fullPage)ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);else{component=context.createNotifications({formal,auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},openTransfer,openOwner,openDispute,openDisputeOption});ready=Promise.resolve()}
  const control=id=>ids.get(id),buttons=()=>control('notificationList').querySelectorAll('button');
  return {component,context,client,control,calls,opened,ready,get list(){return control('notificationList')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setPage(value){defaultPage=value},holdLogout(value){logoutResult=value},
@@ -61,7 +61,7 @@ const markButton=e=>e.list.querySelectorAll('button').find(n=>n.dataset.notifica
 
 for(const initial of [null,account('1',false),account('1',true,'banned'),account('1',true,'disabled')])test('Ineligible session cannot read or mutate the inbox',async()=>{const e=environment({initial});await e.component.refresh();await e.control('notificationMarkAll').onclick();assert.equal(e.calls.length,0);assert.equal(e.control('selfNotifications').hidden,true)});
 
-test('Initial load keeps exact BIGINT strings and reads without side effects',async()=>{const e=environment();await e.component.refresh();assert.match(e.list.textContent,/Historical request/);assert.match(e.control('notificationUnread').textContent,/"1"/);assert.equal(e.list.children[0].dataset.notificationId,row().id);assert.equal(writes(e).length,0);assert.match(e.calls[0].url,/limit=25$/);for(const call of e.calls){assert.equal(call.verified,true);assert.equal(call.options.cache,'no-store');assert.equal(call.options.credentials,'omit');assert.equal(call.options.redirect,'error');assert.doesNotMatch(call.url,/recipient|viewer|user_id/)}});
+test('Initial load keeps exact BIGINT strings and reads without side effects',async()=>{const e=environment();await e.component.refresh();assert.match(e.list.textContent,/Historical request/);assert.match(e.control('notificationUnread').textContent,/"1"/);assert.equal(e.list.children[0].dataset.notificationId,row().id);assert.equal(writes(e).length,0);assert.match(e.calls[0].url,/limit=25$/);for(const call of e.calls){assert.equal(call.verified,false);assert.equal(call.options.cache,'no-store');assert.equal(call.options.credentials,'omit');assert.equal(call.options.redirect,'error');assert.doesNotMatch(call.url,/recipient|viewer|user_id/)}});
 
 test('Mark one is explicit, duplicate-click safe, and rereads only this inbox',async()=>{const e=environment();await e.component.refresh();e.queue(success(),'/read','POST');e.setPage(page({items:[row({is_read:true,read_at:success().read_at})],unread_count:'0'}));const first=e.mark();e.mark();await first;assert.equal(writes(e).length,1);assert.equal(writes(e)[0].url,'/api/auth/notifications/'+row().id+'/read');assert.equal(writes(e)[0].options.body,'{}');assert.equal(markButton(e).hidden,true);assert.equal(e.opened.length,0);assert.match(e.list.textContent,/2026-10-07T02/);assert.equal(e.control('notificationMarkAll').disabled,true)});
 
@@ -115,3 +115,13 @@ test('Legacy null body renders as empty text without rejecting the inbox',async(
 
 for(const outcome of [denied(400),denied(409),denied(422),Error('Unknown read outcome')])test('Read-update failure keeps supported target controls functional through fresh canonical reads while marks stay disabled',async()=>{const e=environment();await e.component.refresh();e.queue(outcome,'/read','POST');await e.mark();const open=e.list.querySelectorAll('button').find(n=>n.dataset.notificationOpen);assert.equal(open.disabled,false);assert.equal(markButton(e).disabled,true);e.queue({},'/transfers/');await open.onclick();assert.equal(e.opened.length,1);assert.match(e.calls.at(-1).url,/\/transfers\//);assert.equal(writes(e).length,1)});
 for(const target of [{kind:'dispute',case_id:'9223372036854775807'},{kind:'dispute_option',claim_id:'9007199254740993'}])test('Private dispute notice opens only a fresh authorized exact-ID read without accepting or marking read',async()=>{const e=environment();e.setPage(page({items:[row({destination:target})]}));await e.component.refresh();e.queue({},'/ownership-disputes/');await e.open();assert.equal(e.opened.length,1);assert.equal(e.opened[0][0],target.kind);assert.equal(writes(e).length,0);assert.equal(markButton(e).hidden,false);assert.match(e.calls.at(-1).url,target.kind==='dispute'?/\/ownership-disputes\/9223372036854775807$/:/\/ownership-disputes\/options\/9007199254740993$/);assert.equal(e.calls.at(-1).options.credentials,'omit');assert.equal(e.calls.at(-1).verified,true)});
+
+
+test('Formal notification count is unknown until a successful read and resets on failure or identity change',async()=>{
+ const e=environment({formal:true}),heading=e.control('notificationHeading'),held=deferred();
+ assert.equal(heading.dataset.countPending,'true');e.queue(held.promise);const job=e.component.refresh();
+ assert.equal(heading.dataset.countPending,'true');held.resolve(page({items:[],unread_count:'0'}));await job;
+ assert.equal(heading.dataset.countPending,'false');e.queue(new Error('network failure'));await e.component.refresh();
+ assert.equal(heading.dataset.countPending,'true');await e.component.refresh();assert.equal(heading.dataset.countPending,'false');
+ e.changeAccount(null);assert.equal(heading.dataset.countPending,'true');
+});

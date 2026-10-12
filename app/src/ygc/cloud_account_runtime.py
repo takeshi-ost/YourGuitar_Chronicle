@@ -1,5 +1,6 @@
 """Explicit Cloud Run entry point; never starts local WebUI or migrations."""
 import os
+from dataclasses import replace
 import re
 import uvicorn
 from ygc.cloud_account_api import create_app
@@ -24,6 +25,9 @@ def application():
         if not settings.host.startswith('/cloudsql/' + project + ':'):
             raise ValueError('Cloud SQL and Identity Platform projects must match.')
     storage = CloudStorage(StorageSettings.from_environment(project))
+    from ygc.db.postgres_pool import RuntimeConnectionPools
+    pools = RuntimeConnectionPools(settings)
+    settings = replace(settings, pool=pools)
     backup_client = None
     maintenance_client = None
     crawl_client = None
@@ -42,6 +46,7 @@ def application():
                       web_config={'apiKey': os.environ.get('YGC_FIREBASE_API_KEY', ''),
                                   'authDomain': os.environ.get('YGC_FIREBASE_AUTH_DOMAIN', '')})
     except Exception:
+        pools.close()
         if backup_client is not None:backup_client.close()
         if maintenance_client is not None:maintenance_client.close()
         if crawl_client is not None:crawl_client.close()
@@ -50,12 +55,29 @@ def application():
         raise
 
 
+class CloudRunHTTPS:
+    """Cloud Run terminates external TLS before the container's HTTP socket.
+
+    Only the Cloud Run runtime installs this adapter. Do not trust client-sent
+    Forwarded/Host headers or change the peer address to recover the scheme.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] == 'http':
+            scope = dict(scope, scheme='https')
+        await self.app(scope, receive, send)
+
+
 def main():
     try:
         port = int(os.environ.get('PORT', '8080'))
         if not 1 <= port <= 65535:
             raise ValueError('Invalid PORT.')
         app = application()
+        if os.environ.get('K_SERVICE'):
+            app = CloudRunHTTPS(app)
     except Exception:
         raise SystemExit('Cloud account startup configuration is invalid.') from None
     uvicorn.run(app, host='0.0.0.0', port=port, workers=1, access_log=False)

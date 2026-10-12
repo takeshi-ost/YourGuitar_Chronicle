@@ -23,6 +23,7 @@ class PostgresSettings:
     password: str = field(repr=False)
     port: int = 5432
     prefix: str = 'ygc_'
+    pool: object = field(default=None, repr=False, compare=False)
 
     @classmethod
     def from_environment(cls, password=None):
@@ -47,17 +48,44 @@ class PostgresSettings:
         return self.prefix + target
 
 
+def connection_parameters(settings, target):
+    from psycopg.rows import dict_row
+    return dict(host=settings.host, port=settings.port,
+        dbname=settings.database(target), user=settings.user,
+        password=settings.password, connect_timeout=10,
+        application_name='ygc-postgres', row_factory=dict_row)
+
+
+def connection_class():
+    # Cache one subclass for prepared-statement and pool type consistency.
+    import psycopg
+    from ygc.request_metrics import measure
+    class TimedConnection(psycopg.Connection):
+        def execute(self, *args, **kwargs):
+            with measure('sql_execute'):
+                return super().execute(*args, **kwargs)
+    return TimedConnection
+
+# The optional PostgreSQL dependency is imported only when opening a store.
+from functools import lru_cache
+connection_class = lru_cache(maxsize=1)(connection_class)
+
+
 @contextmanager
 def connect(settings, target):
-    import psycopg
-    from psycopg.rows import dict_row
-    # Separate parameters, never a password-bearing DSN in errors or logs.
-    with psycopg.connect(host=settings.host, port=settings.port,
-                         dbname=settings.database(target), user=settings.user,
-                         password=settings.password, connect_timeout=10,
-                         application_name='ygc-postgres', row_factory=dict_row) as con:
-        con.execute('SET statement_timeout = 60000')
-        yield con
+    from ygc.request_metrics import measure
+    # Jobs/CLI/migrations keep independent connections. Only the HTTP runtime
+    # supplies a lifespan-owned pool. No account/mode/SQL result is cached.
+    if settings.pool is not None:
+        with settings.pool.connection(target) as con:
+            con.execute('SET LOCAL statement_timeout = 60000')
+            yield con
+    else:
+        with measure('db_acquire'):
+            con = connection_class().connect(**connection_parameters(settings, target))
+        with con:
+            con.execute('SET statement_timeout = 60000')
+            yield con
 
 
 def schema(target):

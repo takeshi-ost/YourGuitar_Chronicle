@@ -55,9 +55,11 @@ def application_router(verifier,service):
                     import json
                     data=json.loads(raw)
                     if not isinstance(data,dict):raise ValueError()
-                    if action in ('cancel','retry'):
+                    if action in ('cancel','retry','replace_photos'):
                         if data:raise ValueError()
-                        result=await run_in_threadpool(service.cancel if action=='cancel' else service.retry,who,revision)
+                        result=await run_in_threadpool(getattr(service,action),who,revision)
+                    elif action=='preview':result=await run_in_threadpool(service.preview,who,data)
+                    elif action=='keep':result=await run_in_threadpool(service.keep_preview,who,data)
                     elif action=='submit':
                         if service.storage is None:raise HTTPException(503,'Image storage unavailable.',headers=headers)
                         result=await run_in_threadpool(service.submit,who,revision,data)
@@ -75,10 +77,16 @@ def application_router(verifier,service):
             if zone_token is not None:viewer_timezone.reset(zone_token)
     @router.api_route('/api/auth/applications',methods=['GET','POST'])
     async def applications(request:Request):return await handle(request)
+    @router.post('/api/auth/applications/preview')
+    async def preview(request:Request):return await handle(request,action='preview')
+    @router.post('/api/auth/applications/keep')
+    async def keep(request:Request):return await handle(request,action='keep')
     @router.post('/api/auth/applications/{revision}/submit')
     async def submit(request:Request,revision:str):return await handle(request,revision,'submit')
     @router.post('/api/auth/applications/{revision}/cancel')
     async def cancel(request:Request,revision:str):return await handle(request,revision,'cancel')
+    @router.post('/api/auth/applications/{revision}/replace_photos')
+    async def replace_photos(request:Request,revision:str):return await handle(request,revision,'replace_photos')
     @router.post('/api/auth/applications/{revision}/retry')
     async def retry(request:Request,revision:str):return await handle(request,revision,'retry')
     @router.api_route('/api/auth/applications/{revision}/photos/{role}',methods=['GET','POST'])

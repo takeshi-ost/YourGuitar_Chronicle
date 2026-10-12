@@ -1,7 +1,7 @@
 /* Navigate the last clicked list with Up / Down without hijacking form controls. */
 (() => {
   'use strict';
-  const listSelector = '#individualBody, #unverifiedAcquireBody, #userBody, '
+  const listSelector = '#catalogRows, #favoritesList, .self-guitar-list, #individualBody, #unverifiedAcquireBody, #userBody, '
     + '#newDiscoveryList, #notificationList, #userChronicleList, '
     + '[id^="profileRows-"], .user-guitar-list';
   const itemSelector = 'tr.clickable, .discovery-item, .notification-item, '
@@ -117,11 +117,11 @@
         label.className = 'list-item-count';
         title.append(label);
       }
-      const text = globalThis.YGCI18n?.t('list.item_count',{count,formattedCount:globalThis.YGCI18n.number(count)},count+' items') ?? count+' items';
+      const text = title.dataset.countPending==='true' ? '—' : globalThis.YGCI18n?.t('list.item_count',{count,formattedCount:globalThis.YGCI18n.number(count)},count+' items') ?? count+' items';
       if (label.textContent !== text) label.textContent = text;
     }
   }
-  new MutationObserver(updateCounts).observe(document.body, {childList: true, subtree: true});
+  new MutationObserver(updateCounts).observe(document.body, {childList: true, subtree: true, attributes:true, attributeFilter:['data-count-pending']});
   updateCounts();
 })();
 

@@ -7,10 +7,10 @@ const preferences=(extra={})=>({profile_revision:'9007199254740993',fields:{birt
 const success=(favorite=false,id=guitar().id)=>({individual_id:id,favorite});
 const denied=(httpStatus=403,code='account_inactive')=>({httpStatus,code});
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
-function environment({kind='favorites',initial=account(),fullPage=false,tableLayout=false}={}){
+function environment({kind='favorites',initial=account(),fullPage=false,tableLayout=false,compact=false}={}){
  const ids=new Map(),listeners={};
  class Element{
-  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this._text=''}
+  constructor(tag='div'){this.classList={add(){},toggle(){}};this.tagName=tag.toUpperCase();this.children=[];this.listeners={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.disabled=false;this._text=''}
   set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
   set textContent(value){this._text=String(value);this.children=[]}get textContent(){return this._text+this.children.map(n=>n.textContent).join('')}
   set innerHTML(_){throw Error('Private values must remain text')}
@@ -34,18 +34,19 @@ function environment({kind='favorites',initial=account(),fullPage=false,tableLay
    else{assert.equal(options.method||'GET','GET','Writes require explicit fixture');value=url.startsWith('/api/auth/favorites?')?listPage:url==='/api/auth/profile/visibility'?profile:success(favorite,url.split('/').at(-1))}
    if(value instanceof Error)throw value;return value?.httpStatus?{ok:false,status:value.httpStatus,json:async()=>({detail:{code:value.code,message:'SECRET SQL'}})}:{ok:true,json:async()=>value};
   }};
- for(const filename of ['cloud-account-favorites.js','cloud-account-visibility.js'])vm.runInContext(fs.readFileSync(path.join(assets,filename),'utf8').replaceAll('export function','function'),context);
+ for(const filename of ['cloud-account-favorites.js','cloud-account-visibility.js'])vm.runInContext(fs.readFileSync(path.join(assets,filename),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
+ if(tableLayout){vm.runInContext(fs.readFileSync(path.join(assets,'profile-list.js'),'utf8'),context);context.YGCProfileList.sizeGuitarList=()=>{};vm.runInContext(fs.readFileSync(path.join(assets,'cloud-profile-list.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context)}
  const args={tableLayout,auth:()=>client,state:()=>client.account,busy:()=>busy,work:async fn=>{busy=true;component?.render();try{return await fn()}finally{busy=false;component?.render()}}};
  let ready=Promise.resolve();
  if(fullPage){
   const noOp=()=>({render(){},clear(){cleared.push(true)},refresh:async()=>{},refreshHistory:async()=>{},failed(){},setCatalogIntent(){}});
   Object.assign(context,{loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,createDisputes:noOp,createIdentityCorrections:noOp,createNotifications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
   ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);
- }else component=kind==='favorites'?context.createFavorites(args):kind==='visibility'?context.createVisibility(args):context.createFavoriteControl({...args,root:detail,document,t:context.YGCI18n.t,canWrite:()=>writeAllowed});
+ }else component=kind==='favorites'?context.createFavorites(args):kind==='visibility'?context.createVisibility(args):context.createFavoriteControl({...args,root:detail,document,compact,t:context.YGCI18n.t,canWrite:()=>writeAllowed});
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,ready,cleared,root:detail,
   sdkSwitch(next){client.account=null;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},
-  queue(value,match=null,method=null){replies.push({value,match,method})},setList(value){listPage=value},setProfile(value){profile=value},setFavorite(value){favorite=value},setWriteAllowed(value){writeAllowed=value;component.render()},holdLogout(value){logoutResult=value},
+  queue(value,match=null,method=null){replies.push({value,match,method})},setList(value){listPage=value},setProfile(value){profile=value},setFavorite(value){favorite=value},setBusy(value){busy=value;component.render()},setWriteAllowed(value){writeAllowed=value;component.render()},holdLogout(value){logoutResult=value},
   changeAccount(next){client.account=next;client.signedIn=Boolean(next);component?.render()},event(key,event={}){return Promise.all((listeners[key]||[]).map(fn=>fn(event)))},
   choose(key,value){const input=control('visibility_'+key);input.value=value;input.onchange()},submit(){return control('visibilityForm').onsubmit({preventDefault(){}})},
   async flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve))}
@@ -54,7 +55,7 @@ function environment({kind='favorites',initial=account(),fullPage=false,tableLay
 const writes=e=>e.calls.filter(c=>c.options.method==='PUT');
 for(const initial of [null,account('1',false),account('1',true,'disabled'),account('1',true,'banned')])test('Ineligible accounts cannot read favorites or preferences',async()=>{for(const kind of ['favorites','visibility']){const e=environment({kind,initial});await e.component.refresh();assert.equal(e.calls.length,0);assert.equal(e.control(kind==='favorites'?'selfFavorites':'selfVisibility').hidden,true)}});
 
-test('Favorites list is private bounded exact-ID text with only public-detail links',async()=>{const e=environment();await e.component.refresh();assert.equal(e.control('favoritesList').children[0].dataset.favoriteId,guitar().id);assert.match(e.control('favoritesCount').textContent,/"1"/);const link=e.control('favoritesList').querySelectorAll('a')[0];assert.equal(link.href,'/guitars/'+guitar().id);assert.equal(e.control('favoritesList').querySelectorAll('img,button').length,0);assert.equal(e.calls[0].url,'/api/auth/favorites?limit=25');assert.equal(e.calls[0].verified,true);for(const key of ['cache','credentials','redirect'])assert.equal(e.calls[0].options[key],{cache:'no-store',credentials:'omit',redirect:'error'}[key]);assert.equal(writes(e).length,0)});
+test('Favorites list is private bounded exact-ID text with only public-detail links',async()=>{const e=environment();await e.component.refresh();assert.equal(e.control('favoritesList').children[0].dataset.favoriteId,guitar().id);assert.match(e.control('favoritesCount').textContent,/"1"/);const link=e.control('favoritesList').querySelectorAll('a')[0];assert.equal(link.href,'/guitars/'+guitar().id);assert.equal(e.control('favoritesList').querySelectorAll('img,button').length,0);assert.equal(e.calls[0].url,'/api/auth/favorites?limit=25');assert.equal(e.calls[0].verified,false);for(const key of ['cache','credentials','redirect'])assert.equal(e.calls[0].options[key],{cache:'no-store',credentials:'omit',redirect:'error'}[key]);assert.equal(writes(e).length,0)});
 test('Favorites Previous and Next use descending exact string keyset pages',async()=>{const e=environment();e.setList(favorites({next_after:guitar().id,total:'27'}));await e.component.refresh();e.queue(favorites({items:[guitar({id:'9007199254740993'})]}),'after=');await e.control('favoritesNext').onclick();assert.equal(e.control('favoritesList').children.length,1);assert.equal(e.control('favoritesPrevious').disabled,false);assert.match(e.calls.at(-1).url,/after=9007199254741009&limit=25$/);await e.control('favoritesPrevious').onclick();assert.equal(e.control('favoritesList').children[0].dataset.favoriteId,guitar().id);assert.equal(e.control('favoritesPrevious').disabled,true)});
 test('Favorite text is inert and 200 Unicode code points remain intact',async()=>{const e=environment();e.setList(favorites({items:[guitar({model:'<img src=x onerror=secret>',manufacturer:'🎸'.repeat(200)})]}));await e.component.refresh();assert.match(e.control('favoritesList').textContent,/<img/);assert.equal(e.control('favoritesList').querySelectorAll('img,script').length,0)});
 for(const patch of [{id:9007199254741009},{id:'1\n'},{id:'01'},{id:'9223372036854775808'},{photo:'https://private'},{owner:'SECRET'},{model:'🎸'.repeat(201)},{year:1960},{manufacturer:'bad\ntext'},{finish:'\ud800'}])test('Malformed or extra favorite fields fail closed '+Object.keys(patch),async()=>{const e=environment();e.setList(favorites({items:[guitar(patch)]}));await e.component.refresh();assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('favoritesCount').textContent,'')});
@@ -85,7 +86,7 @@ test('External SDK identity changes clear every account-shell private component'
  assert.equal(e.control('selfFavorites').hidden,true);assert.equal(e.control('selfVisibility').hidden,true);assert.equal(e.control('accountSummary').hidden,true);assert.ok(e.cleared.length-before>=9);assert.match(e.control('status').textContent,/session_changed/);assert.equal(writes(e).length,0);
 });
 test('BFCache account return rechecks canonical identity before refreshing private sections',async()=>{
- const e=environment({fullPage:true});await e.ready;await e.event('pagehide');assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('visibilityValues').children.length,0);const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('selfFavorites').hidden,true);e.client.account=account('2');e.setList(favorites({items:[guitar({model:'B guitar'})]}));held.resolve(e.client.account);await show;assert.match(e.control('favoritesList').textContent,/B guitar/);assert.equal(e.calls.at(-1).owner,'uuid-2');assert.equal(writes(e).length,0);
+ const e=environment({fullPage:true});await e.ready;await e.event('pagehide');assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('visibilityValues').children.length,0);const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('selfFavorites').hidden,true);assert.equal(e.control('cloudAccountForm').hidden,true);assert.equal(e.control('authActions').hidden,true);e.client.account=account('2');e.setList(favorites({items:[guitar({model:'B guitar'})]}));held.resolve(e.client.account);await show;assert.match(e.control('favoritesList').textContent,/B guitar/);assert.equal(e.calls.at(-1).owner,'uuid-2');assert.equal(writes(e).length,0);
 });
 test('A late BFCache restore after a newer pagehide cannot reload private sections',async()=>{
  const e=environment({fullPage:true});await e.ready;await e.event('pagehide');const held=deferred();e.client.restore=()=>held.promise;const show=e.event('pageshow',{persisted:true});await e.event('pagehide');const calls=e.calls.length;held.resolve(e.client.account);await show;assert.equal(e.control('favoritesList').children.length,0);assert.equal(e.control('visibilityValues').children.length,0);assert.equal(e.calls.length,calls);
@@ -93,6 +94,74 @@ test('A late BFCache restore after a newer pagehide cannot reload private sectio
 
 
 test('Formal Favorite table retains exact private IDs and bounded text without changing ownership',async()=>{
- const e=environment({tableLayout:true});await e.component.refresh();const list=e.control('favoritesList');assert.equal(list.tagName,'TBODY');assert.equal(list.children[0].tagName,'TR');assert.equal(list.children[0].children.length,5);assert.equal(list.children[0].children[0].children[0].href,'/guitars/9007199254741009');assert.equal(writes(e).length,0);
+ const e=environment({tableLayout:true});await e.component.refresh();const list=e.control('favoritesList');assert.equal(list.tagName,'TBODY');assert.equal(list.children[0].tagName,'TR');assert.equal(list.children[0].children.length,8);assert.equal(list.children[0].children[0].children[0].href,'/guitars/9007199254741009');assert.equal(writes(e).length,0);
  e.sdkSwitch(account('2'));e.component.render();assert.equal(list.children.length,0);
 });
+
+test('List/detail hearts share confirmed state, fence concurrent writes and propagate unknown outcomes',async()=>{
+ const e=environment({kind:'control'}),doc=e.context.document,root=doc.createElement('span');
+ const peer=e.context.createFavoriteControl({auth:()=>e.client,state:()=>e.client.account,root,compact:true,idPrefix:'peer_',document:doc,t:key=>key});
+ await e.component.select(guitar().id);await peer.select(guitar().id);
+ const held=deferred();e.queue(held.promise,null,'PUT');const first=e.control('favoriteToggle').onclick();
+ assert.equal(e.control('peer_favoriteToggle').disabled,true);await e.control('peer_favoriteToggle').onclick();assert.equal(writes(e).length,1);
+ held.resolve(success(true));await first;assert.equal(e.control('peer_favoriteToggle')['aria-pressed'],'true');assert.equal(e.control('peer_favoriteToggle').disabled,false);
+ e.queue(Error('lost result'),null,'PUT');await e.control('peer_favoriteToggle').onclick();
+ assert.equal(e.control('favoriteToggle').disabled,true);assert.match(e.control('favoriteStatus').textContent,/uncertain/);assert.equal(e.control('peer_favoriteRefresh').hidden,false);
+ e.setFavorite(false);await e.control('favoriteRefresh').onclick();assert.equal(e.control('peer_favoriteToggle').disabled,false);assert.equal(e.control('peer_favoriteToggle')['aria-pressed'],'false');
+ e.changeAccount(account('2'));peer.render();assert.equal(root.hidden,true);
+});
+
+test('A confirmed peer mutation invalidates an older held favorite GET',async()=>{
+ const e=environment({kind:'control'}),doc=e.context.document,root=doc.createElement('span');
+ const peer=e.context.createFavoriteControl({auth:()=>e.client,state:()=>e.client.account,root,compact:true,idPrefix:'peer_',document:doc,t:key=>key});
+ await e.component.select(guitar().id);const held=deferred();e.queue(held.promise,null,'GET');const read=peer.select(guitar().id);
+ e.queue(success(true),null,'PUT');await e.control('favoriteToggle').onclick();held.resolve(success(false));await read;
+ assert.equal(e.control('peer_favoriteToggle')['aria-pressed'],'true');assert.equal(e.control('peer_favoriteToggle').disabled,false);
+});
+
+
+test('snapshot reads share the entire descending collection, exact IDs, and no completed cache',async()=>{
+ const e=environment({kind:'control'}),read=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account});
+ const held=deferred();e.queue(held.promise,'limit=50');
+ const first=read(guitar().id),absent=read('1');assert.equal(e.calls.length,1);
+ e.queue(favorites({items:[guitar({id:'2'})],total:'2',next_after:null}),'after=');
+ held.resolve(favorites({total:'2',next_after:guitar().id}));
+ assert.equal((await first).favorite,true);assert.equal((await absent).favorite,false);assert.equal(e.calls.length,2);
+ e.setList(favorites({items:[],total:'0'}));assert.equal((await read(guitar().id)).favorite,false);assert.equal(e.calls.length,3);
+});
+for(const value of [favorites({total:'2'}),favorites({items:[guitar(),guitar()],total:'2'}),favorites({next_after:'1'}),{items:[],total:'0',next_after:null,private:'unexpected'},denied(403)])test('invalid or denied snapshot never guesses false '+JSON.stringify(value),async()=>{
+ const e=environment({kind:'control'}),read=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account});e.queue(value,'limit=50');await assert.rejects(read('1'));
+});
+test('snapshot rejects a late identity response and remains invalidated by concurrent favorite writes',async()=>{
+ const e=environment({kind:'control'}),read=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account});
+ const held=deferred();e.queue(held.promise,'limit=50');const first=read('1');e.changeAccount(account('2'));held.resolve(favorites());await assert.rejects(first);
+ await e.component.select(guitar().id);const old=deferred();e.queue(old.promise,'limit=50');const second=read('1');e.queue(success(true),null,'PUT');await e.control('favoriteToggle').onclick();old.resolve(favorites());await assert.rejects(second);
+});
+test('row initial snapshot supports a heart while explicit refresh uses the single-guitar authority',async()=>{
+ const e=environment({kind:'control'}),read=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account});
+ await e.component.select(guitar().id,read);assert.equal(e.control('favoriteToggle')['aria-pressed'],'true');assert.equal(e.calls.length,1);assert.match(e.calls[0].url,/limit=50/);
+ e.setFavorite(false);await e.control('favoriteRefresh').onclick();assert.equal(e.control('favoriteToggle')['aria-pressed'],'false');assert.equal(e.calls.at(-1).url,'/api/auth/favorites/'+guitar().id);
+});
+
+
+test('Independent row readers in the same page share an in-flight canonical personal collection',async()=>{
+ const e=environment({kind:'control'}),one=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account}),two=e.context.createFavoriteSnapshotReader({auth:()=>e.client,state:()=>e.client.account});
+ const held=deferred();e.queue(held.promise,'limit=50');const a=one(guitar().id),b=two('1');assert.equal(e.calls.length,1);held.resolve(favorites());assert.equal((await a).favorite,true);assert.equal((await b).favorite,false);
+ e.setList(favorites({items:[],total:'0'}));assert.equal((await two(guitar().id)).favorite,false);assert.equal(e.calls.length,2);
+});
+
+test('Formal Favorite table paginates 50 entries and shares one further snapshot across all row hearts',async()=>{
+ const e=environment({tableLayout:true});e.setList(favorites({items:Array.from({length:51},(_,i)=>guitar({id:String(51-i)})),total:'51'}));
+ // Server fixture must apply the same 50-entry keyset boundary as the real API.
+ e.queue(favorites({items:Array.from({length:50},(_,i)=>guitar({id:String(51-i)})),total:'51',next_after:'2'}),'limit=50');
+ e.queue(favorites({items:[guitar({id:'1'})],total:'51',next_after:null}),'after=2');
+ const held=deferred();e.queue(held.promise,'limit=50');
+ await e.component.refresh();assert.equal(e.calls.length,3);assert.equal(e.control('favoritesList').children.length,51);
+ held.resolve(favorites({items:[],total:'0'}));await new Promise(r=>setImmediate(r));
+ assert.ok(e.control('favoritesList').children.every(row=>row.children[1].children[0].children[0].disabled===false));
+});
+
+test('Compact heart distinguishes transient busy from service restriction and preserves its value',async()=>{const e=environment({kind:'control',compact:true});e.setFavorite(true);await e.component.select(guitar().id);const before=e.calls.length;e.setBusy(true);assert.equal(e.control('favoriteToggle').disabled,true);assert.equal(e.control('favoriteToggle').textContent,'♥');assert.equal(e.control('favoriteStatus').textContent,'');await e.control('favoriteToggle').onclick();assert.equal(e.calls.length,before);e.setBusy(false);assert.equal(e.control('favoriteToggle').disabled,false);e.setWriteAllowed(false);assert.equal(e.control('favoriteStatus').textContent,'favorites.restricted');assert.equal(e.control('favoriteStatus').className,'favorite-status-compact');assert.equal(e.control('favoriteToggle').title,'favorites.restricted');assert.equal(e.control('favoriteToggle')['aria-describedby'],'favoriteStatus');});
+test('Compact uncertain write exposes an accessible icon retry without long in-flow text',async()=>{const e=environment({kind:'control',compact:true});await e.component.select(guitar().id);e.queue(denied(503),null,'PUT');await e.control('favoriteToggle').onclick();assert.equal(e.control('favoriteToggle').disabled,true);assert.equal(e.control('favoriteStatus').className,'favorite-status-compact');assert.equal(e.control('favoriteStatus').hidden,false);assert.equal(e.control('favoriteRefresh').textContent,'↻');assert.equal(e.control('favoriteRefresh')['aria-label'],'action.refresh');assert.equal(e.control('favoriteRefresh').hidden,false);e.setFavorite(true);await e.control('favoriteRefresh').onclick();assert.equal(e.control('favoriteToggle').textContent,'♥');assert.equal(e.control('favoriteRefresh').hidden,true);});
+
+test('Selecting a compact heart during another operation still completes its read',async()=>{const e=environment({kind:'control',compact:true});e.setBusy(true);e.setFavorite(true);await e.component.select(guitar().id);assert.equal(e.calls.length,1);assert.equal(e.control('favoriteToggle').textContent,'♥');assert.equal(e.control('favoriteToggle').disabled,true);e.setBusy(false);assert.equal(e.control('favoriteToggle').disabled,false);assert.equal(e.calls.length,1);});

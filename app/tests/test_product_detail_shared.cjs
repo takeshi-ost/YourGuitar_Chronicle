@@ -32,6 +32,11 @@ assert.equal(detail.orderedClaims([
   {id: 4, occurred_at: '2026-01-01', created_at: '2026-09-01'},
   {id: 5, occurred_at: '2026-08-01', created_at: '2026-08-02'},
 ]).map(c => c.id).join(','), '5,4');
+assert.equal(detail.orderedClaims([
+  {id:'9007199254740992',occurred_at:'2026-01-01'},
+  {id:'9007199254740993',occurred_at:'2026-01-01'},
+  {id:'9007199254740994',claim_type:'identity_correction',target_claim_id:'9007199254740992',occurred_at:'2026-02-01'},
+]).map(c=>c.id).join(','),'9007199254740993,9007199254740992,9007199254740994');
 for (const page of ['index_html', 'user_view_html']) {
   const markup = require('./page_source.cjs')('app/src/ygc/static/' + page + '.html');
   assert.match(markup, /<script src="\/assets\/product-detail\.js\?v=shared-ui-v2" defer><\/script>/);

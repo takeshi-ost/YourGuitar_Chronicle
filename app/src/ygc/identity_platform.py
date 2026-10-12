@@ -61,7 +61,9 @@ class IdentityPlatformIdentity:
         if not isinstance(bearer_token, str) or not bearer_token.strip():
             raise PermissionError('An Identity Platform ID token is required.')
         try:
-            claims = self._verify(bearer_token, check_revoked=True)
+            from ygc.request_metrics import measure
+            with measure('identity'):
+                claims = self._verify(bearer_token, check_revoked=True)
         except Exception:
             # SDK exceptions may contain credential details. Keep public errors generic.
             raise PermissionError('Identity token verification failed.') from None

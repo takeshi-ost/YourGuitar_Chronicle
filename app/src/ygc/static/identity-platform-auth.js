@@ -1,12 +1,95 @@
 // Google credentials go only to the official SDK. API calls carry an ID token.
 (() => {
-  function create({sdk, auth, fetch: request=globalThis.fetch.bind(globalThis), origin=location.origin}){
+  function create({sdk, auth, fetch: request=globalThis.fetch.bind(globalThis), origin=location.origin,storage,now=()=>Date.now()}){
     let initialization, account=null, accountUser=null, pending=Promise.resolve();
     let observedUser=auth.currentUser;
+    // Display data only: canonical identity and operation permissions never come
+    // from this tab-scoped, short-lived cache. Every document restores /me first.
+    const storageKey='ygc-self-display-v1';
+    try{storage??=globalThis.sessionStorage}catch{/* Storage is optional. */}
+    let dataOwner=null,dataEpoch=0,dataWrites=0,entries={};
+    const dataListeners=new Set();
+    globalThis.addEventListener?.('pagehide',()=>{dataEpoch++;dataGate=null});
+    const ttl=path=>path==='/api/auth/settings'?30000:path==='/api/auth/profile/summary'?15000:
+      /^\/api\/auth\/(notifications|favorites)(?:\?|$)/.test(path)&&!path.split('?')[0].slice('/api/auth/'.length).includes('/')?10000:0;
+    function invalidateUserData(reason='refresh',error=null){
+      dataEpoch++;entries={};try{storage?.removeItem(storageKey)}catch{}
+      if(reason==='blocked'||reason==='changed')for(const listener of dataListeners){try{listener(reason,error)}catch{}}
+    }
+    function bindUserData(){
+      const user=auth.currentUser,valid=account?.user?.app_user_id&&account.identity?.email_verified===true;
+      const owner=valid&&typeof user?.uid==='string'?JSON.stringify([origin,user.uid,auth.tenantId||'',account.user.app_user_id,account.user.role||'',account.user.status||'']):null;
+      if(owner===dataOwner)return;
+      dataOwner=owner;entries={};dataEpoch++;
+      try{
+        const raw=storage?.getItem(storageKey);if(!raw)return;
+        if(raw.length>512*1024)throw Error('Oversize');
+        const saved=JSON.parse(raw);if(!owner||saved.owner!==owner||!saved.entries||Array.isArray(saved.entries)||Object.keys(saved.entries).length>64)throw Error('Wrong cache owner');
+        for(const [path,row] of Object.entries(saved.entries))if(ttl(path)&&row&&typeof row.body==='string'&&row.body.length<=65536&&Number.isFinite(row.at)&&row.at<=now()&&now()-row.at<ttl(path)){JSON.parse(row.body);entries[path]=row}
+      }catch{try{storage?.removeItem(storageKey)}catch{}}
+    }
+    function saveUserData(){
+      if(!dataOwner)return;
+      const live=Object.entries(entries).filter(([path,row])=>now()>=row.at&&now()-row.at<ttl(path)).slice(-64);entries=Object.fromEntries(live);
+      try{const raw=JSON.stringify({owner:dataOwner,entries});if(raw.length<=512*1024)storage?.setItem(storageKey,raw);else invalidateUserData()}catch{/* Memory reuse still works when storage is unavailable. */}
+    }
+    async function userDataGate(){
+      // Reuse saves expensive private reads, not the service-mode check. Concurrent
+      // cache hits share only this in-flight check, never a completed decision.
+      const response=await request(new URL('/api/service/status',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
+      if(!response.ok)throw Object.assign(Error('Service status unavailable.'),{status:503});
+      const status=await response.json();
+      if(!['normal','read_only','offline','admin_only'].includes(status?.mode))throw Object.assign(Error('Invalid service status.'),{status:503});
+      return status.mode;
+    }
+    let dataGate=null;
+    async function displayRead(path,options,forceRefresh){
+      const url=new URL(path,origin),key=url.pathname+url.search;
+      const reusable=url.origin===origin&&options.reuseUserData===true&&!forceRefresh&&!options.signal&&!options.body&&(!options.headers||[...new Headers(options.headers)].length===0)&&ttl(key)&&accountUser===auth.currentUser&&dataOwner&&!dataWrites;
+      const {reuseUserData,...requestOptions}=options;
+      const owner=dataOwner,version=dataEpoch,user=auth.currentUser;
+      const current=()=>version===dataEpoch&&owner===dataOwner&&user===auth.currentUser&&accountUser===user&&!dataWrites;
+      if(ttl(key)&&!options.reuseUserData){delete entries[key];saveUserData()}
+      const row=reusable?entries[key]:null;
+      if(row&&row.at<=now()&&now()-row.at<ttl(key)){
+        try{
+          if(!dataGate){const pending=userDataGate();dataGate=pending;pending.finally(()=>{if(dataGate===pending)dataGate=null}).catch(()=>{})}
+          const mode=await dataGate;if(!current())throw changedIdentity();
+          if(mode==='offline'){invalidateUserData('blocked',{status:403,code:'service_restricted'});return new Response(JSON.stringify({detail:{code:'service_restricted',message:'Service access is temporarily restricted.'}}),{status:403,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}
+          if(mode==='normal'||mode==='read_only'){
+            // A cached notification DTO must never retain an enabled write
+            // control after the service has entered Read Only.
+            const data=JSON.parse(row.body);
+            if(mode==='read_only'&&url.pathname==='/api/auth/notifications')data.can_write=false;
+            return new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+          }
+          invalidateUserData(); // Admin Only requires the ordinary authorized API.
+        }catch(error){invalidateUserData('blocked',error);throw error}
+      }
+      const response=await dispatchApi(path,requestOptions,forceRefresh);
+      if([401,403,503].includes(response.status)){
+        const error=await response.clone().json().catch(()=>null);
+        const blocked=response.status===401||error?.detail?.code==='service_restricted'||error?.code==='service_restricted'||response.status===403&&Boolean(ttl(key));
+        invalidateUserData(blocked?'blocked':'failure',{status:response.status,code:error?.detail?.code||error?.code});return response;
+      }
+      if(reusable&&current()&&response.status===200&&response.headers.get('content-type')?.split(';')[0]==='application/json'){
+        const body=await response.clone().text();
+        if(current()&&body.length<=65536){try{
+          const data=JSON.parse(body);
+          const complete=url.pathname!=='/api/auth/favorites'||!url.searchParams.has('after')&&data.next_after===null&&Array.isArray(data.items)&&String(data.items.length)===data.total;
+          if(complete){entries[key]={at:now(),body};saveUserData()}
+        }catch{}}
+      }
+      return response;
+    }
     const identityListeners=new Set();
-    function identityChanged(){
+    const sharedReads=new Map();
+    function identityChanged(initial=false){
       if(observedUser===auth.currentUser)return;
       observedUser=auth.currentUser;account=null;accountUser=null;
+      sharedReads.clear();dataOwner=null;
+      if(!initial)invalidateUserData();
+      if(initial)return;
       for(const listener of identityListeners){try{listener()}catch{/* One view cannot retain another view's private data. */}}
     }
     const changedIdentity=()=>Object.assign(Error('The signed-in account changed.'),{code:'sign_in_required'});
@@ -14,16 +97,40 @@
       return initialization??=(async()=>{
         await sdk.setPersistence(auth,sdk.browserSessionPersistence);
         await auth.authStateReady();
-        identityChanged();
+        identityChanged(true);
         // The canonical server account cannot survive an SDK principal change.
-        if(typeof sdk.onAuthStateChanged==='function')sdk.onAuthStateChanged(auth,identityChanged);
+        if(typeof sdk.onAuthStateChanged==='function')sdk.onAuthStateChanged(auth,()=>identityChanged());
       })();
     }
     function serial(action){
       const result=pending.catch(()=>{}).then(async()=>{await ready();return action()});
       pending=result;return result;
     }
-    async function api(path,options={},forceRefresh=false){
+    // All authenticated page components share the database connection budget.
+    // Row-only throttling misses concurrent profile/detail/settings requests.
+    let activeRequests=0,backgroundRequests=0;const requestWaiters=[];
+    const aborted=()=>Object.assign(Error('Request aborted.'),{name:'AbortError'});
+    function drainRequests(){
+      while(activeRequests<2){
+        let index=requestWaiters.findIndex(waiter=>waiter.priority===2);
+        if(index<0)index=requestWaiters.findIndex(waiter=>!waiter.background);
+        if(index<0&&backgroundRequests<1)index=requestWaiters.findIndex(waiter=>waiter.background);
+        if(index<0)return;
+        const waiter=requestWaiters.splice(index,1)[0];
+        waiter.signal?.removeEventListener('abort',waiter.cancel);
+        activeRequests++;if(waiter.background)backgroundRequests++;
+        waiter.resolve();
+      }
+    }
+    function requestSlot(priority,signal){
+      if(signal?.aborted)return Promise.reject(aborted());
+      return new Promise((resolve,reject)=>{
+        const waiter={priority,background:priority===0,signal,resolve,cancel:()=>{const index=requestWaiters.indexOf(waiter);if(index>=0){requestWaiters.splice(index,1);reject(aborted());drainRequests()}}};
+        requestWaiters.push(waiter);signal?.addEventListener('abort',waiter.cancel,{once:true});drainRequests();
+      });
+    }
+    function releaseRequest(background){activeRequests--;if(background)backgroundRequests--;drainRequests()}
+    async function dispatchApi(path,options={},forceRefresh=false){
       const url=new URL(path,origin);
       if(url.origin!==origin||!url.pathname.startsWith('/api/'))throw Error('Only same-origin API requests are allowed.');
       // Preserve the principal at the synchronous call boundary, before SDK
@@ -36,11 +143,41 @@
       identityChanged();
       if(auth.currentUser!==user)throw changedIdentity();
       if(!user)throw Object.assign(Error('Sign in to continue.'),{code:'sign_in_required'});
-      const headers=new Headers(options.headers||{});
-      const token=await user.getIdToken(forceRefresh);
+      // One background row read leaves a slot available for user operations.
+      const background=['GET','HEAD'].includes((options.method||'GET').toUpperCase())&&/^\/api\/auth\/(?:favorites\/[1-9][0-9]*|members\/[1-9][0-9]*\/avatar)$/.test(url.pathname);
+      const priority=background?0:!['GET','HEAD'].includes((options.method||'GET').toUpperCase())||url.pathname==='/api/auth/me'||/^\/api\/public\/guitars(?:\/[1-9][0-9]*(?:\/.*)?)?$/.test(url.pathname)?2:1;
+      await requestSlot(priority,options.signal);
+      try{
+        // Waiting must not turn an old identity's request into a new user's action.
+        if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
+        if(options.signal?.aborted)throw Object.assign(Error('Request aborted.'),{name:'AbortError'});
+        const headers=new Headers(options.headers||{});
+        const token=await user.getIdToken(forceRefresh);
+        if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
+        if(options.signal?.aborted)throw Object.assign(Error('Request aborted.'),{name:'AbortError'});
+        headers.set('Authorization','Bearer '+token);
+        const publicRevalidation=(options.method||'GET').toUpperCase()==='GET'&&options.cache==='no-cache'&&/^\/api\/public\/guitars(?:\/[1-9][0-9]*(?:\/chronicle)?|\/(?:discoveries|statistics|world-map))?$/.test(url.pathname);
+        return await request(url.href,{...options,headers,credentials:'omit',redirect:'error',cache:publicRevalidation?'no-cache':'no-store'});
+      }finally{releaseRequest(background)}
+    }
+    async function api(path,options={},forceRefresh=false){
+      const method=(options.method||'GET').toUpperCase(),user=auth.currentUser;
+      // Share only simultaneous reads, never a stored response. Signals and
+      // forced refreshes remain independent; writes invalidate pending reuse.
+      if(!['GET','HEAD'].includes(method)){
+        sharedReads.clear();invalidateUserData();dataWrites++;
+        try{return await dispatchApi(path,options,forceRefresh)}finally{dataWrites--;invalidateUserData(dataWrites?'refresh':'changed')}
+      }
+      if(method!=='GET'||forceRefresh||options.signal||options.body||new URL(path,origin).pathname==='/api/auth/me')return displayRead(path,options,forceRefresh);
+      const key=JSON.stringify([new URL(path,origin).href,[...new Headers(options.headers||{})],options.cache==='no-cache'?'revalidate':'fresh',options.reuseUserData===true]);
+      let entry=sharedReads.get(key);
+      if(!entry||entry.user!==user){
+        entry={user,promise:displayRead(path,options,forceRefresh)};sharedReads.set(key,entry);
+        entry.promise.finally(()=>{if(sharedReads.get(key)===entry)sharedReads.delete(key)}).catch(()=>{});
+      }
+      const response=await entry.promise;
       if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
-      headers.set('Authorization','Bearer '+token);
-      return request(url.href,{...options,headers,credentials:'omit',redirect:'error',cache:'no-store'});
+      return response.clone();
     }
     async function result(response){
       const data=await response.json();
@@ -65,7 +202,7 @@
       }
       const data=await result(response);
       if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
-      accountUser=user;return account=data;
+      accountUser=user;account=data;bindUserData();return account;
     }
     async function documents(){
       const response=await request(new URL('/api/auth/registration',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
@@ -83,7 +220,7 @@
       documents,
       restore(){return serial(me)},
       signIn(credentials){return serial(async()=>{
-        account=null;
+        invalidateUserData();account=null;
         await sdk.signInWithEmailAndPassword(auth,credentials.email,credentials.password);
         return me();
       })},
@@ -129,8 +266,10 @@
         // Force a new JWT: SDK emailVerified alone cannot authorize an app action.
         return me(true);
       })},
-      logout(){return serial(async()=>{await sdk.signOut(auth);account=null})},
+      logout(){invalidateUserData();return serial(async()=>{try{await sdk.signOut(auth);account=null;dataOwner=null}finally{invalidateUserData()}})},
       authorizedFetch:api,
+      invalidateUserData,
+      onUserDataInvalidated(listener){dataListeners.add(listener);return ()=>dataListeners.delete(listener)},
       onIdentityChanged(listener){identityListeners.add(listener);return ()=>identityListeners.delete(listener)},
       get account(){return accountUser===auth.currentUser?account:null},
       get signedIn(){return Boolean(auth.currentUser)},

@@ -49,7 +49,7 @@ function environment({initial=account(),search='',fullPage=false}={}){
  context.window=context;context.addEventListener=(key,fn)=>(listeners[key]??=[]).push(fn);
  function catalogResponse(url,options,extra={}){publicCalls.push({url,options,...extra});return response(publicReplies.length?publicReplies.shift():guitar(url.split('/').at(-1)))}context.fetch=catalogResponse;
  vm.runInContext(fs.readFileSync(path.join(staticPath,'overlays.js'),'utf8'),context);
- vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-applications.js'),'utf8').split('export function createApplications')[0].replaceAll('export function','function'),context);
+ vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-applications.js'),'utf8').replace(/^import .*;\n/gm,'').split('export function createApplications')[0].replaceAll('export function','function'),context);
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-media.js'),'utf8').replaceAll('export function','function'),context);
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-claims.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createClaims;context.createClaims=value=>{args=value;component=create(value);return component};
@@ -90,7 +90,7 @@ test('Verified selection reads private own Claims even if public detail is no lo
  await e.component.setCatalogIntent('12');e.open();assert.equal(e.publicCalls.length,0);assert.equal(writes(e).length,0);
  assert.equal(e.dialog.open,true);assert.match(e.control('claimSavedState').textContent,/<img/);assert.match(e.control('claimSavedState').textContent,/2026-01-02T03:04:05Z/);
  assert.doesNotMatch(e.control('catalogClaimDetail').textContent,/PRIVATE-EXTRA/);assert.equal(e.control('claimSavedState').children.length,0);
- assert.equal(e.calls[0].verified,true);assert.ok(e.calls[0].options.headers['X-YGC-Timezone']);
+ assert.equal(e.calls[0].verified,false);assert.ok(e.calls[0].options.headers['X-YGC-Timezone']);
 });
 
 test('Opening/repeating/cancelling a populated Claim form performs no mutation and preserves fields',async()=>{

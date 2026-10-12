@@ -71,6 +71,8 @@ def main():
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in (
         'cloud-account-applications.js', 'overlays.js',
         'cloud-account.css', 'ui-components.css')}
+    from browser_assets import include_module_dependencies
+    include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(catalog) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     photo = BytesIO()

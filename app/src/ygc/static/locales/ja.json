@@ -1338,6 +1338,7 @@
   "chronicle.decision_saved": "判定を保存し、個体情報と履歴を更新しました。",
   "chronicle.decision_conflict": "Claimが変更されたか、Crawl／DBメンテナンスが実行中です。再取得してから再確認してください。",
   "chronicle.decision_unavailable": "結果を確認できませんでした。再操作する前に履歴を再取得してください。",
+  "chronicle.dispute_claim_locked": "このClaimは所有権係争の決定により変更が制限されています。変更には管理者による係争の再審議が必要です。",
   "users.owned": "現在所有",
   "users.formerly_owned": "過去に所有",
   "users.ownership_refresh": "所有一覧を再取得",
@@ -1817,5 +1818,15 @@
   "members.readonly": "読み取り専用モードではフォローを変更できません。",
   "members.followed": "この会員をフォローしました。",
   "members.unfollowed": "フォローを解除しました。",
-  "members.uncertain": "処理結果を確認できません。変更前に再読み込みしてください。"
+  "members.uncertain": "処理結果を確認できません。変更前に再読み込みしてください。",
+  "settings.partial_saved": "プロフィール設定は保存されましたが、後続の処理に失敗しました。",
+  "settings.refresh_required": "結果を確認できません。再度保存する前にこのページを再読み込みしてください。",
+  "settings.notice": "表示名は必須です。その他のプロフィール情報は任意です。メールアドレスとパスワードは認証サービスで管理されます。",
+  "applications.replace_photos": "写真を差し替える",
+  "applications.replace_photos_confirm": "エラーになったListingを下書きへ戻して、写真2枚を選び直しますか？ Challengeと提出期限は変更しません。",
+  "owner.acquire_inbox": "未回答のリクエスト",
+  "owner.claims_ownership": "が所有を主張しています：",
+  "owner.inbox_unavailable": "所有申請を取得できませんでした。ページを再読み込みしてください。",
+  "owner.accept": "承諾",
+  "owner.decline": "辞退"
 }

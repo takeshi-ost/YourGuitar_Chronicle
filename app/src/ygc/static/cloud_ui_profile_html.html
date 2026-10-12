@@ -3,11 +3,16 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Your Guitar Chronicle — Public catalog</title>
-<link rel="stylesheet" href="/assets/cloud-account.css"><link rel="stylesheet" href="/assets/ui-components.css">
+<link rel="stylesheet" href="/assets/ui-components.css">
 <link rel="stylesheet" href="/assets/pages/user-view.css">
 <link rel="stylesheet" href="/assets/themes.css">
 <link rel="stylesheet" href="/assets/cloud-ui.css">
+<script src="/assets/profile-list.js" defer></script>
 <script src="/assets/overlays.js" defer></script>
+<script src="/assets/ownership-presentation.js" defer></script>
+<script src="/assets/product-detail.js" defer></script>
+<script src="/assets/table-columns.js" defer></script>
+<script src="/assets/list-navigation.js" defer></script>
 <script src="/assets/identity-platform-auth.js" defer></script>
 <script src="/assets/i18n.js" defer></script><script src="/assets/cloud-account-page.js" type="module"></script>
 <link rel="stylesheet" href="/assets/cloud-ui-profile.css"></head>
@@ -32,7 +37,7 @@
 <section id="catalogOwnershipIntent" hidden></section>
 
 <p data-i18n="cloud.credentials_notice">Your email and password are sent to Google for authentication.</p>
-<div id="authActions"><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
+<div id="authActions" hidden><button type="button" id="showSignIn" data-i18n="account.sign_in">Sign In</button> <button type="button" id="showRegistration" data-i18n="cloud.create_account">Create Account</button></div>
 <p id="accountSummary" hidden></p>
 <p id="consoleLink" hidden><a href="/console" data-i18n="ui.browser_console_bc10c95d">Browser Console</a></p>
 <button id="signOut" type="button" hidden data-i18n="account.sign_out">SignOut</button>
@@ -52,6 +57,7 @@
 <p id="selfProfileStatus" role="status"></p>
 </section>
 <section id="selfGuitars" hidden></section>
+<section id="selfOwnerAcquire" hidden></section>
 <section id="selfOwnership" hidden></section>
 <section id="selfApplications" hidden></section>
 <section id="selfClaims" hidden></section>
@@ -62,7 +68,7 @@
 <p data-i18n="avatar.limits">JPEG, PNG or WebP, up to 8 MiB and 8 million pixels.</p>
 <button id="avatarUpload" type="submit" data-i18n="avatar.save">Save image</button><button id="avatarRemove" type="button" disabled data-i18n="avatar.remove">Remove image</button><button id="avatarRefresh" type="button" data-i18n="action.refresh">Refresh</button></form><p id="avatarStatus" role="status"></p>
 </section>
-<form id="cloudAccountForm">
+<form id="cloudAccountForm" hidden>
   <fieldset id="credentialsFields">
     <label for="email" data-i18n="ui.email_address_f2488fd4">Email address</label><input id="email" type="email" autocomplete="username" required>
     <label for="password" data-i18n="ui.password_e7cf3ef4">Password</label><input id="password" type="password" autocomplete="current-password" required>
@@ -85,12 +91,12 @@
 <button id="catalogSearchSubmit" type="submit">Search</button>
 </form>
 <p id="catalogStatus" class="status" role="status" aria-live="polite"></p>
-<div class="table-wrap"><table><thead><tr><th>ID</th><th id="columnMaker">Maker</th><th id="columnModel">Model</th><th id="columnFinish">Finish</th><th id="columnYear">Year</th><th id="columnSerial">Serial</th></tr></thead><tbody id="catalogRows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th><span id="columnMaker">Maker</span></th><th><span id="columnModel">Model</span></th><th><span id="columnFinish">Finish</span></th><th><span id="columnYear">Year</span></th><th><span id="columnSerial">Serial</span></th></tr></thead><tbody id="catalogRows"></tbody></table></div>
 <nav id="catalogPagination" class="pagination" aria-label="Catalog pages"><button type="button" id="catalogPrevious" disabled>Previous</button><span id="catalogPage"></span><button type="button" id="catalogNext" disabled>Next</button></nav>
 </section>
 <aside id="productDetailShell" class="detail-shell"><section id="catalogDetail" class="panel detail-panel product-detail" aria-labelledby="detailHeading">
-<div class="detail-panel-heading"><h2 id="detailHeading" tabindex="-1">Product Detail</h2><a id="catalogBack" href="/" hidden>Back to catalog</a></div>
-<div class="detail-scroll"><p id="detailStatus" class="status" role="status" aria-live="polite">Choose a guitar to explore its story.</p>
+<div class="detail-panel-heading"><h2 id="detailHeading" tabindex="-1">Product Detail</h2><a id="catalogBack" class="compact-detail-close" data-ui-action="close" aria-label="Close Product Detail" href="/" hidden>×</a></div>
+<div id="detail" class="detail-scroll sub"><p id="detailStatus" class="status" role="status" aria-live="polite">Choose a guitar to explore its story.</p>
 <article id="detailContent" hidden>
 <div id="detailPhoto" class="detail-image-placeholder" role="img" aria-label="Photo unavailable"><span id="photoPlaceholder">Photo unavailable</span></div>
 <div class="detail-header"><h3 id="detailTitle"></h3><p id="detailIdentifier" class="muted"></p><a id="acquireLink" class="button-link" href="/account">Acquire</a><a id="addClaimLink" class="button-link" href="/account">Add Claim</a><a id="ownershipLink" class="button-link" href="/account">Transfer / Release</a><p id="ownershipDescription" class="muted">Current owners can propose a Transfer or record a Release from their account.</p><p id="addClaimDescription" class="muted">Record a specification, repair or incident from your account.</p><p id="acquireDescription" class="muted">Continue to your account to make an ownership application.</p></div>

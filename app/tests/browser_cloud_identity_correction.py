@@ -56,6 +56,8 @@ def main():
         'cloud-account.css', 'cloud-auth-loader.js', 'identity-platform-auth.js',
         'overlays.js', 'ui-components.css')
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in names}
+    from browser_assets import include_module_dependencies
+    include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
@@ -383,7 +385,7 @@ def main():
         expect(page.locator('#identityHistory li')).to_have_count(2)
         settle(); close()
         store['history_size'] = 25; store['can_write'] = False
-        page.locator('#identityRefresh').click(); settle(); open_listing()
+        page.reload(); page.wait_for_function('globalThis.YGCCloudAccountReady===true'); settle(); open_listing()
         expect(page.locator('#identityCreate')).to_be_disabled()
         expect(page.locator('#identityHistory')).to_contain_text('Malformed committed response')
         close()
@@ -424,13 +426,13 @@ def main():
         expect(listings.locator('li')).to_have_count(0)
         expect(page.locator('#identityHistory li')).to_have_count(0)
         store['author_available'] = True
-        page.locator('#identityRefresh').click(); settle(); open_listing()
+        page.reload(); page.wait_for_function('globalThis.YGCCloudAccountReady===true'); settle(); open_listing()
         store['mode'] = 'offline'
         page.locator('#identityReload').click(); settle()
         expect(dialog).to_be_hidden()
         expect(page.locator('#identityHistory li')).to_have_count(0)
         store['mode'] = 'normal'
-        page.locator('#identityRefresh').click(); settle(); open_listing()
+        page.reload(); page.wait_for_function('globalThis.YGCCloudAccountReady===true'); settle(); open_listing()
         close(); page.locator('#signOut').click()
         expect(page.locator('#selfIdentityCorrections')).to_be_hidden()
         expect(listings.locator('li')).to_have_count(0)

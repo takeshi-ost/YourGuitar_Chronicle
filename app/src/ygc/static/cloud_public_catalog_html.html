@@ -23,9 +23,9 @@
 <section id="catalogList" class="panel" aria-labelledby="listHeading">
 <div class="panel-heading"><h2 id="listHeading">Guitar catalog</h2><button type="button" id="catalogRefresh">Refresh</button></div>
 <form id="catalogSearchForm" class="catalog-toolbar" role="search">
-<label class="search-field"><span id="searchLabel">Search guitars</span><input id="catalogSearch" type="search" maxlength="120" placeholder="Maker, model or serial" autocomplete="off"></label>
-<label><span id="sortLabel">Sort</span><select id="catalogSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="maker">Maker</option><option value="model">Model</option></select></label>
-<button id="catalogSearchSubmit" type="submit">Search</button>
+<label class="search-field"><span id="searchLabel">Search guitars</span><input id="catalogSearch" disabled type="search" maxlength="120" placeholder="Maker, model or serial" autocomplete="off"></label>
+<label><span id="sortLabel">Sort</span><select id="catalogSort" disabled><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="maker">Maker</option><option value="model">Model</option></select></label>
+<button id="catalogSearchSubmit" disabled type="submit">Search</button>
 </form>
 <p id="catalogStatus" class="status" role="status" aria-live="polite"></p>
 <ol id="catalogRows" class="guitar-list"></ol>

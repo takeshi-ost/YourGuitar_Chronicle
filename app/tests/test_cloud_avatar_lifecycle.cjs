@@ -24,8 +24,8 @@ function environment(initial=account()){
 const empty=e=>{assert.equal(e.control('avatarPreview').src,undefined);assert.equal(e.control('avatarPreview').hidden,true);assert.equal(e.control('avatarStatus').textContent,'')};
 
 for(const role of ['member','admin'])test('Avatar happy path preserves the private Bearer adapter and '+role+' endpoint',async()=>{
- const e=environment(account('A',{role}));e.queue(response());await e.avatar.refresh();e.avatar.render();
- assert.equal(e.calls[0].url,role==='admin'?'/api/admin/accounts/me/avatar':'/api/auth/avatar');assert.equal(e.calls[0].verified,true);
+ const e=environment(account('A',{role}));e.queue(response());await e.avatar.refresh();
+ assert.equal(e.calls[0].url,role==='admin'?'/api/admin/accounts/me/avatar':'/api/auth/avatar');assert.equal(e.calls[0].verified,false);
  assert.equal(e.control('avatarPreview').src,e.created[0]);assert.equal(e.control('avatarPreview').hidden,false);assert.equal(e.control('avatarRemove').disabled,false);
  e.control('avatarFile').value='private selection';e.avatar.clear();empty(e);assert.equal(e.control('avatarFile').value,'');assert.deepEqual(e.revoked,e.created);
 });
@@ -105,3 +105,5 @@ for(const method of ['save','remove'])for(const phase of ['before-dispatch','tok
  if(phase==='token'){assert.deepEqual(tokens,['A']);auth.currentUser=userB;e.changeAccount(account('B'));held.resolve('token-A')}
  await pending;assert.equal(network.length,0);assert.equal(tokens.includes('B'),false);empty(e);
 });
+
+test('A fresh missing-avatar read disables removal without a separate shell render',async()=>{const e=environment();e.queue(response());await e.avatar.refresh();assert.equal(e.control('avatarRemove').disabled,false);e.queue(response(null,404));await e.avatar.refresh();assert.equal(e.control('avatarRemove').disabled,true);assert.equal(e.control('avatarPreview').hidden,true);});

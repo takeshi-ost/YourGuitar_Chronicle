@@ -1,0 +1,30 @@
+#discovery{margin-bottom:16px}
+#discovery .toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+#discovery .toolbar h2{margin:0}
+#insightsRefresh{font-size:11px;padding:4px 7px}
+#newDiscoveryList>.discovery-item{color:var(--text);text-decoration:none}
+#newDiscoveryList>.discovery-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#newDiscoveryList>p{padding:8px 10px;margin:0;font-size:12px;color:var(--muted)}
+.insights-status{margin:0 0 8px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.insights-chart{min-width:0;overflow:auto;display:flex;flex-direction:column}
+.insights-chart>svg{width:100%;flex:1;min-height:140px;max-height:220px;color:var(--text);fill:var(--text)}
+.insights-chart>p{margin:auto;color:var(--muted);font-size:12px}
+.insights-chart .chart-grid{stroke:var(--line);stroke-width:1}
+.insights-chart text{fill:var(--text)}
+.insights-chart details,#mapCounts details{font-size:11px;color:var(--muted)}
+.insights-chart summary,#mapCounts summary{cursor:pointer;padding:4px 0}
+.insights-chart table,#mapCounts table{width:100%;font-size:11px}
+.insights-chart td:first-child,#mapCounts td:first-child{overflow-wrap:anywhere}
+.insights-chart td:last-child,#mapCounts td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+#world-map .world-map-panel{position:relative}
+#world-map .world-map-legend{bottom:38px;right:24px}
+#mapSelection{min-height:1.5em;margin:6px 0 0}
+#mapCoverage{margin:8px 0}
+#mapCounts details{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.map-credit{margin:6px 0}.map-credit a{color:var(--muted)}
+#worldMapSvg .world-country:focus{stroke:var(--text);stroke-width:2;outline:none}
+@media(max-width:900px){.insights-chart>svg{min-height:155px}#newDiscoveryList .discovery-item{gap:6px;padding:6px}.discovery-time{max-width:110px;white-space:normal;font-size:9px}}
+
+#world-map .map-summary{margin-top:8px}#world-map .map-summary #mapCoverage{margin-top:0}
+
+@media(max-width:600px){.insights-chart text{font-size:20px}}

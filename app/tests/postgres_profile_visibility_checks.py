@@ -368,6 +368,85 @@ def http_checks(w):
         w.seed_account(disabled=0)
 
 
+def settings_checks(w):
+    w.mode('normal')
+    before=w.service.own_settings(w.actor())
+    fields={**before['fields'],'account_type':'builder','date_of_birth':'2000-01-01','theme':'sunburst_3ply',**DEFAULTS}
+    body={'revision':before['profile_revision'],'fields':fields}
+    result=w.service.edit_own_settings(w.actor(),body)
+    assert result['saved'] and result['profile_revision']!=body['revision']
+    assert w.service.own_settings(w.actor())['fields']==fields
+    w.unchanged(ProfileConflict,lambda:w.service.edit_own_settings(w.actor(),body))
+    w.accounts.drain_projection()
+    with connect(w.settings,'chronicle') as con:
+        a=w.records['a']['id'];b=w.records['b']['id']
+        guitar=con.execute("INSERT INTO individuals(manufacturer,normalized_manufacturer,model,finish,serial_number,created_at,updated_at,current_owner_user_id) VALUES('Synthetic','synthetic','Settings','Sunburst','settings-only','now','now',%s) RETURNING id",(a,)).fetchone()['id']
+    assert w.service.own_signature(w.actor())=={'individual_id':None}
+    assert w.service.edit_own_signature(w.actor(),{'previous':None,'individual_id':str(guitar)})=={'individual_id':str(guitar)}
+    assert w.service.own_signature(w.actor())=={'individual_id':str(guitar)}
+    assert w.service.own_guitars(w.actor(),kind='owned')['items'][0]['finish']=='Sunburst'
+    w.unchanged(ValueError,lambda:w.service.edit_own_signature(w.actor('b'),{'previous':None,'individual_id':str(guitar)}))
+    w.unchanged(ProfileConflict,lambda:w.service.edit_own_signature(w.actor(),{'previous':None,'individual_id':None}))
+    w.mode('read_only')
+    from ygc.db.postgres_operations import ServiceRestricted
+    w.unchanged(ServiceRestricted,lambda:w.service.edit_own_signature(w.actor(),{'previous':str(guitar),'individual_id':None}))
+    assert w.service.own_signature(w.actor())['individual_id']==str(guitar)
+    w.mode('normal')
+    print('User Settings: self-only fields, account CAS, outbox projection, exact signature IDs, current-owner validation, stale signature and read-only gates passed.')
+
+
+def application_preview_checks(w):
+    from ygc.cloud_applications import CloudApplications
+    from ygc.cloud_guitars import GuitarMissing
+    service=CloudApplications(w.settings,w.operations,None)
+    payload=dict(manufacturer='Synthetic',serial_number='PREVIEW-ONLY',model='Unsaved',finish='',year='',occurred_at='2020-01-01',body='Private fixture')
+    source={'kind':'listing','payload':payload}
+    before=w.snapshot('chronicle')
+    preview=service.preview(w.actor(),source)
+    assert preview['unsaved'] and preview['status']=='draft' and len(preview['draft_token'])==64
+    assert w.snapshot('chronicle')==before and service.list(w.actor())['items']==[]
+    assert service.preview(w.actor(),source)['draft_token']==preview['draft_token']
+    body={'draft_token':preview['draft_token'],'acquisition_date':'2020-01-01','body':'Saved fixture'}
+    rejected(GuitarMissing,lambda:service.keep_preview(w.actor('b'),body))
+    rejected(GuitarMissing,lambda:service.keep_preview(w.actor(),{**body,'draft_token':'f'*64}))
+    w.mode('read_only')
+    rejected(ServiceRestricted,lambda:service.preview(w.actor(),source))
+    rejected(ServiceRestricted,lambda:service.keep_preview(w.actor(),body))
+    w.mode('normal')
+    saved=service.keep_preview(w.actor(),body)
+    assert saved['revision']==preview['revision'] and saved['challenge']==preview['challenge'] and 'unsaved' not in saved
+    assert service.keep_preview(w.actor(),body)['revision']==saved['revision']
+    assert len(service.list(w.actor())['items'])==1
+    assert not w.snapshot('chronicle')['claims']
+    service.cancel(w.actor(),saved['revision'])
+    rejected(ValueError,lambda:service.keep_preview(w.actor(),body))
+    with connect(w.settings,'accounts') as con:
+        key='application_preview:'+w.actor()+':'+preview['draft_token']
+        con.execute('UPDATE account_metadata SET value=%s WHERE key=%s',(json.dumps({**preview,'expires_at':0}),key))
+    rejected(ValueError,lambda:service.keep_preview(w.actor(),body))
+    fresh=service.preview(w.actor(),source)
+    assert fresh['revision']!=preview['revision'] and fresh['draft_token']!=preview['draft_token']
+    assert service.keep_preview(w.actor(),{**body,'draft_token':fresh['draft_token']})['revision']==fresh['revision']
+    with connect(w.settings,'chronicle') as con:guitar=con.execute("SELECT id FROM individuals WHERE serial_number='settings-only'").fetchone()['id']
+    acquisition=service.preview(w.actor('b'),{'kind':'acquire','individual_id':str(guitar)})
+    acquisition_body={'draft_token':acquisition['draft_token'],'acquisition_date':'2021-02-03','body':'Acquire saved atomically'}
+    acquired=service.keep_preview(w.actor('b'),acquisition_body)
+    assert acquired['acquisition_date']=='2021-02-03' and acquired['body']=='Acquire saved atomically'
+    assert service.keep_preview(w.actor('b'),{**acquisition_body,'body':'Edited once'})['body']=='Edited once'
+    assert len(service.list(w.actor('b'))['items'])==1
+    assert w.service.own_summary(w.actor())=={'owned_count':'1','former_count':'0','claim_count':'0'}
+    assert w.service.own_summary(w.actor('b'))=={'owned_count':'0','former_count':'0','claim_count':'0'}
+    # A completed Acquire must not resurrect its consumed preview when the
+    # former owner applies again. Simulate the completed status in this fixture.
+    with connect(w.settings,'chronicle') as con:
+        con.execute("UPDATE acquire_applications SET status='accepted' WHERE revision=%s",(acquired['revision'],))
+    new_acquisition=service.preview(w.actor('b'),{'kind':'acquire','individual_id':str(guitar)})
+    assert new_acquisition['revision']!=acquired['revision']
+    assert new_acquisition['draft_token']!=acquisition['draft_token']
+    assert service.keep_preview(w.actor('b'),{**acquisition_body,'draft_token':new_acquisition['draft_token']})['revision']==new_acquisition['revision']
+    print('Application preview: no application/Claim on open, same-actor reuse, cross-actor/tamper/expiry rejection, mode fences, idempotent Keep and no replay after cancellation passed. No image upload.')
+
+
 def run(port):
     prefix = 'ygctest_visibility_' + uuid.uuid4().hex[:10] + '_'
     runtime = prefix + 'app'
@@ -401,6 +480,8 @@ def run(port):
             fence_checks(w)
             http_checks(w)
             assert accounts.drain_projection() > 0
+            settings_checks(w)
+            application_preview_checks(w)
             assert accounts.drain_projection() == 0
             assert structure(owner, runtime) == baseline, 'Visibility work changed schema or runtime grants'
             print('PostgreSQL self visibility: preserved defaults/legacy values, exact private DTO, '

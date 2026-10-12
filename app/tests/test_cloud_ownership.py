@@ -295,7 +295,7 @@ def test_create_strict_payload(workflow, changes):
         service.create(a, individual, data | changes)
 
 
-@pytest.mark.parametrize('changes', [dict(occurred_at=''), dict(occurred_at=None), dict(occurred_at='2999-01-01'),
+@pytest.mark.parametrize('changes', [dict(occurred_at='2999-01-01'), dict(previous_owner_text=[]), dict(previous_owner_text='x'*2001), dict(previous_owner_text='x\x00'),
     dict(occurred_at=True), dict(body=[]), dict(body='x' * 2001), dict(body='x\x00'),
     dict(ownership_kind='transfer'), dict(author_user_id=2), dict(revision='x')])
 def test_release_strict_payload(workflow, changes):
@@ -480,3 +480,15 @@ def test_listing_evidence_is_bound_even_if_snapshot_timestamps_do_not_change(wor
     with repo.connect() as con:
         con.execute("UPDATE claim_listing_items SET value_text='Another maker' WHERE field_name='manufacturer'")
     assert service.view(a, individual)['revision'] != before
+
+
+@pytest.mark.parametrize('empty',[None,''])
+def test_release_optional_date_and_related_person_match_local(workflow,empty):
+    repo,service,a,_,_,individual=workflow
+    result=service.release(a,individual,{'occurred_at':empty,'body':None,'previous_owner_text':'  Synthetic related person  ','revision':service.view(a,individual)['revision']})
+    from ygc.cloud_ownership import utcnow
+    assert result['claim']['occurred_at']==utcnow()[:10]
+    with repo.connect() as con:
+        row=con.execute('SELECT previous_owner_text FROM claims WHERE id=?',(int(result['claim']['id']),)).fetchone()
+        assert row['previous_owner_text']=='Synthetic related person'
+    assert result['ownership']['current_owner_user_id'] is None

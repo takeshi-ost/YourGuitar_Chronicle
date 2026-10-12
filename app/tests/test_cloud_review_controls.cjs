@@ -5,7 +5,7 @@ function environment(){
     constructor(tag='div'){this.tag=tag;this.children=[];this.listeners={};this.dataset={};this.style={};this.value='';this.files=[];this.hidden=false;this.open=false;this.disabled=false;this.textContent='';}
     set id(value){this._id=value;ids.set(value,this)}get id(){return this._id}
     append(...nodes){this.children.push(...nodes)}replaceChildren(...nodes){this.children=nodes}
-    setAttribute(key,value){this[key]=value}removeAttribute(key){delete this[key]}
+    setAttribute(key,value){this[key]=value}getAttribute(key){return this[key]??null}removeAttribute(key){delete this[key]}
     addEventListener(key,fn){this.listeners[key]=fn}reset(){}focus(){}scrollIntoView(){}
     all(){return this.children.flatMap(n=>[n,...(n.all?.()||[])])}
     querySelectorAll(selector){if(selector==='li button')return this.all().filter(n=>n.tag==='li').flatMap(n=>n.all().filter(c=>c.tag==='button'));const tags=selector.split(',');return this.all().filter(n=>selector==='[data-owner-confirm]'?n.dataset.ownerConfirm:tags.some(tag=>n.tag===tag.replace('li ','')))}
@@ -13,8 +13,8 @@ function environment(){
   const document={body:new Element('body'),createElement:tag=>new Element(tag),getElementById(id){if(!ids.has(id)){const e=new Element();e.id=id}return ids.get(id)},querySelector(){return new Element()},querySelectorAll(){return []}};
   let state={user:{app_user_id:'applicant',role:'admin',display_name:'Person'},identity:{email_verified:true}},busy=false;
   const calls=[],replies=[];
-  const client={signedIn:true,restore:async()=>state,logout:async()=>{state=null},authorizedFetch:async(url,options={},verified)=>{calls.push({url,options,verified});const value=replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
-  const context=vm.createContext({addEventListener(){},document,URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
+  const client={signedIn:true,get account(){return state},restore:async()=>state,logout:async()=>{state=null},authorizedFetch:async(url,options={},verified)=>{calls.push({url,options,verified});const value=replies.shift();if(value instanceof Error)throw value;return {ok:true,json:async()=>value}}};
+  const context=vm.createContext({addEventListener(){},document,location:{search:''},URL,URLSearchParams,Intl,Date,console,YGCI18n:{t:(key,params={})=>key+JSON.stringify(params)},YGCOverlays:{open:d=>{d.open=true},close:d=>{d.open=false;d.listeners['ygc:closed']?.()}},loadCloudAuth:async()=>client,fetch:async()=>({ok:true})});
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},detail(){}});for(const key of ['createDisputes','createUserBrowser','createCrawlBrowser','createBackupBrowser','createGuitarBrowser','createApplicationBrowser'])context[key]=noOp;
   const args={auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;try{return await fn()}finally{busy=false;context.component?.render()}}};
   function load(file,name){let source=fs.readFileSync(path.join(__dirname,'../src/ygc/static',file),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function');vm.runInContext(source+`;globalThis.component=${name}(args);`,Object.assign(context,{args}));return context.component}

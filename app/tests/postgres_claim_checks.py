@@ -32,13 +32,14 @@ from ygc.platform_boundaries import ActorContext
 
 ISSUER = 'local-claim-posting-fixture'
 PRIVATE = 'CLAIM-PRIVATE-DO-NOT-PUBLISH'
+PUBLIC = 'Synthetic public Claim prose'
 BIG_ID = 9007199254741009
 OWN_FIELDS = {'id', 'individual_id', 'claim_type', 'specification_kind',
               'incident_kind', 'event_kind', 'field_name', 'value_text', 'body', 'occurred_at',
               'status', 'verification_status', 'created_at', 'updated_at',
               'spec_items', 'revision'}
 PUBLIC_CLAIM_FIELDS = {'id', 'claim_type', 'ownership_kind', 'occurred_at',
-                       'created_at', 'verification_status', 'items', 'source_url'}
+                       'created_at', 'verification_status', 'items', 'source_url', 'presentation'}
 
 
 def rejected(error, operation):
@@ -49,7 +50,7 @@ def rejected(error, operation):
     raise AssertionError('Expected ' + error.__name__)
 
 
-def specification(*, kind='specification', body=PRIVATE, items=None, date='2026-03-01'):
+def specification(*, kind='specification', body=PUBLIC, items=None, date='2026-03-01'):
     return dict(claim_type='specification', specification_kind=kind,
                 items=items if items is not None else [
                     dict(field_name='neck', value_text='Maple'),
@@ -57,7 +58,7 @@ def specification(*, kind='specification', body=PRIVATE, items=None, date='2026-
                 body=body, occurred_at=date)
 
 
-def incident(*, kind='damage', body=PRIVATE, date='2026-03-01'):
+def incident(*, kind='damage', body=PUBLIC, date='2026-03-01'):
     return dict(claim_type='incident', incident_kind=kind, body=body, occurred_at=date)
 
 
@@ -80,7 +81,7 @@ def run(port):
                 migrate(owner, target, runtime)
             accounts, operations = PostgresAccounts(app), PostgresOperations(app)
             records = {name: accounts.ensure_identity(issuer=ISSUER, subject=name,
-                display_name=PRIVATE + '-' + name) for name in ('admin', 'a', 'b', 'c')}
+                display_name='Synthetic public member-' + name) for name in ('admin', 'a', 'b', 'c')}
             assert grant_first_admin(app, records['admin']['app_user_id'], 'local-test-operator')
             accounts.drain_projection()
             operations.set_mode(records['admin']['app_user_id'], mode='normal', message='',
@@ -205,7 +206,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
         rejected(ValueError, lambda: respond('b', third, stance))
 
     # Changes invalidate both the author's editor and the Owner's open review.
-    changed_data = specification(kind='repair', body=PRIVATE + '-edited', items=[
+    changed_data = specification(kind='repair', body=PUBLIC + '-edited', items=[
         dict(field_name='bridge', value_text='Brass bridge'),
         dict(field_name='pickups', value_text='New single coils')])
     changed = edit('b', third, changed_data)
@@ -217,11 +218,11 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
     rejected(ClaimConflict, lambda: edit('b', changed, changed_data))
     accepted = own('b', third['id'])
     assert accepted['verification_status'] == 'positive'
-    accepted = edit('b', accepted, changed_data | {'body': PRIVATE + '-still-positive'})
+    accepted = edit('b', accepted, changed_data | {'body': PUBLIC + '-still-positive'})
     assert accepted['verification_status'] == 'positive'
     respond('a', pending('a', third['id']), 'negative')
     negative = own('b', third['id'])
-    negative = edit('b', negative, changed_data | {'body': PRIVATE + '-still-negative'})
+    negative = edit('b', negative, changed_data | {'body': PUBLIC + '-still-negative'})
     assert negative['verification_status'] == 'negative'
     respond('a', pending('a', third['id']), 'unverified')
     assert edit('b', own('b', third['id']), changed_data)['verification_status'] == 'unverified'
@@ -245,7 +246,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
         assert row['claim_type'] == 'incident' and row['incident_kind'] == kind
         assert row['field_name'] == 'incident_kind' and row['value_text'] == kind
         assert row['spec_items'] == [] and row['verification_status'] == 'unverified'
-        assert edit('b', row, incident(kind=kind, body=PRIVATE + '-details'))['incident_kind'] == kind
+        assert edit('b', row, incident(kind=kind, body=PUBLIC + '-details'))['incident_kind'] == kind
     current_incident = own('b', incidents[0]['id'])
     rejected(ValueError, lambda: edit('b', current_incident, incident(kind='theft')))
     rejected(ValueError, lambda: edit('b', current_incident, specification()))
@@ -371,7 +372,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
         flags = con.execute('SELECT verification_status,admin_verification FROM claims WHERE id=%s',
                             (int(waiting['id']),)).fetchone()
         assert flags['admin_verification'] == 1
-    edited_moderated = edit('c', moderated, incident(body=PRIVATE + '-admin-decision-preserved'))
+    edited_moderated = edit('c', moderated, incident(body=PUBLIC + '-admin-decision-preserved'))
     assert edited_moderated['verification_status'] == 'negative'
     with connect(settings, 'chronicle') as con:
         assert con.execute('SELECT verification_status,admin_verification FROM claims WHERE id=%s',
@@ -399,7 +400,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
         changed_data | {'revision': 'a' * 64}))
     assert snapshot() == before
     accounts.drain_projection()
-    create('b', incident(body=PRIVATE + '-projection-delivered'))
+    create('b', incident(body=PUBLIC + '-projection-delivered'))
 
     # Ordinary authenticated actions obey PR #52 service modes even for Admin.
     admin_claim = create('admin', incident())
@@ -422,7 +423,7 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
         rejected(ServiceRestricted, lambda: service.list(actors[name], individual))
         rejected(ServiceRestricted, lambda: service.create(actors[name], individual, incident()))
     assert service.list(actors['admin'], individual)['can_write'] is True
-    admin_claim = edit('admin', admin_claim, incident(body=PRIVATE + '-admin-only'))
+    admin_claim = edit('admin', admin_claim, incident(body=PUBLIC + '-admin-only'))
     assert create('admin', specification())['verification_status'] == 'unverified'
     # An already-resolved browser identity does not retain a revoked Admin role.
     with connect(settings, 'accounts') as con:
@@ -444,11 +445,12 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
             int(admin_claim['id']), {'revision': admin_claim['revision']}))
     assert snapshot() == before
 
-    # Public projection remains the existing allowlist. Body, custom spec data,
-    # author/location identity and Incident detail never become public fields.
+    # Public Claim prose/names use separate markers. Custom specification
+    # data, profile-only fields and inactive content must remain private.
     private_spec = create('b', specification(items=[dict(field_name='owner_private_note', value_text=PRIVATE)]))
     public = catalog.chronicle(None, individual, limit=50)
     assert PRIVATE not in json.dumps(public) and PRIVATE not in json.dumps(catalog.detail(None, individual))
+    assert PUBLIC in json.dumps(public)
     for row in public['items']:
         assert set(row) == PUBLIC_CLAIM_FIELDS
     by_id = {row['id']: row for row in public['items']}
@@ -522,7 +524,7 @@ def http_checks(settings, accounts, operations, service, owners, records, fixtur
         assert hidden.json()['items'][0]['id'] == str(fixture['hidden_claim'])
         assert hidden.json()['items'][0]['status'] == 'inactive'
 
-        response = client.post(base, headers=headers('b'), json=incident(body=PRIVATE + '-http'))
+        response = client.post(base, headers=headers('b'), json=incident(body=PUBLIC + '-http'))
         assert response.status_code == 200, response.text
         row = response.json()['claim']
         path = base + '/' + row['id']
@@ -532,7 +534,7 @@ def http_checks(settings, accounts, operations, service, owners, records, fixtur
             assert denied.status_code == 404 and PRIVATE not in denied.text
             assert client.post(path + '/deactivate', headers=headers(name),
                                json={'revision': row['revision']}).status_code == 404
-        edited = client.patch(path, headers=headers('b'), json=incident(body=PRIVATE + '-http-edit') | {'revision': row['revision']})
+        edited = client.patch(path, headers=headers('b'), json=incident(body=PUBLIC + '-http-edit') | {'revision': row['revision']})
         assert edited.status_code == 200, edited.text
         assert client.patch(path, headers=headers('b'), json=incident() | {'revision': row['revision']}).status_code == 409
         row = edited.json()['claim']

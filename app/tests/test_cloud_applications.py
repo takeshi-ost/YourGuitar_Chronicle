@@ -107,6 +107,7 @@ def test_retry_requires_canonical_applicant_and_empty_payload(api):
     ('post',BASE,{'kind':'acquire','individual_id':'12'},'start'),
     ('post',BASE+'/'+REV+'/cancel',{},'cancel'),
     ('post',BASE+'/'+REV+'/retry',{},'retry'),
+    ('post',BASE+'/'+REV+'/replace_photos',{},'replace_photos'),
     ('post',BASE+'/'+REV+'/submit',{'acquisition_date':'2020-01-01'},'submit'),
     ('get',BASE+'/'+REV+'/photos/closeup',None,'image'),
     ('post',BASE+'/'+REV+'/photos/closeup',None,'upload'),
@@ -164,3 +165,83 @@ def test_application_list_permission_comes_from_locked_read_transaction(monkeypa
     assert result=={'items':[],'can_write':writable}
     assert active==[]
     operations.access.assert_called_once_with('user_read','canonical')
+
+@pytest.mark.parametrize('route,method,body',[('preview','preview',{'kind':'acquire','individual_id':'12'}),('keep','keep_preview',{'draft_token':'b'*64,'acquisition_date':'2020-01-01','body':'Synthetic'})])
+def test_unsaved_preview_routes_remain_verified_actor_scoped(api,route,method,body):
+    client,verifier,service=api
+    getattr(service,method).return_value={'status':'draft','unsaved':route=='preview'}
+    response=client.post(BASE+'/'+route,headers=AUTH,json=body)
+    assert response.status_code==200 and response.headers['cache-control']=='private, no-store'
+    getattr(service,method).assert_called_once_with('canonical',body)
+    assert client.post(BASE+'/'+route+'?user_id=2',headers=AUTH,json=body).status_code==400
+    verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    assert client.post(BASE+'/'+route,headers=AUTH,json=body).status_code==403
+
+
+def test_replace_photos_requires_verified_applicant_and_empty_payload(api):
+    client,verifier,service=api
+    service.replace_photos.return_value={'status':'draft'}
+    path=BASE+'/'+REV+'/replace_photos'
+    assert client.post(path,headers=AUTH,json={}).json()=={'status':'draft'}
+    service.replace_photos.assert_called_once_with('canonical',REV)
+    assert client.post(path,headers=AUTH,json={'applicant_id':2}).status_code==400
+    verifier.verify.return_value=VerifiedIdentity('issuer','subject','',False)
+    assert client.post(path,headers=AUTH,json={}).status_code==403
+    assert service.replace_photos.call_count==1
+
+
+@pytest.fixture
+def recovery():
+    import sqlite3,time
+    from contextlib import contextmanager
+    from ygc.cloud_applications import CloudApplications
+    db=sqlite3.connect(':memory:');db.row_factory=sqlite3.Row
+    fields=['revision','applicant_id','request_kind','claim_id','expires_at','status','images','submitted_at','started_at','completed_at','received','result','report','error','attempts','lease_token','lease_until','product_observations','challenge','serial','acquisition_date']
+    db.execute('CREATE TABLE acquire_applications ('+','.join(fields)+')')
+    db.execute('CREATE TABLE acquire_application_events (id INTEGER PRIMARY KEY,revision,at,kind,note)')
+    row=dict.fromkeys(fields,'old');row.update(revision=REV,applicant_id='canonical',request_kind='listing',claim_id=None,expires_at=time.time()+3600,status='error',images='{"closeup":"old","overview":"old"}',challenge='CHALLENGE',serial='SERIAL',acquisition_date='2025-04-15')
+    db.execute('INSERT INTO acquire_applications VALUES('+','.join('?' for _ in fields)+')',list(row.values()))
+    db.commit()
+    class Cursor:
+        def __init__(self,c):self.c=c
+        def fetchone(self):
+            r=self.c.fetchone();return dict(r) if r else None
+    class Connection:
+        def execute(self,sql,args=()):return Cursor(db.execute(sql.replace('%s','?').replace(' FOR UPDATE',''),args))
+    service=object.__new__(CloudApplications)
+    @contextmanager
+    def transaction(actor,write=False):
+        assert write is True
+        with db:yield Connection(),actor,None
+    service.transaction=transaction;service.detail=lambda r:r
+    yield service,db,row
+    db.close()
+
+
+def test_failed_listing_reopens_with_same_challenge_and_no_old_review_authority(recovery):
+    service,db,before=recovery
+    row=service.replace_photos('canonical',REV)
+    assert row['status']=='draft' and row['images']=='{}'
+    for key in ('submitted_at','started_at','completed_at','received','result','report','error','lease_token','lease_until','product_observations'):assert row[key] is None
+    for key in ('challenge','serial','acquisition_date','expires_at','claim_id'):assert row[key]==before[key]
+    assert row['attempts']==0
+    assert db.execute('SELECT kind FROM acquire_application_events').fetchone()[0]=='photos_reopened'
+    assert service.replace_photos('canonical',REV)==row
+    assert db.execute('SELECT count(*) FROM acquire_application_events').fetchone()[0]==1
+
+
+@pytest.mark.parametrize('field,value',[("status",v) for v in ('pending','processing','accepted','rejected','cancelled','expired')]+[('request_kind','acquire'),('claim_id',12),('expires_at',0)])
+def test_photo_recovery_does_not_reopen_other_states(recovery,field,value):
+    service,db,_=recovery
+    db.execute('UPDATE acquire_applications SET '+field+'=?',(value,));db.commit()
+    before=tuple(db.execute('SELECT * FROM acquire_applications').fetchone())
+    with pytest.raises(ValueError):service.replace_photos('canonical',REV)
+    assert tuple(db.execute('SELECT * FROM acquire_applications').fetchone())==before
+    assert db.execute('SELECT count(*) FROM acquire_application_events').fetchone()[0]==0
+
+
+def test_photo_recovery_cannot_access_another_applicants_request(recovery):
+    from ygc.cloud_guitars import GuitarMissing
+    service,db,_=recovery
+    with pytest.raises(GuitarMissing):service.replace_photos('another',REV)
+    assert db.execute('SELECT status FROM acquire_applications').fetchone()[0]=='error'

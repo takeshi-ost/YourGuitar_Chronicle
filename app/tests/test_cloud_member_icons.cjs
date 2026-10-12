@@ -15,7 +15,7 @@ function environment(){
 }
 test('member images use authenticated no-store fetch, blob only and revoke on clear',async()=>{
  const e=environment(),host=e.element();e.icons.mount(host,'2');await tick();
- const r=e.requests[0];assert.equal(r.url,'/api/auth/members/2/avatar');assert.equal(r.options.cache,'no-store');assert.equal(r.options.credentials,'omit');assert.equal(r.options.redirect,'error');assert.equal(r.verified,true);
+ const r=e.requests[0];assert.equal(r.url,'/api/auth/members/2/avatar');assert.equal(r.options.cache,'no-store');assert.equal(r.options.credentials,'omit');assert.equal(r.options.redirect,'error');assert.equal(r.verified,false);
  e.pending.shift()(e.response());await tick();assert.equal(host.children[0].src,'blob:synthetic-0');
  e.icons.clear();assert.equal(host.textContent,'♙');assert.deepEqual(e.revoked,e.made);
 });

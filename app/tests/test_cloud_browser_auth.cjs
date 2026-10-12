@@ -173,7 +173,7 @@ function principalHarness({readiness=Promise.resolve(),token=Promise.resolve('A-
  const request=async(url,options)=>{calls.push({url,options});return fetch?fetch(url,options):new Response(JSON.stringify(account))};
  const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
  const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request});
- return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener()}};
+ return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener(user)}};
 }
 test('Pending SDK readiness cannot send an initiating A mutation using B credentials',async()=>{
  const hold=delayed(),s=principalHarness({readiness:hold.promise});
@@ -203,4 +203,82 @@ test('A stale canonical cache rejects writes after the SDK switched before obser
  assert.equal(s.calls.length,count);assert.equal(cleared,1);assert.equal(s.adapter.account,null);
  // Canonical restore is an explicit new read and is still available for B.
  await s.adapter.restore();assert.equal(s.calls.at(-1).options.headers.get('Authorization'),'Bearer B-token');
+});
+
+test('Shared API budget bounds mixed component reads and releases on network failure',async()=>{
+ const holds=[];let active=0,peak=0;
+ const s=principalHarness({fetch:async(url)=>{active++;peak=Math.max(peak,active);const hold=delayed();holds.push(hold);await hold.promise;active--;if(url.endsWith('/settings'))throw Error('network');return new Response('{}')}});
+ const paths=['/api/auth/settings','/api/auth/profile/summary','/api/auth/profile','/api/auth/notifications'];
+ const results=Promise.allSettled(paths.map(path=>s.adapter.authorizedFetch(path)));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(s.calls.length,2);
+ holds[0].resolve();await new Promise(resolve=>setImmediate(resolve));assert.equal(s.calls.length,3);
+ holds[1].resolve();await new Promise(resolve=>setImmediate(resolve));assert.equal(s.calls.length,4);
+ holds[2].resolve();holds[3].resolve();assert.equal((await results).filter(r=>r.status==='rejected').length,1);assert.equal(peak,2);
+});
+test('Queued cancelled requests and old-identity mutations never reach the server',async()=>{
+ const hold=delayed(),s=principalHarness({fetch:async()=>{await hold.promise;return new Response('{}')}});
+ const running=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/profile/summary')];
+ const controller=new AbortController();
+ const cancelled=s.adapter.authorizedFetch('/api/auth/profile',{signal:controller.signal});
+ const cancelCheck=assert.rejects(cancelled,e=>e.name==='AbortError');controller.abort();
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(s.calls.length,2);hold.resolve();await Promise.all(running);await cancelCheck;assert.equal(s.calls.length,2);
+ const hold2=delayed(),q=principalHarness({fetch:async()=>{await hold2.promise;return new Response('{}')}});
+ const first=[q.adapter.authorizedFetch('/api/auth/settings'),q.adapter.authorizedFetch('/api/auth/profile/summary')];
+ const queued=q.adapter.authorizedFetch('/api/auth/profile',{method:'PUT',body:'private'});
+ const check=assert.rejects(queued,e=>e.code==='sign_in_required');await new Promise(resolve=>setImmediate(resolve));q.switchUser();hold2.resolve();assert.ok((await Promise.allSettled(first)).every(r=>r.status==='rejected'&&r.reason.code==='sign_in_required'));await check;assert.equal(q.calls.length,2);
+});
+
+test('Row reads reserve foreground capacity and queued user work runs before another row',async()=>{
+ const holds=[],s=principalHarness({fetch:async()=>{const h=delayed();holds.push(h);await h.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const rows=[s.adapter.authorizedFetch('/api/auth/favorites/1'),s.adapter.authorizedFetch('/api/auth/favorites/2')];await tick();assert.equal(s.calls.length,1);
+ const selection=s.adapter.authorizedFetch('/api/public/guitars/12');await tick();assert.equal(s.calls.length,2);assert.ok(s.calls[1].url.endsWith('/guitars/12'));
+ const sort=s.adapter.authorizedFetch('/api/public/guitars?sort=oldest');await tick();assert.equal(s.calls.length,2);
+ holds[1].resolve();await selection;await tick();assert.equal(s.calls.length,3);assert.ok(s.calls[2].url.includes('sort=oldest'));
+ holds[2].resolve();await sort;holds[0].resolve();await tick();assert.equal(s.calls.length,4);assert.ok(s.calls[3].url.endsWith('/favorites/2'));holds[3].resolve();await Promise.all(rows);
+});
+
+test('Simultaneous same-principal GETs share one request with separately consumable responses; later reads are fresh',async()=>{
+ const hold=delayed(),s=principalHarness({fetch:async()=>{await hold.promise;return new Response('{"value":7}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const reads=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/settings',{cache:'no-store'})];await tick();assert.equal(s.calls.length,1);hold.resolve();
+ const responses=await Promise.all(reads);assert.notEqual(responses[0],responses[1]);assert.deepEqual(await Promise.all(responses.map(r=>r.json())),[{value:7},{value:7}]);
+ await s.adapter.authorizedFetch('/api/auth/settings');assert.equal(s.calls.length,2);
+});
+
+test('Different headers and cancellable or forced reads cannot share another request',async()=>{
+ const holds=[],s=principalHarness({fetch:async()=>{const h=delayed();holds.push(h);await h.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const reads=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/settings',{headers:{'X-YGC-Timezone':'Asia/Tokyo'}}),s.adapter.authorizedFetch('/api/auth/settings',{},true),s.adapter.authorizedFetch('/api/auth/settings',{signal:new AbortController().signal})];
+ await tick();assert.equal(s.calls.length,2);holds[0].resolve();holds[1].resolve();await tick();assert.equal(s.calls.length,4);holds[2].resolve();holds[3].resolve();await Promise.all(reads);
+});
+
+test('A mutation invalidates pending GET reuse before its response arrives',async()=>{
+ const hold=delayed(),s=principalHarness({fetch:async(url,options)=>{if(!options.method)await hold.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const read=s.adapter.authorizedFetch('/api/auth/settings');await tick();await s.adapter.authorizedFetch('/api/auth/settings',{method:'PUT',body:'{}'},true);
+ const after=s.adapter.authorizedFetch('/api/auth/settings');await tick();assert.equal(s.calls.filter(c=>!c.options.method).length,2);hold.resolve();await Promise.all([read,after]);
+});
+
+test('An identity switch rejects all consumers of a shared late response',async()=>{
+ const hold=delayed(),s=principalHarness({fetch:async()=>{await hold.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const checks=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/settings')].map(p=>assert.rejects(p,e=>e.code==='sign_in_required'));
+ await tick();assert.equal(s.calls.length,1);s.switchUser();hold.resolve();await Promise.all(checks);assert.equal(s.calls.length,1);
+});
+
+test('Queued cancellation rejects promptly without waiting for an occupied slot',async()=>{
+ const hold=delayed(),s=principalHarness({fetch:async()=>{await hold.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const running=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/profile/summary')];await tick();
+ const controller=new AbortController(),check=assert.rejects(s.adapter.authorizedFetch('/api/public/guitars/12',{signal:controller.signal}),e=>e.name==='AbortError');await tick();controller.abort();await check;assert.equal(s.calls.length,2);hold.resolve();await Promise.all(running);
+});
+
+test('An interactive catalog request precedes queued initial statistics and map reads',async()=>{
+ const holds=[],s=principalHarness({fetch:async()=>{const h=delayed();holds.push(h);await h.promise;return new Response('{}')}}),tick=()=>new Promise(r=>setImmediate(r));
+ const initial=[s.adapter.authorizedFetch('/api/auth/settings'),s.adapter.authorizedFetch('/api/auth/profile/summary')];await tick();
+ const statistics=s.adapter.authorizedFetch('/api/public/guitars/statistics'),map=s.adapter.authorizedFetch('/api/public/guitars/world-map'),sort=s.adapter.authorizedFetch('/api/public/guitars?sort=oldest');await tick();
+ holds[0].resolve();await tick();assert.ok(s.calls[2].url.includes('sort=oldest'));holds[2].resolve();holds[1].resolve();await tick();assert.equal(s.calls.length,5);holds[3].resolve();holds[4].resolve();await Promise.all([...initial,statistics,map,sort]);
+});
+
+
+for(const [path,method,cache] of [
+ ['/api/public/guitars','GET','no-cache'],['/api/public/guitars/52','GET','no-cache'],['/api/public/guitars/52/chronicle?limit=25','GET','no-cache'],['/api/public/guitars/world-map','GET','no-cache'],
+ ['/api/public/guitars/52/photo','GET','no-store'],['/api/auth/avatar','GET','no-store'],['/api/auth/notifications','GET','no-store'],['/api/auth/me','GET','no-store'],['/api/public/guitars','POST','no-store']])test('revalidation opt-in applies only to public JSON GET '+path+' '+method,async()=>{
+ const s=setup();s.auth.currentUser=s.user;await s.adapter.authorizedFetch(path,{method,cache:'no-cache'});
+ assert.equal(s.calls.at(-1).options.cache,cache);assert.equal(s.calls.at(-1).options.credentials,'omit');assert.match(s.calls.at(-1).options.headers.get('Authorization'),/^Bearer /);
 });

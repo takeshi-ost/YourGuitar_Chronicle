@@ -1338,6 +1338,7 @@
   "chronicle.decision_saved": "Decision saved. Guitar details and history have been refreshed.",
   "chronicle.decision_conflict": "The Claim changed or Crawl/maintenance is running. Refresh before reviewing again.",
   "chronicle.decision_unavailable": "The result could not be confirmed. Refresh the history before attempting another change.",
+  "chronicle.dispute_claim_locked": "This Claim is locked by an ownership dispute decision. Use administrator dispute reconsideration to change it.",
   "users.owned": "Owned",
   "users.formerly_owned": "Formerly Owned",
   "users.ownership_refresh": "Refresh ownership",
@@ -1817,5 +1818,15 @@
   "members.readonly": "Follow changes are unavailable in read-only mode.",
   "members.followed": "Following this member.",
   "members.unfollowed": "No longer following this member.",
-  "members.uncertain": "The result is uncertain. Refresh to check before changing it again."
+  "members.uncertain": "The result is uncertain. Refresh to check before changing it again.",
+  "settings.partial_saved": "Profile settings were saved; the following step failed.",
+  "settings.refresh_required": "The result is uncertain. Reload this page before saving again.",
+  "settings.notice": "Display Name is required. Other profile information is optional. Email and password are managed by authentication.",
+  "applications.replace_photos": "Replace photos",
+  "applications.replace_photos_confirm": "Return this failed Listing to a draft and select both photos again? The existing challenge and deadline stay unchanged.",
+  "owner.acquire_inbox": "Unanswered Requests",
+  "owner.claims_ownership": "claims ownership of",
+  "owner.inbox_unavailable": "Ownership requests could not be loaded. Refresh the page to retry.",
+  "owner.accept": "Accept",
+  "owner.decline": "Decline"
 }
