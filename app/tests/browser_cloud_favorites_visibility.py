@@ -79,7 +79,9 @@ def main():
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     account_html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
-    public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8')
+    public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8').replace('</head>', '<script src="/assets/overlays.js" defer></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css"></head>')
+    assets['overlays.js'] = (STATIC / 'overlays.js').read_text()
+    assets['cloud-auth-dialog.css'] = (STATIC / 'cloud-auth-dialog.css').read_text()
     users = {name: dict(id=str(index), app_user_id='fixture-' + name,
         display_name=name.title(), account_type='user', role='member', status='active')
         for index, name in enumerate(('alice', 'other'), 1)}

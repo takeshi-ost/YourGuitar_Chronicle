@@ -82,7 +82,9 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8')
+    html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8').replace('</head>', '<script src="/assets/overlays.js" defer></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css"></head>')
+    assets['overlays.js'] = (STATIC / 'overlays.js').read_text()
+    assets['cloud-auth-dialog.css'] = (STATIC / 'cloud-auth-dialog.css').read_text()
     guitars, history = fixtures()
     state = dict(requests=[], writes=[], external=[], failures={}, mode='normal', role='member')
     errors = []
@@ -392,8 +394,11 @@ def main():
         search('SERIAL-10'); open_guitar('10')
         clean_content()
         page.locator('#acquireLink').click()
-        expect(page.locator('#accountFixture')).to_be_visible()
-        assert page.url == BASE + '/account?acquire=10'
+        expect(page.locator('#cloudAuthDialog')).to_be_visible()
+        expect(page.locator('#authEmail')).to_be_visible()
+        assert page.url == BASE + '/guitars/10'
+        page.locator('#authCancel').click()
+        expect(page.locator('#cloudAuthDialog')).not_to_be_visible()
         assert not state['writes'] and not state['external'] and not errors, (state, errors)
     print('Cloud public catalog browser: anonymous search/sort/pages, safe structured detail, '
           'Chronicle pagination, source links, mobile/Japanese and browser history, empty/errors/modes, '
