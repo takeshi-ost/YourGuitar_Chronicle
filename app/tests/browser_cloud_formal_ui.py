@@ -59,8 +59,8 @@ def check_profile_lists(page,base,fixture):
     page.reload()
     # The seed changed outside a user mutation. Exercise the real explicit
     # refresh to invalidate the legitimate same-user display cache.
-    expect(page.locator('#selfProfileRefresh')).to_be_enabled()
-    page.locator('#selfProfileRefresh').click()
+    expect(page.locator('#formalProfileRefresh')).to_be_enabled()
+    page.locator('#formalProfileRefresh').click()
     owned=page.locator('#selfGuitars_owned')
     favorites=page.locator('#selfFavorites')
     expect(owned.locator('tbody tr.clickable')).to_have_count(30)
