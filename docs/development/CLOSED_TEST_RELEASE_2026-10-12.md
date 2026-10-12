@@ -12,14 +12,17 @@ Recent performance changes reduce duplicate reads, aggregate row Favorites, shar
 short-lived tab-local self display data after fresh identity/service checks, reuse
 public/static HTTP responses, pool HTTP database connections and render photos
 before unrelated list/Chronicle completion. Negative dots and compact Favorite
-status layout have also been corrected. No schema migration is introduced.
+status layout have also been corrected. Avatar reads update their controls on
+completion, including reloads with an existing image. No schema migration is introduced.
 
 ## Verification requirements
 
 Run the standard `scripts/run_tests.py` entry point for Python, JavaScript,
 Chromium and disposable PostgreSQL 18.6. PR checks also validate pinned dependency
 closure and schema artifacts. PostgreSQL pool acceptance and formal Claim/dispute
-browser checks are now included in the standard runner.
+browser checks are now included in the standard runner. All 21 independent
+browser groups run and report failures; one failure no longer suppresses later
+coverage. The CI job budget is 25 minutes for the expanded suite.
 
 The local environment cannot perform the complete Chromium/PostgreSQL acceptance;
 GitHub PR checks must pass on the exact candidate commit. Synthetic fixtures do

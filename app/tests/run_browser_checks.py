@@ -4,6 +4,8 @@ from pathlib import Path
 import socket
 import tempfile
 import threading
+import importlib
+import traceback
 
 
 def main():
@@ -32,48 +34,24 @@ def main():
             thread = threading.Thread(target=server.run, kwargs={'sockets':[sock]}, daemon=True)
             thread.start()
             try:
-                from browser_ui_components import main as components
-                from browser_modal_dismissal import main as dismissal
-                components()
-                dismissal()
-                from browser_user_journeys import main as journeys
-                journeys(repository)
-                from browser_cloud_account import main as cloud_account
-                cloud_account()
-                from browser_cloud_applications_retry import main as cloud_applications_retry
-                cloud_applications_retry()
-                from browser_cloud_owner import main as cloud_owner
-                cloud_owner()
-                from browser_cloud_console import main as cloud_console
-                cloud_console()
-                from browser_cloud_admin_applications import main as cloud_admin_applications
-                cloud_admin_applications()
-                from browser_cloud_public_catalog import main as cloud_public_catalog
-                cloud_public_catalog()
-                from browser_cloud_formal_ui import main as cloud_formal_ui
-                cloud_formal_ui()
-                from browser_detail_dispute import main as detail_dispute
-                detail_dispute()
-                from browser_formal_claim_actions import main as formal_claim_actions
-                formal_claim_actions()
-                from browser_cloud_claim_posting import main as cloud_claim_posting
-                cloud_claim_posting()
-                from browser_cloud_media_claims import main as cloud_media_claims
-                cloud_media_claims()
-                from browser_cloud_event_claims import main as cloud_event_claims
-                cloud_event_claims()
-                from browser_cloud_identity_correction import main as cloud_identity_correction
-                cloud_identity_correction()
-                from browser_cloud_notifications import main as cloud_notifications
-                cloud_notifications()
-                from browser_cloud_ownership_disputes import main as cloud_ownership_disputes
-                cloud_ownership_disputes()
-                from browser_cloud_favorites_visibility import main as cloud_favorites_visibility
-                cloud_favorites_visibility()
-                from browser_cloud_follows import main as cloud_follows
-                cloud_follows()
-                from browser_cloud_ownership import main as cloud_ownership
-                cloud_ownership()
+                # Independent fixture journeys must all run so one failure does
+                # not hide regressions in the remaining browser coverage.
+                failures = []
+                checks = ('browser_ui_components', 'browser_modal_dismissal', 'browser_user_journeys', 'browser_cloud_account', 'browser_cloud_applications_retry', 'browser_cloud_owner', 'browser_cloud_console', 'browser_cloud_admin_applications', 'browser_cloud_public_catalog', 'browser_cloud_formal_ui', 'browser_detail_dispute', 'browser_formal_claim_actions', 'browser_cloud_claim_posting', 'browser_cloud_media_claims', 'browser_cloud_event_claims', 'browser_cloud_identity_correction', 'browser_cloud_notifications', 'browser_cloud_ownership_disputes', 'browser_cloud_favorites_visibility', 'browser_cloud_follows', 'browser_cloud_ownership')
+                for module in checks:
+                    print('START browser:', module, flush=True)
+                    try:
+                        check = importlib.import_module(module).main
+                        check(repository) if module == 'browser_user_journeys' else check()
+                    except Exception:
+                        traceback.print_exc()
+                        failures.append(module)
+                        print('FAIL browser:', module, flush=True)
+                    else:
+                        print('PASS browser:', module, flush=True)
+                if failures:
+                    raise SystemExit('Browser checks failed: ' + ', '.join(failures))
+                print('All browser groups passed:', len(checks), flush=True)
             finally:
                 server.should_exit = True
                 thread.join(timeout=10)

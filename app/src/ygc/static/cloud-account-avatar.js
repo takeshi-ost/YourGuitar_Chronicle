@@ -48,7 +48,7 @@ export function createAvatar({auth,state,busy}){
   }
   async function refresh(){
     const c=begin();if(!c)return;
-    try{await read(c)}catch(error){fail(error,c)}
+    try{await read(c)}catch(error){fail(error,c)}finally{if(current(c))render()}
   }
   async function save(file){
     const c=begin();if(!c)return;
