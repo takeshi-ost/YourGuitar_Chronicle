@@ -337,7 +337,7 @@ def check_initial_discovery(page,base,fixture):
     page.evaluate("sessionStorage.setItem('fixture-random','0.999')")
     page.reload();expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailTitle')).to_contain_text('Fixture 1');assert page.url==base+'/ui'
-    page.locator('#catalogRefresh').click();expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
+    page.locator('#insightsRefresh').click();expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
     page.goto(base+'/ui/guitars/2');expect(page.locator('html')).to_have_attribute('data-fixture-ready','true')
     expect(page.locator('#detailTitle')).to_contain_text('Fixture 2');assert page.url.endswith('/ui/guitars/2')
     fixture.insights_case='empty'
