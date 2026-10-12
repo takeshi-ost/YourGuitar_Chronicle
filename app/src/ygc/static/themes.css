@@ -1,4 +1,18 @@
 /* Operator-curated themes. No user-authored CSS or image URLs are accepted. */
+:root[data-theme="dark_default"] {
+  color-scheme:dark;--bg:#101214;--panel:#181b1f;--surface:#15181b;--input:#15181b;
+  --line:#2a2f35;--text:#edf0f3;--muted:#9ba6b0;--accent:#d0a45d;
+  --control:#2a3036;--control-hover:#313943;
+}
+:root[data-theme="dark_default"] body {background:var(--bg);color:var(--text)}
+/* Older cloud pages have fixed white surfaces. Reconcile them with the same
+   saved preference; formal layouts keep their existing curated surface rules. */
+:root[data-theme] body:not([data-formal-catalog]):not([data-formal-profile]):not([data-formal-members]) :is(main:not(.console-workspace),.panel,dialog,.panel-heading,.guitar-card,.chronicle-record) {
+  background:var(--panel);color:var(--text);border-color:var(--line);
+}
+:root[data-theme] body:not([data-formal-catalog]):not([data-formal-profile]):not([data-formal-members]) :is(input,select,textarea,button,.button-link) {
+  background:var(--input);color:var(--text);border-color:var(--line);
+}
 :root[data-theme="light_default"] {
   color-scheme: light;
   --bg: #d4d8d9;

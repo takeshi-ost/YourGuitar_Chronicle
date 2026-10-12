@@ -362,6 +362,12 @@ def check_prepublication(page,base,fixture):
     expect(page.locator('[data-claim-id="101"] [data-private-claim-action="edit"]')).to_be_enabled()
     page.locator('[data-claim-id="101"] [data-private-claim-action="edit"]').click()
     expect(page.locator('#identityDialog')).to_be_visible();page.locator('#identityClose').click()
+    page.goto(base+'/account');expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
+    expect(page.locator('#accountSummary')).to_contain_text('Alice')
+    assert page.locator('main').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(25, 23, 21)'
+    for path in ('/console','/members'):
+        page.goto(base+path);expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
+        assert page.locator('body').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(188, 132, 52)'
     print('Prepublication: member Good/Bad persist through reload independently of owner decisions; Listing Edit opens author correction on Top/Profile; independent Profile panel removed and list Refresh visible.')
     fixture.prepublication=False
 
