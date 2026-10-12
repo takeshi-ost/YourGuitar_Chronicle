@@ -28,7 +28,7 @@ export function createProfile({formalProfile=false,auth,state,busy,work,updated}
     profile=data;$('selfProfileValues').replaceChildren();
     if(formalProfile){
       const node=(tag,cls,value)=>{const el=document.createElement(tag);el.className=cls;el.textContent=value;return el};
-      const user=state()?.user||{},meta=node('div','profile-meta','');if(data.fields.theme)document.documentElement.dataset.theme=data.fields.theme;
+      const user=state()?.user||{},meta=node('div','profile-meta','');if(data.fields.theme){globalThis.YGCTheme?.remember(data.fields.theme);document.documentElement.dataset.theme=data.fields.theme;}
       const location=[data.fields.location_country,data.fields.location_region].filter(Boolean).join(' / ');
       const values=[[t('ui.account_type_dce81c5b'),data.fields.account_type||user.account_type||'user']];
       if(user.created_at)values.push([t('ui.member_since_9321bcc0'),String(user.created_at).slice(0,10)]);

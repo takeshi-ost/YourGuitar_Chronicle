@@ -46,13 +46,13 @@ function environment({initial=account(),fullPage=false,storage=new Map(),storage
  vm.runInContext(fs.readFileSync(path.join(assets,'cloud-account-identity.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createIdentityCorrections;context.createIdentityCorrections=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
- Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
+ Object.assign(context,{createAuthDialog:options=>({open:async()=>options.onAuthenticated(await client.signIn()),close(){},render(){}}),createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
  let ready;if(fullPage)ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);else{component=context.createIdentityCorrections({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
  const control=id=>ids.get(id);
  return {component,context,client,control,calls,storage,ready,get updates(){return updates},get dialog(){return control('identityDialog')},get list(){return control('identityListings')},get history(){return control('identityHistory')},
   queue(value,match=null,method=null){replies.push({value,match,method})},setDetail(value){defaultDetail=value},setListings(value){defaultListings=value},
   open(id='31'){return component.openListing(id)},create(){return control('identityCreate').onclick()},dismiss(){control('identityClose').onclick()},review(){return control('identityForm').onsubmit({preventDefault(){}})},confirm(){return control('identityConfirm').onclick()},
-  changeAccount(next){state=next;client.signedIn=Boolean(next);component.render()},sdkSwitch(next){client.account=next;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
+  changeAccount(next,reconcile=true){state=next;client.signedIn=Boolean(next);if(reconcile)component.render()},sdkSwitch(next){client.account=next;client.signedIn=Boolean(next);for(const listener of identityListeners)listener()},event(type,event={}){return Promise.all((listeners[type]||[]).map(fn=>fn(event)))},
   async flush(){for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve))}
  };
 }
@@ -120,7 +120,7 @@ test('Newer list read supersedes old response',async()=>{const e=environment(),h
 
 test('An older denied list request cannot clear a newly opened authorized detail',async()=>{const e=environment(),held=deferred();e.queue(held.promise,'identity-corrections');const job=e.component.refresh();await e.open();held.resolve(denied(403));await job;assert.equal(e.dialog.open,true);assert.match(e.control('identityGuitar').textContent,/SERIAL-12/)});
 
-test('Account page restores Listings only after verification and clears on signout',async()=>{const e=environment({initial:null,fullPage:true});await e.ready;assert.equal(e.control('selfIdentityCorrections').hidden,true);await e.control('cloudAccountForm').onsubmit({preventDefault(){}});assert.equal(e.control('selfIdentityCorrections').hidden,true);await e.control('refreshVerification').onclick();assert.equal(e.control('selfIdentityCorrections').hidden,false);assert.match(e.list.textContent,/identity.edit_listing/);await e.open();e.create();field(e,'identityReason','PRIVATE');await e.control('signOut').onclick();assert.equal(e.dialog.open,false);assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(e.control('identityReason').value,'');assert.equal(writes(e).length,0)});
+test('Account page restores Listings only after verification and clears on signout',async()=>{const e=environment({initial:null,fullPage:true});await e.ready;assert.equal(e.control('selfIdentityCorrections').hidden,true);await e.control('showSignIn').onclick();assert.equal(e.control('selfIdentityCorrections').hidden,true);await e.control('refreshVerification').onclick();assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(e.list.children.length,0);await e.open();e.create();field(e,'identityReason','PRIVATE');await e.control('signOut').onclick();assert.equal(e.dialog.open,false);assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(e.control('identityReason').value,'');assert.equal(writes(e).length,0)});
 
 test('Positive older-Listing correction can return authoritative current snapshot from later chronology',async()=>{const e=environment();await compose(e);e.queue(success({detail:detail({individual:guitar('12',{model:'Later Listing current'}),items:[correction()],revision:'b'.repeat(64)})}),'/31','POST');await e.confirm();assert.equal(e.storage.size,0);assert.match(e.control('identityGuitar').textContent,/Later Listing current/);assert.match(e.history.textContent,/Model → Corrected/);assert.match(e.control('identityMessage').textContent,/identity.saved/)});
 
@@ -153,4 +153,10 @@ for(const next of [account(),account('2'),null])test('Full account BFCache reche
 for(const exit of ['signout','SDK change'])test('Full account '+exit+' still erases active Identity Correction retry state',async()=>{
  const e=environment({fullPage:true});await e.ready;await compose(e);e.queue(Error('Lost result'),'/31','POST');await e.confirm();if(exit==='signout')await e.control('signOut').onclick();else e.sdkSwitch(account('2'));
  assert.equal(e.storage.size,0);assert.equal(e.list.children.length,0);assert.equal(e.dialog.open,false);assert.equal(e.control('identityReason').value,'');assert.equal(e.control('selfIdentityCorrections').hidden,true);assert.equal(writes(e).length,1);
+});
+
+test('Listing Detail entry reconciles a newly signed-in actor before opening without a standalone list read',async()=>{
+ const e=environment({initial:null});e.changeAccount(account(),false);await e.open();
+ assert.equal(e.dialog.open,true);assert.match(e.control('identityGuitar').textContent,/31|Maker/);
+ assert.equal(writes(e).length,0);assert.equal(e.calls.filter(c=>c.url==='/api/auth/identity-corrections').length,0);
 });

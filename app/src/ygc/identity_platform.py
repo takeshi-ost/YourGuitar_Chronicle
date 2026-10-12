@@ -5,9 +5,13 @@ No registration or linking by email happens during token resolution.
 import os
 import re
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from ygc.platform_boundaries import ActorContext
+
+_request_identity = ContextVar('ygc_verified_request_identity', default=None)
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,15 @@ class IdentityPlatformIdentity:
             self._delete_app(self._app)
             self._app = None
 
+    @contextmanager
+    def verified_request(self, bearer_token, identity):
+        """Bind a completed verification to one ASGI request, never a session."""
+        handle = _request_identity.set((self, bearer_token, identity))
+        try:
+            yield
+        finally:
+            _request_identity.reset(handle)
+
     def verify(self, *, bearer_token: str | None) -> VerifiedIdentity:
         """Verify before enrollment; this alone does not authorize content actions."""
         self._reject_emulator()
@@ -60,6 +73,9 @@ class IdentityPlatformIdentity:
             raise RuntimeError('Identity verifier has been closed.')
         if not isinstance(bearer_token, str) or not bearer_token.strip():
             raise PermissionError('An Identity Platform ID token is required.')
+        cached = _request_identity.get()
+        if cached is not None and cached[0] is self and cached[1] == bearer_token:
+            return cached[2]
         try:
             from ygc.request_metrics import measure
             with measure('identity'):

@@ -7,7 +7,7 @@
     // from this tab-scoped, short-lived cache. Every document restores /me first.
     const storageKey='ygc-self-display-v1';
     try{storage??=globalThis.sessionStorage}catch{/* Storage is optional. */}
-    let dataOwner=null,dataEpoch=0,dataWrites=0,entries={};
+    let dataOwner=null,dataEpoch=0,dataWrites=0,entries={},themeOwner=null;
     const dataListeners=new Set();
     globalThis.addEventListener?.('pagehide',()=>{dataEpoch++;dataGate=null});
     const ttl=path=>path==='/api/auth/settings'?30000:path==='/api/auth/profile/summary'?15000:
@@ -19,6 +19,15 @@
     function bindUserData(){
       const user=auth.currentUser,valid=account?.user?.app_user_id&&account.identity?.email_verified===true;
       const owner=valid&&typeof user?.uid==='string'?JSON.stringify([origin,user.uid,auth.tenantId||'',account.user.app_user_id,account.user.role||'',account.user.status||'']):null;
+      const themeKnown=globalThis.YGCTheme?.bind(owner);
+      if(owner&&globalThis.YGCTheme&&!themeKnown&&themeOwner!==owner){
+        themeOwner=owner;
+        // A direct Account/Console/Member entry also restores the same display
+        // preference. Never authorize an operation from a saved theme.
+        Promise.resolve().then(()=>displayRead('/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
+          if(response.ok){const data=await response.json();if(dataOwner===owner&&accountUser===auth.currentUser)globalThis.YGCTheme?.remember(data?.fields?.theme)}
+        }).catch(()=>{});
+      }
       if(owner===dataOwner)return;
       dataOwner=owner;entries={};dataEpoch++;
       try{
@@ -36,8 +45,8 @@
     async function userDataGate(){
       // Reuse saves expensive private reads, not the service-mode check. Concurrent
       // cache hits share only this in-flight check, never a completed decision.
-      const response=await request(new URL('/api/service/status',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
-      if(!response.ok)throw Object.assign(Error('Service status unavailable.'),{status:503});
+      const response=await dispatchApi('/api/service/status',{},false);
+      if(!response.ok){const data=await response.json().catch(()=>null);throw Object.assign(Error('Service access unavailable.'),{status:response.status,code:data?.code||data?.detail?.code})}
       const status=await response.json();
       if(!['normal','read_only','offline','admin_only'].includes(status?.mode))throw Object.assign(Error('Invalid service status.'),{status:503});
       return status.mode;
@@ -87,8 +96,8 @@
     function identityChanged(initial=false){
       if(observedUser===auth.currentUser)return;
       observedUser=auth.currentUser;account=null;accountUser=null;
-      sharedReads.clear();dataOwner=null;
-      if(!initial)invalidateUserData();
+      sharedReads.clear();dataOwner=null;themeOwner=null;
+      if(!initial){invalidateUserData();globalThis.YGCTheme?.clear()}
       if(initial)return;
       for(const listener of identityListeners){try{listener()}catch{/* One view cannot retain another view's private data. */}}
     }
@@ -191,7 +200,7 @@
     async function me(forceRefresh=false){
       identityChanged();account=null;accountUser=null;
       const user=auth.currentUser;
-      if(!user)return null;
+      if(!user){globalThis.YGCTheme?.clear();return null;}
       const response=await api('/api/auth/me',{},forceRefresh);
       if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
       if(response.status===409){
@@ -206,7 +215,8 @@
     }
     async function documents(){
       const response=await request(new URL('/api/auth/registration',origin).href,{cache:'no-store',credentials:'omit',redirect:'error'});
-      return (await result(response)).documents;
+      const data=await result(response);
+      return data.participant_only===true?{...data.documents,participant_only:true}:data.documents;
     }
     function validate(profile,policies){
       const fields=['display_name','account_type','terms_accepted','privacy_accepted','terms_version','privacy_version'];
@@ -228,6 +238,7 @@
         const policies=await documents();validate(profile,policies);
         account=null;
         if(!auth.currentUser){
+          if(policies.participant_only===true)throw Object.assign(Error('Closed-test participant sign-in is required.'),{code:'closed_test_participant_required'});
           if(!credentials?.email||!credentials?.password)throw Error('Email and password are required.');
           await sdk.createUserWithEmailAndPassword(auth,credentials.email,credentials.password);
         }else if(credentials?.email&&credentials.email.trim().toLowerCase()!==auth.currentUser.email?.toLowerCase()){
@@ -238,7 +249,7 @@
         const registered=await result(await api('/api/auth/register',{method:'POST',
           headers:{'Content-Type':'application/json'},body:JSON.stringify({...profile,display_name:profile.display_name.trim()})}));
         if(auth.currentUser!==user){identityChanged();throw changedIdentity()}
-        accountUser=user;return account=registered;
+        accountUser=user;account=registered;bindUserData();return account;
       })},
       requestEmailVerification({language='en',acquire,claim}={}){return serial(async()=>{
         const user=auth.currentUser;
@@ -266,7 +277,7 @@
         // Force a new JWT: SDK emailVerified alone cannot authorize an app action.
         return me(true);
       })},
-      logout(){invalidateUserData();return serial(async()=>{try{await sdk.signOut(auth);account=null;dataOwner=null}finally{invalidateUserData()}})},
+      logout(){globalThis.YGCTheme?.clear();invalidateUserData();return serial(async()=>{try{await sdk.signOut(auth);account=null;dataOwner=null}finally{invalidateUserData()}})},
       authorizedFetch:api,
       invalidateUserData,
       onUserDataInvalidated(listener){dataListeners.add(listener);return ()=>dataListeners.delete(listener)},

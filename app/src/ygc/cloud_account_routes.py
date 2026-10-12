@@ -25,7 +25,7 @@ def account_response(identity, account):
             'identity': {'provider': 'identity-platform', 'email_verified': identity.email_verified}}
 
 
-def account_router(verifier, documents):
+def account_router(verifier, documents, *, participant_only=False):
     documents = deepcopy(documents)
     if set(documents) != {'terms', 'privacy'} or any(
             not isinstance(doc.get('version'), str) or not doc['version']
@@ -42,7 +42,7 @@ def account_router(verifier, documents):
 
     @router.get('/registration')
     def registration_documents():
-        return response({'backend': 'identity_platform', 'documents': documents})
+        return response({'backend': 'identity_platform', 'documents': documents, 'participant_only':participant_only})
 
     @router.post('/register')
     async def register(request: Request):

@@ -154,6 +154,8 @@ def main(argv=None):
                         safe=failure_status(exc,stage)
                         con.execute("UPDATE backup_schedules SET last_status='failed',last_error=%s WHERE target=%s",(safe.get('code','Backup worker failed.'),target))
                     print(json.dumps({'target':target,**safe}),file=sys.stderr)
+            from ygc.cloud_backup_monitor import read_schedule_report
+            print(json.dumps(read_schedule_report(settings,time.time())),flush=True)
             print(json.dumps({'status':'failed' if failed else 'ok','saved_targets':saved}));return int(failed)
         if args.verify_only:progress('read_back_verification')
         result=verify_latest(settings,storage,args.target) if args.verify_only else save(settings,storage,args.target,execution,progress,token)

@@ -21,6 +21,8 @@ from ygc.cloud_account_page import install, public_config
 
 
 def create_app(settings, *, project_id, tenant='', web_config=None, storage=None, backup_client=None,maintenance_client=None,crawl_client=None,review_verifier=None):
+    from ygc.cloud_participants import participant_subjects, ParticipantAdmission
+    subjects = participant_subjects(required=project_id == 'your-guitar-chronicle-staging')
     config = public_config(web_config, project_id=project_id, tenant=tenant) if web_config is not None else None
     accounts = PostgresAccounts(settings)
     verifier = IdentityPlatformIdentity(accounts, project_id=project_id, tenant=tenant)
@@ -49,8 +51,10 @@ def create_app(settings, *, project_id, tenant='', web_config=None, storage=None
     app = FastAPI(title='YGC staging account API', lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     from ygc.request_metrics import RequestTiming
+    if subjects is not None:
+        app.add_middleware(ParticipantAdmission, verifier=verifier, subjects=subjects)
     app.add_middleware(RequestTiming)
-    app.include_router(account_router(verifier, DOCUMENTS))
+    app.include_router(account_router(verifier, DOCUMENTS, participant_only=subjects is not None))
     if review_verifier is not None:
         from ygc.cloud_review_gateway import review_gateway
         from ygc.cloud_review import CloudReview

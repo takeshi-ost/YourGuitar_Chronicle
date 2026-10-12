@@ -16,6 +16,7 @@ function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2
     set textContent(value){this._text=String(value);this.children=[]}get textContent(){return this._text+this.children.map(child=>child.textContent).join('')}
     set innerHTML(_){throw Error('Public data must never be inserted as HTML.')}
     append(...nodes){this.children.push(...nodes)}replaceChildren(...nodes){this._text='';this.children=nodes}
+    removeAttribute(key){delete this.attributes[key];if(key==='src')delete this.src}
     setAttribute(key,value){this.attributes[key]=String(value)}getAttribute(key){return this.attributes[key]??null}
     focus(){document.activeElement=this}
     all(){return this.children.flatMap(child=>[child,...child.all()])}
@@ -303,7 +304,7 @@ test('Formal compact close preserves selected record and URL; reopening and filt
 test('Formal catalog aggregates API pages without pager UI and rejects changed or duplicate snapshots',async()=>{
   const guitars=Array.from({length:55},(_,i)=>guitar(i+1));
   const e=environment({url:'https://catalog.example/ui?page=2',guitars,presentation:{basePath:'/ui',listStyle:'table'}});
-  await e.ui.start();assert.equal(e.links().length,55);assert.equal(e.ids.get('catalogPagination').hidden,true);assert.equal(e.ids.get('catalogRefresh').hidden,true);
+  await e.ui.start();assert.equal(e.links().length,55);assert.equal(e.ids.get('catalogPagination').hidden,true);assert.equal(e.ids.get('catalogRefresh').hidden,false);
   assert.deepEqual(e.publicCalls().filter(c=>c.path==='/api/public/guitars').map(c=>c.params.get('page')),['1','2','3']);
   for(const fault of ['duplicate','changed','incomplete']){
     e.handler=call=>{if(call.path==='/api/public/guitars'&&call.params.get('page')==='2')return response({items:fault==='incomplete'?[]:guitars.slice(fault==='duplicate'?31:7,fault==='duplicate'?55:31),total:fault==='changed'?'56':'55',page:2,page_size:24,total_pages:3})};
@@ -477,7 +478,7 @@ test('Representative image starts before a held Chronicle and catalog; late imag
  e.handler=c=>c.path==='/api/public/guitars/1/chronicle'?chronicle.promise:c.path==='/api/public/guitars/1/photo'?photo.promise:c.path==='/api/public/guitars'?list.promise:undefined;
  const start=e.ui.start();await tick();assert.match(e.text('detailTitle'),/Model 1/);assert.equal(e.ids.get('detailContent').hidden,false);assert.equal(e.publicCalls().filter(c=>c.path.endsWith('/photo')).length,1);
  e.handler=null;await e.ui.navigate('/ui/guitars/2');assert.equal(e.publicCalls().find(c=>c.path.endsWith('/photo')).options.signal.aborted,true);
- photo.resolve(new Response(new Blob(['old image'],{type:'image/jpeg'}),{headers:{'Content-Type':'image/jpeg'}}));chronicle.resolve(response({items:[],next_after:null}));list.resolve(response({items:e.guitars,total:'2',page:1,page_size:24,total_pages:1}));await start;await tick();assert.match(e.text('detailTitle'),/Model 2/);assert.equal(image.src,undefined);
+ photo.resolve(new Response(new Blob(['old image'],{type:'image/jpeg'}),{headers:{'Content-Type':'image/jpeg'}}));chronicle.resolve(response({items:[],next_after:null}));list.resolve(response({items:e.guitars,total:'2',page:1,page_size:24,total_pages:1}));await start;await tick();assert.match(e.text('detailTitle'),/Model 2/);assert.equal(image.src,'/assets/no-picture.svg');
 });
 
 test('After mutation refresh keeps list/detail visible without restoring auth, then reflects fresh projection',async()=>{
@@ -498,4 +499,25 @@ test('Verification-only update with unchanged table fields keeps exact rows and 
 
 test('Mutation affecting Claim count rereads full list rather than retaining stale counts',async()=>{
  const e=environment({url:'https://catalog.example/ui/guitars/1',guitars:[guitar(1,{claim_count:'1'}),guitar(2,{claim_count:'0'})],presentation:{basePath:'/ui',listStyle:'table'}});await e.ui.start();const reads=e.publicCalls().filter(c=>c.path==='/api/public/guitars').length;e.guitars[0]=guitar(1,{claim_count:'2'});await e.ui.refresh({preserveView:true});assert.equal(e.publicCalls().filter(c=>c.path==='/api/public/guitars').length,reads+1);assert.ok(e.ids.get('catalogRows').children.some(row=>row.children.at(-1).textContent==='2'));
+});
+
+
+test('Top Page hydrates a discovery without changing its URL and retains it on refresh',async()=>{
+ const e=environment({url:'https://catalog.example/ui',presentation:{basePath:'/ui'}});await e.ui.start();
+ const lists=e.calls.filter(c=>c.path==='/api/public/guitars').length;
+ await e.ui.selectInitial('2');assert.equal(e.window.location.pathname,'/ui');assert.match(e.text('detailTitle'),/Model 2/);
+ assert.equal(e.calls.filter(c=>c.path==='/api/public/guitars').length,lists);
+ await e.ui.refresh();assert.match(e.text('detailTitle'),/Model 2/);
+ await e.ui.selectInitial('1');assert.match(e.text('detailTitle'),/Model 2/);
+});
+
+test('Explicit guitar and navigation before discoveries arrive take precedence over random default',async()=>{
+ for(const direct of [true,false]){
+  const e=environment({url:'https://catalog.example/ui'+(direct?'/guitars/1':''),presentation:{basePath:'/ui'}});await e.ui.start();
+  if(!direct)await e.ui.select('1');await e.ui.selectInitial('2');assert.match(e.text('detailTitle'),/Model 1/);assert.equal(e.window.location.pathname,'/ui/guitars/1');
+ }
+});
+
+test('Restricted Top Page never loads an initial discovery detail',async()=>{
+ const e=environment({url:'https://catalog.example/ui',presentation:{basePath:'/ui'}});e.mode='offline';await e.ui.start();const before=e.calls.length;await e.ui.selectInitial('2');assert.equal(e.calls.length,before);
 });

@@ -1,3 +1,4 @@
+import {createAuthDialog} from './cloud-auth-dialog.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 import {createMemberIcons} from './cloud-member-icons.js';
 export const memberId=v=>typeof v==='string'&&/^[1-9][0-9]{0,18}$/.test(v)&&!/[\r\n]/.test(v)&&(v.length<19||v<='9223372036854775807');
@@ -12,6 +13,8 @@ export function createMembersPage({document=globalThis.document,window=globalThi
  let auth=null,state=null,epoch=0,modalEpoch=0,profile=null,loading=false,uncertain=false,modalNext=null,modalDirection=null,stopped=false;
  const key=()=>state?.user?.app_user_id??null;
  const eligible=()=>Boolean(key()&&state?.identity?.email_verified===true&&auth?.signedIn&&auth?.account?.user?.app_user_id===key());
+ const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:()=>load()});
+ document.querySelectorAll('a[href="/account"],a[data-i18n="account.sign_in"],a[data-i18n="members.account"]').forEach(link=>{link.onclick=event=>{if(!eligible()){event.preventDefault();authDialog.open({opener:link})}}});
  const icons=createMemberIcons({document,window,auth:()=>auth,identity:key,eligible});
  function close(){icons.clear($('memberConnectionsList'));modalEpoch++;modalNext=null;modalDirection=null;$('memberConnectionsList').replaceChildren();$('memberConnectionsStatus').textContent='';$('memberMore').hidden=true;if($('memberConnections').open){if(formal)globalThis.YGCOverlays.close($('memberConnections'));else $('memberConnections').close()}}
  function clear(){icons.clear();epoch++;close();profile=null;state=null;loading=false;uncertain=false;$('memberResults').replaceChildren();$('memberCount').textContent='';$('memberName').textContent='';$('memberProfile').hidden=$('memberSearch').hidden=$('memberSelf').hidden=$('memberSignOut').hidden=true;$('memberFollow').hidden=true;$('memberFollowers').textContent=$('memberFollowing').textContent='';$('memberFirst').hidden=$('memberNext').hidden=true}

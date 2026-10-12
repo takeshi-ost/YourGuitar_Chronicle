@@ -67,7 +67,7 @@ test('One network/data error keeps other valid public sections and offers retry'
 test('Empty data is honest and language changes do not make another request',async()=>{
   const e=environment();e.response.discovery={items:[]};e.response.statistics={...stats(),individuals:'0',models:[],years:[]};e.response.map={countries:[]};await e.sync();
   assert.match(e.text('newDiscoveryList'),/No recent/);assert.match(e.text('modelChart'),/No model/);assert.match(e.text('yearChart'),/No single-year/);assert.match(e.text('mapSelection'),/No public country/);
-  e.state.locale='ja';await e.sync();assert.equal(e.calls.length,3);assert.equal(e.text('discoveryHeading'),'新着ギター');assert.match(e.text('newDiscoveryList'),/新着情報/);
+  e.state.locale='ja';await e.sync();assert.equal(e.calls.length,3);assert.equal(e.text('discoveryHeading'),'新着情報');assert.match(e.text('newDiscoveryList'),/新着情報/);
 });
 
 test('Country aliases combine counts and unknown small countries stay in accessible table',async()=>{
@@ -115,4 +115,14 @@ test('Chart end labels keep a full tick interval and all counts remain in tables
 
 test('Service invalidation clears insights with restriction text, without asking for sign-in',async()=>{
  const e=environment();await e.sync();e.state.blocked=true;e.state.blockCode='service_restricted';e.state.serviceMode='offline';await e.sync();assert.match(e.text('discoveryStatus'),/restricted/);assert.doesNotMatch(e.text('discoveryStatus'),/session|sign in/i);assert.equal(e.ids.get('newDiscoveryList').children.length,0);
+});
+
+
+test('Initial random detail draws only from displayed discoveries, including a single item or empty data',async()=>{
+ const e=environment();assert.equal(e.component.pickDiscovery(),null);
+ e.response.discovery.items=[news('2'),news('52'),news('9007199254740993')];await e.sync();
+ assert.equal(e.component.pickDiscovery(()=>0),'2');assert.equal(e.component.pickDiscovery(()=>.5),'52');assert.equal(e.component.pickDiscovery(()=>.999),'9007199254740993');
+ e.component.clear();assert.equal(e.component.pickDiscovery(),null);
+ e.response.discovery.items=[news('52')];await e.sync();assert.equal(e.component.pickDiscovery(()=>.999),'52');
+ e.response.discovery.items=[];e.state.readRevision++;await e.sync();assert.equal(e.component.pickDiscovery(),null);
 });

@@ -146,6 +146,17 @@ def checks(settings, db_owner, accounts, operations, records, fixture):
     individual = fixture['individual']
     actors = {name: row['app_user_id'] for name, row in records.items()}
 
+    # Votes use the real restricted Chronicle runtime, remain idempotent and
+    # cannot change verification or ownership, including for the author's vote.
+    vote_key = fixture['listing']
+    initial_owner = catalog.detail(None, individual)['presentation']['owner']
+    first_vote = service.votes(actors['b'], individual, vote_key, {'vote':'good'})
+    assert first_vote['items'][0]['vote'] == 'good'
+    assert service.votes(actors['b'], individual, vote_key, {'vote':'good'}) == first_vote
+    assert service.votes(actors['b'], individual, vote_key, {'vote':'bad'})['items'][0]['bad_count'] == '1'
+    assert catalog.detail(None, individual)['presentation']['owner'] == initial_owner
+    service.votes(actors['b'], individual, vote_key, {'vote':None})
+
     def create(name, data):
         row = service.create(actors[name], individual, data)['claim']
         assert set(row) == OWN_FIELDS

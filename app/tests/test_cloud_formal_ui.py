@@ -137,3 +137,18 @@ def test_versioned_formal_module_graph_resolves_inside_same_allowlisted_revision
                     assert resolved.startswith(prefix),resolved
                     todo.append(resolved)
         assert len(seen)>25
+
+
+def test_wallpapers_are_served_as_immutable_curated_images(monkeypatch):
+    # Match a minimal Linux runtime without a host WebP MIME registration.
+    monkeypatch.setattr('ygc.cloud_account_page.mimetypes.guess_type', lambda _: (None, None))
+    app=FastAPI();install(app,{})
+    with TestClient(app) as client:
+        prefix=re.search(r'/assets/v/[0-9a-f]{64}/',client.get('/ui').text)[0]
+        for name in ('butterscotch-wood.webp','rellic-black-wood.webp','cherry-wood.webp','white-pearl.webp'):
+            response=client.get(prefix+'theme-textures/'+name)
+            assert response.status_code==200 and response.headers['content-type']=='image/webp'
+            assert 'immutable' in response.headers['cache-control'] and len(response.content)>100
+        assert client.get(prefix+'theme-textures/unknown.webp').status_code==404
+        html=client.get('/ui').text
+        assert html.index('cloud-theme.js')<html.index('themes.css')

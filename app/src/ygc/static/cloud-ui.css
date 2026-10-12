@@ -108,3 +108,8 @@ body[data-formal-members] #memberStatus:empty{display:none}
 #catalogList td>a{text-decoration:none}
 
 #catalogSearch{font-size:14px}
+
+#detailPhoto[data-photo-loading]{visibility:hidden;min-height:180px}
+.profile-list-panel .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.profile-list-panel .toolbar input{min-width:140px;flex:1}
+.profile-list-panel .toolbar button{flex:none}

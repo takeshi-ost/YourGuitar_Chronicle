@@ -1,3 +1,4 @@
+import {createAuthDialog} from './cloud-auth-dialog.js';
 import {createDisputes} from './cloud-account-disputes.js';
 import {createApplicationBrowser} from './cloud-console-applications.js';
 import {createUserBrowser} from './cloud-console-users.js';
@@ -8,6 +9,8 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const modes={normal:'ui.normal_a7248eeb',read_only:'ui.read_only_8ac76735',offline:'ui.offline_a1794783',admin_only:'console.admin_only'};
 const defaultMessage=mode=>mode==='normal'?'':t('console.default_'+mode);
+const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:()=>location.reload()});
+document.querySelector('#consoleAccount a').onclick=event=>{event.preventDefault();authDialog.open({opener:event.currentTarget})};
 let auth,settings=null,reviewState=null,reviewPending=null,authorized=false,busy=false,sessionEpoch=0;
 const disputes=createDisputes({auth:()=>auth,state:()=>authorized?auth?.account:null,busy:()=>busy,work:action,admin:true,onUnauthorized:error,updated:()=>guitars.refresh()});
 const backups=createBackupBrowser({request,authorized:()=>authorized,onUnauthorized:error,maintenanceMode:()=>!!settings&&settings.mode!=='normal'});

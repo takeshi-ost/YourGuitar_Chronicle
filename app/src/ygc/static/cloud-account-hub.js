@@ -28,7 +28,7 @@ export function createAccountHub({auth,state,onUpdate=()=>{},readAvatar=true,rea
   const json=async path=>{const response=await auth().authorizedFetch(path,{cache:'no-store',reuseUserData:reuse},false);if(!response.ok)throw Error('Unavailable');return response.json()};
   const results=await Promise.allSettled([json('/api/auth/settings'),json('/api/auth/profile/summary'),readAvatar?auth().authorizedFetch('/api/auth/avatar',{cache:'no-store'},false):Promise.resolve(null),readNotifications?json('/api/auth/notifications?limit=25'):Promise.resolve(null)]);
   if(!current())return;
-  if(results[0].status==='fulfilled'){const data=results[0].value;if(data?.fields&&['location_country','location_region','theme'].every(key=>typeof data.fields[key]==='string')){settings=data.fields;document.documentElement.dataset.theme=settings.theme}}
+  if(results[0].status==='fulfilled'){const data=results[0].value;if(data?.fields&&['location_country','location_region','theme'].every(key=>typeof data.fields[key]==='string')){settings=data.fields;globalThis.YGCTheme?.remember(settings.theme);document.documentElement.dataset.theme=settings.theme}}
   if(results[1].status==='fulfilled'){const data=results[1].value;if(data&&Object.keys(data).length===3&&['owned_count','former_count','claim_count'].every(key=>typeof data[key]==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(data[key])))counts=data}
   if(results[2].status==='fulfilled'){const response=results[2].value;if(response?.ok&&response.headers.get('content-type')?.split(';')[0]==='image/jpeg'){const blob=await response.blob();if(current()&&blob.size&&blob.size<=25*1024*1024){if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(blob);avatar.src=url}}}
   if(!current())return;

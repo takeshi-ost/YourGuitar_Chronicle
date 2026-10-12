@@ -41,7 +41,8 @@ def main():
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     account_html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
-    public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8')
+    public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8').replace('</head>', '<script src="/assets/overlays.js" defer></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css"></head>')
+    assets['cloud-auth-dialog.css'] = (STATIC / 'cloud-auth-dialog.css').read_text()
     store = dict(rows=[], calls=[], writes=[], external=[], can_write=True, conflict_once=False, drop_after_commit=False, revision=0)
     errors = []
 
@@ -176,14 +177,14 @@ def main():
         page.wait_for_function('globalThis.YGCCloudPublicCatalogReady === true')
         expect(page.locator('#addClaimLink')).to_have_attribute('href', '/account?claim=' + GUITAR_ID)
         page.locator('#addClaimLink').click()
-        page.wait_for_function('globalThis.YGCCloudAccountReady === true')
-        expect(page.locator('#catalogClaimStatus')).to_contain_text('Sign in')
-        expect(page.locator('#catalogClaimStart')).to_be_disabled()
+        expect(page.locator('#cloudAuthDialog')).to_be_visible()
         assert not store['writes']
         assert not any(call['path'] == API for call in store['calls'])
-        page.locator('#email').fill('claim@example.invalid')
-        page.locator('#password').fill('fixture-password')
-        page.locator('#submit').click()
+        page.locator('#authEmail').fill('claim@example.invalid')
+        page.locator('#authPassword').fill('fixture-password')
+        page.locator('#authSubmit').click()
+        page.wait_for_function('globalThis.YGCCloudAccountReady === true')
+        assert page.url == BASE + '/account?claim=' + GUITAR_ID
         expect(page.locator('#catalogClaimStatus')).to_contain_text('Verify your email')
         page.locator('#sendVerification').click()
         page.wait_for_function('globalThis.fixtureVerificationURL !== undefined')

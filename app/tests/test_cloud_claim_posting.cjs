@@ -54,7 +54,7 @@ function environment({initial=account(),search='',fullPage=false}={}){
  vm.runInContext(fs.readFileSync(path.join(staticPath,'cloud-account-claims.js'),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function'),context);
  const create=context.createClaims;context.createClaims=value=>{args=value;component=create(value);return component};
  const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){},setCatalogIntent(){}});
- Object.assign(context,{createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createApplications:noOp});
+ Object.assign(context,{createAuthDialog:options=>{context.authComplete=options.onAuthenticated;return {open(){},close(){},render(){}}},createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createApplications:noOp});
  let ready;
  if(fullPage){ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context)}
  else{component=context.createClaims({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}
@@ -189,7 +189,7 @@ for(const bad of [page([],{individual:guitar('13')}),page([claim({individual_id:
 
 test('Login, verification and account Back/Forward retain Claim intent with no automatic mutation',async()=>{
  const id='9007199254740993',e=environment({initial:null,search:'?claim='+id,fullPage:true});await e.ready;await e.flush();assert.equal(e.status,'catalog.acquire_sign_in');
- await e.control('cloudAccountForm').onsubmit({preventDefault(){}});await e.flush();assert.equal(e.status,'catalog.acquire_verify');await e.control('sendVerification').onclick();assert.equal(e.authCalls.at(-1).options.claim,id);
+ await e.context.authComplete(await e.client.signIn({email:e.control('email').value,password:e.control('password').value}));await e.flush();assert.equal(e.status,'catalog.acquire_verify');await e.control('sendVerification').onclick();assert.equal(e.authCalls.at(-1).options.claim,id);
  await e.control('refreshVerification').onclick();await e.flush();assert.equal(e.status,'claims.ready');assert.equal(writes(e).length,0);e.start();field(e,'claimBody','KEEP');e.navigate('');await e.flush();assert.equal(e.dialog.open,false);assert.equal(e.control('catalogClaimIntent').hidden,true);
  e.navigate('?claim=12');await e.flush();assert.match(e.control('catalogClaimDetail').textContent,/SERIAL-12/);e.navigate('?claim=12&claim=13');await e.flush();assert.equal(e.status,'catalog.acquire_invalid');assert.equal(writes(e).length,0);
 });

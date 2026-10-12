@@ -9,11 +9,12 @@ const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 
 // This author-only entrance is independent of Current Owner. It never edits a
 // Listing, media, ownership, or Verification, and never reads private duplicates.
-export function createIdentityCorrections({auth,state,busy,work,updated=async()=>{}}){
+export function createIdentityCorrections({auth,state,busy,work,updated=async()=>{},listPanel=true}){
   const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
   const node=(tag,text='',id='')=>{const n=document.createElement(tag);n.textContent=text;if(id)n.id=id;return n};
   const button=(key,id='')=>{const n=node('button',t(key),id);n.type='button';return n};
-  const root=document.getElementById('selfIdentityCorrections'),status=node('p','','identityStatus'),list=node('ul','','identityListings'),refreshButton=button('action.refresh','identityRefresh'),more=button('claims.older','identityMore');
+  const root=listPanel?document.getElementById('selfIdentityCorrections'):document.createElement('section'),status=node('p','','identityStatus'),list=node('ul','','identityListings'),refreshButton=button('action.refresh','identityRefresh'),more=button('claims.older','identityMore');
+  if(!listPanel){const previous=document.getElementById('selfIdentityCorrections');if(previous)previous.hidden=true}
   status.setAttribute('role','status');root.append(node('h2',t('identity.heading')),node('p',t('identity.author_help')),refreshButton,status,list,more);
   const dialog=node('dialog','','identityDialog'),title=node('h2',t('identity.edit_listing'),'identityTitle'),guitar=node('p','','identityGuitar'),listingDate=node('p','','identityListingDate'),message=node('p','','identityMessage');
   dialog.setAttribute('aria-labelledby',title.id);message.setAttribute('role','status');
@@ -125,6 +126,9 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
     }else if([401,403,404].includes(error.status)){purge();notice=errorText(error)}
   }
   function openListing(id){
+    // Reconcile an authenticated Detail entry before selecting/opening. The
+    // detached editor no longer receives the former standalone list refresh.
+    render();
     if(busy()||!eligible()||dialog.open||!catalogIndividualId(id))return;resetDialog();selected=id;globalThis.YGCOverlays.open(dialog);message.textContent=t('cloud.working');render();const c=context(),read=++detailEpoch;
     return action(async()=>{try{const value=await readDetail(id);if(!sameDialog(c)||read!==detailEpoch)return;applyDetail(value);message.textContent=unknown()?t('identity.uncertain'):value.can_write?'':t('identity.write_unavailable')}catch(error){await handleError(error,c)}});
   }
@@ -177,5 +181,6 @@ export function createIdentityCorrections({auth,state,busy,work,updated=async()=
   globalThis.addEventListener('pagehide',()=>{navigationEpoch++;purge()});
   globalThis.addEventListener('pageshow',()=>{if(eligible())refresh()});
   globalThis.addEventListener('focus',()=>{if(!busy()&&eligible()){refresh();if(dialog.open)reloadCurrent()}});
-  render();return {render,clear,refresh,openListing};
+  async function readActions(guitar){render();if(!eligible())return [];const actor=identity(),items=[];let after=null;do{const data=listings(await request(null,{},after),after);if(identity()!==actor||!eligible())return [];items.push(...data.items.filter(row=>row.individual.id===guitar));after=data.next_after}while(after);return items}
+  render();return {render,clear,refresh,openListing,readActions};
 }

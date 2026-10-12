@@ -314,10 +314,11 @@ def main():
             idle(account=True)
 
         def sign_in_form(actor):
-            expect(page.locator('#cloudAccountForm')).to_be_visible()
-            page.locator('#email').fill(actor + '@example.invalid')
-            page.locator('#password').fill('fixture-password')
-            page.locator('#submit').click()
+            page.locator('#showSignIn').click()
+            expect(page.locator('#cloudAuthDialog')).to_be_visible()
+            page.locator('#authEmail').fill(actor + '@example.invalid')
+            page.locator('#authPassword').fill('fixture-password')
+            page.locator('#authSubmit').click()
             idle(account=True)
 
         def change_visibility(field=FIELDS[0], value='Private'):
@@ -454,7 +455,7 @@ def main():
         expect(dialog).to_be_hidden()
         page.evaluate('catalogFixture.release("visibilityWriteLate")'); idle(account=True)
         expect(values).to_be_empty()
-        expect(rows).to_have_count(0)
+        expect(rows).to_have_count(25)
         assert len(store['writes']) == before + 1
         refresh_favorites(); refresh_visibility()
 
@@ -478,19 +479,19 @@ def main():
             store['read_error'] = None
             refresh_favorites(); refresh_visibility()
 
-        # An already-received success released after navigation cannot repopulate
-        # private account panels. Browser Back/Forward performs no writes either.
+        # Same-user navigation retains/reconciles Favorites. Visibility keeps
+        # its separate navigation guard; pagehide still purges both projections.
         for event in ('popstate', 'pagehide'):
             for path, refresh_id in ((FAVORITES, 'favoritesRefresh'), (VISIBILITY, 'visibilityRefresh')):
                 page.evaluate('path => catalogFixture.hold(path, "", "late")', path)
                 page.locator('#' + refresh_id).click()
                 page.wait_for_function('Boolean(catalogFixture.waiting.late)')
                 page.evaluate('event => dispatchEvent(new Event(event))', event)
-                expect(rows).to_have_count(0)
+                expect(rows).to_have_count(0 if event=='pagehide' or path==FAVORITES else 25)
                 expect(values).to_be_empty()
                 expect(dialog).to_be_hidden()
                 page.evaluate('catalogFixture.release("late")'); idle(account=True)
-                expect(rows).to_have_count(0)
+                expect(rows).to_have_count(0 if event=='pagehide' else 25)
                 expect(values).to_be_empty()
                 if event == 'pagehide':
                     expect(page.locator('#selfFavorites')).to_be_hidden()
@@ -528,10 +529,10 @@ def main():
         before = len(store['writes'])
         page.evaluate("history.pushState({}, '', '/account?fixture=navigation')")
         page.go_back(); idle(account=True)
-        expect(rows).to_have_count(0)
+        expect(rows).to_have_count(25)
         expect(values).to_be_empty()
         page.go_forward(); idle(account=True)
-        expect(rows).to_have_count(0)
+        expect(rows).to_have_count(25)
         expect(values).to_be_empty()
         assert len(store['writes']) == before
         refresh_favorites(); refresh_visibility()

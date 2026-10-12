@@ -1,3 +1,4 @@
+import {createAuthDialog} from './cloud-auth-dialog.js';
 import {createFavorites} from './cloud-account-favorites.js';
 import {createVisibility} from './cloud-account-visibility.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
@@ -23,7 +24,7 @@ const guitars=createGuitars({tableLayout:formalProfile,inboxRoot:document.getEle
 const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const claims=createClaims({onSaved:()=>formalView?.refresh({preserveView:true}),auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
+const identityCorrections=createIdentityCorrections({listPanel:false,auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
 async function refreshOwnershipViews(){
@@ -63,9 +64,11 @@ function render(){
   $('accountSummary').hidden=!registered;
   $('consoleLink').hidden=!(registered&&verified&&state.user.role==='admin');
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
-  $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered||resume;
+  $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered;
+  $('showRegistration').hidden=true;
+  $('closedTestNotice').hidden=policies?.participant_only!==true||registered;
   $('signOut').hidden=!auth?.signedIn;
-  $('cloudAccountForm').hidden=serviceBlocked||authPending||pageSuspended||registered;
+  $('cloudAccountForm').hidden=true;
   $('profileFields').hidden=mode!=='register';
   $('profileFields').disabled=mode!=='register';
   $('credentialsFields').hidden=resume;
@@ -107,7 +110,7 @@ function errorMessage(error){
   const codes={'auth/email-already-in-use':'cloud.email_exists','auth/invalid-credential':'cloud.invalid_credentials',
     'auth/invalid-email':'cloud.invalid_email','auth/weak-password':'cloud.weak_password',
     'auth/too-many-requests':'cloud.too_many_requests','auth/network-request-failed':'cloud.network_error',
-    policy_changed:'cloud.policy_changed'};
+    policy_changed:'cloud.policy_changed',closed_test_participant_required:'cloud.participant_required'};
   return t(codes[error.code]||'cloud.failed');
 }
 function policy(kind){
@@ -120,30 +123,10 @@ function policy(kind){
 }
 $('viewTerms').onclick=()=>policy('terms');$('viewPrivacy').onclick=()=>policy('privacy');
 $('closePolicy').onclick=()=>YGCOverlays.close('policyDialog');
-for(const [id,value] of [['showSignIn','signin'],['showRegistration','register']])$(id).onclick=()=>{
-  mode=value;$('status').textContent='';$('password').value='';render();
-};
-$('cloudAccountForm').onsubmit=async event=>{
-  event.preventDefault();if(busy||!auth)return;
-  busy=true;render();$('status').textContent=t('cloud.working');
-  const credentials={email:$('email').value.trim(),password:$('password').value};
-  try{
-    const result=mode==='signin'?await auth.signIn(credentials):await auth.register({
-      display_name:$('displayName').value,account_type:$('accountType').value,
-      terms_accepted:$('terms').checked,privacy_accepted:$('privacy').checked,
-      terms_version:policies.terms.version,privacy_version:policies.privacy.version,
-    },state?.registration_required?undefined:credentials);
-    $('email').value='';update(result,true);
-  }catch(error){
-    if(error.code==='policy_changed'){
-      try{await documents()}catch{error={code:'auth/network-request-failed'}}
-    }
-    if(auth.signedIn&&!auth.account&&error.status!==401&&error.status!==403){state={registration_required:true};mode='register'}
-    $('status').textContent=errorMessage(error);
-  }finally{$('password').value='';busy=false;render()}
-  await hydrateAccount();
-  await resumeFormalIntent();
-};
+const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:async result=>{update(result);await hydrateAccount();await resumeFormalIntent()}});
+for(const id of ['showSignIn','showRegistration'])$(id).onclick=()=>authDialog.open({opener:$(id)});
+$('showSignIn').textContent='Sign in / Create Account';$('showSignIn').removeAttribute('data-i18n');
+$('cloudAccountForm').hidden=true;
 $('signOut').onclick=async()=>{
   if(busy)return;busy=true;update(null);favorites.clear();visibility.clear();notifications.clear();disputes.clear();render();
   try{await auth.logout();mode='signin';$('cloudAccountForm').reset();update(null)}
@@ -181,7 +164,7 @@ async function loadAvatar(){
   if(!current())return;
   const secondary=await Promise.allSettled([
     formalView?.refresh(),...formalProfile?[]:[visibility.refresh()],disputes.refresh(),notifications.refresh({reuse:true}),
-    identityCorrections.refresh(),ownership.refresh(),applications.refresh().catch(applications.failed),
+    ownership.refresh(),applications.refresh().catch(applications.failed),
     avatar.refresh().catch(avatar.failed),
   ]);
   if(!current())return;
@@ -212,7 +195,7 @@ $('avatarRemove').onclick=()=>avatarAction(()=>avatar.remove());
 $('avatarRefresh').onclick=()=>avatarAction(()=>avatar.refresh());
 if(formalProfile){
   const {createFormalProfileView}=await import('./cloud-ui-profile.js');
-  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,owners:guitars,claims,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
+  formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,totals:formalTotals,owners:guitars,claims,identityCorrections,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
 }
 try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{serviceBlocked=false;update(null);if(!authPending)$('status').textContent=t('cloud.session_changed')});auth.onUserDataInvalidated?.((reason,error)=>{if(reason==='blocked'){serviceBlocked=error?.code==='service_restricted';update(null);$('status').textContent=t('self_profile.restricted')}});const [restored]=await Promise.all([auth.restore(),documents()]);authPending=false;update(restored);if(state?.user&&state.identity?.email_verified===true)await hydrateAccount()}
 catch(error){authPending=false;$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
