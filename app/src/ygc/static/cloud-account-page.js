@@ -64,7 +64,7 @@ function render(){
   $('accountSummary').hidden=!registered;
   $('consoleLink').hidden=!(registered&&verified&&state.user.role==='admin');
   if(registered)$('accountSummary').textContent=t('cloud.signed_in',{name:state.user.display_name});
-  $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered||resume;
+  $('authActions').hidden=serviceBlocked||authPending||pageSuspended||registered;
   $('showRegistration').hidden=true;
   $('closedTestNotice').hidden=policies?.participant_only!==true||registered;
   $('signOut').hidden=!auth?.signedIn;

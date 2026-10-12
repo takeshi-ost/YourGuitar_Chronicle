@@ -237,7 +237,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   }
   function closePhoto(){globalThis.YGCImageAlbum?.close()}
   function clearDetail(){
-    closePhoto();photoEpoch++;if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;
+    closePhoto();photoEpoch++;const photo=$('detailPhoto');if(photo?.dataset){delete photo.dataset.photoPath;delete photo.dataset.photoReady;delete photo.dataset.photoLoading}if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;
     favorite.clear();
     detail=null;claims=[];nextAfter=null;moreLoading=false;
     $('detailContent').hidden=true;$('detailTitle').textContent='';$('detailIdentifier').textContent='';
@@ -351,14 +351,16 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
   }
   async function loadPublicPhoto(){
     const id=detail?.id,path=detail?.public_photo,target=$('detailPhoto'),version=++photoEpoch,owner=auth?.account?.user?.app_user_id;
+    if(target?.dataset.photoPath===path&&target.dataset.photoOwner===String(owner??'')&&(target.dataset.photoLoading==='true'||target.dataset.photoReady==='true')){photoEpoch--;return}
     if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;
     if(!target)return;
-    const fallback=()=>{delete target.dataset.photoLoading;target.src='/assets/no-picture.svg'};
-    target.onload=()=>{delete target.dataset.photoLoading};
+    const fallback=()=>{delete target.dataset.photoLoading;delete target.dataset.photoReady;target.src='/assets/no-picture.svg'};
+    if(path){target.dataset.photoPath=path;target.dataset.photoOwner=String(owner??'');target.dataset.photoLoading='true';target.removeAttribute('src')}
+    target.onload=()=>{if(version!==photoEpoch)return;delete target.dataset.photoLoading;target.dataset.photoReady='true'};
     if(typeof path==='string'&&path.startsWith('https://')){
-      try{const url=new URL(path);if(!['images.reverb.com','photos.reverb.com','rvb-img.reverb.com'].includes(url.hostname)||url.username||url.password||url.hash||url.port&&url.port!=='443')return;
+      try{const url=new URL(path);if(!['images.reverb.com','photos.reverb.com','rvb-img.reverb.com'].includes(url.hostname)||url.username||url.password||url.hash||url.port&&url.port!=='443'){fallback();return}
         target.referrerPolicy='no-referrer';target.onerror=()=>{target.onerror=null;fallback()};target.src=path;
-      }catch{}return;
+      }catch{fallback()}return;
     }
     if(path!=='/api/public/guitars/'+id+'/photo')return;
     const current=()=>version===photoEpoch&&!stopped&&detail?.id===id&&auth?.account?.user?.app_user_id===owner&&!authBlocked&&$('detailPhoto')===target;
@@ -372,6 +374,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     const shared=globalThis.YGCProductDetail;
     if(!formal||!shared)return;closePhoto();
     const keep=Object.fromEntries(['detailFavorite','acquireLink','addClaimLink','ownershipLink','chronicleStatus','chronicleMore'].map(id=>[id,$(id)]));
+    const previousPhoto=$('detailPhoto');
     const collapsed=['specificationAccordion','chronicleAccordion'].filter(id=>$(id)?.classList.contains('collapsed'));
     const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     // Only explicit public presentation fields are rendered; Evidence is never used.
@@ -379,7 +382,8 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     $('detailContent').innerHTML=shared.render({individual:detail,specifications:detail.specifications,
       image:'<img id="detailPhoto" class="detail-image" '+(detail.public_photo?'data-photo-loading="true"':'src="/assets/no-picture.svg"')+' alt="'+escape(t('photo'))+'">',
       owner:detail.presentation?.owner&&validId(detail.presentation.owner.id)?'<a href="/ui/members/'+detail.presentation.owner.id+'">'+escape(detail.presentation.owner.display_name)+'</a>':escape(detail.presentation?.source_owner_name||'—'),location:escape(detail.presentation?.location||'—'),fieldLabel,escape});
-    const photo=$('detailPhoto');photo.alt=[detail.manufacturer,detail.model].filter(Boolean).join(' ');photo.setAttribute('role','button');photo.tabIndex=0;// The shared image album handles click and keyboard activation.
+    if(previousPhoto?.tagName==='IMG'&&previousPhoto.dataset.guitarId===detail.id)$('detailPhoto').replaceWith(previousPhoto);
+    const photo=$('detailPhoto');photo.dataset.guitarId=detail.id;photo.alt=[detail.manufacturer,detail.model].filter(Boolean).join(' ');photo.setAttribute('role','button');photo.tabIndex=0;// The shared image album handles click and keyboard activation.
     const caption=node('span',globalThis.YGCI18n.t(detail.public_photo?'ui.representative_image_c23db047':'ui.no_picture_b2e8e688'),'detail-source');photo.after(caption);
     const title=$('detailContent').querySelector('.detail-header-title');title.id='detailTitle';
     const identifier=node('span',undefined,'sub');identifier.id='detailIdentifier';identifier.hidden=true;title.after(identifier);

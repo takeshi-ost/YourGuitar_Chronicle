@@ -16,6 +16,7 @@ function environment({url='https://catalog.example/',guitars=[guitar(1),guitar(2
     set textContent(value){this._text=String(value);this.children=[]}get textContent(){return this._text+this.children.map(child=>child.textContent).join('')}
     set innerHTML(_){throw Error('Public data must never be inserted as HTML.')}
     append(...nodes){this.children.push(...nodes)}replaceChildren(...nodes){this._text='';this.children=nodes}
+    removeAttribute(key){delete this.attributes[key];if(key==='src')delete this.src}
     setAttribute(key,value){this.attributes[key]=String(value)}getAttribute(key){return this.attributes[key]??null}
     focus(){document.activeElement=this}
     all(){return this.children.flatMap(child=>[child,...child.all()])}
