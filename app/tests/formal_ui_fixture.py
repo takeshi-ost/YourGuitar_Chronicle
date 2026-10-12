@@ -198,7 +198,7 @@ class FormalUIFixture(FollowFixture):
         @app.get('/api/auth/favorites')
         def favorites(request:Request,after:int=0,limit:int=25):
             key=actor(request);rows=[r for r in reversed(self.rows) if ('synthetic-'+str(key),r['id']) in self.favorites]
-            remaining=[row for row in rows if not after or int(row['id'])<after];page=remaining[:limit]
+            remaining=[{k:v for k,v in row.items() if k!='claim_count'} for row in rows if not after or int(row['id'])<after];page=remaining[:limit]
             return {'items':page,'total':str(len(rows)),'next_after':page[-1]['id'] if len(remaining)>limit else None}
         @app.api_route('/api/auth/avatar',methods=['GET','PUT','DELETE'])
         async def avatar(request:Request):

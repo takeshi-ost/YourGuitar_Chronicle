@@ -374,7 +374,9 @@ def main():
             expect(inbox_list.locator('li')).to_have_count(0)
             expect(page.locator('#notificationUnread')).to_be_empty()
             store['mode'] = 'normal'
-            refresh()
+            # Service denial clears the entire private account. Recover through
+            # a fresh canonical restore, not the now-hidden inbox button.
+            page.reload(); page.wait_for_function('globalThis.YGCCloudAccountReady===true'); settle()
 
         # Already-delivered GETs held across navigation cannot repopulate the
         # private inbox; real Back/Forward likewise never marks anything read.

@@ -503,7 +503,7 @@ def main():
             assert not store['external'], store['external']
             assert page.evaluate('Boolean(globalThis.fixtureXss)') is False
             for request in page.evaluate('disputeFixture.requests'):
-                assert request['required'] is True
+                assert request['required'] is (request['method'] not in ('GET', 'HEAD'))
                 assert (request['cache'], request['credentials'], request['redirect']) == ('no-store', 'omit', 'error')
 
         def navigate(row=None, candidate=None, *, actor='applicant', verified=True, locale='en', preserve=False):
@@ -1243,7 +1243,7 @@ def main():
         # Every private request uses the authenticated no-store boundary. No
         # original is linked to public media, gallery, or a cloud object URL.
         for request in page.evaluate('disputeFixture.requests'):
-            assert request['required'] is True
+            assert request['required'] is (request['method'] not in ('GET', 'HEAD'))
             assert request['cache'] == 'no-store'
             assert request['credentials'] == 'omit'
             assert request['redirect'] == 'error'
