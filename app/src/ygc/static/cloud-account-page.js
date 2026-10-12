@@ -22,7 +22,7 @@ const profile=createProfile({formalProfile,auth:()=>auth,state:()=>state,busy:()
 const guitars=createGuitars({tableLayout:formalProfile,inboxRoot:document.getElementById('selfOwnerAcquire'),onOwnerSaved:()=>formalView?.refresh({preserveView:true}),onSelect:formalProfile?id=>formalView?.openGuitar(id):undefined,onTotal:(kind,total)=>{formalTotals[kind]=total;formalView?.render()},auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openOwnership:id=>ownership.openGuitar(id)});
 const ownership=createOwnership({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
-const claims=createClaims({onSaved:()=>formalView?.refresh(),auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
+const claims=createClaims({onSaved:()=>formalView?.refresh({preserveView:true}),auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const identityCorrections=createIdentityCorrections({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});

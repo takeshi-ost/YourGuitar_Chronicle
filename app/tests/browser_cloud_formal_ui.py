@@ -175,10 +175,12 @@ def check_claim_forms(page,base,fixture):
             page.locator('#claimValue_0').fill('Synthetic bone nut')
         page.locator('#claimBody').fill('Synthetic '+kind+' draft')
         page.locator('#claimSave').click();expect(page.locator('#claimDialog')).not_to_be_visible()
+        expect(page.locator('#selfProfileEdit')).to_be_enabled()
         page.locator('#chronicleEntries [data-private-claim-action=edit]').first.click();expect(page.locator('#claimDialog')).to_be_visible()
         expect(page.locator('#claimBody')).to_have_value('Synthetic '+kind+' draft')
         page.locator('#claimBody').fill('Synthetic '+kind+' edited')
         page.locator('#claimSave').click();expect(page.locator('#claimDialog')).not_to_be_visible()
+        expect(page.locator('#selfProfileEdit')).to_be_enabled()
     assert len([w for w in fixture.writes if w[0]=='claim_create'])==3
     assert len([w for w in fixture.writes if w[0]=='claim_edit'])==3
     print('Canonical Claim forms: PC/390/320, four per-kind layouts, Escape/focus/selection, Specification/Incident/Event create and edit; no upload.')
