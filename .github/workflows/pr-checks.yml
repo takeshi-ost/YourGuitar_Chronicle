@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      checks:
+        description: Validation scope (pull requests always run all checks)
+        type: choice
+        default: full
+        options: [full, top-page]
 
 permissions:
   contents: read
@@ -68,7 +74,15 @@ jobs:
         run: python scripts/build_postgres_schema.py --check
 
       - name: Run all checks with disposable storage
-        run: python scripts/run_tests.py --browser --browser-artifacts test-artifacts --postgres-port 5432
+        env:
+          CHECK_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.checks || 'full' }}
+        run: |
+          if [ "$CHECK_SCOPE" = "top-page" ]; then
+            node --test app/tests/test_cloud_public_catalog.cjs app/tests/test_cloud_catalog_insights.cjs
+            PYTHONPATH=app/src:app/tests python app/tests/browser_cloud_formal_ui.py
+          else
+            python scripts/run_tests.py --browser --browser-artifacts test-artifacts --postgres-port 5432
+          fi
 
       - name: Save failed browser diagnostics
         if: failure()
