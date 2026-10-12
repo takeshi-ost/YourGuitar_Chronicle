@@ -98,3 +98,10 @@ test('Read Only never reuses an enabled notification write control from Normal',
 test('Blocked event retains service restriction reason separately from authentication rejection',async()=>{
  const s=harness();await s.adapter.restore();await read(s);let detail;s.adapter.onUserDataInvalidated((reason,error)=>{detail={reason,error}});s.mode('offline');await read(s);assert.equal(detail.reason,'blocked');assert.equal(detail.error.code,'service_restricted');assert.equal(detail.error.status,403);
 });
+
+test('Explicit display invalidation during pending cache gate rejects stale snapshot without blocking the same canonical actor',async()=>{
+ const s=harness();await s.adapter.restore();await read(s);let blocked=0;s.adapter.onUserDataInvalidated(reason=>{if(reason==='blocked')blocked++});
+ const gate=defer();s.gateHold(gate.promise);const cached=read(s);await new Promise(setImmediate);s.adapter.invalidateUserData();gate.resolve();
+ await assert.rejects(cached,e=>e.code==='stale_user_data');assert.equal(blocked,0);assert.deepEqual(s.adapter.account,s.account);assert.equal(s.store.size,0);
+ s.gateHold(null);await read(s);assert.equal(s.count('/api/auth/settings'),2);
+});

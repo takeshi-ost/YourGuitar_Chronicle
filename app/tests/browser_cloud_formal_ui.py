@@ -64,7 +64,11 @@ def check_profile_lists(page,base,fixture):
     owned=page.locator('#selfGuitars_owned')
     favorites=page.locator('#selfFavorites')
     expect(owned.locator('tbody tr.clickable')).to_have_count(30)
-    expect(favorites.locator('tbody tr.clickable')).to_have_count(30)
+    try:
+        expect(favorites.locator('tbody tr.clickable')).to_have_count(30)
+    except AssertionError:
+        print('Synthetic Favorites diagnostics:',favorites.inner_text(),fixture.calls[-60:],flush=True)
+        raise
     expect(owned.locator('tbody tr.clickable').first.locator('td').first).to_have_text('1')
     expect(favorites.locator('tbody tr.clickable').first.locator('td').first).to_have_text('1')
     for width in (1440,390,320):

@@ -474,11 +474,16 @@ def main():
             store['malformed'] = None; refresh_visibility()
         for status in (401, 403, 503):
             store['read_error'] = status
-            refresh_favorites(); refresh_visibility()
+            refresh_favorites()
+            # A private collection rejection invalidates the canonical page;
+            # another private control must not remain usable after that denial.
             expect(rows).to_have_count(0)
             expect(values).to_be_empty()
+            expect(page.locator('#selfVisibility')).to_be_hidden()
             safe_content()
             store['read_error'] = None
+            page.reload()
+            page.wait_for_function('globalThis.YGCCloudAccountReady === true')
             refresh_favorites(); refresh_visibility()
 
         # Same-user navigation retains/reconciles Favorites. Visibility keeps

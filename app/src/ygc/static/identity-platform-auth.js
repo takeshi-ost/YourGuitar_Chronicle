@@ -63,7 +63,7 @@
       if(row&&row.at<=now()&&now()-row.at<ttl(key)){
         try{
           if(!dataGate){const pending=userDataGate();dataGate=pending;pending.finally(()=>{if(dataGate===pending)dataGate=null}).catch(()=>{})}
-          const mode=await dataGate;if(!current())throw changedIdentity();
+          const mode=await dataGate;if(!current()){if(auth.currentUser===user&&owner===dataOwner)throw Object.assign(Error('Display data was refreshed.'),{code:'stale_user_data'});throw changedIdentity()}
           if(mode==='offline'){invalidateUserData('blocked',{status:403,code:'service_restricted'});return new Response(JSON.stringify({detail:{code:'service_restricted',message:'Service access is temporarily restricted.'}}),{status:403,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}
           if(mode==='normal'||mode==='read_only'){
             // A cached notification DTO must never retain an enabled write
@@ -73,7 +73,7 @@
             return new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
           }
           invalidateUserData(); // Admin Only requires the ordinary authorized API.
-        }catch(error){invalidateUserData('blocked',error);throw error}
+        }catch(error){if(error.code!=='stale_user_data')invalidateUserData('blocked',error);throw error}
       }
       const response=await dispatchApi(path,requestOptions,forceRefresh);
       if([401,403,503].includes(response.status)){

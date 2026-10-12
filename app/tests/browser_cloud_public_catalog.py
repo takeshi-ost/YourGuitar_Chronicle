@@ -393,10 +393,11 @@ def main():
         page.locator('#catalogBack').click(); idle()
         search('SERIAL-10'); open_guitar('10')
         clean_content()
+        selected_url=page.url
         page.locator('#acquireLink').click()
         expect(page.locator('#cloudAuthDialog')).to_be_visible()
         expect(page.locator('#authEmail')).to_be_visible()
-        assert page.url == BASE + '/guitars/10'
+        assert page.url == selected_url and urlsplit(page.url).path == '/guitars/10'
         page.locator('#authCancel').click()
         expect(page.locator('#cloudAuthDialog')).not_to_be_visible()
         assert not state['writes'] and not state['external'] and not errors, (state, errors)
