@@ -449,6 +449,12 @@ def main():
                 page.locator('#authEmail').fill('alice@example.invalid');page.locator('#authPassword').fill('bad');page.locator('#authSubmit').click()
                 expect(page.locator('#cloudAuthStatus')).to_contain_text('incorrect');assert page.locator('#authPassword').input_value()=='bad'
                 page.evaluate("sessionStorage.setItem('verified-alice@example.invalid','true')")
+                def check_login_wait(route):
+                    assert page.locator('#authEmail').input_value()=='alice@example.invalid'
+                    assert page.locator('#authPassword').input_value()=='fixture-password'
+                    expect(page.locator('#cloudAuthDialog')).to_be_visible()
+                    route.continue_()
+                page.route(base+'/api/auth/me',check_login_wait,times=1)
                 page.locator('#authEmail').fill('alice@example.invalid');page.locator('#authPassword').fill('fixture-password');page.locator('#authSubmit').click()
                 expect(page.locator('#shellIdentity')).to_have_text('Alice');expect(page.locator('#cloudAuthDialog')).not_to_be_visible()
                 expect(page.locator('#favoriteToggle')).to_be_visible()
