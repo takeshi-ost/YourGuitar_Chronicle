@@ -99,7 +99,7 @@
         await auth.authStateReady();
         identityChanged(true);
         // The canonical server account cannot survive an SDK principal change.
-        if(typeof sdk.onAuthStateChanged==='function')sdk.onAuthStateChanged(auth,identityChanged);
+        if(typeof sdk.onAuthStateChanged==='function')sdk.onAuthStateChanged(auth,()=>identityChanged());
       })();
     }
     function serial(action){

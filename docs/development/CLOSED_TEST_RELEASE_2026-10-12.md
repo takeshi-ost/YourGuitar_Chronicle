@@ -12,7 +12,8 @@ Recent performance changes reduce duplicate reads, aggregate row Favorites, shar
 short-lived tab-local self display data after fresh identity/service checks, reuse
 public/static HTTP responses, pool HTTP database connections and render photos
 before unrelated list/Chronicle completion. Negative dots and compact Favorite
-status layout have also been corrected. Avatar reads update their controls on
+status layout have also been corrected. SDK principal changes invalidate cached identity and notify subscribed views,
+including callbacks carrying the new user. Avatar reads update their controls on
 completion, including reloads with an existing image. No schema migration is introduced.
 
 ## Verification requirements
@@ -35,8 +36,8 @@ a later candidate's CI result.
 The pre-finalization staging reference is `ygc-staging-accounts-ui-20261012al`,
 100% traffic, image digest
 `sha256:06bf37d1fa75562bf2bd349e160ef42f4009c2fa112681a5b6d18c991160919b`.
-Production source bytes in its submitted build package match this candidate's
-source. Final deployment should use an immutable image digest labelled with the
+It is the historical rollback reference; subsequent acceptance fixes are part
+of the final candidate. Final deployment should use an immutable image digest labelled with the
 verified Git commit. Record the final commit, CI run, build and revision together.
 Rollback uses the previously deployed digest/revision. Environment variables,
 service identity, IAM, job schedules and database contents are outside this change.

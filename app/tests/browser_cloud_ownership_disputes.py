@@ -219,6 +219,8 @@ def main():
     names = [path.name for path in STATIC.glob('cloud-account-*.js')]
     names += ['cloud-account.css', 'cloud-console.css', 'overlays.js', 'ui-components.css']
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in names}
+    from browser_assets import include_module_dependencies
+    include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
     stream = BytesIO()

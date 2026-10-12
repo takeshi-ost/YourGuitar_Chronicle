@@ -173,7 +173,7 @@ function principalHarness({readiness=Promise.resolve(),token=Promise.resolve('A-
  const request=async(url,options)=>{calls.push({url,options});return fetch?fetch(url,options):new Response(JSON.stringify(account))};
  const context={URL,Headers,Error,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
  const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request});
- return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener()}};
+ return {adapter,auth,calls,first,second,switchUser(user=second){auth.currentUser=user;for(const listener of listeners)listener(user)}};
 }
 test('Pending SDK readiness cannot send an initiating A mutation using B credentials',async()=>{
  const hold=delayed(),s=principalHarness({readiness:hold.promise});

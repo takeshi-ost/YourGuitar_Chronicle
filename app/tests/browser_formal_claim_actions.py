@@ -39,6 +39,7 @@ def main():
      assert page.locator('#claimDialog .modal').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth}')
      if width==1440:page.locator('#claimBody').fill('Edited from Claim card');page.locator('#claimSave').click();expect(page.locator('#claimDialog')).not_to_be_visible()
      else:page.keyboard.press('Escape')
+     expect(verify).to_be_enabled()
      before=len(fixture.writes);page.locator('[data-claim-id="902"] .claim-compact-tag').click();expect(page.locator('#claimPopupModal .claim-response-select')).to_be_enabled();page.locator('#claimPopupModal .claim-response-select').select_option('positive');expect(page.locator('#ownerResponseDialog')).to_be_visible();expect(page.locator('#ownerResponseDialog select')).to_be_disabled();expect(page.locator('[data-owner-media-view]')).to_be_enabled();assert len(fixture.writes)==before
      page.keyboard.press('Escape');expect(page.locator('#ownerResponseDialog')).not_to_be_visible()
     fixture.mode='read_only';page.reload();expect(verify).to_be_disabled();assert len([w for w in fixture.writes if w[0]=='owner_response'])==2;assert len([w for w in fixture.writes if w[0]=='claim_edit'])==1
