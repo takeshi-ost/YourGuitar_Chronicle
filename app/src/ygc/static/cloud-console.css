@@ -25,3 +25,5 @@ header .page-nav{display:flex;flex:1;min-width:0;gap:4px;overflow-x:auto;align-i
 
 /* Shared list styles must not widen the Console workspace on small screens. */
 header h1{white-space:normal;min-width:0;max-width:100%}.console-data-list .table-wrap{width:100%;max-width:100%;min-width:0}.console-workspace input,.console-workspace select,.console-workspace button{max-width:100%;min-width:0}
+
+header{flex-direction:row;align-items:center}header .page-nav{width:auto;max-width:100%}.console-data-list .table-wrap{position:relative}.console-main-layer,.console-detail-layer{overflow-x:hidden}
