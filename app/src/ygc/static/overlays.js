@@ -32,6 +32,7 @@ window.YGCOverlays = (() => {
   }
   function decorate(root,panel){
     panel.classList.add('ygc-themed-modal');
+    if(panel.classList.contains?.('claim-popup-modal')&&Number.isFinite(window.innerWidth)){const width=Math.min(560,window.innerWidth-24);panel.style.width=width+'px';panel.style.left=Math.max(12,(window.innerWidth-width)/2)+'px';panel.style.top='12px';}
     const candidates=Array.from(panel.querySelectorAll('button')).filter(button=>button.dataset?.uiAction==='close'||/^(Close|閉じる|×|✕)$/i.test(String(button.textContent||'').trim()));
     let button=candidates[0]||panel.querySelector('.ygc-modal-close');
     if(!button){button=document.createElement('button');button.type='button';button.onclick=()=>{if(stack.some(entry=>entry.root===root))close(root);else if(root.tagName==='DIALOG')root.close()};}

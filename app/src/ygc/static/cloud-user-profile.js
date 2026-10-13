@@ -9,6 +9,7 @@ import {createClaims} from './cloud-account-claims.js';
 import {createIdentityCorrections} from './cloud-account-identity.js';
 import {createDetailClaimActions} from './cloud-detail-claim-actions.js';
 const $=id=>document.getElementById(id),t=(key,p)=>globalThis.YGCI18n.t(key,p),target=document.body.dataset.profileTarget;
+const loading=new Set();
 let auth=null,epoch=0,profile=null,busy=false,active=true,catalog=null,started=false;
 const state=()=>active?auth?.account:null,eligible=()=>state()?.identity?.email_verified===true&&state()?.user?.app_user_id&&auth?.signedIn;
 const node=(tag,text='',cls='')=>{const n=document.createElement(tag);n.textContent=text;n.className=cls;return n};
@@ -22,7 +23,8 @@ const lists={};for(const [kind,key] of [['owned','ui.owned_guitars_bb07d3cd'],['
 new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',Math.ceil(document.querySelector('.sticky-header').getBoundingClientRect().height)+'px')).observe(document.querySelector('.sticky-header'));
 $('shellTitle').textContent=t('ui.user_profile_ee7672e2');$('shellMembers')?.remove();$('shellProducts').href='/ui';$('shellProducts').textContent=t('ui.top_page_272373b6');$('shellSignOut').hidden=true;$('accountLink').href='/ui/profile';$('accountLink').textContent=t('self_profile.heading');$('shellNotifications').href='/ui/profile#selfNotifications';
 const icons=createMemberIcons({document,window,auth:()=>auth,identity:()=>state()?.user?.app_user_id,eligible});
-const work=async fn=>{if(busy)return;busy=true;try{return await fn()}finally{busy=false;detailActions.render()}};
+function controls(){follow.disabled=busy||loading.size>0||!eligible()||!profile?.member.can_write}
+const work=async fn=>{if(busy||loading.size)return;busy=true;controls();try{return await fn()}finally{busy=false;controls();detailActions.render()}};
 const owners=createGuitars({root:document.createElement('section'),auth:()=>auth,state,busy:()=>busy,work});
 const claims=createClaims({formal:true,root:document.createElement('section'),intentRoot:document.createElement('section'),auth:()=>auth,state,busy:()=>busy,work,onSaved:()=>catalog?.refresh({preserveView:true})});
 const corrections=createIdentityCorrections({listPanel:false,auth:()=>auth,state,busy:()=>busy,work});
@@ -34,7 +36,7 @@ async function openConnections(which,after=null){if(!profile||!eligible())return
 more.onclick=()=>openConnections(direction,cursor);connections.addEventListener('ygc:closed',()=>{connectionEpoch++;connectionList.replaceChildren()});
 follow.onclick=()=>work(async()=>{if(!profile||!eligible())return;const token=epoch;follow.disabled=true;try{const response=await auth.authorizedFetch('/api/auth/members/'+target+'/following',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({following:!profile.member.following})},true);if(!response.ok)throw Error();if(token===epoch)await load()}catch{if(token===epoch){notice.textContent=t('members.uncertain');follow.disabled=true}}});
 async function openGuitar(id){if(catalog)return catalog.navigate('/ui/profiles/'+target+'/guitars/'+id)}
-async function load(){clear();const token=epoch;notice.textContent=t('cloud.working');try{
+async function load(){clear();const token=epoch;loading.add(token);controls();notice.textContent=t('cloud.working');try{
  auth=auth||await loadCloudAuth();await auth.restore();if(token!==epoch)return;if(!eligible()){notice.textContent=t('members.signin');$('shellSignIn').hidden=false;return}
  if(state().user.id===target){location.replace('/ui/profile');return}
  const data=await request('/api/auth/profiles/'+target);if(token!==epoch||!eligible())return;memberProfile(data.member,target);if(data.member.is_self){location.replace('/ui/profile');return}if(!data.fields||['account_type','bio','location_country','location_region'].some(k=>!(data.fields[k]===null||typeof data.fields[k]==='string')))throw Error();profile=data;
@@ -47,7 +49,7 @@ async function load(){clear();const token=epoch;notice.textContent=t('cloud.work
  if(!started){started=true;await catalog.start()}else await catalog.refresh({preserveView:true});
  // Continue large inventories after the first Detail is visible.
  for(const kind of ['owned','formerly_owned']){let next=data[kind].next_after,rows=[...data[kind].items];const seen=new Set(rows.map(r=>r.id));while(next){const page=await request('/api/auth/profiles/'+target+'?kind='+kind+'&after='+next);if(token!==epoch||!eligible())return;const p=page[kind];if(!p||!Array.isArray(p.items)||p.items.length>50||p.items.some(r=>!memberId(r.id)||seen.has(r.id)||BigInt(r.id)<=BigInt(next))||p.next_after!==null&&(!memberId(p.next_after)||!p.items.length||p.next_after!==p.items.at(-1).id))throw Error();for(const r of p.items)seen.add(r.id);rows.push(...p.items);next=p.next_after;lists[kind].setRows(rows)}}
- }catch(error){if(token===epoch){clear();notice.textContent=error.message||t('users.profile_unavailable')}}}
+ }catch(error){if(token===epoch){clear();notice.textContent=error.message||t('users.profile_unavailable')}}finally{loading.delete(token);controls()}}
 window.addEventListener('pagehide',()=>{active=false;clear()});
 window.addEventListener('pageshow',event=>{if(event.persisted){active=true;void load()}});
 auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{clear();void load()});auth.onUserDataInvalidated?.(reason=>{if(reason==='blocked')clear()});await load();globalThis.YGCCloudOtherProfileReady=true;

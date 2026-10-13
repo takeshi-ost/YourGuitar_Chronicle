@@ -1,14 +1,22 @@
 """Other-user Profile replaces the retired directory; viewer authority is separate."""
 from urllib.parse import urlsplit
-from fastapi.testclient import TestClient
+from contextlib import contextmanager
+import socket,threading,uvicorn
 from playwright.sync_api import sync_playwright, expect
 from browser_diagnostics import diagnostic_page
 from browser_cloud_public_catalog import HOLD_SCRIPT
 from formal_ui_fixture import FormalUIFixture
 BASE='http://ygc-follow-fixture.invalid'
+@contextmanager
+def local_server(fixture):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1',0));base='http://127.0.0.1:'+str(sock.getsockname()[1]);server=uvicorn.Server(uvicorn.Config(fixture.app(),log_level='error',lifespan='off'));thread=threading.Thread(target=server.run,kwargs={'sockets':[sock]},daemon=True);thread.start()
+        try:yield base
+        finally:server.should_exit=True;thread.join(timeout=10)
+
 def main():
     fixture=FormalUIFixture();external=[];errors=[];images=[]
-    with TestClient(fixture.app(),base_url=BASE) as client,sync_playwright() as pw,diagnostic_page(pw,'browser_cloud_follows') as page:
+    with local_server(fixture) as BASE,sync_playwright() as pw,diagnostic_page(pw,'browser_cloud_follows') as page:
         page.add_init_script(HOLD_SCRIPT)
         page.add_init_script("sessionStorage.setItem('fixture-sdk-email','alice@example.invalid');sessionStorage.setItem('verified-alice@example.invalid','true')")
         page.on('pageerror',lambda e:errors.append(str(e)))
@@ -16,8 +24,7 @@ def main():
             r=route.request;url=urlsplit(r.url)
             if url.scheme+'://'+url.netloc!=BASE:external.append(r.url);route.abort();return
             if url.path.endswith('/avatar'):images.append(r.headers)
-            response=client.request(r.method,url.path+('?' +url.query if url.query else ''),headers=r.headers,content=r.post_data_buffer,follow_redirects=False)
-            route.fulfill(status=response.status_code,headers=dict(response.headers),body=response.content)
+            route.continue_()
         page.route('**/*',respond)
         page.goto(BASE+'/ui/members/2')
         expect(page.locator('#viewedUserProfile .profile-name')).to_have_text('Bob')

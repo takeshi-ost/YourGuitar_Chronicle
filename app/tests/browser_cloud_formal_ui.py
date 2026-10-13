@@ -315,7 +315,12 @@ def check_claim_popup(page,base):
 def check_formal_follow(page,base,fixture):
     page.goto(base+'/ui/profiles/2')
     expect(page.locator('#profileFollow')).to_be_enabled()
-    page.locator('#profileFollow').click();expect(page.locator('#profileFollow')).to_have_text('Unfollow')
+    expect(page.locator('#profileFollow')).to_have_text('Follow')
+    page.locator('#profileFollow').click()
+    try:expect(page.locator('#profileFollow')).to_have_text('Unfollow')
+    except AssertionError:
+        print('Synthetic Follow diagnostics:',fixture.follows,fixture.writes[-8:],page.locator('#viewedUserProfile').inner_text(),flush=True)
+        raise
     for width in (1440,390,320):
         page.set_viewport_size({'width':width,'height':844})
         page.get_by_role('button',name='Followers · 31',exact=True).click()
