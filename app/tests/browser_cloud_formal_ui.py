@@ -103,6 +103,7 @@ def check_profile_lists(page,base,fixture):
 def check_profile_bootstrap_timing(page,base,fixture):
     import time,json
     page.set_viewport_size({'width':1440,'height':1000})
+    page.evaluate("sessionStorage.setItem('fixture-sdk-email','alice@example.invalid');sessionStorage.setItem('verified-alice@example.invalid','true');sessionStorage.removeItem('ygc-self-display-v1')")
     fixture.profile_all=True;fixture.profile_cursor_gate=threading.Event()
     gate=fixture.profile_cursor_gate
     before=len(fixture.calls);started=time.monotonic()
