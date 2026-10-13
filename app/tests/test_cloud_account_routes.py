@@ -173,7 +173,9 @@ def test_cloud_page_is_explicit_and_config_matches_verifier(monkeypatch):
             assert client.get(path).status_code == 401
         assert client.put('/api/auth/members/2/following', json={'following': True}).status_code == 401
         assert client.get('/assets/cloud-members.js').status_code == 200
-        assert client.get('/assets/cloud-members.css').status_code == 200
+        assert client.get('/assets/cloud-members.css').status_code == 404
+        assert client.get('/assets/cloud-user-profile.js').status_code == 200
+        assert client.get('/assets/cloud-modal-theme.css').status_code == 200
         assert client.get('/assets/cloud-auth-loader.js').status_code == 200
         assert client.get('/assets/i18n.js').status_code == 200
         assert client.get('/assets/local-auth.js').status_code == 404
