@@ -17,3 +17,8 @@
 :root[data-theme] .ygc-themed-modal :is(label,.sub,small){color:var(--muted)!important}
 :root[data-theme] .ygc-themed-modal :is(input,select,textarea){background:var(--input,var(--panel))!important;color:var(--text)!important;border-color:var(--line)!important}
 :root[data-theme] .ygc-themed-modal button:not(.ygc-modal-close){background:var(--control,var(--surface))!important;color:var(--text)!important;border-color:var(--line)!important}
+
+/* Preserve the selected page palette rather than the legacy modal palette. */
+:root[data-theme] .ygc-themed-modal{--bg:inherit;--panel:inherit;--surface:inherit;--input:inherit;--control:inherit;--control-hover:inherit;--line:inherit;--text:inherit;--muted:inherit;--accent:inherit}
+:root[data-theme] .ygc-themed-modal :is(input,select,textarea){box-sizing:border-box;min-width:0;max-width:100%}
+:root[data-theme] .ygc-themed-modal .form-row{min-width:0;max-width:100%}
