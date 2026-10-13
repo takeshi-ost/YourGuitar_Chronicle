@@ -105,3 +105,5 @@ test('Explicit display invalidation during pending cache gate rejects stale snap
  await assert.rejects(cached,e=>e.code==='stale_user_data');assert.equal(blocked,0);assert.deepEqual(s.adapter.account,s.account);assert.equal(s.store.size,0);
  s.gateHold(null);await read(s);assert.equal(s.count('/api/auth/settings'),2);
 });
+
+test('A late rejected display read after logout cannot invalidate the new Guest state',async()=>{const s=harness();await s.adapter.restore();await read(s);let blocked=0;s.adapter.onUserDataInvalidated(reason=>{if(reason==='blocked')blocked++});s.status(403);const hold=defer();s.hold(hold.promise);const pending=s.adapter.authorizedFetch('/api/auth/settings');await new Promise(setImmediate);await s.adapter.logout();hold.resolve();await assert.rejects(pending);assert.equal(blocked,0);assert.equal(s.adapter.account,null)});

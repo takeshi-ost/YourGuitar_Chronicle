@@ -16,7 +16,7 @@ def main():
             r=route.request;url=urlsplit(r.url)
             if url.scheme+'://'+url.netloc!=BASE:external.append(r.url);route.abort();return
             if url.path.endswith('/avatar'):images.append(r.headers)
-            response=client.request(r.method,url.path+('?' +url.query if url.query else ''),headers=r.headers,content=r.post_data_buffer)
+            response=client.request(r.method,url.path+('?' +url.query if url.query else ''),headers=r.headers,content=r.post_data_buffer,follow_redirects=False)
             route.fulfill(status=response.status_code,headers=dict(response.headers),body=response.content)
         page.route('**/*',respond)
         page.goto(BASE+'/ui/members/2')

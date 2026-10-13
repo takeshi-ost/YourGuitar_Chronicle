@@ -73,13 +73,13 @@
             return new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
           }
           invalidateUserData(); // Admin Only requires the ordinary authorized API.
-        }catch(error){if(error.code!=='stale_user_data')invalidateUserData('blocked',error);throw error}
+        }catch(error){if(error.code!=='stale_user_data'&&version===dataEpoch&&owner===dataOwner&&user===auth.currentUser)invalidateUserData('blocked',error);throw error}
       }
       const response=await dispatchApi(path,requestOptions,forceRefresh);
       if([401,403,503].includes(response.status)){
         const error=await response.clone().json().catch(()=>null);
         const blocked=response.status===401||error?.detail?.code==='service_restricted'||error?.code==='service_restricted'||response.status===403&&Boolean(ttl(key));
-        invalidateUserData(blocked?'blocked':'failure',{status:response.status,code:error?.detail?.code||error?.code});return response;
+        if(version===dataEpoch&&owner===dataOwner&&user===auth.currentUser)invalidateUserData(blocked?'blocked':'failure',{status:response.status,code:error?.detail?.code||error?.code});return response;
       }
       if(reusable&&current()&&response.status===200&&response.headers.get('content-type')?.split(';')[0]==='application/json'){
         const body=await response.clone().text();

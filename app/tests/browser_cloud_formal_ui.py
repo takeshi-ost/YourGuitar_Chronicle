@@ -56,10 +56,10 @@ def check_profile_lists(page,base,fixture):
     fixture.profile_all=True
     fixture.favorites={('synthetic-1',str(i)) for i in range(1,31)}
     page.goto(base+'/ui/profile')
-    page.evaluate("localStorage.setItem('ygc_ui_language','en');sessionStorage.setItem('fixture-sdk-email','alice@example.invalid');sessionStorage.setItem('verified-alice@example.invalid','true')")
+    page.evaluate("localStorage.setItem('ygc_ui_language','en');sessionStorage.setItem('fixture-sdk-email','alice@example.invalid');sessionStorage.setItem('verified-alice@example.invalid','true');sessionStorage.removeItem('ygc-self-display-v1')")
     page.reload()
-    # The seed changed outside a user mutation. Exercise the real explicit
-    # refresh to invalidate the legitimate same-user display cache.
+    # The seed changed outside a user mutation; remove only the disposable
+    # display cache before the reload so this is a fresh-profile measurement.
     expect(page.locator('#formalProfileRefresh')).to_have_count(0)
     expect(page.locator('#selfGuitars_owned .toolbar button').last).to_be_enabled()
     page.locator('#selfFavorites #favoritesRefresh').click()

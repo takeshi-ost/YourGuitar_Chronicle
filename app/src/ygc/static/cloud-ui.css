@@ -64,20 +64,6 @@ body[data-formal-catalog] #catalogRefresh{align-self:flex-end;font-size:11px;pad
 #applicationDialog p:empty{display:none}
 .formal-request-rows{list-style:none;padding:0;margin:0}
 
-/* Formal member shell uses canonical profile typography and connections modal.
-   Search has no standalone local counterpart; retain its existing navigation. */
-body[data-formal-members] main{display:block;background:transparent;border:0;padding:0;max-width:1200px}
-body[data-formal-members] .member-nav,body[data-formal-members] .pager{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-body[data-formal-members] #memberSearchForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-body[data-formal-members] #memberQuery{min-width:0;flex:1}
-body[data-formal-members] #memberSearch{padding:14px;border:1px solid var(--line);background:var(--panel);border-radius:12px}
-body[data-formal-members] .people{list-style:none;padding:0}
-body[data-formal-members] .people a{display:flex;gap:12px;align-items:center;padding:8px 0;color:var(--text);border-bottom:1px solid var(--line)}
-body[data-formal-members] .person-icon{overflow:hidden;display:inline-flex;align-items:center;justify-content:center}
-body[data-formal-members] .people .person-icon{width:36px;height:36px;border-radius:50%}
-body[data-formal-members] .person-icon img{width:100%;height:100%;object-fit:cover}
-body[data-formal-members] #memberStatus:empty{display:none}
-
 #ownershipDialog p:empty{display:none}
 
 /* The authorized owner review uses the same Claim popup surface. */
