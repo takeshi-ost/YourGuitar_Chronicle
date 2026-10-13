@@ -35,7 +35,7 @@ window.YGCOverlays = (() => {
     const candidates=Array.from(panel.querySelectorAll('button')).filter(button=>button.dataset?.uiAction==='close'||/^(Close|閉じる|×|✕)$/i.test(String(button.textContent||'').trim()));
     let button=candidates[0]||panel.querySelector('.ygc-modal-close');
     if(!button){button=document.createElement('button');button.type='button';button.onclick=()=>{if(stack.some(entry=>entry.root===root))close(root);else if(root.tagName==='DIALOG')root.close()};}
-    button.type='button';button.classList.add('ygc-modal-close');button.textContent='×';button.removeAttribute('data-i18n');button.setAttribute('aria-label',globalThis.YGCI18n?.t('action.close')||'Close');panel.append(button);
+    button.type='button';button.classList.add('ygc-modal-close');button.textContent='×';button.removeAttribute('data-i18n');button.setAttribute('aria-label',globalThis.YGCI18n?.t('action.close')||'Close');if(!panel.contains?.(button))panel.append(button);
     for(const other of candidates)if(other!==button)other.hidden=true;
   }
   const originalShowModal=globalThis.HTMLDialogElement?.prototype.showModal;
