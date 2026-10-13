@@ -129,6 +129,15 @@ def main():
             return normalize_image(png(),'image/png')
     Applications.storage=storage
     app.include_router(application_router(TestVerifier(),Applications()))
+    @app.get('/ui/profile')
+    def transport_fixture():
+        from fastapi.responses import HTMLResponse
+        from ygc.cloud_account_page import STATIC
+        # All live entrypoints use Profile/shared modal. This exercises the
+        # underlying private controllers independently of formal presentation.
+        html=(Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text()
+        return HTMLResponse(html)
+
     install(app, public_config({'apiKey': 'fixture-key', 'authDomain': 'fixture-project.firebaseapp.com'},
                                project_id='fixture-project', tenant=''))
 
@@ -169,18 +178,10 @@ def main():
                 return JSONResponse({'detail': 'Temporary test outage'}, status_code=503)
         return await call_next(request)
 
-    @app.get('/transport-fixture')
-    def transport_fixture():
-        from fastapi.responses import HTMLResponse
-        from ygc.cloud_account_page import STATIC
-        # All live entrypoints use Profile/shared modal. This exercises the
-        # underlying private controllers independently of formal presentation.
-        html=(Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text()
-        return HTMLResponse(html)
 
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
-        url = f'http://127.0.0.1:{sock.getsockname()[1]}/transport-fixture'
+        url = f'http://127.0.0.1:{sock.getsockname()[1]}/ui/profile'
         server = uvicorn.Server(uvicorn.Config(app, log_level='error', lifespan='off'))
         thread = threading.Thread(target=server.run, kwargs={'sockets': [sock]}, daemon=True)
         thread.start()
@@ -240,7 +241,7 @@ def main():
                 page.locator('#sendVerification').click()
                 expect(page.locator('#status')).to_contain_text('Verification email sent')
                 assert page.evaluate('window.fixtureVerificationSends') == 1
-                assert page.evaluate('window.fixtureVerificationURL') == url.rsplit('/transport-fixture',1)[0]+'/ui/profile'
+                assert page.evaluate('window.fixtureVerificationURL') == url.rsplit('/ui/profile',1)[0]+'/ui/profile'
                 page.locator('#refreshVerification').click()
                 expect(page.locator('#status')).to_contain_text('still unverified')
                 page.evaluate("sessionStorage.setItem('verified-new@example.invalid','true')")

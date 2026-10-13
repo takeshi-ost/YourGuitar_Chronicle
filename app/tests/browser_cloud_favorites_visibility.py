@@ -139,7 +139,7 @@ def main():
                 name = path.removeprefix('/assets/')
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):
@@ -293,7 +293,7 @@ def main():
                     sessionStorage.setItem('verified-' + email, String(verified));
                 }
             }''', [actor, verified])
-            page.goto(BASE + '/account')
+            page.goto(BASE + '/ui/profile')
             page.wait_for_function('globalThis.YGCCloudAccountReady === true')
             idle(account=True)
 
@@ -333,7 +333,7 @@ def main():
             assert not store['external'], store['external']
             assert SECRET not in page.locator('body').inner_text()
 
-        page.goto(BASE + '/account')
+        page.goto(BASE + '/ui/profile')
         page.wait_for_function('globalThis.YGCCloudAccountReady === true')
         expect(page.locator('#selfFavorites')).to_be_hidden()
         expect(page.locator('#selfVisibility')).to_be_hidden()
@@ -541,7 +541,7 @@ def main():
         expect(values.locator('dd')).to_have_count(4)
 
         before = len(store['writes'])
-        page.evaluate("history.pushState({}, '', '/account?fixture=navigation')")
+        page.evaluate("history.pushState({}, '', '/ui/profile?fixture=navigation')")
         page.go_back(); idle(account=True)
         expect(rows).to_have_count(25)
         expect(values).to_be_empty()

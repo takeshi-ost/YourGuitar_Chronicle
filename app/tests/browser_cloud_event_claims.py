@@ -166,7 +166,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):
@@ -326,7 +326,7 @@ def main():
                 route.abort()
 
         page.route('**/*', respond)
-        page.goto(BASE + '/account?claim=' + GUITAR_ID)
+        page.goto(BASE + '/ui/profile?claim=' + GUITAR_ID)
         page.wait_for_function('globalThis.YGCCloudAccountReady === true')
         dialog = page.locator('#claimDialog')
         media_input = page.locator('#claimMediaInput')
@@ -580,11 +580,11 @@ def main():
         page.set_viewport_size({'width': 390, 'height': 844})
         for dismissal in ('escape', 'navigation', 'back', 'forward'):
             if dismissal == 'back':
-                page.evaluate("history.pushState({}, '', '/account?claim=' + " + json.dumps(OTHER_GUITAR_ID)
-                              + "); history.pushState({}, '', '/account?claim=' + " + json.dumps(GUITAR_ID) + ")")
+                page.evaluate("history.pushState({}, '', '/ui/profile?claim=' + " + json.dumps(OTHER_GUITAR_ID)
+                              + "); history.pushState({}, '', '/ui/profile?claim=' + " + json.dumps(GUITAR_ID) + ")")
             if dismissal == 'forward':
-                page.evaluate("history.pushState({}, '', '/account?claim=' + " + json.dumps(OTHER_GUITAR_ID) + "); history.back()")
-                page.wait_for_url(BASE + '/account?claim=' + GUITAR_ID)
+                page.evaluate("history.pushState({}, '', '/ui/profile?claim=' + " + json.dumps(OTHER_GUITAR_ID) + "); history.back()")
+                page.wait_for_url(BASE + '/ui/profile?claim=' + GUITAR_ID)
                 expect(page.locator('#catalogClaimDetail')).to_contain_text(GUITAR_ID)
             start([files[0]])
             assert dialog.evaluate('element => element.scrollWidth <= element.clientWidth + 1')
@@ -596,7 +596,7 @@ def main():
             if dismissal == 'escape':
                 page.keyboard.press('Escape')
             elif dismissal == 'navigation':
-                page.evaluate("history.pushState({}, '', '/account?claim=' + " + json.dumps(OTHER_GUITAR_ID)
+                page.evaluate("history.pushState({}, '', '/ui/profile?claim=' + " + json.dumps(OTHER_GUITAR_ID)
                               + "); dispatchEvent(new PopStateEvent('popstate'))")
             elif dismissal == 'back':
                 page.evaluate("history.back()")
@@ -607,7 +607,7 @@ def main():
             assert len(store['writes']) == before
             no_blobs()
             assert page.evaluate('document.body.style.overflow') != 'hidden'
-            page.evaluate("history.pushState({}, '', '/account?claim=' + " + json.dumps(GUITAR_ID)
+            page.evaluate("history.pushState({}, '', '/ui/profile?claim=' + " + json.dumps(GUITAR_ID)
                           + "); dispatchEvent(new PopStateEvent('popstate'))")
             expect(page.locator('#catalogClaimStart')).to_be_enabled()
         page.set_viewport_size({'width': 1440, 'height': 1000})

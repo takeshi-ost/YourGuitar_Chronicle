@@ -70,7 +70,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):
@@ -297,7 +297,7 @@ def main():
             if dismiss == 'escape':
                 page.keyboard.press('Escape')
             else:
-                page.evaluate("history.pushState({}, '', '/account'); dispatchEvent(new PopStateEvent('popstate'))")
+                page.evaluate("history.pushState({}, '', '/ui/profile'); dispatchEvent(new PopStateEvent('popstate'))")
             expect(dialog).to_be_hidden()
             page.evaluate("catalogFixture.release('preflight')")
             expect(page.locator('#signOut')).to_be_enabled()

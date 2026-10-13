@@ -164,7 +164,7 @@ def main():
 
     from pathlib import Path
     from fastapi.responses import HTMLResponse
-    @app.get('/account')
+    @app.get('/ui/profile')
     def transport_fixture():return HTMLResponse((Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text())
 
     install(app, public_config({'apiKey': 'fixture-key',

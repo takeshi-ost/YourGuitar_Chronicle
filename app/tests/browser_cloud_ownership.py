@@ -94,7 +94,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):
@@ -225,7 +225,7 @@ def main():
         inbox = page.locator('#ownershipInbox')
         owned = page.locator('#selfGuitars_owned')
         former = page.locator('#selfGuitars_formerly_owned')
-        account_url = BASE + '/account?ownership=' + GUITAR
+        account_url = BASE + '/ui/profile?ownership=' + GUITAR
 
         def settle():
             page.wait_for_function('globalThis.catalogFixture.pending===0')
@@ -312,11 +312,11 @@ def main():
         page.evaluate('path=>catalogFixture.hold(path,"","navigation")', ROOT + '/ownership')
         owned.get_by_role('button', name='Transfer / Release', exact=True).click()
         page.wait_for_function('Boolean(catalogFixture.waiting.navigation)')
-        page.evaluate("history.pushState({},'', '/account'); dispatchEvent(new PopStateEvent('popstate'))")
+        page.evaluate("history.pushState({},'', '/ui/profile'); dispatchEvent(new PopStateEvent('popstate'))")
         page.evaluate('catalogFixture.release("navigation")')
         settle()
         expect(dialog).to_be_hidden()
-        page.evaluate('id=>{history.pushState({},"","/account?ownership="+id); dispatchEvent(new PopStateEvent("popstate"))}', GUITAR)
+        page.evaluate('id=>{history.pushState({},"","/ui/profile?ownership="+id); dispatchEvent(new PopStateEvent("popstate"))}', GUITAR)
         expect(page.locator('#ownershipStart')).to_be_enabled()
         settle()
 

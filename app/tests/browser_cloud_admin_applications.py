@@ -31,7 +31,7 @@ HTML = '''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/assets/cloud-account.css">
 <link rel="stylesheet" href="/assets/cloud-console.css">
-<script src="/assets/i18n.js"></script><script src="/assets/profile-list.js"></script><script src="/assets/list-navigation.js"></script><script src="/assets/overlays.js"></script>
+<script src="/assets/i18n.js"></script><script src="/assets/profile-list.js"></script><script src="/assets/list-navigation.js" defer></script><script src="/assets/overlays.js"></script>
 </head><body><header><h1>Administrator application fixture</h1></header>
 <main class="console-workspace"><section class="console-main-layer">
 <section class="panel" id="applicationBrowser"></section></section></main>

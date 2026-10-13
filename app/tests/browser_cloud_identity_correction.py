@@ -105,7 +105,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=html)
                 return
             if path == '/favicon.ico':
@@ -212,7 +212,7 @@ def main():
                 sessionStorage.setItem('fixture-sdk-email',email);
                 sessionStorage.setItem('verified-'+email,String(verified));
             }""", [actor, verified])
-            page.goto(BASE + '/account')
+            page.goto(BASE + '/ui/profile')
             page.wait_for_function('globalThis.YGCCloudAccountReady===true')
             settle()
 
@@ -246,7 +246,7 @@ def main():
             expect(page.locator('#identityConfirm')).to_be_hidden()
             expect(page.locator('#identityReason')).to_have_value('')
 
-        page.goto(BASE + '/account')
+        page.goto(BASE + '/ui/profile')
         page.wait_for_function('globalThis.YGCCloudAccountReady===true')
         expect(page.locator('#selfIdentityCorrections')).to_be_hidden()
         sign_in(verified=False)
@@ -293,7 +293,7 @@ def main():
             if dismiss == 'close':
                 close()
             else:
-                page.evaluate("history.pushState({},'', '/account?fixture=back');dispatchEvent(new PopStateEvent('popstate'))")
+                page.evaluate("history.pushState({},'', '/ui/profile?fixture=back');dispatchEvent(new PopStateEvent('popstate'))")
             page.evaluate('catalogFixture.release("late")')
             settle()
             expect(dialog).to_be_hidden()
@@ -303,7 +303,7 @@ def main():
 
         # Actual same-document browser Back/Forward closes an active editor
         # and never resurrects the draft or submits it on traversal.
-        page.evaluate("history.pushState({},'', '/account?fixture=navigation')")
+        page.evaluate("history.pushState({},'', '/ui/profile?fixture=navigation')")
         open_listing()
         page.locator('#identityCreate').click()
         page.locator('#identityReason').fill('Unsent navigation draft')

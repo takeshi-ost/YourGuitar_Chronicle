@@ -408,6 +408,7 @@ def main():
                 page.locator('#userRows td:first-child a').nth(1).click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 2')
                 assert page.locator('#guitarRows tr.selected').get_attribute('data-guitar-id')==selected_guitar
+                expect(page.locator('#userRefresh')).to_be_enabled()
                 page.locator('#userRows td:first-child a').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0

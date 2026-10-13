@@ -118,7 +118,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path in ('/account','/ui/profile'):
+            if path == '/ui/profile':
                 route.fulfill(content_type='text/html', body=html)
                 return
             if path == '/favicon.ico':
@@ -236,7 +236,7 @@ def main():
                 sessionStorage.setItem('fixture-sdk-email',email);
                 sessionStorage.setItem('verified-'+email,String(verified));
             }""", [actor, verified])
-            page.goto(BASE + '/account')
+            page.goto(BASE + '/ui/profile')
             page.wait_for_function('globalThis.YGCCloudAccountReady===true')
             settle()
 
@@ -248,7 +248,7 @@ def main():
             rows[0].update(is_read=False, read_at=None)
             refresh()
 
-        page.goto(BASE + '/account')
+        page.goto(BASE + '/ui/profile')
         page.wait_for_function('globalThis.YGCCloudAccountReady===true')
         expect(page.locator('#selfNotifications')).to_be_hidden()
         sign_in(verified=False)
@@ -395,7 +395,7 @@ def main():
                 settle()
             else:
                 refresh()
-        page.evaluate("history.pushState({},'', '/account?fixture=navigation')")
+        page.evaluate("history.pushState({},'', '/ui/profile?fixture=navigation')")
         page.go_back()
         expect(inbox_list.locator('li')).to_have_count(0)
         page.go_forward()
