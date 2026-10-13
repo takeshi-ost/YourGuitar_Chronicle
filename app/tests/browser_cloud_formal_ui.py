@@ -271,7 +271,7 @@ def check_ownership_entry(page,base,fixture):
         page.locator('#ownershipCandidates button').click();expect(page.locator('#ownershipSelected')).to_have_text('To: Bob (#2)')
         page.locator('#ownershipKind').select_option('release')
         expect(page.locator('#ownershipPrevious')).to_be_visible();expect(page.locator('#ownershipDate')).to_have_value('')
-        assert page.locator('#ownershipDialog .modal').evaluate('(e)=>e.scrollWidth<=e.clientWidth'),width
+        assert page.locator('#ownershipDialog .modal').evaluate('(e)=>e.scrollWidth<=e.clientWidth'),(width,page.locator('#ownershipDialog .modal').evaluate("e=>({classes:e.className,width:e.clientWidth,scroll:e.scrollWidth,items:[...e.querySelectorAll('*')].filter(x=>x.getBoundingClientRect().right>e.getBoundingClientRect().right-18&&x.getClientRects().length).map(x=>[x.tagName,x.id,x.className,x.getBoundingClientRect().width,getComputedStyle(x).boxSizing,getComputedStyle(x).position])})"))
         page.keyboard.press('Escape');expect(page.locator('#ownershipDialog')).not_to_be_visible()
     assert len(fixture.writes)==before
     page.locator('#addClaimLink').click();page.locator('#addClaimMenu [data-ownership-entry]').click();expect(page.locator('#ownershipDialog.open')).to_be_visible()
