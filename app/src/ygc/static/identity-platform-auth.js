@@ -24,7 +24,7 @@
         themeOwner=owner;
         // A direct Account/Console/Member entry also restores the same display
         // preference. Never authorize an operation from a saved theme.
-        Promise.resolve().then(()=>displayRead(profileBootstrap?'/api/auth/profile/bootstrap':'/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
+        Promise.resolve().then(()=>api(profileBootstrap?'/api/auth/profile/bootstrap':'/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
           if(response.ok){const data=await response.json();if(dataOwner===owner&&accountUser===auth.currentUser)globalThis.YGCTheme?.remember((profileBootstrap?data?.settings:data)?.fields?.theme)}
         }).catch(()=>{});
       }
