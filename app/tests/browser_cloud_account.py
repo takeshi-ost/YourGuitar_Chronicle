@@ -175,7 +175,7 @@ def main():
         from ygc.cloud_account_page import STATIC
         # All live entrypoints use Profile/shared modal. This exercises the
         # underlying private controllers independently of formal presentation.
-        html=(STATIC/'cloud_ui_profile_html.html').read_text().replace('data-formal-profile="true"','')
+        html=(Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text()
         return HTMLResponse(html)
 
     with socket.socket() as sock:

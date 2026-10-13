@@ -114,9 +114,9 @@ $('maintenanceForm').onsubmit=event=>{
   });
 };
 $('consoleSignOut').onclick=()=>action(async()=>{clear();await auth.logout();$('consoleStatus').textContent=t('console.sign_in_required')});
-document.querySelector('.console-main-layer a[href="#cloudCrawl"]').onclick=()=>{if(authorized)$('operations').scrollIntoView({block:'start'})};
-document.querySelector('.console-main-layer a[href="#guitarBrowser"]').onclick=()=>{if(authorized)$('cloudProductDetail').scrollIntoView({block:'start'})};
-document.querySelector('.console-main-layer a[href="#userBrowser"]').onclick=()=>{if(authorized)$('cloudUserDetail').scrollIntoView({block:'start'})};
+document.querySelector('header .page-nav a[href="#cloudCrawl"]').onclick=()=>{if(authorized){select($('crawlTab'));$('operations').scrollIntoView({block:'start'})}};
+document.querySelector('header .page-nav a[href="#guitarBrowser"]').onclick=()=>{if(authorized)$('cloudProductDetail').scrollIntoView({block:'start'})};
+document.querySelector('header .page-nav a[href="#userBrowser"]').onclick=()=>{if(authorized)$('cloudUserDetail').scrollIntoView({block:'start'})};
 const tabs=[$('statusTab'),$('maintenanceTab'),$('crawlTab')];
 function select(tab){
   for(const button of tabs){const selected=button===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;$(button.getAttribute('aria-controls')).hidden=!selected}

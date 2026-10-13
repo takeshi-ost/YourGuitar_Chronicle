@@ -258,7 +258,7 @@
         if(!current?.user||auth.currentUser!==user)throw Error('Complete registration before verifying email.');
         if(current.identity.email_verified===true)return {account:current,sent:false};
         if(typeof language!=='string'||language.length>63||!/^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$/.test(language))throw Error('Invalid language.');
-        const returnUrl=new URL('/account',origin);
+        const returnUrl=new URL('/ui/profile',origin);
         for(const [key,value] of [['acquire',acquire],['claim',claim]]){
           if(value===undefined)continue;
           if(typeof value!=='string'||!/^[1-9][0-9]{0,18}$/.test(value)||(value.length===19&&value>'9223372036854775807'))throw Error('Invalid guitar selection.');

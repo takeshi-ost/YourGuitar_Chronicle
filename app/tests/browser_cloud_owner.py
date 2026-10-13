@@ -162,6 +162,11 @@ def main():
     def applications():
         return {'items': [], 'can_write': True}
 
+    from pathlib import Path
+    from fastapi.responses import HTMLResponse
+    @app.get('/account')
+    def transport_fixture():return HTMLResponse((Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text())
+
     install(app, public_config({'apiKey': 'fixture-key',
         'authDomain': 'fixture-project.firebaseapp.com'}, project_id='fixture-project', tenant=''))
     with socket.socket() as sock:

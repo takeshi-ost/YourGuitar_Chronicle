@@ -108,7 +108,7 @@ test('Verification email is explicit, uses Google SDK and stays on the configure
   const result=await s.adapter.requestEmailVerification({language:'ja'});
   assert.equal(result.sent,true);assert.equal(result.account.identity.email_verified,false);
   const email=s.sdkCalls.find(call=>call[0]==='verifyEmail');
-  assert.equal(email[1],s.user);assert.equal(email[2].url,'https://ygc.example/account');
+  assert.equal(email[1],s.user);assert.equal(email[2].url,'https://ygc.example/ui/profile');
   assert.equal(s.auth.languageCode,'ja');assert.equal(s.refreshes.at(-1),true);
   assert.equal(s.calls.every(call=>!call.options.method||call.options.method==='GET'),true);
 });
@@ -155,7 +155,7 @@ test('Google throttling during verification remains an error and cannot mark ema
 test('Verification return preserves exact canonical BIGINT Acquire intent on the fixed account path',async()=>{
   const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
   await s.adapter.requestEmailVerification({language:'en',acquire:'9223372036854775807',returnUrl:'https://evil.invalid'});
-  assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/account?acquire=9223372036854775807');
+  assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/ui/profile?acquire=9223372036854775807');
   assert.equal(s.calls.some(call=>call.url.includes('/applications')),false);
 });
 for(const acquire of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','https://evil.invalid','12&next=https://evil.invalid'])test(`Verification rejects invalid Acquire intent ${String(acquire)}`,async()=>{
@@ -166,7 +166,7 @@ for(const acquire of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808',
 test('Verification return preserves Claim intent alongside Acquire without accepting a return URL',async()=>{
  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});
  await s.adapter.requestEmailVerification({language:'ja',claim:'9223372036854775807',acquire:'12',returnUrl:'https://evil.invalid'});
- assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/account?acquire=12&claim=9223372036854775807');
+ assert.equal(s.sdkCalls.find(call=>call[0]==='verifyEmail')[2].url,'https://ygc.example/ui/profile?acquire=12&claim=9223372036854775807');
 });
 for(const claim of ['',null,12,'0','01','+1','-1','1e3','9223372036854775808','https://evil.invalid','12&next=https://evil.invalid'])test(`Verification rejects invalid Claim intent ${String(claim)}`,async()=>{
  const s=setup();await s.adapter.signIn({email:'test@example.invalid',password:'password'});await assert.rejects(s.adapter.requestEmailVerification({claim}));assert.equal(s.sdkCalls.some(call=>call[0]==='verifyEmail'),false);
