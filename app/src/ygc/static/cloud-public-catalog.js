@@ -92,7 +92,8 @@ const valueText=value=>typeof value==='string'&&value.length?value:'—';
 const safeSource=value=>typeof value==='string'&&value===value.trim()&&/^https:\/\/reverb\.com\/item\/[1-9][0-9]{0,19}$/.test(value)?value:null;
 
 export function createPublicCatalog({document=globalThis.document,window=globalThis.window,request=globalThis.fetch.bind(globalThis),loadAuth=loadCloudAuth,restoredAccount=()=>null,basePath='',listStyle='cards',onState=()=>{},detailOnly=false,accountPath='/account',onClaim=null,onAcquire=null,onOwnership=null,onChronicle=()=>{},onClaimPopup=()=>{}}={}){
-  if(!['','/ui','/ui/profile'].includes(basePath)||!['/account','/ui/profile'].includes(accountPath)||!['cards','table'].includes(listStyle))throw Error('Invalid catalog presentation.');
+  const profileBase=/^\/ui\/profiles\/([1-9][0-9]{0,18})$/.exec(basePath);
+  if(!['','/ui','/ui/profile'].includes(basePath)&&!(profileBase&&validId(profileBase[1]))||!['/account','/ui/profile'].includes(accountPath)||!['cards','table'].includes(listStyle))throw Error('Invalid catalog presentation.');
   const $=id=>document.getElementById(id);
   let locale='en';
   try{if(window.localStorage.getItem('ygc_ui_language')==='ja')locale='ja'}catch{/* Storage is optional. */}

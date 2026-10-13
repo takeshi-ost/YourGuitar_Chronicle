@@ -52,6 +52,7 @@ def check_formal_headers(page, base):
 
 
 def check_profile_lists(page,base,fixture):
+    page.set_viewport_size({'width':1440,'height':1000})
     fixture.profile_all=True
     fixture.favorites={('synthetic-1',str(i)) for i in range(1,31)}
     page.goto(base+'/ui/profile')
@@ -399,6 +400,9 @@ def check_round2(page,base,fixture):
     expect(dialog.locator('#authCreateAccount')).to_have_text('Register for a New Account here.')
     expect(dialog.locator('#authCreateAccount strong')).to_have_text('New Account')
     assert dialog.locator('#authSubmit').evaluate('(e)=>Math.abs(e.getBoundingClientRect().width-e.parentElement.getBoundingClientRect().width)<2')
+    for theme in ('dark_default','light_default','sunburst_3ply','butterscotch_black','black_pearl','lake_blue_pearl'):
+        page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
+        assert page.evaluate('''()=>{const p=getComputedStyle(document.querySelector('#catalogList')),m=getComputedStyle(document.querySelector('#cloudAuthDialog'));return p.backgroundColor===m.backgroundColor&&p.backgroundImage===m.backgroundImage&&p.borderTopWidth===m.borderTopWidth&&p.borderTopStyle===m.borderTopStyle}'''),theme
     dialog.locator('#authCancel').click()
     print('Round2: notification target and popup bounds, no global refresh, Settings wallpaper canvas, Japanese authentication, primary submit and right-top closes passed.')
 
