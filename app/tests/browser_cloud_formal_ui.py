@@ -434,7 +434,7 @@ def check_round2(page,base,fixture):
     assert dialog.locator('#authSubmit').evaluate('(e)=>Math.abs(e.getBoundingClientRect().width-e.parentElement.getBoundingClientRect().width)<2')
     for theme in ('dark_default','light_default','sunburst_3ply','butterscotch_black','black_pearl','lake_blue_pearl'):
         page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
-        assert page.evaluate('''()=>{const p=getComputedStyle(document.querySelector('#catalogList')),m=getComputedStyle(document.querySelector('#cloudAuthDialog'));return p.backgroundColor===m.backgroundColor&&p.backgroundImage===m.backgroundImage&&p.borderTopWidth===m.borderTopWidth&&p.borderTopStyle===m.borderTopStyle}'''),theme
+        assert page.evaluate('''()=>{const p=getComputedStyle(document.querySelector('#catalogList')),m=getComputedStyle(document.querySelector('#cloudAuthDialog'));return p.backgroundColor===m.backgroundColor&&p.backgroundImage===m.backgroundImage&&p.borderTopWidth===m.borderTopWidth&&p.borderTopStyle===m.borderTopStyle}'''),(theme,page.evaluate("()=>['#catalogList','#cloudAuthDialog'].map(id=>{const s=getComputedStyle(document.querySelector(id));return [s.backgroundColor,s.backgroundImage,s.borderTopWidth,s.borderTopStyle,s.getPropertyValue('--panel'),s.getPropertyValue('--ygc-window-image')]})"))
     dialog.locator('#authCancel').click()
     print('Round2: notification target and popup bounds, no global refresh, Settings wallpaper canvas, Japanese authentication, primary submit and right-top closes passed.')
 
