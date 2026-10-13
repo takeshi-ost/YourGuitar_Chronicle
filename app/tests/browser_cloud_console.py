@@ -267,6 +267,7 @@ def main():
                     route.fulfill(content_type='text/javascript',body='export const initializeApp=config=>config;' if 'firebase-app.js' in route.request.url else SDK)
                 context.route('https://www.gstatic.com/firebasejs/**',intercept)
                 page=context.new_page()
+                page.on('pageerror',lambda error:print('Console runtime error:',str(error),flush=True))
                 def open_console(email=None,verified=True):
                     page.goto(base+'/console');page.wait_for_function('window.YGCCloudConsoleReady===true')
                     page.evaluate('([email,verified])=>{sessionStorage.clear();if(email){sessionStorage.setItem("fixture-sdk-email",email);sessionStorage.setItem("verified-"+email,String(verified))}}',[email,verified])
@@ -366,7 +367,6 @@ def main():
                 live.fill('Model 2');expect(page.locator('#guitarRows tr.clickable')).to_have_count(7)
                 live.fill('');expect(page.locator('#guitarRows tr.clickable')).to_have_count(25)
                 assert len(guitar_reads)==before_reads
-                page.locator('#guitarBrowser thead th').first.click()
                 page.locator('#guitarBrowser thead th').first.click()
                 expect(page.locator('#guitarRows td:first-child a').first).to_have_text('1')
                 for section in ('guitarBrowser','userBrowser'):

@@ -240,7 +240,7 @@ def main():
                 page.locator('#sendVerification').click()
                 expect(page.locator('#status')).to_contain_text('Verification email sent')
                 assert page.evaluate('window.fixtureVerificationSends') == 1
-                assert page.evaluate('window.fixtureVerificationURL') == url
+                assert page.evaluate('window.fixtureVerificationURL') == url.rsplit('/transport-fixture',1)[0]+'/ui/profile'
                 page.locator('#refreshVerification').click()
                 expect(page.locator('#status')).to_contain_text('still unverified')
                 page.evaluate("sessionStorage.setItem('verified-new@example.invalid','true')")
