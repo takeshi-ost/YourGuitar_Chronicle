@@ -412,11 +412,13 @@ def check_round2(page,base,fixture):
     fixture.notices=[dict(id='81',notification_type='claim_added',title='New Specification Claim',body='Synthetic notice',created_at='2026-10-08T09:00:00Z',is_read=True,read_at='2026-10-08T09:00:00Z',actor=None,destination={'kind':'owner','individual_id':'1','claim_id':'901'})]
     for width in (1440,390,320):
         page.set_viewport_size({'width':width,'height':844})
+        before=len(fixture.calls)
         page.goto(base+'/ui');expect(page.locator('#shellIdentity')).to_have_text(fixture.people[1]['display_name'])
         page.locator('#shellNotifications').click();page.locator('[data-notification-id="81"]').click()
         expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
         expect(page.locator('#ownerResponseDialog.open')).to_be_visible()
         expect(page.locator('#ownerResponseDialog select')).to_be_visible()
+        assert not any('/guitars/901/' in path for method,path in fixture.calls[before:]),fixture.calls[before:]
         panel=page.locator('#ownerResponseDialog .claim-popup-modal')
         assert panel.evaluate('(e)=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}'),panel.bounding_box()
         expect(panel.locator('.ygc-modal-close')).to_have_text('×')

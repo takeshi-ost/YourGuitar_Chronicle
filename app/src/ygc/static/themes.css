@@ -140,7 +140,7 @@
 :root[data-theme="black_pearl"] :is(.panel,.dashboard-card,.notification-panel),
 :root[data-theme="lake_blue_pearl"] :is(.panel,.dashboard-card,.notification-panel) {
   background-color:var(--panel);
-  background-image:linear-gradient(rgba(255,255,255,.84),rgba(255,255,255,.84)),url('/assets/theme-textures/white-pearl.webp');
+  background-image:linear-gradient(rgba(255,255,255,.84),rgba(255,255,255,.84)),url('/assets/theme-textures/white-pearl.webp')!important;
   background-size:auto,280px auto;
 }
 :root[data-theme="sunburst_3ply"] :is(.panel,.dashboard-card,.notification-panel) {

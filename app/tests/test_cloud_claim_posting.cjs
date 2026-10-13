@@ -75,6 +75,8 @@ test('Claim URL intent is a canonical BIGINT string and ignores unrelated return
  const e=environment(),read=e.context.readClaimIntent;
  for(const id of ['1','9007199254740993','9223372036854775807'])assert.equal(read('?claim='+id+'&next=https://evil.invalid'),id);
  assert.equal(read('?acquire=12'),null);
+ assert.equal(read('?notice=owner&target=1&claim=901'),null);
+ assert.equal(read('?notice=invalid&claim=901'),null);
  for(const value of ['','0','01','-1','+1','1.0','9223372036854775808','12\n','https://evil.invalid'])assert.equal(read('?claim='+encodeURIComponent(value)),'');
  assert.equal(read('?claim=12&claim=12'),'');
 });

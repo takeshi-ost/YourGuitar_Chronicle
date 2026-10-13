@@ -6,7 +6,10 @@ const eventKinds=['exhibition','performance','recording','auction','other'];
 const photoClaim=row=>['media','event'].includes(row?.claim_type);
 
 export function readClaimIntent(search){
-  const values=new URLSearchParams(search).getAll('claim');
+  const query=new URLSearchParams(search);
+  // Notification claim IDs are review targets, not guitar creation intents.
+  if(query.has('notice'))return null;
+  const values=query.getAll('claim');
   return values.length===0?null:values.length===1?(catalogIndividualId(values[0])||''):'';
 }
 
