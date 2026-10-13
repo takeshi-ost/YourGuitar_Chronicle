@@ -63,7 +63,7 @@ def main():
     assets['cloud-account-page.js'] = assets['cloud-account-page.js'].replace('listPanel:false', 'listPanel:true').replace('notifications.refresh({reuse:true}),', 'notifications.refresh({reuse:true}),identityCorrections.refresh(),')
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
+    html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
     guitar = dict(id=GUITAR, manufacturer='Fixture maker', model='Original identity',
                   year='1965', serial_number='ORIGINAL-001')
     store = dict(rows=[], revision=1, can_write=True, mode='normal', author_available=True,
@@ -105,7 +105,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path == '/account':
+            if path in ('/account','/ui/profile'):
                 route.fulfill(content_type='text/html', body=html)
                 return
             if path == '/favicon.ico':

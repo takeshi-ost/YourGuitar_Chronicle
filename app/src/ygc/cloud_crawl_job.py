@@ -86,9 +86,11 @@ def perform(settings,storage,collector,execution,token=None,progress=lambda stag
             progress('crawl')
             result=advance_program(repo,collector,'electric_acoustic',low,high,_summary_limit=limit)
             record['counts']={key:value for key,value in result.items() if type(value) is int}
-            if record['source']=='scheduled':
-                catalog.execute('UPDATE auto_crawl SET next_run=%s WHERE id=1 AND year_min=%s AND year_max=%s AND interval_seconds=%s AND next_run=%s',
-                    ((int(time.time()//3600)+config['interval_seconds']//3600)*3600,low,high,config['interval_seconds'],config['next_run']))
+            completed_at=datetime.now(timezone.utc)
+            record['completed_at']=completed_at.isoformat()
+            # Preserve live settings changed while this run was in progress.
+            catalog.execute('UPDATE auto_crawl SET next_run=%s+interval_seconds WHERE id=1',
+                            (completed_at.timestamp(),))
             update(catalog,event['id'],record,'succeeded')
             try:prune(settings,storage,'chronicle')
             except Exception:record['retention_pending']=True;update(catalog,event['id'],record,'succeeded')

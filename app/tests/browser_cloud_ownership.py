@@ -35,7 +35,7 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    account_html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
+    account_html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
     public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8')
     users = {name: dict(id=str(index), display_name=name.title() + ' ' + ATTACK,
                        account_type='user') for index, name in enumerate(('owner', 'buyer', 'other'), 1)}
@@ -94,7 +94,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path == '/account':
+            if path in ('/account','/ui/profile'):
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):

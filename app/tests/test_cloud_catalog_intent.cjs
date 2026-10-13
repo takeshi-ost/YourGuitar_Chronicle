@@ -21,7 +21,7 @@ function environment({initial=account(),search='',fullPage=false,catalogReplies=
     getBoundingClientRect(){return {left:20,right:600,top:20,bottom:600}}showModal(){this.open=true;this.opens=(this.opens||0)+1}close(){this.open=false}
   }
   const document={body:new Element('body'),documentElement:{lang:'en'},createElement:tag=>new Element(tag),getElementById:id=>ids.get(id),addEventListener(key,fn){(listeners[key]??=[]).push(fn)}};
-  const html=fs.readFileSync(path.join(staticPath,'cloud_account_html.html'),'utf8');
+  const html=fs.readFileSync(path.join(staticPath,'cloud_ui_profile_html.html'),'utf8');
   for(const match of html.matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)){const n=new Element(match[1]);n.id=match[2];document.body.append(n)}
   let state=initial,busy=false,component,componentArgs;
   const calls=[],publicCalls=[],authCalls=[],replies=[],publicReplies=[...catalogReplies],authReplies=[];

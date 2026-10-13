@@ -180,8 +180,9 @@ def install(app, config):
         return JSONResponse(config, headers={'Cache-Control': 'no-store'})
 
     @app.get('/account')
-    def account_page():
-        return page_response((STATIC / 'cloud_account_html.html').read_text(encoding='utf-8'))
+    def account_page(request:Request):
+        suffix=('?'+request.url.query) if request.url.query else ''
+        return RedirectResponse('/ui/profile'+suffix,status_code=303)
 
     @app.get('/members')
     @app.get('/ui/members')
@@ -232,7 +233,7 @@ def install(app, config):
     def asset(filename: str, request: Request):
         if filename in ('cloud-catalog-insights.js', 'cloud-catalog-insights.css', 'cloud-world-geometry.js'):
             return static_file(request, STATIC / filename)
-        if filename not in ('cloud-modal-theme.css','cloud-profile-bootstrap.js','cloud-user-profile.js','cloud-member-data.js','cloud-notification-text.js', 'cloud-claim-votes.js', 'cloud-auth-dialog.css', 'cloud-auth-dialog.js', 'cloud-theme.js', 'cloud-detail-dispute.js', 'cloud-application-presentation.js', 'cloud-ownership-presentation.js', 'cloud-account-hub.js', 'cloud-profile-connections.js', 'cloud-detail-claim-actions.js', 'cloud-claim-presentation.js', 'cloud-user-settings.js', 'profile-list.js', 'cloud-profile-list.js', 'list-navigation.js', 'product-detail.js', 'table-columns.js', 'cloud-ui.js', 'cloud-ui.css', 'cloud-ui-profile.js', 'cloud-ui-profile.css', 'themes.css', 'sunburst-wood.webp', 'identity-platform-auth.js', 'cloud-auth-loader.js',
+        if filename not in ('cloud-console-list.js','cloud-modal-theme.css','cloud-profile-bootstrap.js','cloud-user-profile.js','cloud-member-data.js','cloud-notification-text.js', 'cloud-claim-votes.js', 'cloud-auth-dialog.css', 'cloud-auth-dialog.js', 'cloud-theme.js', 'cloud-detail-dispute.js', 'cloud-application-presentation.js', 'cloud-ownership-presentation.js', 'cloud-account-hub.js', 'cloud-profile-connections.js', 'cloud-detail-claim-actions.js', 'cloud-claim-presentation.js', 'cloud-user-settings.js', 'profile-list.js', 'cloud-profile-list.js', 'list-navigation.js', 'product-detail.js', 'table-columns.js', 'cloud-ui.js', 'cloud-ui.css', 'cloud-ui-profile.js', 'cloud-ui-profile.css', 'themes.css', 'sunburst-wood.webp', 'identity-platform-auth.js', 'cloud-auth-loader.js',
                             'cloud-public-catalog.js', 'cloud-public-catalog.css', 'cloud-members.js', 'cloud-member-icons.js',
                             'cloud-account-favorites.js', 'cloud-account-visibility.js', 'cloud-account-disputes.js', 'cloud-account-page.js', 'cloud-account-notifications.js', 'cloud-account-profile.js', 'cloud-account-guitars.js', 'cloud-owner-acquire-inbox.js', 'cloud-account-ownership.js', 'cloud-account-identity.js', 'cloud-account-applications.js', 'cloud-account-claims.js', 'cloud-account-media.js', 'cloud-account-avatar.js', 'cloud-account.css', 'cloud-console-page.js', 'cloud-console-applications.js', 'cloud-console-guitars.js', 'cloud-console-media.js', 'cloud-console-users.js', 'cloud-console-backups.js', 'cloud-console-crawl.js', 'cloud-console.css', 'ui-components.css', 'overlays.js'):
             raise HTTPException(404, 'Asset not found.')

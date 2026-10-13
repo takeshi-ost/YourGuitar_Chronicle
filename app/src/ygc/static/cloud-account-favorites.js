@@ -108,7 +108,7 @@ export function createFavoriteControl({auth,state,root,compact=false,idPrefix=''
   const node=(tag,id)=>{const n=document.createElement(tag);n.id=idPrefix+id;return n};
   const toggle=node('button','favoriteToggle'),refreshButton=node('button','favoriteRefresh'),status=node('p','favoriteStatus'),account=node('a','favoriteAccount'),help=node('p','favoritePrivateNotice');
   if(compact)root.classList.add('favorite-control-compact');
-  toggle.type=refreshButton.type='button';status.setAttribute('role','status');account.href='/account#selfFavorites';root.append(toggle,refreshButton,account,help,status);
+  toggle.type=refreshButton.type='button';status.setAttribute('role','status');account.href='/ui/profile#selfFavorites';root.append(toggle,refreshButton,account,help,status);
   let id=null,value=null,epoch=0,loading=false,mutating=false,uncertain=false,notice='',identity=favoriteIdentity(state());
   const eligible=()=>favoriteEligible(state())&&auth()?.signedIn===true;
   function clear(){favoriteObservers.delete(observe);epoch++;id=null;value=null;loading=mutating=uncertain=false;notice='';root.hidden=true;toggle.hidden=refreshButton.hidden=account.hidden=true;toggle.textContent=status.textContent='';toggle.setAttribute('aria-pressed','false');identity=favoriteIdentity(state())}

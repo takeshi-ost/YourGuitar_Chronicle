@@ -31,7 +31,7 @@ HTML = '''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/assets/cloud-account.css">
 <link rel="stylesheet" href="/assets/cloud-console.css">
-<script src="/assets/i18n.js"></script><script src="/assets/overlays.js"></script>
+<script src="/assets/i18n.js"></script><script src="/assets/profile-list.js"></script><script src="/assets/list-navigation.js"></script><script src="/assets/overlays.js"></script>
 </head><body><header><h1>Administrator application fixture</h1></header>
 <main class="console-workspace"><section class="console-main-layer">
 <section class="panel" id="applicationBrowser"></section></section></main>
@@ -78,7 +78,7 @@ def application(index=1, *, status='pending', kind='listing', serial=None):
     return dict(
         revision=f'{index:032x}', request_kind=kind, status=status,
         applicant_id='9007199254740993', applicant_name='<b>Private applicant</b>',
-        product_name='<b>Private guitar</b>', serial=serial or f'FIRST{index:03}',
+        manufacturer='Fender', product_name='<b>Private guitar</b>', serial=serial or f'FIRST{index:03}',
         individual_id='9007199254740995' if kind == 'acquire' else None,
         claim_id=None, verification_status=None, created_at=1780000000,
         submitted_at=1780000010, completed_at=None, error=None, attempts=2,
@@ -103,7 +103,7 @@ def summary(row):
 
 def main():
     assets = {name: (STATIC / name).read_text(encoding='utf-8') for name in (
-        'cloud-console-applications.js', 'overlays.js', 'cloud-account.css', 'cloud-console.css')}
+        'cloud-console-applications.js', 'cloud-console-list.js','cloud-profile-list.js','profile-list.js','list-navigation.js','cloud-account-favorites.js','overlays.js', 'cloud-account.css', 'cloud-console.css')}
     from browser_assets import include_module_dependencies
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
@@ -222,10 +222,12 @@ def main():
                 page.wait_for_function('fixture.ready')
             expect(root).to_be_visible()
             expect(rows).to_contain_text('FIRST001')
+            assert root.locator('thead th').count()==7
+            assert root.locator('thead th').evaluate_all('(nodes)=>nodes.map(n=>n.childNodes[0].textContent)')==(['ID','Maker','Product','Serial','Applicant','Application type','Status'] if locale=='en' else ['ID','メーカー','製品','シリアル','申請者','申請種別','状態'])
 
         def open_application(row=None, *, locale='en'):
             navigate(row, locale=locale)
-            rows.locator('button').first.click()
+            rows.locator('td:first-child a').first.click()
             idle()
             expect(dialog).to_be_visible()
             expect(page.locator('#adminApplicationDetailFields')).to_contain_text('FIRST001')

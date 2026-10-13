@@ -88,7 +88,7 @@ test('Enrollment cannot silently switch the signed-in identity',async()=>{
 test('Bearer requests reject cross-origin destinations and redirects',async()=>{
   const s=setup();s.auth.currentUser=s.user;
   await assert.rejects(s.adapter.authorizedFetch('https://other.example/api/me'));
-  await assert.rejects(s.adapter.authorizedFetch('/account'));
+  await assert.rejects(s.adapter.authorizedFetch('/ui/profile'));
   assert.equal(s.calls.length,0);
   await s.adapter.authorizedFetch('/api/auth/me');
   assert.equal(s.calls[0].options.redirect,'error');assert.equal(s.calls[0].options.credentials,'omit');

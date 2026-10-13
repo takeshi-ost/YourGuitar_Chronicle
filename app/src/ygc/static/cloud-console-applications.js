@@ -1,3 +1,4 @@
+import {createConsoleList} from './cloud-console-list.js';
 // Application image review is separate from Claim Verification and Owner consent.
 export function createApplicationBrowser({request,authorized,onUnauthorized,onGuitar}){
   const root=document.getElementById('applicationBrowser'),t=(key,params={})=>globalThis.YGCI18n.t(key,params);
@@ -19,10 +20,10 @@ export function createApplicationBrowser({request,authorized,onUnauthorized,onGu
   const toolbar=node('div'),heading=node('h2',t('admin_applications.heading'));toolbar.className='toolbar';toolbar.append(heading,refreshButton);
   const reviewNotice=node('p',undefined,'adminApplicationReviewNotice'),manual=node('p',undefined,'adminApplicationManualReview'),status=node('p',undefined,'adminApplicationStatus');status.setAttribute('role','status');reviewNotice.setAttribute('role','status');
   const table=node('table'),head=node('thead'),headRow=node('tr'),rows=node('tbody',undefined,'adminApplicationRows'),scroll=node('div');scroll.className='guitar-table-scroll';
-  for(const key of ['applicant','product','serial','kind','status'])headRow.append(node('th',t('admin_applications.'+key)));
-  headRow.append(node('th',t('action.detail')));head.append(headRow);table.append(head,rows);scroll.append(table);
+  head.append(headRow);table.append(head,rows);scroll.append(table);
   const previous=button('guitars.previous','adminApplicationPrevious'),next=button('guitars.next','adminApplicationNext');
   root.append(toolbar,node('p',t('admin_applications.scope')),form,reviewNotice,manual,scroll,status,node('span',t('guitars.page_size')+' '),previous,next);
+  const presentation=createConsoleList({section:root,title:heading,list:rows,refreshButton,columns:[['id','ID'],['manufacturer',t('guitars.field_manufacturer')],['product_name',t('admin_applications.product')],['serial',t('admin_applications.serial')],['applicant_name',t('admin_applications.applicant')],['request_kind',t('admin_applications.kind')],['status',t('admin_applications.status')]],numericId:false,busy:()=>mutation||listLoading,onSelect:id=>{if(!mutation&&!listLoading)detail(id)},renderCell:(row,key,td)=>{if(!['request_kind','status'].includes(key))return false;td.textContent=t('applications.'+(key==='status'?'status_':'')+row[key]);return true}});
 
   const dialog=node('dialog',undefined,'adminApplicationDialog'),title=node('h2',t('admin_applications.detail'),'adminApplicationTitle'),detailRefresh=button('action.refresh','adminApplicationDetailRefresh'),close=button('action.close','adminApplicationClose');
   dialog.setAttribute('aria-labelledby',title.id);
@@ -62,7 +63,7 @@ export function createApplicationBrowser({request,authorized,onUnauthorized,onGu
   }
   function clear(){
     accountEpoch++;listEpoch++;listLoading=false;mutation=false;history=[null];cursor=null;query=filterStatus=filterKind='';reviewEnabled=null;
-    globalThis.YGCOverlays.close(dialog);clearDetail();rows.replaceChildren();status.textContent=reviewNotice.textContent=manual.textContent='';search.value=statusFilter.value=kindFilter.value='';render();
+    globalThis.YGCOverlays.close(dialog);clearDetail();presentation.clear();status.textContent=reviewNotice.textContent=manual.textContent='';search.value=statusFilter.value=kindFilter.value='';render();
   }
   function render(){
     const allowed=authorized();
@@ -87,7 +88,7 @@ export function createApplicationBrowser({request,authorized,onUnauthorized,onGu
   }
   function reviewText(enabled){return t(enabled?'admin_applications.review_on':'admin_applications.review_off')}
   async function refresh(){
-    if(!authorized())return;const account=accountEpoch,current=++listEpoch;listLoading=true;cursor=null;rows.replaceChildren();status.textContent=t('cloud.working');render();
+    if(!authorized())return;const account=accountEpoch,current=++listEpoch;listLoading=true;cursor=null;presentation.clear();status.textContent=t('cloud.working');render();
     const params=new URLSearchParams({q:query,status:filterStatus,kind:filterKind,limit:'25'});if(history.at(-1))params.set('after',history.at(-1));
     try{
       const result=await read('/api/admin/applications?'+params);
@@ -95,17 +96,13 @@ export function createApplicationBrowser({request,authorized,onUnauthorized,onGu
       if(!result||!countOK(result.total)||!Array.isArray(result.items)||result.items.length>25||!(result.next_after===null||revisionOK(result.next_after))||typeof result.review_enabled!=='boolean')throw Error('Invalid application page');
       validateManual(result.manual_review);for(const row of result.items)validateRow(row);
       cursor=result.next_after;reviewEnabled=result.review_enabled;reviewNotice.textContent=reviewText(reviewEnabled);manual.textContent=result.manual_review.instructions;
-      for(const row of result.items){
-        const tr=node('tr');
-        for(const value of [row.applicant_name||row.applicant_id,row.product_name,row.serial,t('applications.'+row.request_kind),t('applications.status_'+row.status)])tr.append(node('td',display(value)));
-        const cell=node('td'),view=button('action.detail');view.onclick=()=>detail(row.revision);cell.append(view);tr.append(cell);rows.append(tr);
-      }
+      presentation.setRows(result.items.map(row=>({...row,id:row.revision,applicant_name:row.applicant_name||row.applicant_id})));
       status.textContent=t(result.total==='0'?'admin_applications.empty':'admin_applications.total',{count:result.total});
-    }catch(error){if(!alive(account)||current!==listEpoch)return;if(!unauthorized(error,account)){rows.replaceChildren();cursor=null;status.textContent=errorText(error)}}
+    }catch(error){if(!alive(account)||current!==listEpoch)return;if(!unauthorized(error,account)){presentation.clear();cursor=null;status.textContent=errorText(error)}}
     finally{if(alive(account)&&current===listEpoch){listLoading=false;render()}}
   }
   function showDetail(row){
-    validateRow(row,true);selected=row;stale=false;detailLoading=false;resetConfirmation();clearPhotos();reason.value='';detailFields.replaceChildren();events.replaceChildren();operation.replaceChildren();
+    validateRow(row,true);selected=row;presentation.select(row.revision);stale=false;detailLoading=false;resetConfirmation();clearPhotos();reason.value='';detailFields.replaceChildren();events.replaceChildren();operation.replaceChildren();
     detailReview.textContent=reviewText(row.review_enabled);detailManual.textContent=row.manual_review.instructions;
     photoWarning.textContent=row.photos_unavailable?t('admin_applications.photos_unavailable'):'';ownerNotice.textContent=row.status==='accepted'&&row.verification_status==='unverified'?t('applications.owner_waiting'):'';
     const fields=['revision','request_kind','status','applicant_id','applicant_name','product_name','serial','individual_id','claim_id','verification_status','created_at','submitted_at','completed_at','acquisition_date','challenge','body','attempts','lease_until','error','paused_answers','management_version'];

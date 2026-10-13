@@ -48,7 +48,7 @@ class CrawlControl:
         validate(data['year_min'],data['year_max'],data['interval_hours']);validate_limit(data['summary_limit'])
         if data['enabled'] and self.client is None:raise ValueError('Crawl Job not configured.')
         with self.operations.access('admin_write',actor) as (con,mode,account):
-            con.execute("UPDATE auto_crawl SET category='electric_acoustic',year_min=%s,year_max=%s,interval_seconds=%s,enabled=%s,next_run=%s WHERE id=1",(data['year_min'],data['year_max'],data['interval_hours']*3600,int(data['enabled']),(int(time.time()//3600)+data['interval_hours']+1)*3600))
+            con.execute("UPDATE auto_crawl SET category='electric_acoustic',year_min=%s,year_max=%s,interval_seconds=%s,enabled=%s,next_run=%s WHERE id=1",(data['year_min'],data['year_max'],data['interval_hours']*3600,int(data['enabled']),time.time()+data['interval_hours']*3600))
             con.execute('INSERT INTO events(occurred_at,mode,reason) VALUES(%s,%s,%s)',(datetime.now(timezone.utc).isoformat(),mode['mode'],json.dumps(dict(action='crawl_settings',actor=actor,**data))))
         return self.details(actor)
     def start(self,actor,data):

@@ -19,7 +19,7 @@ from ygc.identity_platform import VerifiedIdentity
 
 def check_review_controls(page, operations, writes):
     """Use the real dialog and API to check cancellation and stale-state saves."""
-    page.locator('#maintenanceTab').click()
+    page.locator('#crawlTab').click()
     toggle=page.locator('#reviewToggle');dialog=page.locator('#reviewDialog')
     expect(page.locator('#reviewStatus')).to_have_text('Review OFF')
     expect(toggle).to_have_text('Enable review')
@@ -48,7 +48,7 @@ def check_review_controls(page, operations, writes):
     expect(toggle).to_be_enabled()
     assert writes==[('admin-uuid', {'enabled':True,'expected_enabled':False})]
     page.reload();page.wait_for_function('window.YGCCloudConsoleReady===true')
-    page.locator('#maintenanceTab').click()
+    page.locator('#crawlTab').click()
     expect(page.locator('#reviewStatus')).to_have_text('Review ON')
     toggle.click()
     expect(page.locator('#reviewWarning')).to_contain_text('Answers already in progress are retained')
@@ -278,6 +278,11 @@ def main():
                 open_console('admin@example.invalid',False)
                 expect(page.locator('#consoleControls')).to_be_hidden();assert not calls
                 open_console('admin@example.invalid')
+                # Header anchors follow rendered sections; no retired prototype link.
+                assert page.locator('header .page-nav a').evaluate_all('(links)=>links.map(a=>a.hash)')==['#consoleAccount','#cloudCrawl','#disputeBrowser','#applicationBrowser','#guitarBrowser','#userBrowser','#backupBrowser','#operations','#cloudProductDetail','#cloudUserDetail']
+                assert page.locator('header a[href="/account"]').count()==0
+                assert page.locator('header .page-nav a').first.evaluate('a=>parseFloat(getComputedStyle(a).fontSize)')<=12
+                assert page.locator('#reviewToggle').evaluate('el=>el.closest("#crawlPanel")!==null')
                 expect(page.locator('#operationsStatus')).to_have_text('Offline')
                 check_review_controls(page,ops,review_writes)
                 assert not crawl_calls and not maintenance_calls and not backup_calls
@@ -302,7 +307,7 @@ def main():
                 expect(page.locator('#backupRows tr')).to_have_count(1)
                 expect(page.locator('#backupRows')).to_contain_text('42')
                 page.locator('#backupTarget').select_option('accounts');expect(page.locator('#backupRows')).to_contain_text('8')
-                page.locator('#backupTarget').select_option('operations');expect(page.locator('#backupRows tr')).to_have_count(0)
+                page.locator('#backupTarget').select_option('operations');expect(page.locator('#backupRows tr.clickable')).to_have_count(0)
                 expect(page.locator('#backupStatus')).to_have_text('No saved snapshots for this database.')
                 page.locator('#backupTarget').select_option('accounts')
                 expect(page.locator('#backupKeep')).to_have_value('10')
@@ -348,7 +353,28 @@ def main():
                 assert page.locator('#userRows b').count()==0
                 page.locator('#userNext').click();expect(page.locator('#userRows tr')).to_have_count(3)
                 page.locator('#userPrevious').click();expect(page.locator('#userRows tr')).to_have_count(25)
-                page.locator('#guitarRows button').first.click()
+                # The shared presentation sorts/filters already loaded rows without API reads.
+                assert page.locator('#guitarBrowser thead th').count()==8
+                assert page.locator('#userBrowser thead th').count()==5
+                assert page.locator('#applicationBrowser thead th').count()==7
+                before_reads=len(guitar_reads)
+                manufacturer=page.locator('#guitarBrowser thead th').nth(2)
+                manufacturer.click();expect(manufacturer).to_have_attribute('aria-sort','ascending')
+                manufacturer.press('Enter');expect(manufacturer).to_have_attribute('aria-sort','descending')
+                live=page.locator('#guitarBrowser > .toolbar input')
+                live.fill('Model 28');expect(page.locator('#guitarRows tr.clickable')).to_have_count(0)
+                live.fill('Model 2');expect(page.locator('#guitarRows tr.clickable')).to_have_count(7)
+                live.fill('');expect(page.locator('#guitarRows tr.clickable')).to_have_count(25)
+                assert len(guitar_reads)==before_reads
+                page.locator('#guitarBrowser thead th').first.click()
+                page.locator('#guitarBrowser thead th').first.click()
+                expect(page.locator('#guitarRows td:first-child a').first).to_have_text('1')
+                for section in ('guitarBrowser','userBrowser'):
+                    assert page.locator('#'+section+' .table-wrap').evaluate('el=>{el.scrollTop=90;return el.scrollTop>0&&getComputedStyle(el).overflowY==="auto"}')
+                    assert page.locator('#'+section+' thead th').first.evaluate('el=>getComputedStyle(el).position==="sticky"')
+                # Snapshot scrolling is independent of the surrounding main column.
+                assert page.locator('#backupBrowser .table-wrap').evaluate('el=>{const body=el.querySelector("tbody"),saved=body.innerHTML;for(let i=0;i<30;i++)body.insertAdjacentHTML("beforeend",saved);el.scrollTop=100;const result=el.scrollTop>0;body.innerHTML=saved;return result}')
+                page.locator('#guitarRows td:first-child a').first.click()
                 expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 0')
                 page.locator('#contentMediaFile').set_input_files(dict(name='photo.png',mimeType='image/png',buffer=png()))
                 page.locator('#contentMediaSave').click()
@@ -368,17 +394,17 @@ def main():
                 assert page.locator('#mediaPreview').get_attribute('src') is None
                 page.locator('#contentMediaRows button').click();expect(page.locator('#contentMediaDialog')).to_be_visible();page.keyboard.press('Escape')
                 expect(page.locator('#contentMediaDialog')).not_to_be_visible()
-                page.locator('#guitarRows button').nth(1).click()
+                page.locator('#guitarRows td:first-child a').nth(1).click()
                 expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 0')
-                page.locator('#guitarRows button').nth(2).click()
+                page.locator('#guitarRows td:first-child a').nth(2).click()
                 expect(page.locator('#contentMediaRows button')).to_have_count(25)
                 page.locator('#contentMediaPanel button').filter(has_text='Next').click()
                 expect(page.locator('#contentMediaRows button')).to_have_count(1)
                 page.locator('#contentMediaPanel button').filter(has_text='Previous').click()
                 expect(page.locator('#contentMediaRows button')).to_have_count(25)
-                page.locator('#guitarRows button').first.click()
+                page.locator('#guitarRows td:first-child a').first.click()
                 expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 1')
-                page.locator('#userRows button').first.click()
+                page.locator('#userRows td:first-child a').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0
                 page.locator('#userProfileEdit').click();expect(page.locator('#userProfileDialog')).to_be_visible()
@@ -408,10 +434,10 @@ def main():
                 expect(page.locator('#userRows tr')).to_have_count(1)
                 expect(page.locator('#userStatus')).to_have_text('Total accounts: 28')
                 expect(page.locator('#userPrevious')).to_be_disabled();expect(page.locator('#userNext')).to_be_disabled()
-                page.locator('#userRows button').first.click();expect(page.locator('#userDetailFields')).to_contain_text('Profile 28')
+                page.locator('#userRows td:first-child a').first.click();expect(page.locator('#userDetailFields')).to_contain_text('Profile 28')
                 expect(page.locator('#userGuitars_owned')).to_contain_text('No guitars in this category.')
                 expect(page.locator('#userGuitars_formerly_owned')).to_contain_text('No guitars in this category.')
-                page.locator('#guitarRows button').first.click()
+                page.locator('#guitarRows td:first-child a').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 1')
                 expect(page.locator('#chronicleRows details')).to_have_count(25)
                 expect(page.locator('#chronicleStatus')).to_have_text('Total history records: 28')
@@ -442,7 +468,7 @@ def main():
                 page.locator('#guitarSearch').fill('Model 28');page.locator('#guitarSearchSubmit').click()
                 expect(page.locator('#guitarRows tr')).to_have_count(1)
                 expect(page.locator('#guitarStatus')).to_have_text('Total guitars: 28')
-                page.locator('#guitarRows button').first.click()
+                page.locator('#guitarRows td:first-child a').first.click()
                 expect(page.locator('#guitarDetailFields')).to_contain_text('Model 28')
                 expect(page.locator('#chronicleRows')).to_contain_text('S28')
                 expect(page.locator('#guitarPrevious')).to_be_disabled();expect(page.locator('#guitarNext')).to_be_disabled()
@@ -479,13 +505,13 @@ def main():
                 page.click('#consoleSignOut');expect(page.locator('#consoleControls')).to_be_hidden()
                 expect(page.locator('#reviewStatus')).to_have_text('—');expect(page.locator('#reviewToggle')).to_be_disabled()
                 expect(page.locator('#reviewDialog')).to_be_hidden();assert len(review_writes)==4
-                open_console('admin@example.invalid');page.goto(base+'/account');page.wait_for_function('window.YGCCloudAccountReady===true');expect(page.locator('#consoleLink')).to_be_visible()
+                open_console('admin@example.invalid');page.goto(base+'/account');page.wait_for_function('window.YGCCloudAccountReady===true');expect(page.locator('#consoleLink')).to_be_visible();assert page.url==base+'/ui/profile'
                 page.goto(base+'/console');page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.set_viewport_size({'width':390,'height':844})
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.locator('[data-language-picker]').select_option('ja');page.wait_for_function('document.documentElement.lang==="ja"&&window.YGCCloudConsoleReady===true')
                 expect(page.locator('#operationsStatus')).to_have_text('管理者のみ')
-                page.locator('#maintenanceTab').click()
+                page.locator('#crawlTab').click()
                 expect(page.locator('#reviewStatus')).to_have_text('審議 OFF')
                 expect(page.locator('#reviewToggle')).to_have_text('審議をONにする')
                 page.locator('#reviewToggle').click();expect(page.locator('#reviewDialog')).to_be_visible()

@@ -59,7 +59,7 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                         + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
+    html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
     users = {name: dict(id=str(index), app_user_id='fixture-' + name,
              display_name=name.title(), account_type='user', role='member', status='active')
              for index, name in enumerate(('recipient', 'sender', 'other'), 1)}
@@ -118,7 +118,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path == '/account':
+            if path in ('/account','/ui/profile'):
                 route.fulfill(content_type='text/html', body=html)
                 return
             if path == '/favicon.ico':

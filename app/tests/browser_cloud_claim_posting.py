@@ -40,7 +40,7 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    account_html = (STATIC / 'cloud_account_html.html').read_text(encoding='utf-8')
+    account_html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
     public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8').replace('</head>', '<script src="/assets/overlays.js" defer></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css"></head>')
     assets['cloud-auth-dialog.css'] = (STATIC / 'cloud-auth-dialog.css').read_text()
     store = dict(rows=[], calls=[], writes=[], external=[], can_write=True, conflict_once=False, drop_after_commit=False, revision=0)
@@ -70,7 +70,7 @@ def main():
                 name = path[len('/assets/'):]
                 route.fulfill(content_type='text/css' if name.endswith('.css') else 'text/javascript', body=assets[name])
                 return
-            if path == '/account':
+            if path in ('/account','/ui/profile'):
                 route.fulfill(content_type='text/html', body=account_html)
                 return
             if path == '/' or path.startswith('/guitars/'):
@@ -175,7 +175,7 @@ def main():
         page.route('**/*', respond)
         page.goto(BASE + '/guitars/' + GUITAR_ID)
         page.wait_for_function('globalThis.YGCCloudPublicCatalogReady === true')
-        expect(page.locator('#addClaimLink')).to_have_attribute('href', '/account?claim=' + GUITAR_ID)
+        expect(page.locator('#addClaimLink')).to_have_attribute('href', '/ui/profile?claim=' + GUITAR_ID)
         page.locator('#addClaimLink').click()
         expect(page.locator('#cloudAuthDialog')).to_be_visible()
         assert not store['writes']
@@ -184,11 +184,11 @@ def main():
         page.locator('#authPassword').fill('fixture-password')
         page.locator('#authSubmit').click()
         page.wait_for_function('globalThis.YGCCloudAccountReady === true')
-        assert page.url == BASE + '/account?claim=' + GUITAR_ID
+        assert page.url == BASE + '/ui/profile?claim=' + GUITAR_ID
         expect(page.locator('#catalogClaimStatus')).to_contain_text('Verify your email')
         page.locator('#sendVerification').click()
         page.wait_for_function('globalThis.fixtureVerificationURL !== undefined')
-        assert page.evaluate('globalThis.fixtureVerificationURL') == BASE + '/account?claim=' + GUITAR_ID
+        assert page.evaluate('globalThis.fixtureVerificationURL') == BASE + '/ui/profile?claim=' + GUITAR_ID
         page.evaluate("sessionStorage.setItem('verified-claim@example.invalid', 'true')")
         page.locator('#refreshVerification').click()
         expect(page.locator('#catalogClaimStart')).to_be_enabled()

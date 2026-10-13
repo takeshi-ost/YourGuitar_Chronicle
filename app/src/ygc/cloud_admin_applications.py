@@ -126,7 +126,7 @@ class CloudAdminApplications(CloudReview):
         result = {key: row[key] for key in ('revision', 'request_kind', 'serial', 'created_at', 'submitted_at',
                    'completed_at', 'error', 'attempts', 'lease_until')}
         result.update(status=status, applicant_id=str(row['applicant_id']), applicant_name=applicant[0] if applicant else '(deleted)',
-            product_name=product, individual_id=str(row['individual_id']) if row['individual_id'] else None,
+            manufacturer=(individual['manufacturer'] if individual else payload['manufacturer'] if payload else None), product_name=product, individual_id=str(row['individual_id']) if row['individual_id'] else None,
             claim_id=str(row['claim_id']) if row['claim_id'] else None,
             current_owner_user_id=str(individual['current_owner_user_id']) if individual and individual['current_owner_user_id'] else None,
             verification_status=claim['verification_status'] if claim else None, admin_actions=actions,

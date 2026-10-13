@@ -23,9 +23,10 @@ function environment(){
   const calls=[],replies=[],created=[],revoked=[],denied=[],guitars=[];let allowed=true;
   const URLMock={createObjectURL(blob){const url='blob:fixture-'+created.length;created.push({url,blob});return url},revokeObjectURL(url){revoked.push(url)}};
   const context=vm.createContext({document,URL:URLMock,URLSearchParams,Date,console,CustomEvent:class{constructor(type){this.type=type}},YGCI18n:{t:(key,params={})=>key+Object.values(params).join(',')}});context.window=context;
+require('./console_list_stub.cjs').install(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/overlays.js'),'utf8'),context);
   const request=async(url,options={},binary=false)=>{calls.push({url,options,binary});assert.ok(replies.length,'Missing response for '+url);const value=await replies.shift();if(value instanceof Error)throw value;return value};
-  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-console-applications.js'),'utf8').replace('export function','function')+';globalThis.create=createApplicationBrowser;',context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-console-applications.js'),'utf8').replace(/^import .*;\n/gm,'').replace('export function','function')+';globalThis.create=createApplicationBrowser;',context);
   const ui=context.create({request,authorized:()=>allowed,onUnauthorized:e=>denied.push(e),onGuitar:id=>guitars.push(id)}),get=id=>ids.get('adminApplication'+id);
   return {ui,get,calls,replies,root,created,revoked,denied,guitars,
     async open(data=row()){replies.push(data);await ui.detail(data.revision)},
@@ -45,7 +46,7 @@ test('Search, filters, cursor pagination and latest list win; requests are never
   e.get('Search').value=' serial ';e.get('StatusFilter').value='error';e.get('KindFilter').value='listing';e.replies.push(page([]));e.get('SearchForm').onsubmit({preventDefault(){}});await e.flush();
   const params=new URL('https://fixture'+e.calls.at(-1).url).searchParams;assert.equal(params.get('q'),'serial');assert.equal(params.get('status'),'error');assert.equal(params.get('kind'),'listing');assert.equal(e.get('Previous').disabled,true);
   const old=deferred();e.replies.push(old.promise,page([row({serial:'NEW'})]));const first=e.ui.refresh();await e.ui.refresh();old.resolve(page([row({serial:'OLD'})]));await first;
-  assert.equal(e.get('Rows').children[0].children[2].textContent,'NEW');for(const call of e.calls)assert.equal(call.options.cache,'no-store');
+  assert.equal(e.get('Rows').children[0].children[3].textContent,'NEW');for(const call of e.calls)assert.equal(call.options.cache,'no-store');
 });
 
 test('Private detail JSON/history render only text; photos use binary request and URLs are revoked',async()=>{
@@ -71,7 +72,7 @@ test('Editing the reason or operation invalidates confirmation, including progra
 
 for(const dismiss of ['close','escape','backdrop'])test(`${dismiss} during a POST still refreshes list and never reopens detail`,async()=>{
   const e=environment();await e.open();e.prepare();const pending=deferred();e.replies.push(pending.promise,page([row({status:'accepted'})]));const work=e.get('Confirm').onclick();e.dismiss(dismiss);
-  assert.equal(e.get('Dialog').open,false);pending.resolve(row({status:'accepted'}));await work;assert.equal(e.get('Dialog').open,false);assert.equal(e.get('Dialog').opens,1);assert.match(e.get('Rows').children[0].children[4].textContent,/accepted/);
+  assert.equal(e.get('Dialog').open,false);pending.resolve(row({status:'accepted'}));await work;assert.equal(e.get('Dialog').open,false);assert.equal(e.get('Dialog').opens,1);assert.match(e.get('Rows').children[0].children[6].textContent,/accepted/);
 });
 
 for(const code of [400,409,500])test(`Decision HTTP ${code} requires fresh detail before retry; no private error text leaks`,async()=>{
@@ -86,7 +87,7 @@ for(const stage of ['list','detail','photo','post'])test(`Signout invalidates pe
   if(stage==='list')work=e.ui.refresh();if(stage==='detail')work=e.ui.detail(revision);if(stage==='photo')work=e.get('Photo_closeup').onclick();if(stage==='post')work=e.get('Confirm').onclick();
   e.signout();e.signin();e.replies.push(page([row({serial:'CURRENT'})]));await e.ui.refresh();const count=e.calls.length;
   pending.resolve(stage==='photo'?new Blob(['old']):stage==='list'?page([row({serial:'OLD'})]):row());await work;
-  assert.equal(e.calls.length,count);assert.equal(e.get('Dialog').open,false);assert.equal(e.created.length,0);assert.equal(e.get('Rows').children[0].children[2].textContent,'CURRENT');
+  assert.equal(e.calls.length,count);assert.equal(e.get('Dialog').open,false);assert.equal(e.created.length,0);assert.equal(e.get('Rows').children[0].children[3].textContent,'CURRENT');
 });
 
 test('Authorization render boundary purges private data and object URLs without needing explicit clear',async()=>{
@@ -125,7 +126,7 @@ for(const source of ['list','detail','photo','post'])test(`A late ${source} role
   const e=environment(),pending=deferred();let work;if(['photo','post'].includes(source))await e.open();if(source==='post')e.prepare();e.replies.push(pending.promise);
   if(source==='list')work=e.ui.refresh();if(source==='detail')work=e.ui.detail(revision);if(source==='photo')work=e.get('Photo_closeup').onclick();if(source==='post')work=e.get('Confirm').onclick();
   e.signout();e.signin();e.replies.push(page([row({serial:'CURRENT'})]));await e.ui.refresh();pending.resolve(http(403));await work;
-  assert.equal(e.denied.length,0);assert.equal(e.root.hidden,false);assert.equal(e.get('Rows').children[0].children[2].textContent,'CURRENT');assert.equal(e.get('Dialog').open,false);
+  assert.equal(e.denied.length,0);assert.equal(e.root.hidden,false);assert.equal(e.get('Rows').children[0].children[3].textContent,'CURRENT');assert.equal(e.get('Dialog').open,false);
 });
 
 for(const source of ['list','detail','photo'])test(`A late ${source} role-revocation error cannot erase a newer same-session read`,async()=>{
@@ -135,7 +136,7 @@ for(const source of ['list','detail','photo'])test(`A late ${source} role-revoca
   else if(source==='detail'){e.replies.push(row({revision:second,serial:'CURRENT'}));await e.ui.detail(second)}
   else{e.replies.push(new Blob(['current']));await e.get('Photo_closeup').onclick()}
   pending.resolve(http(403));await work;assert.equal(e.denied.length,0);assert.equal(e.root.hidden,false);
-  if(source==='list')assert.equal(e.get('Rows').children[0].children[2].textContent,'CURRENT');
+  if(source==='list')assert.equal(e.get('Rows').children[0].children[3].textContent,'CURRENT');
   if(source==='detail')assert.match(e.get('DetailFields').all().map(n=>n.textContent).join(' '),/CURRENT/);
   if(source==='photo')assert.equal(e.created.length,1);
 });

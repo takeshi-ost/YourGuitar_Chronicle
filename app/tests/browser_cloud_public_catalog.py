@@ -111,7 +111,7 @@ def main():
             if path == '/' or path.startswith('/guitars/'):
                 route.fulfill(content_type='text/html', body=html)
                 return
-            if path == '/account':
+            if path in ('/account','/ui/profile'):
                 route.fulfill(content_type='text/html', body='<p id="accountFixture">Account destination fixture</p>')
                 return
             if path == '/favicon.ico':

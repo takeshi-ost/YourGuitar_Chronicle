@@ -397,7 +397,8 @@ def check_prepublication(page,base,fixture):
     expect(page.locator('#identityDialog')).to_be_visible();page.locator('#identityClose').click()
     page.goto(base+'/account');expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
     expect(page.locator('#accountSummary')).to_contain_text('Alice')
-    assert page.locator('main').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(25, 23, 21)'
+    assert '/ui/profile' in page.url
+    assert page.locator('main').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgba(0, 0, 0, 0)'
     for path in ('/console',):
         page.goto(base+path);expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
         assert page.locator('body').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(188, 132, 52)'

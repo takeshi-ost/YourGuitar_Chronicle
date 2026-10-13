@@ -91,9 +91,9 @@ const validId=value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value)&&
 const valueText=value=>typeof value==='string'&&value.length?value:'—';
 const safeSource=value=>typeof value==='string'&&value===value.trim()&&/^https:\/\/reverb\.com\/item\/[1-9][0-9]{0,19}$/.test(value)?value:null;
 
-export function createPublicCatalog({document=globalThis.document,window=globalThis.window,request=globalThis.fetch.bind(globalThis),loadAuth=loadCloudAuth,restoredAccount=()=>null,basePath='',listStyle='cards',onState=()=>{},detailOnly=false,accountPath='/account',onClaim=null,onAcquire=null,onOwnership=null,onChronicle=()=>{},onClaimPopup=()=>{}}={}){
+export function createPublicCatalog({document=globalThis.document,window=globalThis.window,request=globalThis.fetch.bind(globalThis),loadAuth=loadCloudAuth,restoredAccount=()=>null,basePath='',listStyle='cards',onState=()=>{},detailOnly=false,accountPath='/ui/profile',onClaim=null,onAcquire=null,onOwnership=null,onChronicle=()=>{},onClaimPopup=()=>{}}={}){
   const profileBase=/^\/ui\/profiles\/([1-9][0-9]{0,18})$/.exec(basePath);
-  if(!['','/ui','/ui/profile'].includes(basePath)&&!(profileBase&&validId(profileBase[1]))||!['/account','/ui/profile'].includes(accountPath)||!['cards','table'].includes(listStyle))throw Error('Invalid catalog presentation.');
+  if(!['','/ui','/ui/profile'].includes(basePath)&&!(profileBase&&validId(profileBase[1]))||accountPath!=='/ui/profile'||!['cards','table'].includes(listStyle))throw Error('Invalid catalog presentation.');
   const $=id=>document.getElementById(id);
   let locale='en';
   try{if(window.localStorage.getItem('ygc_ui_language')==='ja')locale='ja'}catch{/* Storage is optional. */}
@@ -601,7 +601,7 @@ if(document.body.dataset.catalogAutostart!=='false'){
   await catalog.start();
   if(!globalThis.YGCI18n)await import('./i18n.js');
   dialog=createAuthDialog({auth:()=>client,onAuthenticated:()=>catalog.refresh()});
-  function continueMember(id,kind){const target='/account?'+kind+'='+id;if(client?.account?.identity?.email_verified===true)location.assign(target);else dialog.open({verificationPath:target,onSuccess:()=>location.assign(target)})}
+  function continueMember(id,kind){const target='/ui/profile?'+kind+'='+id;if(client?.account?.identity?.email_verified===true)location.assign(target);else dialog.open({verificationPath:target,onSuccess:()=>location.assign(target)})}
   for(const [element,kind] of [['acquireLink','acquire'],['addClaimLink','claim']]){
     const link=document.getElementById(element);link.onclick=event=>{if(event.button>0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();const id=new URL(link.href,location.origin).searchParams.get(kind);if(validId(id))continueMember(id,kind)};
   }

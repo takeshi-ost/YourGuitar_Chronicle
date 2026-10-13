@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const listSelector = '#catalogRows, #favoritesList, .self-guitar-list, #individualBody, #unverifiedAcquireBody, #userBody, '
-    + '#newDiscoveryList, #notificationList, #userChronicleList, '
+    + '.console-list-rows, #newDiscoveryList, #notificationList, #userChronicleList, '
     + '[id^="profileRows-"], .user-guitar-list';
   const itemSelector = 'tr.clickable, .discovery-item, .notification-item, '
     + '.profile-chronicle-row.clickable, .user-guitar-row a';

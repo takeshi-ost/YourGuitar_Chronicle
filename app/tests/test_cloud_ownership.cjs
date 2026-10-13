@@ -25,7 +25,7 @@ function environment({initial=account(),fullPage=false,search=''}={}){
   getBoundingClientRect(){return {left:20,right:600,top:20,bottom:600}}showModal(){this.open=true;this.opens=(this.opens||0)+1}close(){this.open=false}
  }
  const document={body:new Element('body'),documentElement:{lang:'en'},createElement:tag=>new Element(tag),getElementById:id=>ids.get(id),addEventListener(key,fn){(listeners[key]??=[]).push(fn)}};
- for(const match of fs.readFileSync(path.join(assets,'cloud_account_html.html'),'utf8').matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)){const n=new Element(match[1]);n.id=match[2];document.body.append(n)}
+ for(const match of fs.readFileSync(path.join(assets,'cloud_ui_profile_html.html'),'utf8').matchAll(/<(\w+)[^>]*\bid="([^"]+)"/g)){const n=new Element(match[1]);n.id=match[2];document.body.append(n)}
  let state=initial,busy=false,component,args,updates=0,defaultView=view(),defaultRows=[],defaultTransfer=transfer();const calls=[],replies=[],authCalls=[];
  async function response(value){const data=await value;if(data instanceof Error)throw data;return data?.httpStatus?{ok:false,status:data.httpStatus,json:async()=>({detail:{code:data.code}})}:{ok:true,json:async()=>data}}
  const client={signedIn:Boolean(initial),account:initial,documents:async()=>({terms:{version:'t'},privacy:{version:'p'}}),restore:async()=>initial,

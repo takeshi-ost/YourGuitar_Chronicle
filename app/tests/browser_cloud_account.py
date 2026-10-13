@@ -169,9 +169,18 @@ def main():
                 return JSONResponse({'detail': 'Temporary test outage'}, status_code=503)
         return await call_next(request)
 
+    @app.get('/transport-fixture')
+    def transport_fixture():
+        from fastapi.responses import HTMLResponse
+        from ygc.cloud_account_page import STATIC
+        # All live entrypoints use Profile/shared modal. This exercises the
+        # underlying private controllers independently of formal presentation.
+        html=(STATIC/'cloud_ui_profile_html.html').read_text().replace('data-formal-profile="true"','')
+        return HTMLResponse(html)
+
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
-        url = f'http://127.0.0.1:{sock.getsockname()[1]}/account'
+        url = f'http://127.0.0.1:{sock.getsockname()[1]}/transport-fixture'
         server = uvicorn.Server(uvicorn.Config(app, log_level='error', lifespan='off'))
         thread = threading.Thread(target=server.run, kwargs={'sockets': [sock]}, daemon=True)
         thread.start()

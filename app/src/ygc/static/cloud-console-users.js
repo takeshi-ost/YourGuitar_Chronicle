@@ -1,8 +1,10 @@
+import {createConsoleList} from './cloud-console-list.js';
 // Console data access remains separate from Operations availability.
 export function createUserBrowser({request,authorized,onUnauthorized,onGuitar}){
   const $=id=>document.getElementById(id),t=(key,params={})=>YGCI18n.t(key,params);
   let busy=false,epoch=0,next=null,history=[0],query='',selectedUser=null;
   let selectedProfile=null,pendingProfile=null;
+  const presentation=createConsoleList({section:$('userBrowser'),list:$('userRows'),refreshButton:$('userRefresh'),columns:[['id','ID'],...['display_name','account_type','role','disabled'].map(k=>[k,t('users.field_'+k)])],onSelect:id=>detail(id),busy:()=>busy,renderCell:(row,field,td)=>{if(field!=='disabled')return false;td.textContent=t('users.disabled_'+row.disabled);return true}});
   const edit=document.createElement('button'),detailRefresh=document.createElement('button'),profileStatus=document.createElement('p');
   edit.id='userProfileEdit';detailRefresh.id='userDetailRefresh';profileStatus.id='userProfileStatus';profileStatus.setAttribute('role','status');
   edit.textContent=t('users.edit_profile');detailRefresh.textContent=t('users.refresh_detail');$('cloudUserDetail').append(edit,detailRefresh,profileStatus);
@@ -84,11 +86,11 @@ export function createUserBrowser({request,authorized,onUnauthorized,onGuitar}){
       for(const button of item.rows.querySelectorAll('button'))button.disabled=busy||!authorized();
     }
   }
-  function clear(){closeProfile();profileStatus.textContent='';clearOwned();epoch++;next=null;history=[0];query='';$('userRows').replaceChildren();$('userDetailFields').replaceChildren();$('userStatus').textContent='';$('userSearch').value='';$('userDetailEmpty').hidden=false;render()}
+  function clear(){closeProfile();profileStatus.textContent='';clearOwned();epoch++;next=null;history=[0];query='';presentation.clear();$('userDetailFields').replaceChildren();$('userStatus').textContent='';$('userSearch').value='';$('userDetailEmpty').hidden=false;render()}
   function failed(error){
     closeProfile();selectedProfile=null;
     clearOwned();
-    $('userRows').replaceChildren();$('userDetailFields').replaceChildren();$('userDetailEmpty').hidden=false;next=null;
+    presentation.clear();$('userDetailFields').replaceChildren();$('userDetailEmpty').hidden=false;next=null;
     if([401,403].includes(error.status)){clear();onUnauthorized(error)}
     $('userStatus').textContent=t(error.status===404?'users.missing':'users.unavailable');
   }
@@ -102,12 +104,7 @@ export function createUserBrowser({request,authorized,onUnauthorized,onGuitar}){
     const result=await request('/api/admin/users?'+params);
     if(current!==epoch)return;
     if(typeof result.total!=='string'||!/^(0|[1-9][0-9]*)$/.test(result.total)||!Array.isArray(result.items)||result.items.length>25||!(result.next_after===null||typeof result.next_after==='string'&&/^[1-9][0-9]*$/.test(result.next_after)))throw Error('Invalid page');
-    $('userRows').replaceChildren();next=result.next_after;
-    for(const row of result.items){
-      const tr=document.createElement('tr');
-      for(const field of ['display_name','account_type','role','disabled']){const td=document.createElement('td');td.textContent=field==='disabled'?t('users.disabled_'+row[field]):row[field]??'—';tr.append(td)}
-      const td=document.createElement('td'),button=document.createElement('button');button.textContent=t('action.detail');button.onclick=()=>detail(row.id);td.append(button);tr.append(td);$('userRows').append(tr);
-    }
+    next=result.next_after;presentation.setRows(result.items);
     $('userStatus').textContent=t('users.total_count',{count:result.total});
   }
   function refresh(){return action(page)}
@@ -118,7 +115,7 @@ export function createUserBrowser({request,authorized,onUnauthorized,onGuitar}){
     if(current!==epoch)return;
     $('userDetailFields').replaceChildren();
     for(const field of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t('users.field_'+field);dd.textContent=field==='disabled'?t('users.disabled_'+row[field]):row[field]??'—';$('userDetailFields').append(dt,dd)}
-    selectedUser=id;selectedProfile=row;for(const kind of ['owned','formerly_owned']){if(current!==epoch)return;await ownedPage(kind,current)}
+    selectedUser=id;presentation.select(id);selectedProfile=row;for(const kind of ['owned','formerly_owned']){if(current!==epoch)return;await ownedPage(kind,current)}
     if(current!==epoch)return;
     $('userDetailEmpty').hidden=true;if(jump)$('cloudUserDetail').scrollIntoView({block:'start'});
   }

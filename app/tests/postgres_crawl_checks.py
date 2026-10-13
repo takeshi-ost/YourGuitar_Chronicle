@@ -132,7 +132,7 @@ def run(app,accounts,operations,storage,aid):
 
     from unittest.mock import Mock,patch
     from ygc.cloud_crawl_control import CrawlControl
-    from ygc.cloud_crawl_job import perform
+    from ygc.cloud_crawl_job import perform,find,KIND
     from ygc.cloud_backup_job import KIND as BACKUP_KIND
     import json,uuid,time
     client=Mock();client.start.return_value='private-operation';control=CrawlControl(operations,client)
@@ -150,13 +150,21 @@ def run(app,accounts,operations,storage,aid):
     with connect(app,'operations') as con:
         archives=[json.loads(row['reason']) for row in con.execute('SELECT reason FROM events WHERE reason LIKE %s ORDER BY id',('{"kind":"'+BACKUP_KIND+'",%',))]
         assert archives[-1]['target']=='chronicle' and archives[-1]['source']=='crawl'
+    import datetime
+    details=control.details(aid);after_manual=details['next_run']
+    with connect(app,'operations') as con:
+        r=json.loads(find(con,token)['reason'])
+    completion=datetime.datetime.fromisoformat(r['completed_at']).timestamp()
+    assert abs(after_manual-completion-details['interval_hours']*3600)<0.01
     assert perform(app,storage,first,'repeat-crawl',token)['already_completed']
+    assert control.details(aid)['next_run']==after_manual
     blocked=str(uuid.uuid4());control.start(aid,dict(data,request_id=blocked));before=Collector()
     with patch('ygc.cloud_crawl_job.save',side_effect=RuntimeError('fixture failure')):
         try:perform(app,storage,before,'failed-save',blocked)
         except RuntimeError:pass
         else:raise AssertionError('Crawl ran after failed safety copy.')
     assert not before.requests
+    assert control.details(aid)['next_run']==after_manual
     assert perform(app,storage,before,'scheduled-off')['skipped']
     config=control.configure(aid,dict(year_min=1970,year_max=1979,interval_hours=1,enabled=True,summary_limit=3))
     assert config['enabled'] and config['interval_hours']==1 and control.details(aid)['summary_limit']==3
@@ -165,7 +173,12 @@ def run(app,accounts,operations,storage,aid):
     version=operations.details(aid)['version'];mode=operations.details(aid)['mode']
     operations.set_mode(aid,mode='normal',message='',version=version)
     assert perform(app,storage,Collector(),'scheduled-due')['saved_before_crawl']
-    assert control.details(aid)['next_run']>time.time()
+    scheduled_details=control.details(aid)
+    with connect(app,'operations') as con:
+        records=[json.loads(r['reason']) for r in con.execute('SELECT reason FROM events WHERE reason LIKE %s ORDER BY id DESC',('{\"kind\":\"'+KIND+'\",%',))]
+    last=next(r for r in records if r.get('execution')=='scheduled-due')
+    assert abs(scheduled_details['next_run']-datetime.datetime.fromisoformat(last['completed_at']).timestamp()-3600)<0.01
+    assert scheduled_details['next_run']>time.time()
     assert perform(app,storage,Collector(),'scheduled-repeat')['skipped']
     control.configure(aid,dict(year_min=1950,year_max=1980,interval_hours=1,enabled=False,summary_limit=2000))
     operations.set_mode(aid,mode=mode,message='Test',version=operations.details(aid)['version'])

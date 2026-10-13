@@ -1,6 +1,8 @@
+import {createConsoleList} from './cloud-console-list.js';
 export function createBackupBrowser({request,authorized,onUnauthorized,maintenanceMode=()=>false}){
   const $=id=>document.getElementById(id),t=k=>YGCI18n.t(k);
   let busy=false,epoch=0,timer=null,available=false,pending=false,maintenanceAvailable=false,maintenancePending=false,selection=null;
+  const presentation=createConsoleList({section:$('backupBrowser'),list:$('backupRows'),refreshButton:$('backupRefresh'),columns:['created_at','schema_version','tables','rows','action'].map(k=>[k,t('backups.'+({created_at:'at',schema_version:'version'}[k]||k))]),numericId:false,numericFields:['schema_version','tables','rows'],initialSort:'created_at',initialDirection:-1,busy:()=>busy,renderCell:(row,key,td)=>{if(key!=='action')return false;const button=document.createElement('button');button.textContent=t('backups.restore');button.disabled=$('backupReset').disabled;button.onclick=()=>open('restore',row.id);td.append(button);return true}});
   function render(){
     $('backupBrowser').hidden=!authorized();
     $('backupTarget').disabled=$('backupRefresh').disabled=busy||maintenancePending||!authorized();
@@ -10,7 +12,7 @@ export function createBackupBrowser({request,authorized,onUnauthorized,maintenan
     $('backupConfirm').disabled=!selection||$('backupConfirmation').value!==selection.target;
     for(const id of ['backupScheduled','backupInterval','backupKeep','backupPolicySave'])$(id).disabled=busy||pending||maintenancePending||!available||!authorized();
   }
-  function clear(){epoch++;clearTimeout(timer);timer=null;available=false;pending=false;maintenanceAvailable=false;maintenancePending=false;selection=null;$('backupDialog').close();$('backupMaintenanceStatus').textContent='';$('backupRows').replaceChildren();$('backupStatus').textContent='';$('backupSaveStatus').textContent='';$('backupPolicyStatus').textContent='';render()}
+  function clear(){epoch++;clearTimeout(timer);timer=null;available=false;pending=false;maintenanceAvailable=false;maintenancePending=false;selection=null;$('backupDialog').close();$('backupMaintenanceStatus').textContent='';presentation.clear();$('backupStatus').textContent='';$('backupSaveStatus').textContent='';$('backupPolicyStatus').textContent='';render()}
   function display(state){
     pending=['starting','running','unknown'].includes(state.state)&&!state.retry_allowed;
     $('backupSaveStatus').textContent=state.state==='idle'?'':t('backups.'+state.state);
@@ -25,8 +27,8 @@ export function createBackupBrowser({request,authorized,onUnauthorized,maintenan
       if(current!==epoch)return;
       available=result.save_available===true;maintenanceAvailable=result.maintenance_available===true;
       if(available){const policy=await request('/api/admin/backups/policy?'+new URLSearchParams({target}));if(current!==epoch)return;$('backupScheduled').checked=policy.enabled;$('backupInterval').value=policy.interval_hours;$('backupKeep').value=policy.generations;}
-      $('backupRows').replaceChildren();
-      for(const row of result.items){const tr=document.createElement('tr');for(const value of [row.created_at,row.schema_version,row.tables,row.rows]){const td=document.createElement('td');td.textContent=String(value);tr.append(td)}const td=document.createElement('td'),button=document.createElement('button');button.textContent=t('backups.restore');button.onclick=()=>open('restore',row.backup_id);td.append(button);tr.append(td);$('backupRows').append(tr)}
+      presentation.clear();
+      presentation.setRows(result.items.map(row=>({...row,id:row.backup_id})));
       $('backupStatus').textContent=t(result.items.length?'backups.loaded':'backups.empty');
       if(available){const state=await request('/api/admin/backups/save-status?'+new URLSearchParams({target}));if(current===epoch)display(state)}
       if(maintenanceAvailable){const state=await request('/api/admin/databases/status?'+new URLSearchParams({target}));if(current===epoch)maintenanceDisplay(state)}

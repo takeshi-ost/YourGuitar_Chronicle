@@ -42,7 +42,7 @@ class CloudGuitars:
                 con.execute("SET LOCAL lock_timeout='2s'")
                 escaped=q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
                 pattern='%'+escaped+'%'
-                rows=con.execute(f'''SELECT {COLUMNS} FROM individuals WHERE id>%s
+                rows=con.execute(f'''SELECT {COLUMNS},(SELECT COUNT(*) FROM claims c WHERE c.individual_id=individuals.id) AS claim_count FROM individuals WHERE id>%s
                     AND (manufacturer ILIKE %s OR model ILIKE %s OR serial_number ILIKE %s)
                     ORDER BY id LIMIT %s''',(after,pattern,pattern,pattern,limit+1)).fetchall()
                 total=con.execute('SELECT COUNT(*) AS total FROM individuals').fetchone()['total']

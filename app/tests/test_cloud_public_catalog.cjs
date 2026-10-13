@@ -112,7 +112,7 @@ test('Deep links preserve large string identifiers, public specifications, place
   e.specifications[id]=[{field_name:'pickups',value_text:'Two single coils'},{field_name:'body',value_text:'Alder'},{field_name:'finish',value_text:'White'}];
   e.chronicles[id]=[claim('99',{items:[{field_name:'model',value_text:'Historical Model'}],source_url:'https://reverb.com/item/12345'})];await e.ui.start();
   assert.equal(e.ids.get('detailContent').hidden,false);assert.match(e.text('detailTitle'),new RegExp(id));assert.equal(e.ids.get('catalogLayout').dataset.detailOpen,'true');
-  assert.equal(e.ids.get('acquireLink').href,'/account?acquire='+id);assert.equal(e.ids.get('acquireLink').onclick,undefined);assert.equal(e.ids.get('addClaimLink').href,'/account?claim='+id);assert.equal(e.ids.get('addClaimLink').onclick,undefined);
+  assert.equal(e.ids.get('acquireLink').href,'/ui/profile?acquire='+id);assert.equal(e.ids.get('acquireLink').onclick,undefined);assert.equal(e.ids.get('addClaimLink').href,'/ui/profile?claim='+id);assert.equal(e.ids.get('addClaimLink').onclick,undefined);
   assert.match(e.text('detailSpecifications'),/White/);assert.doesNotMatch(e.text('detailSpecifications'),/Sunburst/);
   const fields=e.ids.get('detailSpecifications').children.map(row=>row.children[0].textContent);assert.ok(fields.indexOf('Body')<fields.indexOf('Pickups'));
   assert.equal(e.text('photoPlaceholder'),'Photo unavailable');assert.equal(e.ids.get('detailContent').all().filter(node=>node.tag==='img').length,0);
@@ -152,7 +152,7 @@ test('English/Japanese controls persist language without refetching or translati
 test('Newer selections clear old detail immediately and reject late results even if fetch ignores abort',async()=>{
   const e=environment({url:'https://catalog.example/guitars/1'});await e.ui.start();assert.match(e.text('detailTitle'),/Model 1/);
   const hold=deferred();e.handler=call=>call.path==='/api/public/guitars/2'?hold.promise:undefined;
-  const obsolete=e.ui.navigate('/guitars/2');await tick();assert.equal(e.ids.get('detailContent').hidden,true);assert.equal(e.text('detailTitle'),'');assert.equal(e.ids.get('acquireLink').href,'/account');assert.equal(e.ids.get('addClaimLink').href,'/account');
+  const obsolete=e.ui.navigate('/guitars/2');await tick();assert.equal(e.ids.get('detailContent').hidden,true);assert.equal(e.text('detailTitle'),'');assert.equal(e.ids.get('acquireLink').href,'/ui/profile');assert.equal(e.ids.get('addClaimLink').href,'/ui/profile');
   const oldRequest=e.publicCalls().findLast(call=>call.path==='/api/public/guitars/2');e.handler=null;await e.ui.navigate('/guitars/1?q=Fender');
   assert.equal(oldRequest.options.signal.aborted,true);assert.match(e.text('detailTitle'),/Model 1/);
   hold.resolve(response({...guitar(2),specifications:[]}));await obsolete;assert.match(e.text('detailTitle'),/Model 1/);assert.equal(e.window.location.pathname,'/guitars/1');
@@ -187,7 +187,7 @@ test('Chronicle pagination guards repeated clicks, preserves IDs and discards re
 test('Restricted Chronicle pagination clears the public content and cannot retain an Acquire action',async()=>{
   const e=environment({url:'https://catalog.example/guitars/1'});e.chronicles['1']=Array.from({length:27},(_,i)=>claim(i+1));await e.ui.start();
   e.handler=call=>call.path.endsWith('/chronicle')&&call.params.has('after')?response({detail:{code:'service_restricted'}},403):undefined;
-  await e.ids.get('chronicleMore').onclick();assert.equal(e.ids.get('detailContent').hidden,true);assert.equal(e.ids.get('acquireLink').href,'/account');assert.equal(e.ids.get('addClaimLink').href,'/account');assert.equal(e.links().length,0);assert.match(e.text('detailStatus'),/temporarily restricted/);
+  await e.ids.get('chronicleMore').onclick();assert.equal(e.ids.get('detailContent').hidden,true);assert.equal(e.ids.get('acquireLink').href,'/ui/profile');assert.equal(e.ids.get('addClaimLink').href,'/ui/profile');assert.equal(e.links().length,0);assert.match(e.text('detailStatus'),/temporarily restricted/);
 });
 
 test('Offline/admin-only restriction is enforced by API responses, while canonical signed-in admin access remains possible',async()=>{
@@ -255,7 +255,7 @@ test('Formal entry preserves its route namespace, bounded public DTO and existin
   await e.ui.start();assert.equal(e.ids.get('catalogRows').children[0].tag,'tr');
   assert.ok(e.links().every(link=>link.href.startsWith('/ui/guitars/')));
   await e.click(e.links()[0]);assert.match(e.window.location.pathname,/^\/ui\/guitars\//);
-  assert.match(e.ids.get('acquireLink').href,/^\/account\?acquire=/);
+  assert.match(e.ids.get('acquireLink').href,/^\/ui\/profile\?acquire=/);
   await e.window.history.back();assert.equal(e.window.location.pathname,'/ui');
   assert.ok(e.publicCalls().every(call=>call.path.startsWith('/api/public/guitars')));
 });
