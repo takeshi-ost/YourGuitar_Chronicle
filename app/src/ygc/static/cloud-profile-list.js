@@ -3,7 +3,7 @@
 import {createFavoriteControl,createFavoriteSnapshotReader} from './cloud-account-favorites.js';
 const presentations=new Set();
 export function selectProfileGuitar(id){for(const view of presentations)view.select(id)}
-export function createProfileList({section,title,list,onSelect,guitarHref,actions,auth,state,busy,refreshButton=null,columnsOverride=null,numericId=true,renderCell=null,filterText=null,sharedSelection=true,numericFields=['claim_count'],initialSort='id',initialDirection=1,filterLabel=null}){
+export function createProfileList({section,title,list,onSelect,guitarHref,actions,auth,state,busy,refreshButton=null,columnsOverride=null,numericId=true,renderCell=null,filterText=null,sharedSelection=true,numericFields=['claim_count'],initialSort='id',initialDirection=1,filterLabel=null,emptyLabel=null,noMatchLabel=null}){
   const favorites=new Map(),readFavorite=createFavoriteSnapshotReader({auth,state});
   const t=key=>globalThis.YGCI18n.t(key),columns=columnsOverride||globalThis.YGCProfileList.columns();
   section.classList.add('panel','profile-panel','profile-list-panel','page-section');
@@ -20,13 +20,13 @@ export function createProfileList({section,title,list,onSelect,guitarHref,action
   head.append(headers);table.append(head,list);wrap.append(table);section.append(toolbar,wrap);
   const normalize=(row,field)=>field==='id'&&numericId?BigInt(row.id):numericFields.includes(field)?BigInt(row[field]||0):String(row[field]??'').toLowerCase();
   function render(){
-    const query=filter.value.trim().toLowerCase();const visible=rows.filter(row=>(filterText?filterText(row):[row.manufacturer,row.model,row.finish,row.year,row.serial_number].join(' ')).toLowerCase().includes(query)).sort((a,b)=>{const av=normalize(a,key),bv=normalize(b,key);return av<bv?-direction:av>bv?direction:String(a.id).localeCompare(String(b.id))});
+    const query=filter.value.trim().toLowerCase();const visible=rows.filter(row=>(filterText?filterText(row):[row.manufacturer,row.model,row.finish,row.year,row.serial_number].join(' ')).toLowerCase().includes(query)).sort((a,b)=>{const av=normalize(a,key),bv=normalize(b,key);return av<bv?-direction:av>bv?direction:numericId?(BigInt(a.id)<BigInt(b.id)?-1:BigInt(a.id)>BigInt(b.id)?1:0):String(a.id).localeCompare(String(b.id))});
     list.replaceChildren();for(const row of visible){const tr=document.createElement('tr');tr.className='clickable'+(row.id===selected?' selected':'');tr.dataset.guitarId=row.id;tr.dataset.favoriteId=row.id;
       const select=()=>{if(sharedSelection)selectProfileGuitar(row.id);else view.select(row.id);onSelect?.(row.id)};tr.onclick=e=>{if(!e.target.closest('a,button,input,select'))select()};
       for(const [field] of columns){const td=document.createElement('td');if(renderCell?.(row,field,td)){}else if(field==='favorite'){td.className='favorite-cell';let item=favorites.get(row.id);if(!item){const root=document.createElement('span');const control=createFavoriteControl({root,compact:true,idPrefix:list.id+'_'+row.id+'_',auth,state,t,busy});item={root,control};favorites.set(row.id,item);void control.select(row.id,readFavorite).catch(()=>{})}td.append(item.root)}else if(field==='id'){const link=document.createElement('a');link.href=guitarHref(row.id);link.textContent=row.id;link.onclick=e=>{if(e.button>0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();select()};td.append(link)}else{td.textContent=row[field]??'';if(field==='serial_number')td.className='mono'}tr.append(td)}
       actions?.(row,tr);list.append(tr);
     }
-    if(!visible.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=columns.length;td.className='sub';td.textContent=t(query?'ui.no_matching_guitars_eb9458e7':'ui.no_guitars_yet_9cac0d7d');tr.append(td);list.append(tr)}
+    if(!visible.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=columns.length;td.className='sub';td.textContent=query?(noMatchLabel||t('ui.no_matching_guitars_eb9458e7')):(emptyLabel||t('ui.no_guitars_yet_9cac0d7d'));tr.append(td);list.append(tr)}
     for(const [field,{th,indicator}] of indicators){indicator.textContent=key===field?(direction===1?'▲':'▼'):'';th.setAttribute('aria-sort',key===field?(direction===1?'ascending':'descending'):'none')}
     globalThis.YGCProfileList.sizeGuitarList(section,rows.length);
   }

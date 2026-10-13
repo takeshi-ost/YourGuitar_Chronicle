@@ -1282,6 +1282,7 @@
   "backups.rows": "行数",
   "backups.loaded": "保存済みスナップショットを最大50件表示しています。",
   "backups.empty": "このDBの保存済みスナップショットはありません。",
+  "backups.no_matching": "条件に一致する保存データはありません。",
   "backups.failed": "保存に失敗しました。更新して保存履歴を確認してから再試行してください。",
   "backups.save": "今すぐ保存",
   "backups.starting": "保存を開始しています…",

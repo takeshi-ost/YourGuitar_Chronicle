@@ -1282,6 +1282,7 @@
   "backups.rows": "Rows",
   "backups.loaded": "Showing up to 50 saved snapshots.",
   "backups.empty": "No saved snapshots for this database.",
+  "backups.no_matching": "No matching snapshots.",
   "backups.failed": "The save failed. Refresh and check the saved history before trying again.",
   "backups.save": "Save now",
   "backups.starting": "Starting the save…",
