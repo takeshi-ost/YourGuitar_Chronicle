@@ -6,7 +6,7 @@ async function setup(){
  let initial=true,resolveSettings;
  const account={user:{app_user_id:'1',status:'active'},identity:{email_verified:true}};
  const auth={account:null,signedIn:true,async restore(){if(initial){initial=false;listeners.forEach(fn=>fn())}this.account=account;return account},onIdentityChanged(fn){listeners.push(fn)},authorizedFetch(path){calls.push(path);return new Promise(r=>resolveSettings=r)}};
- const context={createAuthDialog:()=>({open(){}}),loadCloudAuth:async()=>auth,document:{getElementById:element,querySelectorAll:()=>[],documentElement:{style:{setProperty(){}},dataset:{}},createElement:()=>element('new')},YGCI18n:{t:k=>k},addEventListener(){},URL:{revokeObjectURL(){}},console};
+ const context={authLabel:()=> 'Sign in / Create Account',createAuthDialog:()=>({open(){}}),loadCloudAuth:async()=>auth,document:{getElementById:element,querySelectorAll:()=>[],documentElement:{style:{setProperty(){}},dataset:{}},createElement:()=>element('new')},YGCI18n:{t:k=>k},addEventListener(){},URL:{revokeObjectURL(){}},console};
  vm.createContext(context);const running=vm.runInContext('(async()=>{'+source+'})()',context);await new Promise(r=>setImmediate(r));
  return {calls,elements,auth,listeners,running,finish:()=>resolveSettings({ok:false,status:503})};
 }

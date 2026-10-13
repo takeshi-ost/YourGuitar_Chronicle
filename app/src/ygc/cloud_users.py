@@ -81,13 +81,15 @@ class CloudUsers:
         with self.operations.account_access('user_read',actor) as (source,mode,account):
             return self._guitars(account['id'],account['app_user_id'],kind,after,limit)
 
-    def _guitars(self,user_id,app_user_id,kind,after,limit):
+    def _guitars(self,user_id,app_user_id,kind,after,limit,connection=None):
         from ygc.owned_guitar_visibility import VISIBLE_SQL
         from ygc.cloud_public_catalog import PUBLIC_CLAIM_COUNT
-        with connect(self.settings,'chronicle') as con:
-            con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
-            con.execute("SET LOCAL statement_timeout='5s'")
-            con.execute("SET LOCAL lock_timeout='2s'")
+        from contextlib import nullcontext
+        with (nullcontext(connection) if connection is not None else connect(self.settings,'chronicle')) as con:
+            if connection is None:
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                con.execute("SET LOCAL lock_timeout='2s'")
             if kind=='owned':
                 where='i.current_owner_user_id=%s'
                 table='individuals i JOIN users u ON u.id=i.current_owner_user_id'
@@ -100,6 +102,22 @@ class CloudUsers:
             rows=con.execute(f'SELECT i.id,i.manufacturer,i.model,i.finish,i.year,i.serial_number,{PUBLIC_CLAIM_COUNT} FROM {table} WHERE {scope} AND i.id>%s ORDER BY i.id LIMIT %s',params+(after,limit+1)).fetchall()
             more=len(rows)>limit;rows=[dict(row) for row in rows[:limit]]
             return dict(items=rows,total=total,next_after=rows[-1]['id'] if more else None)
+
+    def own_inventory(self,actor):
+        """Both ownership lists, counts and initial selection in one read snapshot."""
+        from ygc.cloud_profile import ProfileConflict
+        with self.operations.account_access('user_read',actor) as (source,mode,account):
+            with connect(self.settings,'chronicle') as con:
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                user=con.execute('SELECT id,signature_individual_id FROM users WHERE id=%s AND app_user_id=%s',(account['id'],actor)).fetchone()
+                if not user:raise ProfileConflict('Account projection is not ready.')
+                owned=self._guitars(account['id'],actor,'owned',0,25,con)
+                former=self._guitars(account['id'],actor,'formerly_owned',0,25,con)
+                claims=con.execute("SELECT COUNT(*) AS n FROM claims WHERE author_user_id=%s AND status='active'",(account['id'],)).fetchone()['n']
+                signature=user['signature_individual_id']
+                if signature is not None and not con.execute('SELECT id FROM individuals WHERE id=%s AND current_owner_user_id=%s',(signature,account['id'])).fetchone():signature=None
+                return {'owned':owned,'formerly_owned':former,'summary':{'owned_count':str(owned['total']),'former_count':str(former['total']),'claim_count':str(claims)},'signature':{'individual_id':str(signature) if signature is not None else None}}
 
     def own_summary(self,actor):
         """Self-only counters; do not expose another member's inventory/activity."""

@@ -3,7 +3,7 @@ const root=path.join(__dirname,'../src/ygc/static');
 const source=fs.readFileSync(path.join(root,'cloud-account-page.js'),'utf8');
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
 function setup(){
- const calls=[],waits={};const context={state:{user:{app_user_id:'A'},identity:{email_verified:true}},sessionEpoch:0,pageSuspended:false,formalProfile:false,accountHydrating:0,render:()=>{}};
+ const calls=[],waits={};const context={state:{user:{app_user_id:'A'},identity:{email_verified:true}},sessionEpoch:0,pageSuspended:false,formalProfile:false,profileBootstrap:null,location:{pathname:'/ui/profile',search:''},URLSearchParams,accountHydrating:0,render:()=>{}};
  for(const name of ['profile','guitars','favorites','formalView','visibility','disputes','notifications','identityCorrections','ownership','applications','avatar']){
   waits[name]=deferred();context[name]={refresh:()=>{calls.push(name);return waits[name].promise},failed:error=>{throw error}};
  }

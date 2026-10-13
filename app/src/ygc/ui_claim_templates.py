@@ -37,16 +37,3 @@ def ownership_presentation_script():
     functions.append('const safe=esc;')
     names=(*names,'requestRow')
     return "(()=>{const esc=value=>String(value??'').replace(/[&<>\\\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\"'\":'&#39;'}[c]));\n"+'\n'.join(functions)+'\nglobalThis.YGCOwnershipPresentation={'+','.join(names)+'};})();'
-
-
-def formal_members_page():
-    """Reuse the local connections dialog, retaining the cloud controller IDs."""
-    static=Path(__file__).with_name('static')
-    local=(static/'user_view_html.html').read_text(encoding='utf-8')
-    start=local.index('<dialog id="userConnectionsDialog"')
-    fragment=local[start:local.index('</dialog>',start)+9]
-    fragment=re.sub(r'\s+on[a-z]+="[^"]*"','',fragment)
-    for old,new in [('userConnectionsDialog','memberConnections'),('userConnectionsTitle','memberConnectionsTitle'),('userConnectionsList','memberConnectionsList'),('userConnectionsStatus','memberConnectionsStatus'),('userConnectionsMore','memberMore')]:fragment=fragment.replace(old,new)
-    fragment=fragment.replace('<button data-ui-action="close"','<button id="memberClose" data-ui-action="close"')
-    page=(static/'cloud_ui_members_html.html').read_text(encoding='utf-8')
-    return re.sub(r'<dialog id="memberConnections".*?</dialog>',lambda _:fragment,page,flags=re.S)

@@ -1,4 +1,5 @@
-import {createAuthDialog} from './cloud-auth-dialog.js';
+import {installProfileBootstrap} from './cloud-profile-bootstrap.js';
+import {createAuthDialog,authLabel} from './cloud-auth-dialog.js';
 import {createFavorites} from './cloud-account-favorites.js';
 import {createVisibility} from './cloud-account-visibility.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
@@ -14,7 +15,7 @@ import {createNotifications} from './cloud-account-notifications.js';
 const $=id=>document.getElementById(id);
 const t=(key,params={})=>globalThis.YGCI18n.t(key,params);
 $('status').removeAttribute('data-i18n');
-let auth,policies,mode=new URLSearchParams(location.search).get('register')==='1'?'register':'signin',busy=false,state=null,authPending=true,pageSuspended=false,sessionEpoch=0,formalView=null,accountHydrating=0;
+let auth,policies,mode=new URLSearchParams(location.search).get('register')==='1'?'register':'signin',busy=false,state=null,authPending=true,pageSuspended=false,sessionEpoch=0,formalView=null,accountHydrating=0,profileBootstrap=null;
 const formalProfile=document.body?.dataset?.formalProfile==='true',formalTotals={};
 const favorites=createFavorites({tableLayout:formalProfile,guitarHref:formalProfile?id=>'/ui/profile/guitars/'+id:undefined,onNavigate:formalProfile?id=>formalView?.openGuitar(id):undefined,auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,work:avatarAction});
 const visibility=createVisibility({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,work:avatarAction});
@@ -26,7 +27,7 @@ const applications=createApplications({auth:()=>auth,state:()=>state,busy:()=>bu
 const claims=createClaims({onSaved:()=>formalView?.refresh({preserveView:true}),auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction});
 const identityCorrections=createIdentityCorrections({listPanel:false,auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
 const disputes=createDisputes({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,updated:refreshOwnershipViews});
-const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:(id,claim)=>guitars.openOwner(id,claim)});
+const notifications=createNotifications({auth:()=>auth,state:()=>state,busy:()=>busy,work:avatarAction,openDispute:id=>disputes.openDispute(id),openDisputeOption:id=>disputes.openDisputeOption(id),openTransfer:id=>ownership.openTransfer(id),openOwner:async(id,claim)=>{await formalView?.openGuitar(id);return guitars.openOwner(id,claim,null,document.getElementById('detailTitle'))}});
 async function refreshOwnershipViews(){
   const actor=state?.user?.app_user_id,version=sessionEpoch;
   await guitars.refreshHistory();
@@ -125,7 +126,7 @@ $('viewTerms').onclick=()=>policy('terms');$('viewPrivacy').onclick=()=>policy('
 $('closePolicy').onclick=()=>YGCOverlays.close('policyDialog');
 const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:async result=>{update(result);await hydrateAccount();await resumeFormalIntent()}});
 for(const id of ['showSignIn','showRegistration'])$(id).onclick=()=>authDialog.open({opener:$(id)});
-$('showSignIn').textContent='Sign in / Create Account';$('showSignIn').removeAttribute('data-i18n');
+$('showSignIn').textContent=authLabel();$('showSignIn').removeAttribute('data-i18n');
 $('cloudAccountForm').hidden=true;
 $('signOut').onclick=async()=>{
   if(busy)return;busy=true;update(null);favorites.clear();visibility.clear();notifications.clear();disputes.clear();render();
@@ -160,10 +161,12 @@ async function loadAvatar(){
   if(!current())return;
   // Start the visible profile and lists first. authorizedFetch retains the
   // shared two-request limit; unrelated panels cannot block these reads.
+  if(formalProfile&&profileBootstrap&&location.pathname==='/ui/profile'&&!location.search){const bundle=await profileBootstrap.ready();if(!current())return;const target=bundle?.signature?.individual_id||bundle?.owned?.items?.[0]?.id||bundle?.formerly_owned?.items?.[0]?.id||bundle?.favorites?.items?.[0]?.id;if(target&&/^[1-9][0-9]{0,18}$/.test(target))history.replaceState(history.state,'','/ui/profile/guitars/'+target+location.hash);}
+  const earlyDetail=formalProfile&&(location.pathname.includes('/guitars/')||new URLSearchParams(location.search).get('notice')==='owner')?formalView?.refresh():null;
   const primary=await Promise.allSettled([profile.refresh({reuse:true}).catch(profile.failed),guitars.refresh(),favorites.refresh({reuse:true})]);
   if(!current())return;
   const secondary=await Promise.allSettled([
-    formalView?.refresh(),...formalProfile?[]:[visibility.refresh()],disputes.refresh(),notifications.refresh({reuse:true}),
+    earlyDetail||formalView?.refresh(),...formalProfile?[]:[visibility.refresh()],disputes.refresh(),notifications.refresh({reuse:true}),
     ownership.refresh(),applications.refresh().catch(applications.failed),
     avatar.refresh().catch(avatar.failed),
   ]);
@@ -179,7 +182,7 @@ async function hydrateAccount(){
   finally{accountHydrating--;render()}
 }
 async function avatarAction(work){
-  if(busy)return;busy=true;render();
+  if(busy)return;profileBootstrap?.invalidate();busy=true;render();
   try{await work()}catch(error){avatar.failed(error)}finally{busy=false;render()}
   await resumeFormalIntent();
 }
@@ -199,7 +202,7 @@ if(formalProfile){
   const {createFormalProfileView}=await import('./cloud-ui-profile.js');
   formalView=createFormalProfileView({auth:()=>auth,state:()=>pageSuspended?null:state,busy:()=>busy,refreshing:()=>authPending||accountHydrating>0,totals:formalTotals,owners:guitars,claims,identityCorrections,openDispute:id=>disputes.openDispute(id),selectedActions:id=>guitars.selectedActions(id),openClaim:(id,type)=>claims.openCreate(id,type),openAcquire:id=>applications.openAcquire(id),openOwnership:id=>ownership.openGuitar(id),refreshAccount:async()=>{auth?.invalidateUserData?.();await avatarAction(async()=>{update(await auth.restore(),true)});await hydrateAccount()}});
 }
-try{auth=await loadCloudAuth();auth.onIdentityChanged?.(()=>{serviceBlocked=false;update(null);if(!authPending)$('status').textContent=t('cloud.session_changed')});auth.onUserDataInvalidated?.((reason,error)=>{if(reason==='blocked'){serviceBlocked=error?.code==='service_restricted';update(null);$('status').textContent=t('self_profile.restricted')}});const [restored]=await Promise.all([auth.restore(),documents()]);authPending=false;update(restored);if(state?.user&&state.identity?.email_verified===true)await hydrateAccount()}
+try{auth=await loadCloudAuth();if(formalProfile)profileBootstrap=installProfileBootstrap(auth);auth.onIdentityChanged?.(()=>{serviceBlocked=false;update(null);if(!authPending)$('status').textContent=t('cloud.session_changed')});auth.onUserDataInvalidated?.((reason,error)=>{if(reason==='blocked'){serviceBlocked=error?.code==='service_restricted';update(null);$('status').textContent=t('self_profile.restricted')}});const [restored]=await Promise.all([auth.restore(),documents()]);authPending=false;update(restored);if(state?.user&&state.identity?.email_verified===true)await hydrateAccount()}
 catch(error){authPending=false;$('status').removeAttribute('data-i18n');$('status').textContent=errorMessage(error);render()}
 $('status').removeAttribute('data-i18n');
 // Navigation from Top notifications is a hint; each destination rechecks its API.
@@ -209,7 +212,7 @@ if(formalProfile&&state?.user&&state.identity?.email_verified===true){
  if(valid(id)&&['transfer','owner','dispute','dispute_option'].includes(kind)&&(kind!=='owner'||valid(claim))){
   history.replaceState(null,'',location.pathname);
   if(kind==='transfer')await ownership.openTransfer(id);
-  else if(kind==='owner')await guitars.openOwner(id,claim);
+  else if(kind==='owner'){await formalView.openGuitar(id);await guitars.openOwner(id,claim,null,document.getElementById('detailTitle'));}
   else if(kind==='dispute')await disputes.openDispute(id);
   else await disputes.openDisputeOption(id);
  }

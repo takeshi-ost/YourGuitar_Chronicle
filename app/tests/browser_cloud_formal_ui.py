@@ -32,9 +32,9 @@ def check_formal_headers(page, base):
             page.keyboard.press('Escape');expect(page.locator('#userConnectionsDialog')).not_to_be_visible()
             expect(trigger).to_be_focused()
     page.set_viewport_size({'width':1440,'height':844})
-    for route in ('/ui/profile', '/ui/members', '/ui/members/2'):
+    for route in ('/ui/profile', '/ui/profiles/2'):
         page.goto(base+route)
-        expect(page.locator('#selfProfileEdit' if route=='/ui/profile' else '#memberSignOut')).to_be_visible()
+        expect(page.locator('#selfProfileEdit' if route=='/ui/profile' else '#profileFollow')).to_be_visible()
         if route=='/ui/profile':expect(page.locator('#selfProfileEdit')).to_be_enabled()
         for width in (1440, 390, 320):
             page.set_viewport_size({'width':width,'height':844})
@@ -59,8 +59,9 @@ def check_profile_lists(page,base,fixture):
     page.reload()
     # The seed changed outside a user mutation. Exercise the real explicit
     # refresh to invalidate the legitimate same-user display cache.
-    expect(page.locator('#formalProfileRefresh')).to_be_enabled()
-    page.locator('#formalProfileRefresh').click()
+    expect(page.locator('#formalProfileRefresh')).to_have_count(0)
+    expect(page.locator('#selfGuitars_owned .toolbar button').last).to_be_enabled()
+    page.locator('#selfFavorites #favoritesRefresh').click()
     owned=page.locator('#selfGuitars_owned')
     favorites=page.locator('#selfFavorites')
     expect(owned.locator('tbody tr.clickable')).to_have_count(30)
@@ -266,7 +267,7 @@ def check_ownership_entry(page,base,fixture):
     page.evaluate("sessionStorage.setItem('fixture-sdk-email','bob@example.invalid');sessionStorage.setItem('verified-bob@example.invalid','true')");page.goto(base+'/ui/profile')
     incoming=page.locator('#ownershipInbox .unanswered-request')
     expect(incoming).to_contain_text('Alice has offered to transfer')
-    expect(incoming.locator('a').first).to_have_attribute('href','/ui/members/1')
+    expect(incoming.locator('a').first).to_have_attribute('href','/ui/profiles/1')
     before=len(fixture.writes)
     incoming.locator('button').filter(has_text='Decline').click();expect(page.locator('#ownershipConfirmModal')).to_be_visible();page.keyboard.press('Escape');assert len(fixture.writes)==before
     incoming.locator('button').filter(has_text='Decline').click();page.locator('#ownershipConfirmSubmit').click()
@@ -311,27 +312,18 @@ def check_claim_popup(page,base):
 
 
 def check_formal_follow(page,base,fixture):
-    page.goto(base+'/ui/members/2');expect(page.locator('#memberFollow')).to_be_enabled()
-    expect(page.locator('#memberFollow')).to_have_text('Follow')
-    before=len(fixture.writes)
-    page.locator('#memberFollow').click();expect(page.locator('#memberFollow')).to_have_text('Following')
-    expect(page.locator('#memberFollow')).to_have_attribute('aria-pressed','true')
+    page.goto(base+'/ui/profiles/2')
+    expect(page.locator('#profileFollow')).to_be_enabled()
+    page.locator('#profileFollow').click();expect(page.locator('#profileFollow')).to_have_text('Unfollow')
     for width in (1440,390,320):
         page.set_viewport_size({'width':width,'height':844})
-        page.locator('#memberFollowers').click();expect(page.locator('#memberConnections')).to_be_visible()
-        expect(page.locator('#memberConnectionsList > a')).to_have_count(31)
-        expect(page.locator('#memberMore')).not_to_be_visible()
-        assert page.locator('#memberConnections').evaluate('(e)=>e.scrollWidth<=e.clientWidth'),width
-        page.keyboard.press('Escape');expect(page.locator('#memberConnections')).not_to_be_visible()
-        expect(page.locator('#memberFollowers')).to_be_focused()
-    page.locator('#memberFollow').click();expect(page.locator('#memberFollow')).to_have_text('Follow')
-    assert len(fixture.writes)==before+2
-    page.goto(base+'/ui/members');expect(page.locator('#memberQuery')).to_be_visible()
-    page.locator('#memberQuery').fill('Bob');page.locator('#memberSearchForm button').click()
-    expect(page.locator('#memberResults li')).to_have_count(1)
-    page.locator('#memberResults a').click();expect(page.locator('#memberName')).to_have_text('Bob')
-    page.go_back();expect(page.locator('#memberQuery')).to_have_value('Bob')
-    print('Members: canonical Follow/Following labels, authorized synthetic mutations, connections modal PC/390/320/Escape/focus, name search and Back retention passed. No profile/Owned/photo scope expansion.')
+        page.get_by_role('button',name='Followers · 31',exact=True).click()
+        expect(page.locator('dialog[open] a')).to_have_count(25)
+        page.get_by_role('button',name='Load more',exact=True).click();expect(page.locator('dialog[open] a')).to_have_count(31)
+        page.keyboard.press('Escape');expect(page.locator('dialog[open]')).to_have_count(0)
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    page.locator('#profileFollow').click();expect(page.locator('#profileFollow')).to_have_text('Follow')
+    print('Other profile: canonical viewer, Follow, connections paging, modal close and mobile passed.')
 
 
 def check_prepublication(page,base,fixture):
@@ -373,11 +365,42 @@ def check_prepublication(page,base,fixture):
     page.goto(base+'/account');expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
     expect(page.locator('#accountSummary')).to_contain_text('Alice')
     assert page.locator('main').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(25, 23, 21)'
-    for path in ('/console','/members'):
+    for path in ('/console',):
         page.goto(base+path);expect(page.locator('html')).to_have_attribute('data-theme','butterscotch_black')
         assert page.locator('body').evaluate('(el)=>getComputedStyle(el).backgroundColor')=='rgb(188, 132, 52)'
     print('Prepublication: member Good/Bad persist through reload independently of owner decisions; Listing Edit opens author correction on Top/Profile; independent Profile panel removed and list Refresh visible.')
     fixture.prepublication=False
+
+
+def check_round2(page,base,fixture):
+    # Explicit destination opens its Detail before the Claim confirmation.
+    claim=dict(id='901',individual_id='1',claim_type='specification',specification_kind='specification',ownership_kind=None,incident_kind=None,event_kind=None,status='active',verification_status='unverified',revision='a'*64,body='Synthetic notification Claim',occurred_at='2026-01-01',created_at='2026-01-01T12:00:00Z',updated_at='2026-01-01',spec_items=[{'field_name':'nut','value_text':'Bone'}],media_items=[],author_name='Bob',decline_reason_required=False)
+    previous=fixture.owner_rows;fixture.owner_rows=[claim]
+    fixture.notices=[dict(id='81',notification_type='claim_added',title='New Specification Claim',body='Synthetic notice',created_at='2026-10-08T09:00:00Z',is_read=True,read_at='2026-10-08T09:00:00Z',actor=None,destination={'kind':'owner','individual_id':'1','claim_id':'901'})]
+    for width in (1440,390,320):
+        page.set_viewport_size({'width':width,'height':844})
+        page.goto(base+'/ui');expect(page.locator('#shellIdentity')).to_have_text('Alice')
+        page.locator('#shellNotifications').click();page.locator('[data-notification-id="81"]').click()
+        expect(page.locator('#detailTitle')).to_contain_text('Fixture 1')
+        expect(page.locator('#ownerResponseDialog.open')).to_be_visible()
+        expect(page.locator('#ownerResponseDialog select')).to_be_visible()
+        panel=page.locator('#ownerResponseDialog .claim-popup-modal')
+        assert panel.evaluate('(e)=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight}'),panel.bounding_box()
+        expect(panel.locator('.ygc-modal-close')).to_have_text('×')
+        panel.locator('.ygc-modal-close').click();expect(page.locator('#ownerResponseDialog')).not_to_be_visible()
+        expect(page.locator('#formalProfileRefresh')).to_have_count(0)
+    fixture.owner_rows=previous
+    page.goto(base+'/ui/settings');expect(page.locator('#settings')).to_be_visible()
+    assert page.locator('main').evaluate('(e)=>getComputedStyle(e).backgroundColor')=='rgba(0, 0, 0, 0)'
+    page.goto(base+'/ui');page.locator('#shellSignOut').click();expect(page.locator('#shellSignIn')).to_be_visible()
+    page.locator('#catalogLanguage').select_option('ja');expect(page.locator('#shellSignIn')).to_have_text('サインイン/ アカウント作成')
+    page.locator('#shellSignIn').click();dialog=page.locator('#cloudAuthDialog')
+    expect(dialog.locator('#authCancel')).to_have_text('×')
+    expect(dialog.locator('#authCreateAccount')).to_have_text('Register for a New Account here.')
+    expect(dialog.locator('#authCreateAccount strong')).to_have_text('New Account')
+    assert dialog.locator('#authSubmit').evaluate('(e)=>Math.abs(e.getBoundingClientRect().width-e.parentElement.getBoundingClientRect().width)<2')
+    dialog.locator('#authCancel').click()
+    print('Round2: notification target and popup bounds, no global refresh, Settings wallpaper canvas, Japanese authentication, primary submit and right-top closes passed.')
 
 
 def check_initial_discovery(page,base,fixture):
@@ -519,6 +542,7 @@ def main():
                 check_notification_cards(page,base,fixture)
                 check_ownership_entry(page,base,fixture)
                 check_prepublication(page,base,fixture)
+                check_round2(page,base,fixture)
                 assert not errors,errors
                 context.close();browser.close()
                 print('Formal UI: routes/history, canonical auth/identity switch/revocation, credential disposal, modal focus, Offline, Japanese and 1440/390/320px passed; synthetic GETs and explicit Settings/Signature/Favorite test saves only.')

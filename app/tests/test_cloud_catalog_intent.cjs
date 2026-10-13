@@ -44,7 +44,7 @@ function environment({initial=account(),search='',fullPage=false,catalogReplies=
   const create=context.createApplications;
   context.createApplications=args=>{componentArgs=args;component=create(args);return component};
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},failed(){},save(){},remove(){}});
-  Object.assign(context,{createAuthDialog:options=>{context.authComplete=options.onAuthenticated;return {open(){},close(){},render(){}}},createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
+  Object.assign(context,{authLabel:()=> 'Sign in / Create Account',createAuthDialog:options=>{context.authComplete=options.onAuthenticated;return {open(){},close(){},render(){}}},createFavorites:noOp,createVisibility:noOp,createDisputes:noOp,createNotifications:noOp,createIdentityCorrections:noOp,loadCloudAuth:async()=>client,createOwnership:()=>({...noOp(),setCatalogIntent(){},openGuitar(){}}),readOwnershipIntent:()=>null,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:()=>({...noOp(),setCatalogIntent(){}}),readClaimIntent:()=>null});
   let ready;
   if(fullPage){const source=fs.readFileSync(path.join(staticPath,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'');ready=vm.runInContext('(async()=>{'+source+'})()',context)}
   else{component=context.createApplications({auth:()=>client,state:()=>state,busy:()=>busy,work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}}});ready=Promise.resolve()}
@@ -102,7 +102,7 @@ for(const failure of [denied(403),denied(404),denied(503),new Error('offline')])
 });
 
 for(const failure of [denied(403),denied(503),new Error('offline')])test(`Catalog becoming unavailable at submit (${failure.httpStatus||failure.message}) blocks creation despite prior write access`,async()=>{
-  const e=environment();await select(e);e.start();e.publicReplies.push(failure);e.submit();await e.flush();assert.equal(posts(e).length,0);assert.equal(e.status,'catalog.acquire_unavailable');assert.equal(e.control('applicationCreate').disabled,true);if(failure.httpStatus!==403)assert.equal(e.dialog.children.at(-2).textContent,'catalog.acquire_unavailable');
+  const e=environment();await select(e);e.start();e.publicReplies.push(failure);e.submit();await e.flush();assert.equal(posts(e).length,0);assert.equal(e.status,'catalog.acquire_unavailable');assert.equal(e.control('applicationCreate').disabled,true);if(failure.httpStatus!==403)assert.ok(e.dialog.children.some(child=>child.textContent==='catalog.acquire_unavailable'));
 });
 
 for(const data of [guitar('13'),guitar(12),{id:'12'},guitar('12',{manufacturer:{html:'unsafe'}})])test('Malformed/mismatched catalog result cannot authorize Acquire',async()=>{

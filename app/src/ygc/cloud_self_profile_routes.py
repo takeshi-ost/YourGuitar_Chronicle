@@ -11,6 +11,7 @@ def self_profile_router(verifier, service):
     router = APIRouter()
     headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'}
 
+    @router.get('/api/auth/profile/bootstrap')
     @router.get('/api/auth/profile/chronicle')
     @router.get('/api/auth/profile/summary')
     @router.api_route('/api/auth/settings/signature', methods=['GET', 'PUT'])
@@ -32,7 +33,7 @@ def self_profile_router(verifier, service):
                 issuer=identity.issuer, subject=identity.subject, tenant=identity.tenant)
             if request.query_params:
                 raise ValueError()
-            kind = 'chronicle' if request.url.path.endswith('/chronicle') else 'summary' if request.url.path.endswith('/summary') else 'signature' if request.url.path.endswith('/signature') else 'settings' if request.url.path.endswith('/settings') else 'profile'
+            kind = 'bootstrap' if request.url.path.endswith('/bootstrap') else 'chronicle' if request.url.path.endswith('/chronicle') else 'summary' if request.url.path.endswith('/summary') else 'signature' if request.url.path.endswith('/signature') else 'settings' if request.url.path.endswith('/settings') else 'profile'
             if request.method == 'GET':
                 result = await run_in_threadpool(getattr(service, 'own_'+kind), account['app_user_id'])
             else:

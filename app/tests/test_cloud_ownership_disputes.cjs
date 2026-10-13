@@ -55,7 +55,7 @@ function environment({admin=false,formal=false,fullPage=false,initial=account(ad
  let ready;
  if(fullPage){
   const noOp=()=>({render(){},clear(){},refresh:async()=>{},refreshHistory:async()=>{updates++},failed(){},setCatalogIntent(){}});
-  Object.assign(context,{createAuthDialog:()=>({open(){},close(){},render(){}}),createFavorites:noOp,createVisibility:noOp,createIdentityCorrections:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
+  Object.assign(context,{authLabel:()=> 'Sign in / Create Account',createAuthDialog:()=>({open(){},close(){},render(){}}),createFavorites:noOp,createVisibility:noOp,createIdentityCorrections:noOp,createNotifications:noOp,loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
   ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);
  }else{component=context.createDisputes({auth:()=>client,state:()=>state,busy:()=>busy,admin,formal,onUnauthorized:error=>denials.push(error),work:async fn=>{busy=true;component.render();try{return await fn()}finally{busy=false;component.render()}},updated:async()=>{updates++}});ready=Promise.resolve()}
 

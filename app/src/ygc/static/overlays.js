@@ -30,11 +30,21 @@ window.YGCOverlays = (() => {
     }
     if (!stack.length) document.body.style.overflow = savedOverflow;
   }
+  function decorate(root,panel){
+    panel.classList.add('ygc-themed-modal');
+    const candidates=Array.from(panel.querySelectorAll('button')).filter(button=>button.dataset?.uiAction==='close'||/^(Close|閉じる|×|✕)$/i.test(String(button.textContent||'').trim()));
+    let button=candidates[0]||panel.querySelector('.ygc-modal-close');
+    if(!button){button=document.createElement('button');button.type='button';button.onclick=()=>{if(stack.some(entry=>entry.root===root))close(root);else if(root.tagName==='DIALOG')root.close()};}
+    button.type='button';button.classList.add('ygc-modal-close');button.textContent='×';button.removeAttribute('data-i18n');button.setAttribute('aria-label',globalThis.YGCI18n?.t('action.close')||'Close');panel.append(button);
+    for(const other of candidates)if(other!==button)other.hidden=true;
+  }
+  const originalShowModal=globalThis.HTMLDialogElement?.prototype.showModal;
+  if(originalShowModal)globalThis.HTMLDialogElement.prototype.showModal=function(){decorate(this,this);return originalShowModal.call(this)};
   function open(value, options = {}) {
     const root = element(value);
     if (!root || stack.some(entry => entry.root === root)) return;
-    const panel = root.tagName === 'DIALOG' ? root : root.querySelector('[role="dialog"],.modal,.ygc-album-panel') || root;
-    panel.setAttribute('role', 'dialog');
+    const panel = root.tagName === 'DIALOG' ? root : root.querySelector('[role="dialog"],.modal,.claim-popup-modal,.ygc-album-panel') || root;
+    decorate(root,panel);panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
     if (!panel.hasAttribute('aria-label') && !panel.hasAttribute('aria-labelledby')) {
       panel.setAttribute('aria-label', panel.querySelector('h2,h3')?.textContent || 'Details');

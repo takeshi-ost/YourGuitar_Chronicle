@@ -63,3 +63,12 @@ def test_save_failures_no_leak(api,error,status):
     client,_,service=api;service.edit_own_profile.side_effect=error
     response=client.put('/api/auth/profile',headers=AUTH,json=BODY)
     assert response.status_code==status and 'secret' not in response.text
+
+def test_bootstrap_is_self_only_read_only_and_private(api):
+    client,verifier,service=api;service.own_bootstrap.return_value={'owned':{'items':[]}}
+    r=client.get('/api/auth/profile/bootstrap',headers=AUTH)
+    assert r.status_code==200 and r.headers['cache-control']=='private, no-store'
+    service.own_bootstrap.assert_called_once_with('canonical-member')
+    assert client.get('/api/auth/profile/bootstrap?user_id=2',headers=AUTH).status_code==400
+    assert client.get('/api/auth/profile/bootstrap').status_code==401
+    assert client.put('/api/auth/profile/bootstrap',headers=AUTH,json={}).status_code==405

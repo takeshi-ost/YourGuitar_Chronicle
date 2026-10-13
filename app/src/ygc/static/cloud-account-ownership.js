@@ -107,7 +107,7 @@ export function createOwnership({auth,state,busy,work,updated=async()=>{},formal
         const product=[row.individual.manufacturer,row.individual.model,row.individual.serial_number].filter(Boolean).join(' ')||t('guitar.reference',{id:row.individual_id});
         const current=()=>account===accountEpoch&&actor===identity()&&navigation===navigationEpoch;
         if(row.to_user.id===actorId()){
-          const sender=node('a',row.from_user.display_name??t('ownership.unavailable_user'));sender.href='/ui/members/'+encodeURIComponent(row.from_user.id);
+          const sender=node('a',row.from_user.display_name??t('ownership.unavailable_user'));sender.href='/ui/profiles/'+encodeURIComponent(row.from_user.id);
           const guitar=node('a',product);guitar.href='/ui/profile/guitars/'+encodeURIComponent(row.individual_id);
           text.append(t('ui.transfer_9e0d719a')+' ',sender,' has offered to transfer ',guitar,' '+t('ui.to_you_40d474b0'));
           for(const action of ['accept','decline']){

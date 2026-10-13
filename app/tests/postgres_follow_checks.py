@@ -16,6 +16,12 @@ from ygc.db.postgres_operations import PostgresOperations, ServiceRestricted
 def checks(w):
     service = CloudFollows(w.settings, w.operations)
     a, b = w.actor(), w.records['b']['id']
+    from ygc.cloud_profile_bundle import CloudProfileBundle
+    from ygc.cloud_favorites import CloudFavorites
+    bundle=CloudProfileBundle(w.service,CloudFavorites(w.settings,w.operations)).own_bootstrap(a)
+    assert bundle['owned']['total']==bundle['summary']['owned_count']
+    assert bundle['formerly_owned']['total']==bundle['summary']['former_count']
+    assert set(bundle)=={'settings','owned','formerly_owned','summary','signature','favorites'}
     original, content = w.snapshot(), w.snapshot('chronicle')
     assert service.state(a, b) == {'target_id': str(b), 'following': False}
     assert w.snapshot() == original
@@ -218,6 +224,19 @@ def avatar_checks(w):
         read(200)
         assert (w.snapshot(),w.snapshot('chronicle'))==before
         w.avatars.set(w.actor('b'));read(404)
+    # Public profile never publishes another user's Favorites/settings or
+    # private biography/location; follower-only fields require a real relation.
+    w.seed_account('b',bio='PRIVATE-PROFILE',bio_visibility='Private',location_country='JP',residence_visibility='Private')
+    profile=service.public_profile(w.actor(),w.records['b']['id'])
+    assert set(profile)=={'member','fields','owned','formerly_owned'}
+    assert profile['fields']['bio']=='' and profile['fields']['location_country']==''
+    w.seed_account('b',bio_visibility='Followers',residence_visibility='Members')
+    assert service.public_profile(w.actor(),w.records['b']['id'])['fields']['bio']==''
+    service.set_following(w.actor(),w.records['b']['id'],True)
+    profile=service.public_profile(w.actor(),w.records['b']['id'])
+    assert profile['fields']['bio']=='PRIVATE-PROFILE' and profile['fields']['location_country']=='JP'
+    service.set_following(w.actor(),w.records['b']['id'],False)
+    w.seed_account('b',bio='',bio_visibility='Private',location_country='',residence_visibility='Private')
     print('PostgreSQL member avatars: normalized pinned private objects, all visibility/identity/mode gates, HTTP no-store, no guest/admin bypass, follow and policy revocation, read locks, safe legacy fallback and read-only side effects passed.')
 
 

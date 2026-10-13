@@ -706,7 +706,7 @@ function positionClaimPopup(trigger,targetId='claimPopupModal'){
   const chronicleRect=chronicle.getBoundingClientRect();
   const marginLeft=22;
   const edge=10;
-  const width=Math.max(220,chronicleRect.width-marginLeft);
+  const width=Math.min(window.innerWidth-edge*2,Math.max(220,chronicleRect.width-marginLeft));
   const preferredLeft=chronicleRect.left+marginLeft-(width*0.5);
   const left=Math.min(
     Math.max(edge,preferredLeft),

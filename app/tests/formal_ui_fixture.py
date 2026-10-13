@@ -144,6 +144,18 @@ class FormalUIFixture(FollowFixture):
             return self.gate(key,write)
         @app.get('/api/auth/registration')
         def documents():return {'backend':'identity_platform','documents':DOCUMENTS}
+        @app.get('/api/auth/profile/bootstrap')
+        def bootstrap(request:Request):
+            key=actor(request)
+            def inventory(kind):
+                rows=self.rows if self.profile_all and kind=='owned' and key==1 else [] if self.profile_all else [self.rows[key-1 if kind=='owned' else key+1]]
+                page=[{k:v for k,v in row.items() if k!='photo'} for row in rows[:25]]
+                return {'items':page,'total':str(len(rows)),'next_after':page[-1]['id'] if len(rows)>25 else None}
+            rows=[{k:v for k,v in row.items() if k!='claim_count'} for row in reversed(self.rows) if ('synthetic-'+str(key),row['id']) in self.favorites]
+            p=profiles.setdefault(key,{'profile_revision':'1','fields':{'display_name':self.people[key]['display_name'],'location_country':'','location_region':'','bio':'Synthetic profile'}})
+            fields=settings_values.setdefault(key,{**p['fields'],'account_type':'user','date_of_birth':'','theme':'sunburst_3ply',**dict.fromkeys(('birth_visibility','residence_visibility','bio_visibility','avatar_visibility'),'Private')})
+            profile={'id':str(key),'profile_revision':p['profile_revision'],'fields':fields}
+            return {'settings':profile,'summary':{'owned_count':inventory('owned')['total'],'former_count':inventory('formerly_owned')['total'],'claim_count':'30' if key==1 else '0'},'signature':{'individual_id':signatures.get(key)},'owned':inventory('owned'),'formerly_owned':inventory('formerly_owned'),'favorites':{'items':rows,'total':str(len(rows)),'next_after':None}}
         @app.get('/api/auth/profile/chronicle')
         def profile_chronicle(request:Request):
             actor(request);return {'items':[]}

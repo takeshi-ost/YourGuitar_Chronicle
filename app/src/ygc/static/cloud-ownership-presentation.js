@@ -32,7 +32,7 @@ export function createOwnershipPresentation({panel,title,detail,form,fields,kind
   const source=document.getElementById('formalClaimTemplates').content.querySelector('#transferReviewDialog'),clone=source.cloneNode(true);panel.style.cssText=source.style.cssText;panel.className='modal';
   for(const el of clone.querySelectorAll('[data-i18n]'))el.textContent=t(el.dataset.i18n);
   const content=clone.querySelector('#transferReviewBody'),who=document.createElement('strong');
-  for(const [index,person] of [row.from_user,row.to_user].entries()){if(index)who.append(' → ');const link=document.createElement('a');link.href='/ui/members/'+person.id;link.textContent=person.display_name||'—';who.append(link)}
+  for(const [index,person] of [row.from_user,row.to_user].entries()){if(index)who.append(' → ');const link=document.createElement('a');link.href='/ui/profiles/'+person.id;link.textContent=person.display_name||'—';who.append(link)}
   const info=document.createElement('p');info.textContent=[row.individual.manufacturer,row.individual.model,row.individual.serial_number].filter(Boolean).join(' / ')+' · #'+row.individual_id+' · '+row.state;
   const evidenceText=document.createElement('p');evidenceText.className='sub';evidenceText.textContent=row.acceptance?t('ui.info_transfer_accepted_on_ba2319c7')+' '+new Date(row.acceptance.accepted_at).toLocaleString(globalThis.YGCI18n.locale||'en-US'):t('ui.accept_confirms_this_ownership_transfer_verification_remai_886c7b21');content.replaceChildren(who,info,evidenceText);
   const status=clone.querySelector('#transferReviewStatus');message.className='sub';status.replaceWith(message);

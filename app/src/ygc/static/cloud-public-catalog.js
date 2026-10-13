@@ -319,7 +319,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     const count=value=>typeof value==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(value);
     if(count(p.good_count)&&count(p.bad_count)){const votes=node('div',undefined,'claim-votes');votes.append(node('span','👍 '+p.good_count,'claim-vote'),node('span','👎 '+p.bad_count,'claim-vote'));footer.append(votes)}
     const created=new Date(row.created_at);if(Number.isFinite(created.getTime()))meta.append(node('span',created.toLocaleString(locale)+' · '));
-    if(p.author&&validId(p.author.id)&&typeof p.author.display_name==='string'){const author=node('a',p.author.display_name,'claim-author');author.href='/ui/members/'+p.author.id;meta.append(author)}
+    if(p.author&&validId(p.author.id)&&typeof p.author.display_name==='string'){const author=node('a',p.author.display_name,'claim-author');author.href='/ui/profiles/'+p.author.id;meta.append(author)}
     footer.append(meta);card.append(footer);
   }
   function renderChronicle(){
@@ -381,7 +381,7 @@ export function createPublicCatalog({document=globalThis.document,window=globalT
     // Do not infer them, fetch local APIs, or turn a private image into a public one.
     $('detailContent').innerHTML=shared.render({individual:detail,specifications:detail.specifications,
       image:'<img id="detailPhoto" class="detail-image" '+(detail.public_photo?'data-photo-loading="true"':'src="/assets/no-picture.svg"')+' alt="'+escape(t('photo'))+'">',
-      owner:detail.presentation?.owner&&validId(detail.presentation.owner.id)?'<a href="/ui/members/'+detail.presentation.owner.id+'">'+escape(detail.presentation.owner.display_name)+'</a>':escape(detail.presentation?.source_owner_name||'—'),location:escape(detail.presentation?.location||'—'),fieldLabel,escape});
+      owner:detail.presentation?.owner&&validId(detail.presentation.owner.id)?'<a href="/ui/profiles/'+detail.presentation.owner.id+'">'+escape(detail.presentation.owner.display_name)+'</a>':escape(detail.presentation?.source_owner_name||'—'),location:escape(detail.presentation?.location||'—'),fieldLabel,escape});
     if(previousPhoto?.tagName==='IMG'&&previousPhoto.dataset.guitarId===detail.id)$('detailPhoto').replaceWith(previousPhoto);
     const photo=$('detailPhoto');photo.dataset.guitarId=detail.id;photo.alt=[detail.manufacturer,detail.model].filter(Boolean).join(' ');photo.setAttribute('role','button');photo.tabIndex=0;// The shared image album handles click and keyboard activation.
     const caption=node('span',globalThis.YGCI18n.t(detail.public_photo?'ui.representative_image_c23db047':'ui.no_picture_b2e8e688'),'detail-source');photo.after(caption);

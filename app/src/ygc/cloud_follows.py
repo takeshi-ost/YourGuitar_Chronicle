@@ -154,6 +154,36 @@ class CloudFollows:
                     'followers_count': str(counts['followers']), 'following_count': str(counts['following']),
                     'can_write': mode['mode'] in ('normal', 'admin_only')}
 
+    def public_profile(self,actor,target,*,kind=None,after=0,limit=50):
+        """Member-visible profile, with explicit field visibility and public inventory."""
+        from ygc.cloud_public_catalog import COLUMNS,VISIBLE_GUITAR,CLAIM_TYPES,STATES
+        from ygc.owned_guitar_visibility import VISIBLE_SQL
+        target_id(target)
+        if kind not in (None,'owned','formerly_owned') or type(after)!=int or not 0<=after<=MAX_ID or type(limit)!=int or not 1<=limit<=50:raise ValueError('Invalid profile page.')
+        with self.operations.account_access('user_read',actor) as (source,mode,viewer):
+            person=self._member(source,target)
+            follow=self.profile(actor,target)
+            row=source.execute('SELECT account_type,bio,bio_visibility,location_country,location_region,residence_visibility FROM account_records WHERE id=%s FOR SHARE',(target,)).fetchone()
+            def visible(policy):return target==viewer['id'] or policy in ('Public','Members') or policy=='Followers' and follow['following']
+            fields={'account_type':row['account_type'],'bio':row['bio'] if visible(row['bio_visibility']) else '',
+                    'location_country':row['location_country'] if visible(row['residence_visibility']) else '',
+                    'location_region':row['location_region'] if visible(row['residence_visibility']) else ''}
+            with connect(self.settings,'chronicle') as con:
+                con.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                con.execute("SET LOCAL statement_timeout='5s'")
+                result={}
+                for inventory_kind in ('owned','formerly_owned'):
+                    if inventory_kind=='owned':table='individuals i JOIN users u ON u.id=i.current_owner_user_id';where='i.current_owner_user_id=%s'
+                    else:table='user_guitars ug JOIN individuals i ON i.id=ug.individual_id JOIN users u ON u.id=ug.user_id';where="ug.user_id=%s AND ug.ownership_status='former_owner' AND "+VISIBLE_SQL
+                    args=(target,person['app_user_id'],list(CLAIM_TYPES),list(STATES))
+                    scope=where+' AND u.app_user_id=%s AND '+VISIBLE_GUITAR
+                    total=con.execute('SELECT COUNT(*) AS n FROM '+table+' WHERE '+scope,args).fetchone()['n']
+                    cursor=after if inventory_kind==kind else 0
+                    rows=con.execute('SELECT '+COLUMNS+' FROM '+table+' WHERE '+scope+' AND i.id>%s ORDER BY i.id LIMIT %s',args+(cursor,limit+1)).fetchall()
+                    more=len(rows)>limit;rows=rows[:limit]
+                    result[inventory_kind]={'items':[{**dict(r),'id':str(r['id'])} for r in rows],'total':str(total),'next_after':str(rows[-1]['id']) if more else None}
+            return {'member':follow,'fields':fields,**result}
+
     @staticmethod
     def _target(con, actor, target):
         if target == actor['id']:

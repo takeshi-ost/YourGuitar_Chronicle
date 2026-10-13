@@ -1,0 +1,9 @@
+/* Same curated surfaces as page subwindows, for native and custom modals. */
+:root[data-theme] .ygc-themed-modal{box-sizing:border-box;background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:12px!important;box-shadow:0 12px 40px #0007;padding:42px 18px 18px!important;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto}
+:root[data-theme] .ygc-themed-modal:not(.claim-popup-modal){position:relative}
+:root[data-theme] dialog.ygc-themed-modal{position:fixed}
+:root[data-theme] .ygc-themed-modal :is(input,select,textarea,button:not(.ygc-modal-close)){color:var(--text);background:var(--input,var(--panel));border-color:var(--line)}
+:root[data-theme] .ygc-themed-modal .claim-card{background:var(--panel);color:var(--text);border-color:var(--line)}
+.ygc-modal-close{position:absolute!important;right:8px!important;top:6px!important;display:grid!important;place-items:center;width:32px!important;height:32px!important;padding:0!important;margin:0!important;border:0!important;border-radius:6px;background:transparent!important;color:var(--text)!important;font-size:24px!important;line-height:1;cursor:pointer;z-index:2}
+.ygc-modal-close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ygc-modal-close[hidden]{display:none!important}

@@ -10,7 +10,7 @@
     let dataOwner=null,dataEpoch=0,dataWrites=0,entries={},themeOwner=null;
     const dataListeners=new Set();
     globalThis.addEventListener?.('pagehide',()=>{dataEpoch++;dataGate=null});
-    const ttl=path=>path==='/api/auth/settings'?30000:path==='/api/auth/profile/summary'?15000:
+    const ttl=path=>path==='/api/auth/profile/bootstrap'?15000:path==='/api/auth/settings'?30000:path==='/api/auth/profile/summary'?15000:
       /^\/api\/auth\/(notifications|favorites)(?:\?|$)/.test(path)&&!path.split('?')[0].slice('/api/auth/'.length).includes('/')?10000:0;
     function invalidateUserData(reason='refresh',error=null){
       dataEpoch++;entries={};try{storage?.removeItem(storageKey)}catch{}

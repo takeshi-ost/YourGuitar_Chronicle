@@ -99,6 +99,11 @@ class FollowFixture:
             raise RuntimeError('Synthetic dropped response')
         return {'target_id':str(target),'following':following}
 
+    def public_profile(self,actor,target,*,kind=None,after=0,limit=50):
+        member=self.profile(actor,target)
+        empty={'items':[],'total':'0','next_after':None}
+        return {'member':member,'fields':{'account_type':'user','bio':'','location_country':'','location_region':''},'owned':empty,'formerly_owned':empty}
+
     def app(self, *, manual=False):
         app=FastAPI()
         app.include_router(follow_router(self,self))

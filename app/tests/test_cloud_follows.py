@@ -173,3 +173,12 @@ def test_avatar_uses_canonical_auth_and_never_redirects_or_caches(api):
     checked(client.get(BASE+'/2/avatar?token=synthetic', headers=AUTH), 400)
     checked(client.get(BASE+'/2/avatar', cookies={'token':'synthetic'}), 401)
     checked(client.request('GET',BASE+'/2/avatar',headers=AUTH,content='{}'),400)
+
+def test_other_profile_has_canonical_viewer_and_explicit_target(api):
+    client,verifier,service=api
+    service.public_profile.return_value={'member':PROFILE,'fields':{},'owned':{'items':[]},'formerly_owned':{'items':[]}}
+    r=client.get('/api/auth/profiles/2',headers=AUTH)
+    assert r.status_code==200 and r.headers['cache-control']=='private, no-store'
+    service.public_profile.assert_called_once_with('canonical-uuid',2,kind=None,after=0,limit=50)
+    assert client.get('/api/auth/profiles/2').status_code==401
+    assert client.get('/api/auth/profiles/2?viewer=1',headers=AUTH).status_code==400

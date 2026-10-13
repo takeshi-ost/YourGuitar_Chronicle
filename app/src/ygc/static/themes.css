@@ -7,7 +7,7 @@
 :root[data-theme="dark_default"] body {background:var(--bg);color:var(--text)}
 /* Older cloud pages have fixed white surfaces. Reconcile them with the same
    saved preference; formal layouts keep their existing curated surface rules. */
-:root[data-theme] body:not([data-formal-catalog]):not([data-formal-profile]):not([data-formal-members]) :is(main:not(.console-workspace),.panel,dialog,.panel-heading,.guitar-card,.chronicle-record) {
+:root[data-theme] body:not([data-formal-catalog]):not([data-formal-profile]):not([data-formal-members]):not([data-formal-settings]) :is(main:not(.console-workspace),.panel,dialog,.panel-heading,.guitar-card,.chronicle-record) {
   background:var(--panel);color:var(--text);border-color:var(--line);
 }
 :root[data-theme] body:not([data-formal-catalog]):not([data-formal-profile]):not([data-formal-members]) :is(input,select,textarea,button,.button-link) {

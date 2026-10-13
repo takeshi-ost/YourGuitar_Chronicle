@@ -1,4 +1,4 @@
-import {createAuthDialog} from './cloud-auth-dialog.js';
+import {createAuthDialog,authLabel} from './cloud-auth-dialog.js';
 import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id),t=key=>globalThis.YGCI18n.t(key);
 const authDialog=createAuthDialog({auth:()=>auth,onAuthenticated:()=>load()});
@@ -18,7 +18,7 @@ async function load(){
   clear();const token=epoch;
   try{
     account=await auth.restore();const owner=identity();if(token!==epoch)return;
-    if(!eligible()){$('emptyState').textContent=t('self_profile.restricted');const link=document.createElement('a');link.href='/ui/profile';link.textContent='Sign in / Create Account';link.onclick=event=>{event.preventDefault();authDialog.open({opener:link})};$('emptyState').append(' ',link);return}
+    if(!eligible()){$('emptyState').textContent=t('self_profile.restricted');const link=document.createElement('a');link.href='/ui/profile';link.textContent=authLabel();link.onclick=event=>{event.preventDefault();authDialog.open({opener:link})};$('emptyState').append(' ',link);return}
     const data=await request('/api/auth/settings');if(!current(token,owner))return;
     const keys=[...Object.keys(fieldIds),...visibility.map(key=>key+'_visibility')];
     if(!data||!exactId(data.id)||!exactId(data.profile_revision)||!data.fields||Object.keys(data.fields).length!==keys.length||keys.some(key=>!Object.hasOwn(data.fields,key)||!(typeof data.fields[key]==='string'||key.endsWith('_visibility')&&data.fields[key]===null)))throw Error(t('users.profile_unavailable'));

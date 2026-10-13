@@ -1,5 +1,5 @@
 import {createIdentityCorrections} from './cloud-account-identity.js';
-import {createAuthDialog} from './cloud-auth-dialog.js';
+import {createAuthDialog,authLabel} from './cloud-auth-dialog.js';
 import {createDetailDispute} from './cloud-detail-dispute.js';
 import {createOwnership} from './cloud-account-ownership.js';
 import {createDisputes} from './cloud-account-disputes.js';
@@ -18,7 +18,7 @@ import {loadCloudAuth} from './cloud-auth-loader.js';
 const $=id=>document.getElementById(id);
 const words={
   en:{top:'Top Page',products:'Products',members:'Members',profile:'Your profile',notifications:'Notifications',account:'Your account',signin:'Sign in / Create Account',signout:'SignOut',register:'Create Account',guest:'Explore guitar histories. Add yours when you are ready.',loading:'Loading user information…',restricted:'Service access is temporarily restricted.',blocked:'Session needs verification. Refresh or sign in again.',email:'Email',password:'Password',cancel:'Cancel',notice:'Your email and password are sent to Google for authentication.',failed:'Sign in could not be completed. Check your details and try again.',logoutFailed:'SignOut could not be confirmed. Refresh to check your session.',pending:'Signing in…',registration:'Complete your registration from Your account.',unverified:'Verify your email from Your account to use member features.',maker:'Maker',model:'Model',finish:'Finish',year:'Year',serial:'Serial'},
-  ja:{top:'トップページ',products:'ギター一覧',members:'会員検索',profile:'自分のプロフィール',notifications:'通知',account:'アカウント',signin:'Sign in / Create Account',signout:'サインアウト',register:'アカウント作成',guest:'ギターの歴史を探す。あなたの記録も加えましょう。',loading:'ユーザー情報を読み込み中…',restricted:'サービスの利用を一時的に制限しています。',blocked:'セッションを確認できません。再取得またはサインインしてください。',email:'メールアドレス',password:'パスワード',cancel:'キャンセル',notice:'メールアドレスとパスワードは認証のためGoogleへ送信されます。',failed:'サインインできませんでした。入力内容を確認して再試行してください。',logoutFailed:'サインアウトの完了を確認できません。再取得してセッションを確認してください。',pending:'サインイン中…',registration:'アカウント画面で登録を完了してください。',unverified:'会員機能を使うにはアカウント画面でメール確認を完了してください。',maker:'メーカー',model:'モデル',finish:'仕上げ',year:'製造年',serial:'シリアル'}
+  ja:{top:'トップページ',products:'ギター一覧',members:'会員検索',profile:'自分のプロフィール',notifications:'通知',account:'アカウント',signin:'サインイン/ アカウント作成',signout:'サインアウト',register:'アカウント作成',guest:'ギターの歴史を探す。あなたの記録も加えましょう。',loading:'ユーザー情報を読み込み中…',restricted:'サービスの利用を一時的に制限しています。',blocked:'セッションを確認できません。再取得またはサインインしてください。',email:'メールアドレス',password:'パスワード',cancel:'キャンセル',notice:'メールアドレスとパスワードは認証のためGoogleへ送信されます。',failed:'サインインできませんでした。入力内容を確認して再試行してください。',logoutFailed:'サインアウトの完了を確認できません。再取得してセッションを確認してください。',pending:'サインイン中…',registration:'アカウント画面で登録を完了してください。',unverified:'会員機能を使うにはアカウント画面でメール確認を完了してください。',maker:'メーカー',model:'モデル',finish:'仕上げ',year:'製造年',serial:'シリアル'}
 };
 let locale='en',auth=null,authPromise=null,busy=false,active=true,lastState=null,noticeKey=null;
 const t=key=>words[locale][key];

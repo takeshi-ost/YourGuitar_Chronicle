@@ -2,7 +2,8 @@
 #cloudAuthDialog form>label,#authRegistrationFields>label{display:block;margin-top:10px}
 #cloudAuthDialog input:not([type=checkbox]),#cloudAuthDialog select{box-sizing:border-box;width:100%;padding:9px;font:inherit}
 #cloudAuthDialog button{margin-top:10px;padding:8px 12px;cursor:pointer}
-#authCreateAccount{display:block;width:100%}
+#authSubmit{display:block;width:100%}
+#authCreateAccount{display:block;margin-top:18px;font-size:13px;color:var(--muted);text-align:center}
 #authRegistrationFields{border:0;padding:0;margin:0}
 #cloudAuthStatus{white-space:pre-line;overflow-wrap:anywhere}
 #cloudAuthDialog [hidden]{display:none!important}

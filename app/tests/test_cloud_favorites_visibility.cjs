@@ -40,7 +40,7 @@ function environment({kind='favorites',initial=account(),fullPage=false,tableLay
  let ready=Promise.resolve();
  if(fullPage){
   const noOp=()=>({render(){},clear(){cleared.push(true)},refresh:async()=>{},refreshHistory:async()=>{},failed(){},setCatalogIntent(){}});
-  Object.assign(context,{createAuthDialog:()=>({open(){},close(){},render(){}}),loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,createDisputes:noOp,createIdentityCorrections:noOp,createNotifications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
+  Object.assign(context,{authLabel:()=> 'Sign in / Create Account',createAuthDialog:()=>({open(){},close(){},render(){}}),loadCloudAuth:async()=>client,createAvatar:noOp,createProfile:noOp,createGuitars:noOp,createClaims:noOp,createOwnership:noOp,createApplications:noOp,createDisputes:noOp,createIdentityCorrections:noOp,createNotifications:noOp,readCatalogIntent:()=>null,readClaimIntent:()=>null,readOwnershipIntent:()=>null});
   ready=vm.runInContext('(async()=>{'+fs.readFileSync(path.join(assets,'cloud-account-page.js'),'utf8').replace(/^import .*;\n/gm,'')+'})()',context);
  }else component=kind==='favorites'?context.createFavorites(args):kind==='visibility'?context.createVisibility(args):context.createFavoriteControl({...args,root:detail,document,compact,t:context.YGCI18n.t,canWrite:()=>writeAllowed});
  const control=id=>ids.get(id);

@@ -60,7 +60,7 @@ def follow_router(verifier, service):
                 args.append(identifier(individual))
             if request.method == 'GET':
                 query = request.query_params
-                allowed = {'q', 'after', 'limit'} if method == 'search' else {'after', 'limit'} if method == 'connections' else set()
+                allowed = {'q', 'after', 'limit'} if method == 'search' else {'after', 'limit'} if method == 'connections' else {'kind','after','limit'} if method=='public_profile' else set()
                 if set(query) - allowed or any(len(query.getlist(key)) != 1 for key in query):
                     raise ValueError()
                 if method in ('search', 'connections'):
@@ -68,6 +68,8 @@ def follow_router(verifier, service):
                               'limit': identifier(query['limit']) if 'limit' in query else 25}
                     if kwargs['limit'] > 50:
                         raise ValueError()
+                if method=='public_profile':
+                    kwargs={'kind':query.get('kind'),'after':identifier(query['after']) if 'after' in query else 0,'limit':identifier(query['limit']) if 'limit' in query else 50}
                 if method == 'search':
                     kwargs['q'] = query.get('q', '')
                     if len(kwargs['q']) > 120 or any(ord(c) < 32 or ord(c) == 127 for c in kwargs['q']):
@@ -109,7 +111,7 @@ def follow_router(verifier, service):
                 if not isinstance(result, bytes) or not 0 < len(result) <= MAX_BYTES:
                     raise RuntimeError('Invalid avatar response.')
                 return Response(result, media_type='image/jpeg', headers=headers)
-            return JSONResponse(result_projection(method, result), headers=headers)
+            return JSONResponse(result if method=='public_profile' else result_projection(method, result), headers=headers)
         except HTTPException as exc:
             exc.headers = {**(exc.headers or {}), **headers}
             raise
@@ -125,6 +127,10 @@ def follow_router(verifier, service):
             raise HTTPException(400, 'Invalid member request.', headers=headers) from None
         except Exception:
             raise HTTPException(503, 'Members unavailable. Refresh before retrying.', headers=headers) from None
+
+    @router.get('/api/auth/profiles/{individual}')
+    async def public_profile(request:Request,individual:str):
+        return await handle(request,'public_profile',individual)
 
     @router.get('/api/auth/members')
     async def search(request: Request):

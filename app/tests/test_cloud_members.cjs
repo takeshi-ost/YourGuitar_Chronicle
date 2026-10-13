@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const code=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-members.js'),'utf8').replace(/^import .*;$/gm,'').replace(/export /g,'');
+const code=fs.readFileSync(path.join(__dirname,'../src/ygc/static/cloud-member-data.js'),'utf8').replace(/^import .*;$/gm,'').replace(/export /g,'');
 const context=vm.createContext({});vm.runInContext(code+';globalThis.contracts={memberId,memberPerson,memberPage,memberProfile};',context);
 const {memberId,memberPerson,memberPage,memberProfile}=context.contracts;
 const person=(id='2')=>({id,display_name:'Same name',icon:null});

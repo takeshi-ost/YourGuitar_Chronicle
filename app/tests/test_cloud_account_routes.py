@@ -166,7 +166,7 @@ def test_cloud_page_is_explicit_and_config_matches_verifier(monkeypatch):
             response = client.get(path)
             assert response.status_code == 200
             assert response.headers['cache-control'] == 'no-store'
-            assert 'id="memberSearch" hidden' in response.text
+            assert 'id="memberSearch"' not in response.text
         assert client.get('/members/01').status_code == 404
         for path in ('/api/auth/members', '/api/auth/members/2',
                      '/api/auth/members/2/connections/followers'):
