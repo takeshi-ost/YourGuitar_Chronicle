@@ -111,7 +111,7 @@ def main():
             if path == '/' or path.startswith('/guitars/'):
                 route.fulfill(content_type='text/html', body=html)
                 return
-            if path in ('/account','/ui/profile'):
+            if path in ('/ui/profile','/ui/profile'):
                 route.fulfill(content_type='text/html', body='<p id="accountFixture">Account destination fixture</p>')
                 return
             if path == '/favicon.ico':
@@ -221,7 +221,7 @@ def main():
         expect(page.locator('#catalogNext')).to_be_enabled()
         expect(page.locator('#catalogPrevious')).to_be_disabled()
         assert all(not row['authorization'] for row in state['requests'])
-        assert page.locator('#accountLink').get_attribute('href') == '/account'
+        assert page.locator('#accountLink').get_attribute('href') == '/ui/profile'
         page.locator('#catalogNext').click(); idle()
         expect(rows).to_have_count(4)
         assert parse_qs(urlsplit(page.url).query)['page'] == ['2']
@@ -242,8 +242,8 @@ def main():
         expect(page.locator('#detailTitle')).to_contain_text(TEXT)
         expect(page.locator('#detailSpecifications')).to_contain_text('Maple ' + TEXT)
         expect(page.locator('#detailPhoto')).to_be_visible()
-        assert page.locator('#acquireLink').get_attribute('href') == '/account?acquire=10'
-        assert page.locator('#addClaimLink').get_attribute('href') == '/account?claim=10'
+        assert page.locator('#acquireLink').get_attribute('href') == '/ui/profile?acquire=10'
+        assert page.locator('#addClaimLink').get_attribute('href') == '/ui/profile?claim=10'
         expect(page.locator('#chronicleEntries .chronicle-record')).to_have_count(25)
         source = page.locator('#chronicleEntries a[href="https://reverb.com/item/12345"]')
         expect(source).to_have_count(1)
@@ -364,8 +364,8 @@ def main():
         assert parse_qs(urlsplit(page.url).query)['q'] == ['BIGINT-SERIAL']
         open_guitar(BIG_ID)
         assert urlsplit(page.url).path == '/guitars/' + BIG_ID
-        assert page.locator('#acquireLink').get_attribute('href') == '/account?acquire=' + BIG_ID
-        assert page.locator('#addClaimLink').get_attribute('href') == '/account?claim=' + BIG_ID
+        assert page.locator('#acquireLink').get_attribute('href') == '/ui/profile?acquire=' + BIG_ID
+        assert page.locator('#addClaimLink').get_attribute('href') == '/ui/profile?claim=' + BIG_ID
         page.locator('#catalogBack').click(); idle()
         search('SERIAL-10')
         page.evaluate("catalogFixture.hold('/api/public/guitars/10', '', 'detail')")

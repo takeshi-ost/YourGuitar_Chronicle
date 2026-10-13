@@ -404,6 +404,10 @@ def main():
                 expect(page.locator('#contentMediaRows button')).to_have_count(25)
                 page.locator('#guitarRows td:first-child a').first.click()
                 expect(page.locator('#contentMediaStatus')).to_have_text('Total images: 1')
+                selected_guitar=page.locator('#guitarRows tr.selected').get_attribute('data-guitar-id')
+                page.locator('#userRows td:first-child a').nth(1).click()
+                expect(page.locator('#userDetailFields')).to_contain_text('Profile 2')
+                assert page.locator('#guitarRows tr.selected').get_attribute('data-guitar-id')==selected_guitar
                 page.locator('#userRows td:first-child a').first.click()
                 expect(page.locator('#userDetailFields')).to_contain_text('Profile 1')
                 assert page.locator('#userDetailFields b').count()==0

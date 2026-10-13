@@ -266,7 +266,7 @@ def main():
 
         page.goto(BASE + '/guitars/' + GUITAR)
         page.wait_for_function('globalThis.YGCCloudPublicCatalogReady===true')
-        expect(page.locator('#ownershipLink')).to_have_attribute('href', '/account?ownership=' + GUITAR)
+        expect(page.locator('#ownershipLink')).to_have_attribute('href', '/ui/profile?ownership=' + GUITAR)
         page.locator('#ownershipLink').click()
         page.wait_for_function('globalThis.YGCCloudAccountReady===true')
         expect(page.locator('#selfOwnership')).to_be_hidden()
