@@ -337,7 +337,9 @@ def main():
                 expect(page.locator('#backupReset')).to_be_disabled()
                 expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
                 assert len(maintenance_calls)==1 and maintenance_calls[0]['action']=='restore'
+                expect(page.locator('#backupReset')).to_be_enabled()
                 page.locator('#backupReset').click();page.locator('#backupConfirmation').fill('accounts');page.locator('#backupConfirm').click()
+                expect(page.locator('#backupMaintenanceStatus')).to_have_text('Applying database maintenance…')
                 expect(page.locator('#backupMaintenanceStatus')).to_have_text('Database maintenance completed.',timeout=12000)
                 assert len(maintenance_calls)==2 and maintenance_calls[-1]['backup_id'] is None
                 expect(page.locator('#guitarRows tr')).to_have_count(25)
