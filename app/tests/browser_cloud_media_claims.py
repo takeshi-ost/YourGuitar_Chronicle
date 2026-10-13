@@ -118,7 +118,7 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    account_html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
+    account_html = (Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text(encoding='utf-8')
     public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8')
     store = dict(rows=[], calls=[], writes=[], decisions=[], external=[], revision=0,
                  can_write=True, own_read_error=None, write_restricted_once=False,

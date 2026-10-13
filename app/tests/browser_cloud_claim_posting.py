@@ -40,7 +40,7 @@ def main():
     include_module_dependencies(STATIC, assets)
     assets['i18n.js'] = ('globalThis.YGCI18nResources=' + json.dumps(ui_resources()) + ';\n'
                          + (STATIC / 'i18n.js').read_text(encoding='utf-8'))
-    account_html = (STATIC / 'cloud_ui_profile_html.html').read_text(encoding='utf-8').replace('data-formal-profile=\"true\"','')
+    account_html = (Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text(encoding='utf-8')
     public_html = (STATIC / 'cloud_public_catalog_html.html').read_text(encoding='utf-8').replace('</head>', '<script src="/assets/overlays.js" defer></script><link rel="stylesheet" href="/assets/cloud-auth-dialog.css"></head>')
     assets['cloud-auth-dialog.css'] = (STATIC / 'cloud-auth-dialog.css').read_text()
     store = dict(rows=[], calls=[], writes=[], external=[], can_write=True, conflict_once=False, drop_after_commit=False, revision=0)
