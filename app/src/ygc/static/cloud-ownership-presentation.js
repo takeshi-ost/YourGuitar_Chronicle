@@ -25,8 +25,8 @@ export function createOwnershipPresentation({panel,title,detail,form,fields,kind
   if(reviewMounted)return;
   if(!mounted)return;
   if(!isTransfer){for(const row of releaseFields.children)row.hidden=kind.value==='transfer';reload.hidden=!uncertain;confirm.hidden=true}
-  else{reload.hidden=false;panel.append(close);close.textContent=t('action.close')}
-  if(!isTransfer){entryActions.prepend(close);close.textContent=t('action.cancel')}
+  else{reload.hidden=false;panel.append(close);close.textContent=close.classList.contains('ygc-modal-close')?'×':t('action.close')}
+  if(!isTransfer){panel.append(close);close.textContent=close.classList.contains('ygc-modal-close')?'×':t('action.cancel')}
  }
  function mountReview(row){
   const source=document.getElementById('formalClaimTemplates').content.querySelector('#transferReviewDialog'),clone=source.cloneNode(true);panel.style.cssText=source.style.cssText;panel.className='modal';
