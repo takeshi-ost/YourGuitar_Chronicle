@@ -164,6 +164,9 @@ def main():
 
     from pathlib import Path
     from fastapi.responses import HTMLResponse
+    @app.get('/api/service/status')
+    def public_status():return {'mode':'read_only' if store.read_only else 'normal'}
+
     @app.get('/ui/profile')
     def transport_fixture():return HTMLResponse((Path(__file__).parent/'fixtures/cloud_account_transport.html').read_text())
 
@@ -171,7 +174,7 @@ def main():
         'authDomain': 'fixture-project.firebaseapp.com'}, project_id='fixture-project', tenant=''))
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
-        url = f'http://127.0.0.1:{sock.getsockname()[1]}/account'
+        url = f'http://127.0.0.1:{sock.getsockname()[1]}/ui/profile'
         server = uvicorn.Server(uvicorn.Config(app, log_level='error', lifespan='off'))
         thread = threading.Thread(target=server.run, kwargs={'sockets': [sock]}, daemon=True)
         thread.start()

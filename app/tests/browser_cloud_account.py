@@ -129,6 +129,9 @@ def main():
             return normalize_image(png(),'image/png')
     Applications.storage=storage
     app.include_router(application_router(TestVerifier(),Applications()))
+    @app.get('/api/service/status')
+    def public_status():return {'mode':'normal'}
+
     @app.get('/ui/profile')
     def transport_fixture():
         from fastapi.responses import HTMLResponse

@@ -91,6 +91,7 @@ def main():
             return VerifiedIdentity('fixture-issuer',bearer_token,'',bearer_token.startswith('fixture-verified-'))
     class Operations:
         review_enabled=False
+        def public_status(self):return {'mode':self.row['mode']}
         def review_status(self,actor):
             with self.access('admin_read',actor):return {'enabled':self.review_enabled}
         def set_review(self,actor,**data):
@@ -513,7 +514,7 @@ def main():
                 open_console('admin@example.invalid');page.goto(base+'/account');page.wait_for_function('window.YGCCloudAccountReady===true');expect(page.locator('#consoleLink')).to_be_visible();assert page.url==base+'/ui/profile'
                 page.goto(base+'/console');page.wait_for_function('window.YGCCloudConsoleReady===true')
                 page.set_viewport_size({'width':390,'height':844})
-                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),page.evaluate('()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("body *")].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&!e.closest(".table-wrap,.page-nav")).slice(0,12).map(e=>({id:e.id,tag:e.tagName,width:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right}))})')
                 page.locator('[data-language-picker]').select_option('ja');page.wait_for_function('document.documentElement.lang==="ja"&&window.YGCCloudConsoleReady===true')
                 expect(page.locator('#operationsStatus')).to_have_text('管理者のみ')
                 page.locator('#crawlTab').click()
