@@ -26,6 +26,7 @@ class FormalUIFixture(FollowFixture):
         self.insights_case = 'normal'
         self.prepublication = False
         self.votes = {}
+        self.profile_cursor_gate = None
 
     def app(self, *, manual=False):
         app=super().app(manual=False)
@@ -37,6 +38,9 @@ class FormalUIFixture(FollowFixture):
             if request.url.path.startswith('/api/auth/') and request.url.path not in ('/api/auth/config','/api/auth/me','/api/auth/registration'):
                 if self.mode in ('offline','admin_only') or request.method not in ('GET','HEAD') and self.mode=='read_only':
                     return JSONResponse({'detail':{'code':'service_restricted'}},status_code=403)
+            if self.profile_cursor_gate is not None and request.url.path=='/api/auth/guitars' and request.query_params.get('after'):
+                import asyncio
+                await asyncio.to_thread(self.profile_cursor_gate.wait,15)
             response=await call_next(request)
             if manual and request.url.path.endswith('/firebase-auth.js'):
                 from fastapi.responses import Response

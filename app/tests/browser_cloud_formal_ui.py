@@ -100,6 +100,32 @@ def check_profile_lists(page,base,fixture):
     print('Formal profile lists: 30-row cursor aggregation, local columns/order/live filter, fixed unfiltered desktop height, cross-list selection and 1440/390/320 passed.')
 
 
+def check_profile_bootstrap_timing(page,base,fixture):
+    import time,json
+    page.set_viewport_size({'width':1440,'height':1000})
+    fixture.profile_all=True;fixture.profile_cursor_gate=threading.Event()
+    gate=fixture.profile_cursor_gate
+    before=len(fixture.calls);started=time.monotonic()
+    try:
+        page.goto(base+'/ui/profile/guitars/1')
+        expect(page.locator('#detailContent')).to_be_visible()
+        detail_ms=round((time.monotonic()-started)*1000)
+        expect(page.locator('#selfGuitars_owned tbody tr.clickable')).to_have_count(0)
+        calls=fixture.calls[before:]
+        assert calls.count(('GET','/api/auth/profile/bootstrap'))==1,calls
+        # First pages/settings/counts/signature are one HTTP read. A deliberately
+        # held cursor continuation must not hold the explicit initial Detail.
+        assert not any(path in ('/api/auth/settings','/api/auth/profile/summary','/api/auth/settings/signature') for method,path in calls),calls
+        gate.set()
+        expect(page.locator('#selfGuitars_owned tbody tr.clickable')).to_have_count(30)
+        list_ms=round((time.monotonic()-started)*1000)
+        artifacts=Path(os.environ.get('YGC_BROWSER_ARTIFACTS','/tmp/ygc-formal-ui-artifacts'));artifacts.mkdir(parents=True,exist_ok=True)
+        result={'initial_profile_reads_before':6,'initial_profile_reads_after':1,'detail_visible_before_cursor_completion':True,'fixture_detail_visible_ms':detail_ms,'fixture_all_owned_rows_ms':list_ms,'live_latency_measured':False}
+        (artifacts/'profile-bootstrap-timing.json').write_text(json.dumps(result,indent=2));print('Profile bootstrap timing:',json.dumps(result),flush=True)
+    finally:
+        gate.set();fixture.profile_cursor_gate=None;fixture.profile_all=False
+
+
 def check_settings(page,base,fixture):
     page.goto(base+'/ui/settings')
     expect(page.locator('#settings')).to_be_visible()
@@ -552,6 +578,7 @@ def main():
                 check_ownership_entry(page,base,fixture)
                 check_prepublication(page,base,fixture)
                 check_round2(page,base,fixture)
+                check_profile_bootstrap_timing(page,base,fixture)
                 assert not errors,errors
                 context.close();browser.close()
                 print('Formal UI: routes/history, canonical auth/identity switch/revocation, credential disposal, modal focus, Offline, Japanese and 1440/390/320px passed; synthetic GETs and explicit Settings/Signature/Favorite test saves only.')
