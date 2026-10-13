@@ -13,5 +13,5 @@ async function initialize(){
   const app=appSDK.initializeApp(config.firebase,'ygc-cloud-account');
   const auth=sdk.getAuth(app);
   auth.tenantId=config.tenant||null;
-  return globalThis.YGCIdentityPlatformAuth.create({sdk,auth});
+  return globalThis.YGCIdentityPlatformAuth.create({sdk,auth,profileBootstrap:globalThis.document?.body?.dataset?.formalProfile==='true'&&!globalThis.document?.body?.dataset?.profileTarget});
 }

@@ -1,6 +1,6 @@
 // Google credentials go only to the official SDK. API calls carry an ID token.
 (() => {
-  function create({sdk, auth, fetch: request=globalThis.fetch.bind(globalThis), origin=location.origin,storage,now=()=>Date.now()}){
+  function create({sdk, auth, fetch: request=globalThis.fetch.bind(globalThis), origin=location.origin,storage,now=()=>Date.now(),profileBootstrap=false}){
     let initialization, account=null, accountUser=null, pending=Promise.resolve();
     let observedUser=auth.currentUser;
     // Display data only: canonical identity and operation permissions never come
@@ -24,8 +24,8 @@
         themeOwner=owner;
         // A direct Account/Console/Member entry also restores the same display
         // preference. Never authorize an operation from a saved theme.
-        Promise.resolve().then(()=>displayRead('/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
-          if(response.ok){const data=await response.json();if(dataOwner===owner&&accountUser===auth.currentUser)globalThis.YGCTheme?.remember(data?.fields?.theme)}
+        Promise.resolve().then(()=>displayRead(profileBootstrap?'/api/auth/profile/bootstrap':'/api/auth/settings',{reuseUserData:true},false)).then(async response=>{
+          if(response.ok){const data=await response.json();if(dataOwner===owner&&accountUser===auth.currentUser)globalThis.YGCTheme?.remember((profileBootstrap?data?.settings:data)?.fields?.theme)}
         }).catch(()=>{});
       }
       if(owner===dataOwner)return;

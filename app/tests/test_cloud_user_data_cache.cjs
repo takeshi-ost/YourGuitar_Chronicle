@@ -1,13 +1,13 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('app/src/ygc/static/identity-platform-auth.js','utf8');
-function harness({store=new Map(),uid='A',clock={value:1000},denyStorage=false}={}){
+function harness({store=new Map(),uid='A',clock={value:1000},denyStorage=false,profileBootstrap=false,theme=null}={}){
  const events={},calls=[],listeners=[],user={uid,getIdToken:async()=>uid+'-token'},auth={currentUser:user,tenantId:null,authStateReady:async()=>{}},account={user:{app_user_id:uid+'-app',role:'member',status:'active'},identity:{email_verified:true}};
  const sdk={browserSessionPersistence:'session',setPersistence:async()=>{},onAuthStateChanged(_,fn){listeners.push(fn)},signOut:async()=>{auth.currentUser=null}};
  const storage={getItem:k=>{if(denyStorage)throw Error('Unavailable');return store.get(k)||null},setItem:(k,v)=>{if(denyStorage)throw Error('Unavailable');store.set(k,v)},removeItem:k=>{if(denyStorage)throw Error('Unavailable');store.delete(k)}};
  let mode='normal',status=200,hold=null,body={fields:{display_name:uid}},gateHold=null,gateStatus=200;
  const request=async(url,options)=>{calls.push({url,options});if(url.endsWith('/api/auth/me'))return Response.json(account);if(url.endsWith('/api/service/status')){if(gateHold)await gateHold;return Response.json(gateStatus===200?{mode}:{code:'closed_test_participant_required'},{status:gateStatus})}if(hold)await hold;return Response.json(body,{status})};
- const context={URL,Headers,Response,Error,addEventListener:(name,fn)=>events[name]=fn,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
- const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request,storage,now:()=>clock.value});
+ const context={YGCTheme:theme,URL,Headers,Response,Error,addEventListener:(name,fn)=>events[name]=fn,location:{origin:'https://ygc.example'},fetch:request};vm.runInNewContext(source,context);
+ const adapter=context.YGCIdentityPlatformAuth.create({sdk,auth,fetch:request,storage,now:()=>clock.value,profileBootstrap});
  return {adapter,store,clock,calls,account,auth,user,events,mode:v=>mode=v,status:v=>status=v,gateStatus:v=>gateStatus=v,hold:v=>hold=v,gateHold:v=>gateHold=v,body:v=>body=v,switchUser(){auth.currentUser={uid:'B',getIdToken:async()=> 'B-token'};listeners.forEach(fn=>fn())},count:path=>calls.filter(c=>new URL(c.url).pathname===path).length};
 }
 const read=s=>s.adapter.authorizedFetch('/api/auth/settings',{reuseUserData:true});
@@ -107,3 +107,7 @@ test('Explicit display invalidation during pending cache gate rejects stale snap
 });
 
 test('A late rejected display read after logout cannot invalidate the new Guest state',async()=>{const s=harness();await s.adapter.restore();await read(s);let blocked=0;s.adapter.onUserDataInvalidated(reason=>{if(reason==='blocked')blocked++});s.status(403);const hold=defer();s.hold(hold.promise);const pending=s.adapter.authorizedFetch('/api/auth/settings');await new Promise(setImmediate);await s.adapter.logout();hold.resolve();await assert.rejects(pending);assert.equal(blocked,0);assert.equal(s.adapter.account,null)});
+
+test('Self Profile theme restore shares the bounded bootstrap instead of a second Settings request',async()=>{
+ const themes=[],s=harness({profileBootstrap:true,theme:{bind:()=>false,remember:t=>themes.push(t)}});s.body({settings:{fields:{theme:'sunburst_3ply'}}});await s.adapter.restore();await s.adapter.authorizedFetch('/api/auth/profile/bootstrap',{reuseUserData:true});await new Promise(r=>setImmediate(r));assert.equal(s.count('/api/auth/settings'),0);assert.equal(s.count('/api/auth/profile/bootstrap'),1);assert.equal(themes.at(-1),'sunburst_3ply');
+});
